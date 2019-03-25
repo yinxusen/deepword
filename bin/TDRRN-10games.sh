@@ -50,7 +50,7 @@ if [[ ! -d $MODELHOME ]]; then
 fi
 
 pushd $PDIR
-./bin/run.sh python/deepdnd/main.py \
+./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-drrn --game_dir $GAME_DIR --vocab_file $VOCAB_FILE \
     --annealing_eps_t 1000000 --annealing_gamma_t 2000 --observation_t 5000 --replay_mem 500000 \
     --embedding_size 64 --save_gap_t 5000 --batch_size 32 \

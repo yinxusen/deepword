@@ -30,7 +30,7 @@ if [[ ! -d $MODELHOME ]]; then
 fi
 
 pushd $PDIR
-./bin/run.sh python/deepdnd/main.py \
+./bin/run.sh python/deeptextworld/main.py \
     -d $DATAHOME -m $MODELHOME --mode train-drrn \
     --game_dir /Users/xusenyin/git-store/textworld-competition/starting_kit/sample_games \
     --vocab_file $VOCAB_FILE \

@@ -15,6 +15,6 @@ if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
 fi
 
-./bin/run.sh python/deepdnd/main.py \
+./bin/run.sh python/deeptextworld/main.py \
     --game_dir $DATAHOME -m $MODELHOME \
     --mode eval-drrn --eval_episode 10 --eval_randomness 0.05

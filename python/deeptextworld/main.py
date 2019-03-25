@@ -49,7 +49,7 @@ if __name__ == '__main__':
     model_dir = args.model_dir
 
     if args.mode == "train-drrn":
-        from deepdnd.train_drrn import run_main
+        from deeptextworld.train_drrn import run_main
         current_dir = os.path.dirname(os.path.realpath(__file__))
         log_config_file = '{}/../../conf/logging.yaml'.format(current_dir)
         setup_logging(
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         hp = load_hparams_for_training(config_file, args)
         run_main(hp, model_dir, game_dir=args.game_dir, max_games_used=args.max_games_used)
     elif args.mode == "eval-drrn":
-        from deepdnd.train_drrn import run_eval
+        from deeptextworld.train_drrn import run_eval
         current_dir = os.path.dirname(os.path.realpath(__file__))
         log_config_file = '{}/../../conf/logging-eval.yaml'.format(current_dir)
         setup_logging(
