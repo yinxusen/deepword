@@ -1,0 +1,507 @@
+import glob
+import hashlib
+import os
+import string
+from typing import List, Dict, Any, Optional
+
+import collections
+import numpy as np
+import tensorflow as tf
+from bitarray import bitarray
+from nltk import word_tokenize
+
+from deeptextworld import trajectory
+from deeptextworld.action import ActionCollector
+from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
+from deeptextworld.log import Logging
+from deeptextworld.tree_memory import TreeMemory
+from deeptextworld.utils import get_token2idx, load_vocab, load_actions, ctime
+
+
+class DRRNMemo(collections.namedtuple(
+    "DRRNMemo",
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal", "action_mask"))):
+    pass
+
+
+class BaseAgent(Logging):
+    """
+    """
+    def __init__(self, hp, model_dir):
+        super(BaseAgent, self).__init__()
+        self.model_dir = model_dir
+
+        self.tjs_prefix = "trajectories"
+        self.action_prefix = "actions"
+        self.memo_prefix = "memo"
+
+        self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
+        self.info(output_hparams(self.hp))
+
+        self.tjs = None
+        self.memo = None
+        self.model = None
+        self.target_model = None
+        self.action_collector = None
+
+        self._initialized = False
+        self._episode_has_started = False
+        self.total_t = 0
+        self.in_game_t = 0
+        self.eps = 0
+        self.sess = None
+        self.target_sess = None
+        self.is_training = True
+        self.train_summary_writer = None
+        self.chkp_prefix = os.path.join(self.model_dir,
+                                        'last_weights', 'after-epoch')
+        self.saver = None
+        self.target_saver = None
+        self._last_action_idx = None
+        self._last_actions_mask = None
+        self._last_action = None
+        self.game_id = None
+
+        self.cumulative_score = 0
+        self.snapshot_saved = False
+        self.epoch_start_t = 0
+
+        self.empty_trans_table = str.maketrans("", "", string.punctuation)
+
+
+    @classmethod
+    def init_tokens(cls, hp):
+        """
+        :param hp:
+        :return:
+        """
+        new_hp = copy_hparams(hp)
+        # make sure that padding_val is indexed as 0.
+        additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
+        tokens = additional_tokens + list(load_vocab(hp.vocab_file))
+        token2idx = get_token2idx(tokens)
+        new_hp.set_hparam('vocab_size', len(tokens))
+        new_hp.set_hparam('sos_id', token2idx[hp.sos])
+        new_hp.set_hparam('eos_id', token2idx[hp.eos])
+        new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
+        new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
+        return new_hp, tokens, token2idx
+
+    def init_actions(self, hp, token2idx, action_path, with_loading=True):
+        action_collector = ActionCollector(
+            hp.n_actions, hp.n_tokens_per_action, token2idx,
+            hp.unk_val_id, hp.padding_val_id)
+        if with_loading:
+            try:
+                action_collector.load_actions(action_path)
+                action_collector.extend(load_actions(hp.action_file))
+            except IOError as e:
+                self.info("load actions error: \n{}".format(e))
+        return action_collector
+
+    def init_trajectory(self, hp, tjs_path, with_loading=True):
+        tjs_creator = getattr(trajectory, hp.tjs_creator)
+        tjs = tjs_creator(hp, padding_val=hp.padding_val_id)
+        if with_loading:
+            try:
+                tjs.load_tjs(tjs_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return tjs
+
+
+    def init_memo(self, hp, memo_path, with_loading=True):
+        memory = TreeMemory(capacity=hp.replay_mem)
+        if with_loading:
+            try:
+                memory.load_memo(memo_path)
+            except IOError as e:
+                self.info('load memory error: \n{}'.format(e))
+        return memory
+
+    @classmethod
+    def lower_tokenize(cls, sentence):
+        return [t.lower() for t in word_tokenize(sentence)]
+
+    def preprocess_master_output(self, master):
+        return ' '.join(
+            map(lambda t: t.lower(),
+                filter(lambda t: t.isalpha(),
+                       word_tokenize(
+                           master.translate(self.empty_trans_table)))))
+
+    @classmethod
+    def report_status(cls, lst_of_status):
+        return ', '.join(
+            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
+
+    @classmethod
+    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
+        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
+        return min(gamma_t, final_gamma)
+
+    @classmethod
+    def annealing_eps(cls, init_eps, final_eps, t, total_t):
+        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
+        return max(eps_t, final_eps)
+
+    def index_string(self, sentence):
+        indexed = [self.token2idx.get(t, self.hp.unk_val_id) for t in sentence]
+        return indexed
+
+    @classmethod
+    def fromBytes(cls, action_mask):
+        retval = []
+        for mask in action_mask:
+           bit_mask = bitarray(endian='little')
+           bit_mask.frombytes(mask)
+           bit_mask[-1] = False
+           retval.append(bit_mask.tolist())
+        return np.asarray(retval, dtype=np.int32)
+
+    @classmethod
+    def zero_mask_bytes(cls):
+        bit_mask_vec = bitarray(2**9, endian="little")
+        bit_mask_vec[::] = False
+        bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
+        return bit_mask_vec.tobytes()
+
+
+    def get_an_eps_action(self, action_mask):
+        """
+        get either an random action index with action string
+        or the best predicted action index with action string.
+        :param action_mask:
+        """
+        raise NotImplementedError()
+
+    def train(self):
+        self.is_training = True
+        self._init()
+
+    def eval(self):
+        self.is_training = False
+        self._init()
+
+    def reset(self):
+        self._initialized = False
+        self._init()
+
+    @classmethod
+    def count_trainable(cls, trainable_vars, mask=None):
+        total_parameters = 0
+        if mask is not None:
+            if type(mask) is list:
+                trainable_vars = filter(lambda v: v.op.name not in mask,
+                                        trainable_vars)
+            elif type(mask) is str:
+                trainable_vars = filter(lambda v: v.op.name != mask,
+                                        trainable_vars)
+            else:
+                pass
+        else:
+            pass
+        for variable in trainable_vars:
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim.value
+            total_parameters += variable_parameters
+        return total_parameters
+
+    def create_n_load_model(self, placement="/device:GPU:0"):
+        start_t = 0
+        with tf.device(placement):
+            model = self.create_model_instance()
+        train_conf = tf.ConfigProto(log_device_placement=False,
+                                    allow_soft_placement=True)
+        train_sess = tf.Session(graph=model.graph, config=train_conf)
+        with model.graph.as_default():
+            train_sess.run(tf.global_variables_initializer())
+            saver = tf.train.Saver(max_to_keep=self.hp.max_snapshot_to_keep,
+                                   save_relative_paths=True)
+            restore_from = tf.train.latest_checkpoint(
+                os.path.join(self.model_dir, 'last_weights'))
+            if restore_from is not None:
+                # Reload weights from directory if specified
+                self.info("Try to restore parameters from: {}".format(restore_from))
+                saver.restore(train_sess, restore_from)
+                global_step = tf.train.get_or_create_global_step()
+                trained_steps = train_sess.run(global_step)
+                start_t = trained_steps + self.hp.observation_t
+            else:
+                self.info('No checkpoint to load, training from scratch')
+            trainable_vars = tf.trainable_variables()
+            self.info('trainable variables: {}'.format(trainable_vars))
+            self.info('count of trainable vars w/o src_embeddings: {}'.format(
+                self.count_trainable(trainable_vars, mask='src_embeddings')))
+        return train_sess, start_t, saver, model
+
+    def create_model_instance(self):
+        raise NotImplementedError()
+
+    def train_impl(self, sess, t, summary_writer, target_sess):
+        raise NotImplementedError()
+
+    def _init(self):
+        """
+        load actions, trajectories, memory, model, etc.
+        """
+        if self._initialized:
+            self.error("the agent was initialized")
+            return
+
+        valid_tags = self.get_compatible_snapshot_tag()
+        largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
+        self.info("try to load from tag: {}".format(largest_valid_tag))
+
+        action_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.action_prefix, largest_valid_tag))
+        tjs_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.tjs_prefix, largest_valid_tag))
+        memo_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
+
+        self.action_collector = self.init_actions(
+           self.hp, self.token2idx, action_path,
+            with_loading=self.is_training)
+        self.tjs = self.init_trajectory(self.hp, tjs_path,
+                                        with_loading=self.is_training)
+        self.memo = self.init_memo(self.hp, memo_path,
+                                   with_loading=self.is_training)
+        if self.is_training:
+            self.sess, self.total_t, self.saver, self.model =\
+                self.create_n_load_model()
+            self.eps = self.hp.init_eps
+            train_summary_dir = os.path.join(
+                self.model_dir, "summaries", "train")
+            self.train_summary_writer = tf.summary.FileWriter(
+                train_summary_dir, self.sess.graph)
+        else:
+            self.sess, _, self.saver, self.model =\
+                self.create_n_load_model(placement="/device:GPU:1")
+            self.eps = 0.05
+            self.total_t = 0
+        self._initialized = True
+
+    def _start_episode(
+            self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
+        """
+        Prepare the agent for the upcoming episode.
+        :param obs: initial feedback from each game
+        :param infos: additional infors of each game
+        :return:
+        """
+        if not self._initialized:
+            self._init()
+        self.tjs.add_new_tj()
+        self.game_id = hashlib.md5(obs[0].encode("utf-8")).hexdigest()
+        self.action_collector.add_new_episode(eid=self.game_id)
+        self.in_game_t = 0
+        self.cumulative_score = 0
+        self._episode_has_started = True
+
+    def mode(self):
+        return "train" if self.is_training else "eval"
+
+    def _end_episode(
+            self, obs: List[str], scores: List[int],
+            infos: Dict[str, List[Any]]) -> None:
+        """
+        tell the agent the episode has terminated
+        :param obs: previous command's feedback for each game
+        :param scores: score obtained so far for each game
+        :param infos: additional infos of each game
+        :return:
+        """
+        # if len(self.memo) > 2 * self.hp.replay_mem:
+        #     to_delete_tj_id = self.memo.clear_old_memory()
+        #     self.tjs.request_delete_key(to_delete_tj_id)
+        self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
+            self.mode(), self.in_game_t, scores[0], infos["has_won"]))
+        self._episode_has_started = False
+        self._last_action_idx = None
+        self._last_actions_mask = None
+        self._last_action = None
+        self.game_id = None
+
+    def save_snapshot(self):
+        self.info('save model')
+        self.saver.save(
+            self.sess, self.chkp_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+        self.info('save snapshot of the agent')
+
+        action_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.action_prefix, self.total_t))
+        tjs_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.tjs_prefix, self.total_t))
+        memo_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.memo_prefix, self.total_t))
+
+        self.memo.save_memo(memo_path)
+        self.tjs.save_tjs(tjs_path)
+        self.action_collector.save_actions(action_path)
+
+        valid_tags = self.get_compatible_snapshot_tag()
+        if len(valid_tags) > self.hp.max_snapshot_to_keep:
+            to_delete_tags = list(reversed(sorted(
+                valid_tags)))[self.hp.max_snapshot_to_keep:]
+            self.info("tags to be deleted: {}".format(to_delete_tags))
+            for tag in to_delete_tags:
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.memo_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir, "{}-{}.npz".format(self.tjs_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.action_prefix, tag)))
+        # notice that we should not save hparams when evaluating
+        # that's why I move this function calling here from __init__
+        save_hparams(self.hp,
+                     os.path.join(self.model_dir, 'hparams.json'),
+                     use_relative_path=True)
+
+    @classmethod
+    def get_path_tags(cls, path, prefix):
+        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
+                              recursive=False)
+        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
+                   map(lambda p: os.path.basename(p), all_paths))
+        return tags
+
+    @classmethod
+    def clip_reward(cls, reward):
+        """clip reward into [-1, 1]"""
+        return max(min(reward, 1), -1)
+
+    def get_compatible_snapshot_tag(self):
+        action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
+        memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
+        tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
+
+        valid_tags = set(action_tags)
+        valid_tags.intersection_update(memo_tags)
+        valid_tags.intersection_update(tjs_tags)
+
+        return list(valid_tags)
+
+    def time_to_save(self):
+        trained_steps = self.total_t - self.hp.observation_t + 1
+        return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
+
+    def act(self, obs: List[str], scores: List[int], dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Optional[List[str]]:
+        """
+        Acts upon the current list of observations.
+        One text command must be returned for each observation.
+        :param obs:
+        :param scores: score obtained so far for each game
+        :param dones: whether a game is finished
+        :param infos:
+        :return:
+
+        Notes:
+            Commands returned for games marked as `done` have no effect.
+            The states for finished games are simply copy over until all
+            games are done.
+        """
+
+        if not self._episode_has_started:
+            self._start_episode(obs, infos)
+
+        assert len(obs) == 1, "cannot handle batch game training"
+        immediate_reward = self.clip_reward(scores[0] - self.cumulative_score - 0.1)
+        self.cumulative_score = scores[0]
+
+        cleaned_obs = self.preprocess_master_output(obs[0])
+        obs_idx = self.index_string(cleaned_obs.split())
+        self.tjs.append_master_txt(obs_idx)
+
+        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, action: {},"
+                       " master: {}, reward: {}, is_terminal: {}".format(
+                "train" if self.is_training else "eval", self.total_t,
+                self.in_game_t, self.eps, self._last_action, cleaned_obs,
+                immediate_reward, dones[0]))
+            self.memo.append(DRRNMemo(
+                tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
+                gid=self.game_id, aid=self._last_action_idx,
+                reward=immediate_reward,
+                is_terminal=dones[0], action_mask=self._last_actions_mask))
+        else:
+            self.info("mode: {}, master: {}, max_score: {}".format(
+                "train" if self.is_training else "eval", cleaned_obs,
+                infos["max_score"]))
+
+        # notice the position of all(dones)
+        # make sure add the last action-master pair into memory
+        if all(dones):
+            self._end_episode(obs, scores, infos)
+            return  # Nothing to return.
+
+        admissible_commands = infos["admissible_commands"][0]
+        actions_mask = self.action_collector.extend(admissible_commands)
+        action_idx, player_t, report = self.get_an_eps_action(actions_mask)
+        self.tjs.append_player_txt(
+            self.action_collector.get_action_matrix()[action_idx])
+        self._last_action_idx = action_idx
+        self._last_actions_mask = actions_mask
+        self._last_action = player_t
+        if self.is_training and self.total_t >= self.hp.observation_t:
+            if self.total_t == self.hp.observation_t:
+                self.epoch_start_t = ctime()
+            # prepare target nn
+            if self.target_model is None:
+                if self.hp.delay_target_network != 0:
+                    # save model for loading of target net
+                    self.debug("save nn for target net")
+                    self.saver.save(
+                        self.sess, self.chkp_prefix,
+                        global_step=tf.train.get_or_create_global_step(
+                            graph=self.model.graph))
+                    self.debug("create and load target net")
+                    self.target_sess, _, self.target_saver, self.target_model =\
+                        self.create_n_load_model()
+                else:
+                    self.debug("target net is the same with nn")
+                    self.target_model = self.model
+                    self.target_sess = self.sess
+                    self.target_saver = self.saver
+
+            self.eps = self.annealing_eps(
+                self.hp.init_eps, self.hp.final_eps,
+                self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
+            self.train_impl(self.sess, self.total_t,
+                            self.train_summary_writer, self.target_sess)
+
+            if self.time_to_save():
+                epoch_end_t = ctime()
+                delta_time = epoch_end_t - self.epoch_start_t
+                self.info('current epoch end')
+                reports_time = [
+                    ('epoch time', delta_time),
+                    ('#batches per epoch', self.hp.save_gap_t),
+                    ('avg step time',
+                     delta_time * 1.0 / self.hp.save_gap_t)]
+                self.info(self.report_status(reports_time))
+                self.save_snapshot()
+                restore_from = tf.train.latest_checkpoint(
+                    os.path.join(self.model_dir, 'last_weights'))
+                self.target_saver.restore(self.target_sess, restore_from)
+                self.info("target net load from: {}".format(restore_from))
+                self.snapshot_saved = True
+                self.info("snapshot saved, ready for evaluation")
+                self.epoch_start_t = ctime()
+        self.total_t += 1
+        self.in_game_t += 1
+        return [player_t] * len(obs)
