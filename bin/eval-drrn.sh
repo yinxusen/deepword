@@ -2,8 +2,6 @@
 
 set -e -x
 
-export PYTHONPATH="$HOME/git-store/zplayer/python/:$PYTHONPATH"
-
 FWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 PDIR="$FWDIR/.."
 filename=$(basename "$0")

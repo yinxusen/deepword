@@ -6,7 +6,6 @@
 
 set -e -x
 
-export PYTHONPATH="$HOME/git-store/zplayer/python/:$PYTHONPATH"
 
 if [[ `hostname` =~ "hpc" ]]; then
     PDIR=""

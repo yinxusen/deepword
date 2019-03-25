@@ -16,7 +16,6 @@ echo "SLURM_NNODES"=$SLURM_NNODES
 echo "SLURMTMPDIR="$SLURMTMPDIR
 echo "working directory = "$SLURM_SUBMIT_DIR
 
-export PYTHONPATH="$HOME/git-store/zplayer/python/:$PYTHONPATH"
 
 if [[ `hostname` =~ "hpc" ]]; then
     PDIR="$SLURM_SUBMIT_DIR"
