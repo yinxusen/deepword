@@ -37,7 +37,7 @@ else
     filename="${filename%.*}"
 fi
 
-MODELHOME="$PDIR/../experiments/agent-drrn-${filename}"
+MODELHOME="$PDIR/../experiments-drrn/agent-drrn-${filename}"
 VOCAB_FILE="$PDIR/resources/vocab.txt"
 GAME_DIR="$PDIR/../textworld-competition-games/train"
 
