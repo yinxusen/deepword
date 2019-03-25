@@ -39,7 +39,7 @@ fi
 
 MODELHOME="$PDIR/../experiments/agent-drrn-${filename}"
 VOCAB_FILE="$PDIR/resources/vocab.txt"
-GAME_DIR="$PDIR/../textworld-competition-games/train"
+GAME_DIR="$PDIR/../textworld-competition-games/train-recipe1"
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
