@@ -14,11 +14,8 @@ else
     PDIR="$FWDIR/.."
 fi
 
-# DATAHOME="$PDIR/../textworld-competition/starting_kit/sample_games/tw-cooking-recipe1+take1-11Oeig8bSVdGSp78.ulx"
-DATAHOME="$PDIR/../textworld-competition/starting_kit/sample_games/tw-cooking-recipe2+take2+cut+open-BnYEixa9iJKmFZxO.ulx"
-MODELHOME="$PDIR/../experiments/agent-drrn-test"
+MODELHOME="$PDIR/../experiments-drrn/agent-drrn-test"
 
-ACTION_FILE=""
 VOCAB_FILE="$PDIR/resources/vocab.txt"
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
@@ -31,10 +28,10 @@ fi
 
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
-    -d $DATAHOME -m $MODELHOME --mode train-drrn \
-    --game_dir /Users/xusenyin/git-store/textworld-competition/starting_kit/sample_games \
+    -m $MODELHOME --mode train-drrn \
+    --game_dir /Users/xusenyin/git-store/textworld-competition-games/train-1 \
     --vocab_file $VOCAB_FILE \
-    --annealing_eps_t 100000 --annealing_gamma_t 10 --observation_t 500 --replay_mem 100000 \
-    --eval_episode 5 --embedding_size 64 \
-    --save_gap_t 100 --batch_size 32 --game_episode_terminal_t 300 --model_creator CNNEncoderDRRN
+    --annealing_eps_t 300 --annealing_gamma_t 10 --observation_t 50 --replay_mem 100 \
+    --eval_episode 1 --embedding_size 64 \
+    --save_gap_t 50 --batch_size 32 --game_episode_terminal_t 20 --model_creator CNNEncoderDRRN
 popd

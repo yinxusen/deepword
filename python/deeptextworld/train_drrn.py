@@ -111,6 +111,10 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
     env_id = textworld.gym.make_batch(
         env_id, batch_size=batch_size, parallel=False)
     env = None
+
+    prev_total_scores = 0
+    prev_total_steps = sys.maxsize
+
     while True:
         with cv:
             cv.wait()
@@ -125,9 +129,21 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
             eval_results = run_agent(
                 cv, agent, env, game_names, nb_epochs, batch_size)
             eval_end_t = ctime()
+            agg_res, total_scores, total_steps = agg_results(eval_results)
             logger.info("eval_results: {}".format(eval_results))
-            logger.info("eval aggregated results: {}".format(agg_results(eval_results)))
+            logger.info("eval aggregated results: {}".format(agg_res))
+            logger.info("total scores: {}, total steps: {}".format(
+                total_scores, total_steps))
             logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
+            if ((total_scores > prev_total_scores) or
+                    ((total_scores == prev_total_scores) and
+                     (total_steps < prev_total_steps))):
+                logger.info("found better agent, save model ...")
+                prev_total_scores = total_scores
+                prev_total_steps = total_steps
+                agent.save_best_model()
+            else:
+                logger.info("no better model, pass ...")
 
 
 def run_main(hp, model_dir, game_dir, batch_size=1, max_games_used=None):
@@ -194,6 +210,8 @@ def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None):
 
 def agg_results(eval_results):
     ret_val = {}
+    total_scores = 0
+    total_steps = 0
     for game_id in eval_results:
         res = eval_results[game_id]
         agg_score = sum(map(lambda r: r[0], res))
@@ -201,4 +219,6 @@ def agg_results(eval_results):
         agg_step = sum(map(lambda r: r[2], res))
         agg_nb_won = len(list(filter(lambda r: r[3] , res)))
         ret_val[game_id] = (agg_score, agg_max_score, agg_step, agg_nb_won)
-    return ret_val
+        total_scores += agg_score
+        total_steps += agg_step
+    return ret_val, total_scores, total_steps

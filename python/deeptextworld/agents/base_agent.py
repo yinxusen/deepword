@@ -53,8 +53,10 @@ class BaseAgent(Logging):
         self.target_sess = None
         self.is_training = True
         self.train_summary_writer = None
-        self.chkp_prefix = os.path.join(self.model_dir,
-                                        'last_weights', 'after-epoch')
+        self.chkp_prefix = os.path.join(
+            self.model_dir, 'last_weights', 'after-epoch')
+        self.best_chkp_prefix = os.path.join(
+            self.model_dir, 'best_weights', 'after-epoch')
         self.saver = None
         self.target_saver = None
         self._last_action_idx = None
@@ -328,6 +330,14 @@ class BaseAgent(Logging):
         self._last_actions_mask = None
         self._last_action = None
         self.game_id = None
+
+    def save_best_model(self):
+        self.info("save the best model so far")
+        self.saver.save(
+            self.sess, self.best_chkp_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+        self.info("the best model saved")
 
     def save_snapshot(self):
         self.info('save model')
