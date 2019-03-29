@@ -301,7 +301,9 @@ class BaseAgent(Logging):
         if not self._initialized:
             self._init()
         self.tjs.add_new_tj()
-        self.game_id = hashlib.md5(obs[0].encode("utf-8")).hexdigest()
+        # use stronger game identity
+        self.game_id = hashlib.md5(
+            (obs[0] + infos["extra.recipe"][0]).encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self.cumulative_score = 0
