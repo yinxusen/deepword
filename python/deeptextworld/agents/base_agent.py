@@ -433,7 +433,9 @@ class BaseAgent(Logging):
         immediate_reward = self.clip_reward(scores[0] - self.cumulative_score - 0.1)
         self.cumulative_score = scores[0]
 
-        cleaned_obs = self.preprocess_master_output(obs[0])
+        recipe = infos["extra.recipe"]
+        master = obs[0] + recipe[0]
+        cleaned_obs = self.preprocess_master_output(master)
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
