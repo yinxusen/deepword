@@ -38,8 +38,8 @@ parser.add_argument('--tjs_creator', type=str)
 parser.add_argument('--game_clazz', type=str)
 parser.add_argument('--delay_target_network', type=int)
 parser.add_argument('--max_action_len', type=int)
-parser.add_argument('--max_games_used', type=int)
 parser.add_argument('--eval_randomness', type=float)
+parser.add_argument('--eval_mode', type=str, default="all")
 
 
 if __name__ == '__main__':
@@ -56,7 +56,7 @@ if __name__ == '__main__':
             default_path=log_config_file,
             local_log_filename=os.path.join(model_dir, 'game_script.log'))
         hp = load_hparams_for_training(config_file, args)
-        run_main(hp, model_dir, game_dir=args.game_dir, max_games_used=args.max_games_used)
+        run_main(hp, model_dir, game_dir=args.game_dir)
     elif args.mode == "eval-drrn":
         from deeptextworld.train_drrn import run_eval
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -66,7 +66,9 @@ if __name__ == '__main__':
             local_log_filename=None)
         pre_config_file = os.path.join(model_dir, 'hparams.json')
         hp = load_hparams_for_evaluation(pre_config_file, args)
-        run_eval(hp, model_dir, game_dir=args.game_dir, eval_randomness=args.eval_randomness)
+        run_eval(
+            hp, model_dir, game_dir=args.game_dir,
+            eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))
 

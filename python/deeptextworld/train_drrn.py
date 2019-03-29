@@ -146,19 +146,17 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
                 logger.info("no better model, pass ...")
 
 
-def run_main(hp, model_dir, game_dir, batch_size=1, max_games_used=None):
-    game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+def split_train_eval(game_dir):
+    # have to sort first, otherwise after shuffling the result is different
+    # on different platforms, e.g. Linux VS MacOS.
+    game_files = sorted(glob.glob(os.path.join(game_dir, "*.ulx")))
     random.Random(42).shuffle(game_files)
-    if max_games_used is not None:
-        game_files = game_files[:max_games_used]
-
     if len(game_files) == 0:
         print("no game files found!")
-        return -1
+        return None
     elif len(game_files) == 1:
         train_games = game_files
         eval_games = game_files
-        pass
     elif len(game_files) < 10:  # use the last one as eval
         train_games = game_files[:-1]
         eval_games = game_files[-1:]
@@ -166,6 +164,14 @@ def run_main(hp, model_dir, game_dir, batch_size=1, max_games_used=None):
         num_train = int(len(game_files) * 0.9)
         train_games = game_files[:num_train]
         eval_games = game_files[num_train:]
+    return train_games, eval_games
+
+
+def run_main(hp, model_dir, game_dir, batch_size=1):
+    games = split_train_eval(game_dir)
+    if games is None:
+        exit(-1)
+    train_games, eval_games = games
     cond_of_eval = Condition()
     eval_worker = Thread(
         name='eval_worker', target=evaluation,
@@ -177,10 +183,27 @@ def run_main(hp, model_dir, game_dir, batch_size=1, max_games_used=None):
           nb_epochs=hp.annealing_eps_t, batch_size=batch_size)
 
 
-def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None):
+def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None,
+             eval_mode="all"):
     logger = logging.getLogger("eval")
     logger.info(hp.num_conv_filters)
-    game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    games = split_train_eval(game_dir)
+    if games is None:
+        exit(-1)
+    train_games, eval_games = games
+
+    game_files = None
+    if eval_mode == "all":
+        # remove possible repeated games
+        game_files = list(set(train_games + eval_games))
+    elif eval_mode == "eval-train":
+        game_files = train_games
+    elif eval_mode == "eval-eval":
+        game_files = eval_games
+    else:
+        print("unknown evaluation mode. choose from [all|eval-train|eval-eval]")
+        exit(-1)
+
     logger.info("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
 
@@ -203,8 +226,11 @@ def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None):
     eval_results = run_agent(
         None, agent, env, game_names, hp.eval_episode, batch_size)
     eval_end_t = ctime()
+    agg_res, total_scores, total_steps = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))
-    logger.info("eval aggregated results: {}".format(agg_results(eval_results)))
+    logger.info("eval aggregated results: {}".format(agg_res))
+    logger.info("total scores: {}, total steps: {}".format(
+        total_scores, total_steps))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
