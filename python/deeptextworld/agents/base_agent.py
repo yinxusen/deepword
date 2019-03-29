@@ -463,7 +463,7 @@ class BaseAgent(Logging):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
 
-        admissible_commands = infos["admissible_commands"][0]
+        admissible_commands = infos["admissible_commands"][0] + ["inventory"]
         actions_mask = self.action_collector.extend(admissible_commands)
         action_idx, player_t, report = self.get_an_eps_action(actions_mask)
         self.tjs.append_player_txt(

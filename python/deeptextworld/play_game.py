@@ -35,6 +35,7 @@ def main(game_file):
         command = input("> ")
         obs, scores, dones, infos = env.step([command])
 
+    print(obs[0])
     print(infos["extra.recipe"][0])
     print("has won: {}".format(infos["has_won"][0]))
 
