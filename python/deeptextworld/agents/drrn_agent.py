@@ -20,7 +20,7 @@ class DRRNAgent(BaseAgent):
         request_infos = EnvInfos()
         if self.is_training:
             request_infos.description = True
-            request_infos.inventory = False
+            request_infos.inventory = True
             request_infos.entities = False
             request_infos.verbs = False
             request_infos.max_score = True
@@ -29,7 +29,7 @@ class DRRNAgent(BaseAgent):
             request_infos.admissible_commands = True
         else:
             request_infos.description = True
-            request_infos.inventory = False
+            request_infos.inventory = True
             request_infos.entities = False
             request_infos.verbs = False
             request_infos.max_score = True

@@ -122,8 +122,8 @@ class BaseAgent(Logging):
         return memory
 
     @classmethod
-    def lower_tokenize(cls, sentence):
-        return [t.lower() for t in word_tokenize(sentence)]
+    def lower_tokenize(cls, master):
+        return ' '.join([t.lower() for t in word_tokenize(master)])
 
     def preprocess_master_output(self, master):
         return ' '.join(
@@ -436,8 +436,14 @@ class BaseAgent(Logging):
         self.cumulative_score = scores[0]
 
         recipe = infos["extra.recipe"]
-        master = obs[0] + recipe[0]
-        cleaned_obs = self.preprocess_master_output(master)
+        inventory = infos["inventory"]
+        # check recipe in the beginning
+        if self.in_game_t == 0:
+            master = "{} {} {}".format(
+                infos["description"][0], recipe[0], inventory[0])
+        else:
+            master = obs[0]
+        cleaned_obs = self.lower_tokenize(master)
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
@@ -463,7 +469,8 @@ class BaseAgent(Logging):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
 
-        admissible_commands = infos["admissible_commands"][0] + ["inventory"]
+        # inventory should be always the first action.
+        admissible_commands = ["inventory"] + infos["admissible_commands"][0]
         # remove commands currently sound useless
         admissible_commands = list(
             filter(lambda c: not c.startswith("examine"), admissible_commands))
