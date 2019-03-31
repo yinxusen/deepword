@@ -17,4 +17,4 @@ fi
 
 ./bin/run.sh python/deeptextworld/main.py \
     --game_dir $DATAHOME -m $MODELHOME \
-    --mode eval-drrn --eval_episode 10 --eval_randomness 0.05 --eval_mode all
+    --mode eval-drrn --eval_episode 10 --eval_randomness 0.05 --eval_mode eval-eval --eval_episode 1

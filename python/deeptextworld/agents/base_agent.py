@@ -67,6 +67,9 @@ class BaseAgent(Logging):
         self.cumulative_score = 0
         self.snapshot_saved = False
         self.epoch_start_t = 0
+        self.prev_cumulative_penalty = -0.1
+        self.prev_player_t = None
+        self.prev_master_t = None
 
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
 
@@ -444,6 +447,18 @@ class BaseAgent(Logging):
         else:
             master = obs[0]
         cleaned_obs = self.lower_tokenize(master)
+
+        if (cleaned_obs == self.prev_master_t and
+            self._last_action == self.prev_player_t and immediate_reward < 0):
+            immediate_reward = max(-1.0, immediate_reward + self.prev_cumulative_penalty)
+            self.debug("repeated bad try, decrease reward by {}, reward changed to {}".format(
+                self.prev_cumulative_penalty, immediate_reward))
+            self.prev_cumulative_penalty = self.prev_cumulative_penalty - 0.1
+        else:
+            self.prev_player_t = self._last_action
+            self.prev_master_t = cleaned_obs
+            self.prev_cumulative_penalty = -0.1
+
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
