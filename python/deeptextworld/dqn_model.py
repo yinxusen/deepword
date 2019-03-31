@@ -88,7 +88,8 @@ class CNNEncoderDQN(BaseDQN):
     def get_q_actions(self):
         inner_states = dqn.encoder_cnn(
             self.inputs["src"], self.src_embeddings, self.pos_embeddings,
-            self.filter_sizes, self.num_filters, self.hp.embedding_size)
+            self.filter_sizes, self.num_filters, self.hp.embedding_size,
+            self.is_infer)
         q_actions = dqn.decoder_dense_classification(inner_states,
                                                      self.hp.n_actions)
         return q_actions

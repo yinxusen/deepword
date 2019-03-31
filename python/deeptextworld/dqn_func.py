@@ -105,7 +105,7 @@ def encoder_cnn_prepare_input_two_facets(src, src_embeddings, pos_embeddings):
     return src_emb_expanded
 
 
-def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size):
+def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is_infer=False):
     layer_outputs = []
     for i, fs in enumerate(filter_sizes):
         with tf.variable_scope("conv-avgpool-block-%s" % fs):
@@ -124,7 +124,10 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size):
                 padding="VALID", name="conv")
             # Apply nonlinearity
             h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-            layer_outputs.append(h)
+            dropout_h = tf.layers.dropout(
+                inputs=h, rate=0.4,
+                training=(not is_infer))
+            layer_outputs.append(dropout_h)
 
     # Combine all the pooled features
     # Squeeze the 3rd dim that is the col of conv result
@@ -135,15 +138,16 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size):
 def encoder_cnn_block(
         src, src_embeddings, pos_embeddings,
         filter_sizes, num_filters,
-        embedding_size):
+        embedding_size, is_infer=False):
     in_tn = encoder_cnn_prepare_input_two_facets(
         src, src_embeddings, pos_embeddings)
-    return encoder_cnn_base(in_tn, filter_sizes, num_filters, embedding_size)
+    return encoder_cnn_base(in_tn, filter_sizes, num_filters,
+                            embedding_size, is_infer)
 
 
 def encoder_cnn(
         src, src_embeddings, pos_embeddings, filter_sizes, num_filters,
-        embedding_size):
+        embedding_size, is_infer=False):
     """
     encode state with CNN, refer to
     Convolutional Neural Networks for Sentence Classification
@@ -157,7 +161,7 @@ def encoder_cnn(
     with tf.variable_scope("cnn_encoder"):
         h_cnn = encoder_cnn_block(
             src, src_embeddings, pos_embeddings, filter_sizes, num_filters,
-            embedding_size)
+            embedding_size, is_infer)
         pooled = tf.reduce_max(h_cnn, axis=1)
         num_filters_total = num_filters * len(filter_sizes)
         inner_states = tf.reshape(pooled, [-1, num_filters_total])
@@ -512,7 +516,7 @@ def test():
     embedding_size = 3
     sos_id = 1
     inner_state = encoder_cnn(
-        src, src_embeddings, pos_embeddings, filter_sizes, num_filters, embedding_size)
+        src, src_embeddings, pos_embeddings, filter_sizes, num_filters, embedding_size, is_infer=False)
 
     # q_actions = decoder_fix_len_cnn_multilayers(
     #     inner_state, src_embeddings, pos_embeddings, n_tokens,

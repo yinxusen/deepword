@@ -82,7 +82,8 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
             h_state = dqn.encoder_cnn(
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size)
+                self.filter_sizes, self.num_filters, self.hp.embedding_size,
+                self.is_infer)
             h_state_expanded = tf.expand_dims(h_state, axis=1)
 
             flat_actions = tf.reshape(self.inputs["actions"],
@@ -90,7 +91,8 @@ class CNNEncoderDRRN(CNNEncoderDQN):
 
             flat_h_actions = dqn.encoder_cnn(
                 flat_actions, self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size)
+                self.filter_sizes, self.num_filters, self.hp.embedding_size,
+                self.is_infer)
             h_actions = tf.reshape(flat_h_actions,
                                    shape=(batch_size, self.n_actions, -1))
             actions_mask = tf.expand_dims(self.inputs["actions_mask"],
