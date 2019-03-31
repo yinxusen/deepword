@@ -464,6 +464,13 @@ class BaseAgent(Logging):
             return  # Nothing to return.
 
         admissible_commands = infos["admissible_commands"][0] + ["inventory"]
+        # remove commands currently sound useless
+        admissible_commands = list(
+            filter(lambda c: not c.startswith("examine"), admissible_commands))
+        admissible_commands = list(
+            filter(lambda c: not c.startswith("close"), admissible_commands))
+        admissible_commands = list(
+            filter(lambda c: not c.startswith("insert"), admissible_commands))
         actions_mask = self.action_collector.extend(admissible_commands)
         action_idx, player_t, report = self.get_an_eps_action(actions_mask)
         self.tjs.append_player_txt(
