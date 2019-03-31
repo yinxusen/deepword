@@ -86,6 +86,25 @@ def encoder_cnn_prepare_input(src, src_embeddings, pos_embeddings):
     return src_emb_expanded
 
 
+def encoder_cnn_prepare_input_two_facets(src, src_embeddings, pos_embeddings):
+    """
+    encode state with CNN, refer to
+    Convolutional Neural Networks for Sentence Classification
+    :param src: placeholder, (tf.int32, [batch_size, src_len])
+    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+    :param pos_embeddings: (tf.float32, [pos_emb_len, embedding_size])
+    :param filter_sizes: list of ints, e.g. [3, 4, 5]
+    :param num_filters: number of filters of each filter_size
+    :param embedding_size: embedding size
+    :return inner_state: (tf.float32, [batch_size, max_src_len, len(filter_sizes) * num_filters])
+    """
+    src_emb = tf.nn.embedding_lookup(src_embeddings, src)
+    pos_emb = tf.slice(pos_embeddings, [0, 0], [tf.shape(src_emb)[1], -1])
+    src_pos_emb = src_emb + pos_emb
+    src_emb_expanded = tf.stack([src_emb, src_pos_emb], axis=-1)
+    return src_emb_expanded
+
+
 def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size):
     layer_outputs = []
     for i, fs in enumerate(filter_sizes):
@@ -93,7 +112,7 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size):
             src_paddings = tf.constant([[0, 0], [fs - 1, 0], [0, 0], [0, 0]])
             src_w_pad = tf.pad(input_tensor, paddings=src_paddings, mode="CONSTANT")
             # Convolution Layer
-            filter_shape = [fs, embedding_size, 1, num_filters]
+            filter_shape = [fs, embedding_size, 2, num_filters]
             w = tf.get_variable(
                 name="W",
                 initializer=lambda: tf.truncated_normal(filter_shape, stddev=0.1))
@@ -117,7 +136,8 @@ def encoder_cnn_block(
         src, src_embeddings, pos_embeddings,
         filter_sizes, num_filters,
         embedding_size):
-    in_tn = encoder_cnn_prepare_input(src, src_embeddings, pos_embeddings)
+    in_tn = encoder_cnn_prepare_input_two_facets(
+        src, src_embeddings, pos_embeddings)
     return encoder_cnn_base(in_tn, filter_sizes, num_filters, embedding_size)
 
 
@@ -486,19 +506,20 @@ def test():
     src_embeddings = np.asarray([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.1, 0.4, 0.6]], dtype=np.float32)
     pos_embeddings = np.asarray([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.1, 0.4, 0.6], [0.1, 0.4, 0.6], [0.1, 0.4, 0.6], [0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.1, 0.4, 0.6], [0.1, 0.4, 0.6], [0.1, 0.4, 0.6]], dtype=np.float32)
     filter_size = 3
+    filter_sizes = [1, 2]
     n_tokens = 3
     num_filters = 2
     embedding_size = 3
     sos_id = 1
-    inner_state = encoder_cnn_multilayers(
-        src, src_embeddings, pos_embeddings, 3, filter_size, embedding_size)
+    inner_state = encoder_cnn(
+        src, src_embeddings, pos_embeddings, filter_sizes, num_filters, embedding_size)
 
-    q_actions = decoder_fix_len_cnn_multilayers(
-        inner_state, src_embeddings, pos_embeddings, n_tokens,
-        embedding_size, 3, filter_size, sos_id)
+    # q_actions = decoder_fix_len_cnn_multilayers(
+    #     inner_state, src_embeddings, pos_embeddings, n_tokens,
+    #     embedding_size, 3, filter_size, sos_id)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    res = sess.run(q_actions)
+    res = sess.run(inner_state)
     print(res)
 
 
