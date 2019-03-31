@@ -468,11 +468,18 @@ class BaseAgent(Logging):
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self._last_action, cleaned_obs,
                 immediate_reward, dones[0]))
-            self.memo.append(DRRNMemo(
-                tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-                gid=self.game_id, aid=self._last_action_idx,
-                reward=immediate_reward,
-                is_terminal=dones[0], action_mask=self._last_actions_mask))
+
+            tid_ = self.tjs.get_current_tid()
+            sid_ = self.tjs.get_last_sid()
+            importance_to_repeat = 10 if immediate_reward > 0 else 1
+            if importance_to_repeat > 1:
+                self.info("encounter important sample, repeat 10 times in memo")
+            for _ in range(importance_to_repeat):
+                self.memo.append(DRRNMemo(
+                    tid=tid_, sid=sid_,
+                    gid=self.game_id, aid=self._last_action_idx,
+                    reward=immediate_reward,
+                    is_terminal=dones[0], action_mask=self._last_actions_mask))
         else:
             self.info("mode: {}, master: {}, max_score: {}".format(
                 "train" if self.is_training else "eval", cleaned_obs,
