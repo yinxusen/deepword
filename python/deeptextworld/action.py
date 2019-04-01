@@ -77,7 +77,7 @@ class ActionCollector(Logging):
         return word_tokenize(action)
 
     def extend(self, actions):
-        bit_mask_vec = bitarray(2**7, endian="little")
+        bit_mask_vec = bitarray(self.n_actions, endian="little")
         bit_mask_vec[::] = False
         bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
         for a in actions:

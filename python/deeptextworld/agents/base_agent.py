@@ -74,6 +74,7 @@ class BaseAgent(Logging):
 
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
+        self.expanded_words = None
 
 
     @classmethod
@@ -166,9 +167,12 @@ class BaseAgent(Logging):
            retval.append(bit_mask.tolist())
         return np.asarray(retval, dtype=np.int32)
 
-    @classmethod
-    def zero_mask_bytes(cls):
-        bit_mask_vec = bitarray(2**9, endian="little")
+    def zero_mask_bytes(self):
+        """
+        self.hp.n_actions should be in the format of 2**n
+        :return:
+        """
+        bit_mask_vec = bitarray(self.hp.n_actions, endian="little")
         bit_mask_vec[::] = False
         bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
         return bit_mask_vec.tobytes()
@@ -441,7 +445,29 @@ class BaseAgent(Logging):
                 contained.append(a)
             else:
                 others.append(a)
-        return contained, others
+
+        expanded_words = self.one_step_expand_theme_words(contained)
+        self.info("expanded theme words: {}".format(expanded_words))
+        if self.expanded_words is None:
+            self.expanded_words = expanded_words
+        else:
+            self.expanded_words += expanded_words
+
+        new_others = []
+        new_contained = []
+        for a in others:
+            if self.contain_words(a, self.expanded_words):
+                new_contained.append(a)
+            else:
+                new_others.append(a)
+
+        return contained + new_contained, new_others
+
+    @classmethod
+    def one_step_expand_theme_words(cls, theme_words_contained_actions):
+        with_clauses = list(filter(lambda a: "with" in a, theme_words_contained_actions))
+        expanded_words = list(map(lambda a: a.split("with")[-1].strip(), with_clauses))
+        return expanded_words
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
