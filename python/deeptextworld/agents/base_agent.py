@@ -1,6 +1,7 @@
 import glob
 import hashlib
 import os
+import re
 import string
 from typing import List, Dict, Any, Optional
 
@@ -72,6 +73,7 @@ class BaseAgent(Logging):
         self.prev_master_t = None
 
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
+        self.theme_words = None
 
 
     @classmethod
@@ -304,13 +306,24 @@ class BaseAgent(Logging):
         if not self._initialized:
             self._init()
         self.tjs.add_new_tj()
+        recipe = infos["extra.recipe"]
         # use stronger game identity
         self.game_id = hashlib.md5(
-            (obs[0] + infos["extra.recipe"][0]).encode("utf-8")).hexdigest()
+            (obs[0] + recipe[0]).encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self.cumulative_score = 0
         self._episode_has_started = True
+
+        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+        theme_words_search = re.search(theme_regex, recipe[0].replace("\n", "<|>"))
+        self.theme_words = None
+        if theme_words_search:
+            theme_words = theme_words_search.group(1)
+            self.theme_words = list(
+                filter(lambda w: w != "",
+                       map(lambda w: w.strip(), theme_words.split("<|>"))))
+            self.debug("theme words: {}".format(", ".join(self.theme_words)))
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -414,6 +427,22 @@ class BaseAgent(Logging):
         trained_steps = self.total_t - self.hp.observation_t + 1
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
+    @classmethod
+    def contain_words(cls, sentence, words):
+        return any(map(lambda w: w in sentence, words))
+
+    def contain_theme_words(self, actions):
+        if self.theme_words is None:
+            return actions
+        contained = []
+        others = []
+        for a in actions:
+            if self.contain_words(a, self.theme_words):
+                contained.append(a)
+            else:
+                others.append(a)
+        return contained, others
+
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
         """
@@ -491,16 +520,24 @@ class BaseAgent(Logging):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
 
-        # inventory should be always the first action.
-        admissible_commands = ["inventory"] + infos["admissible_commands"][0]
-        # remove commands currently sound useless
-        admissible_commands = list(
-            filter(lambda c: not c.startswith("examine"), admissible_commands))
-        admissible_commands = list(
-            filter(lambda c: not c.startswith("close"), admissible_commands))
-        admissible_commands = list(
-            filter(lambda c: not c.startswith("insert"), admissible_commands))
-        actions_mask = self.action_collector.extend(admissible_commands)
+        # populate my own admissible actions
+        admissible_commands = infos["admissible_commands"][0]
+        contained, others = self.contain_theme_words(admissible_commands)
+        actions = ["inventory", "look"]
+        actions += contained
+        actions += list(filter(lambda a: a.startswith("go"), admissible_commands))
+        actions = list(filter(lambda c: not c.startswith("examine"), actions))
+        actions = list(filter(lambda c: not c.startswith("close"), actions))
+        actions = list(filter(lambda c: not c.startswith("insert"), actions))
+        actions = list(filter(lambda c: not c.startswith("eat"), actions))
+        actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        other_valid_commands = {"prepare meal", "eat meal"}
+        actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
+        actions += list(filter(lambda a: a.startswith("drop"), others))
+        self.debug("previous admissible actions: {}".format(", ".join(sorted(admissible_commands))))
+        self.debug("new admissible actions: {}".format(", ".join(sorted(actions))))
+
+        actions_mask = self.action_collector.extend(actions)
         action_idx, player_t, report = self.get_an_eps_action(actions_mask)
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
