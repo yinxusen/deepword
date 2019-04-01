@@ -49,7 +49,7 @@ class DRRNAgent(BaseAgent):
         action_mask = self.fromBytes([action_mask])[0]
         reports = []
         if np.random.random() < self.eps:
-            action_idx, player_t = get_random_1Daction_fairly(
+            action_idx, player_t = get_random_1Daction(
                 self.action_collector.get_actions(), action_mask)
             reports += [('random_action', action_idx),
                         ('action', player_t)]
