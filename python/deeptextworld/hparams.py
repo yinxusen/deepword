@@ -49,7 +49,7 @@ def default_hparams_agent():
         game_episode_terminal_t=5000,
         vocab_size=0,
         tgt_vocab_size=0,
-        n_actions=512,
+        n_actions=128,
         n_tokens_per_action=10,
         sos='<S>',
         eos='</S>',
