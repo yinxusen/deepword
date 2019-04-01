@@ -446,28 +446,7 @@ class BaseAgent(Logging):
             else:
                 others.append(a)
 
-        expanded_words = self.one_step_expand_theme_words(contained)
-        self.info("expanded theme words: {}".format(expanded_words))
-        if self.expanded_words is None:
-            self.expanded_words = expanded_words
-        else:
-            self.expanded_words += expanded_words
-
-        new_others = []
-        new_contained = []
-        for a in others:
-            if self.contain_words(a, self.expanded_words):
-                new_contained.append(a)
-            else:
-                new_others.append(a)
-
-        return contained + new_contained, new_others
-
-    @classmethod
-    def one_step_expand_theme_words(cls, theme_words_contained_actions):
-        with_clauses = list(filter(lambda a: "with" in a, theme_words_contained_actions))
-        expanded_words = list(map(lambda a: a.split("with")[-1].strip(), with_clauses))
-        return expanded_words
+        return contained, others
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
@@ -560,6 +539,7 @@ class BaseAgent(Logging):
         other_valid_commands = {"prepare meal", "eat meal"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
         actions += list(filter(lambda a: a.startswith("drop"), others))
+        actions += list(filter(lambda a: a.startswith("take"), others))
         self.debug("previous admissible actions: {}".format(", ".join(sorted(admissible_commands))))
         self.debug("new admissible actions: {}".format(", ".join(sorted(actions))))
 
