@@ -446,6 +446,34 @@ def get_random_1Daction(actions, mask=1):
     return action_idx, action
 
 
+def get_random_1Daction_fairly(actions, mask):
+    """
+    :param actions: action list
+    :param mask: mask for the action list. 1 means OK to choose, 0 means NO.
+           could be either an integer, or a numpy array the same size with
+           actions.
+    """
+    actions2idx = dict(map(lambda x: (x[1], x[0]), enumerate(actions)))
+
+    val_actions = list(
+        map(lambda x: x[1], filter(lambda x: x[0], zip(mask, actions))))
+    verbs = list(map(lambda a: a.split()[0], val_actions))
+
+    uniq_verbs = list(set(verbs))
+    print("unique verbs: {}".format(uniq_verbs))
+    rnd_dist_verbs = np.random.random(len(uniq_verbs))
+    verb_idx = choose_from_multinomial(rnd_dist_verbs)
+
+    chosen_actions = list(
+        filter(lambda a: a.split()[0] == uniq_verbs[verb_idx], val_actions))
+    rnd_dist = np.random.random(len(chosen_actions))
+    action_idx_in_chosen_actions = choose_from_multinomial(rnd_dist)
+
+    action = chosen_actions[action_idx_in_chosen_actions]
+    action_idx = actions2idx[action]
+    return action_idx, action
+
+
 def get_sampled_1Daction(q_actions_t, actions):
     """notice that the q_actions_t should be changed to probabilities first"""
     action_idx = choose_from_multinomial(q_actions_t)

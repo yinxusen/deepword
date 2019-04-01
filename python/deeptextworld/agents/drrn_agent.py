@@ -4,6 +4,7 @@ from textworld import EnvInfos
 from deeptextworld import drrn_model
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction
+from deeptextworld.dqn_func import get_random_1Daction_fairly
 from deeptextworld.utils import ctime
 
 
@@ -48,7 +49,7 @@ class DRRNAgent(BaseAgent):
         action_mask = self.fromBytes([action_mask])[0]
         reports = []
         if np.random.random() < self.eps:
-            action_idx, player_t = get_random_1Daction(
+            action_idx, player_t = get_random_1Daction_fairly(
                 self.action_collector.get_actions(), action_mask)
             reports += [('random_action', action_idx),
                         ('action', player_t)]
