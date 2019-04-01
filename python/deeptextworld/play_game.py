@@ -29,6 +29,7 @@ def main(game_file):
     request_infos.inventory = True
     request_infos.entities = True
     request_infos.verbs = True
+    request_infos.command_templates = True
     request_infos.max_score = True
     request_infos.has_won = True
     request_infos.extras = ["recipe"]
@@ -83,6 +84,8 @@ def main(game_file):
         print("has won: {}".format(infos["has_won"][0]))
         print("----------------------")
         print(infos["verbs"][0])
+        print("----------------------")
+        print(infos["command_templates"][0])
         print("----------------------")
         print(infos["entities"][0])
         command = input("> ")
