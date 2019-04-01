@@ -1,8 +1,26 @@
 import sys
+import re
 
 import gym
 import textworld.gym
 from textworld import EnvInfos
+
+
+def contain_words(sentence, words):
+    return any(map(lambda w: w in sentence, words))
+
+def contain_theme_words(theme_words, actions):
+    if theme_words is None:
+        return actions
+    contained = []
+    others = []
+    for a in actions:
+        if contain_words(a, theme_words):
+            contained.append(a)
+        else:
+            others.append(a)
+
+    return contained, others
 
 
 def main(game_file):
@@ -27,11 +45,38 @@ def main(game_file):
     obs, infos = env.reset()
     dones = [False] * len(obs)
     print("max score is {}".format(infos["max_score"][0]))
+    theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+    theme_words_search = re.search(theme_regex, infos["extra.recipe"][0].replace("\n", "<|>"))
+    if theme_words_search:
+        theme_words = theme_words_search.group(1)
+        theme_words = list(
+            filter(lambda w: w != "",
+                   map(lambda w: w.strip(), theme_words.split("<|>"))))
+    else:
+        theme_words = None
+
     while not all(dones):
+        # populate my own admissible actions
+        admissible_commands = infos["admissible_commands"][0]
+        contained, others = contain_theme_words(theme_words, admissible_commands)
+        actions = ["inventory", "look"]
+        actions += contained
+        actions += list(filter(lambda a: a.startswith("go"), admissible_commands))
+        actions = list(filter(lambda c: not c.startswith("examine"), actions))
+        actions = list(filter(lambda c: not c.startswith("close"), actions))
+        actions = list(filter(lambda c: not c.startswith("insert"), actions))
+        actions = list(filter(lambda c: not c.startswith("eat"), actions))
+        actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        other_valid_commands = {"prepare meal", "eat meal"}
+        actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
+        actions += list(filter(lambda a: a.startswith("drop"), others))
+        actions += list(filter(lambda a: a.startswith("take"), others))
         print("----------------------")
         print(obs[0])
         print("----------------------")
-        print("\n".join(infos["admissible_commands"][0]))
+        print("\n".join(actions))
+        print("\n")
+        print("{} actions reduced".format(len(admissible_commands) - len(actions)))
         print("----------------------")
         print(infos["extra.recipe"][0])
         print("----------------------")

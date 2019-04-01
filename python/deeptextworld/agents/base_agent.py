@@ -54,16 +54,17 @@ class BaseAgent(Logging):
         self.target_sess = None
         self.is_training = True
         self.train_summary_writer = None
-        self.chkp_prefix = os.path.join(
-            self.model_dir, 'last_weights', 'after-epoch')
-        self.best_chkp_prefix = os.path.join(
-            self.model_dir, 'best_weights', 'after-epoch')
+        self.chkp_path = os.path.join(self.model_dir, 'last_weights')
+        self.best_chkp_path = os.path.join(self.model_dir, 'best_weights')
+        self.chkp_prefix = os.path.join(self.chkp_path, 'after-epoch')
+        self.best_chkp_prefix = os.path.join(self.best_chkp_path, 'after-epoch')
         self.saver = None
         self.target_saver = None
         self._last_action_idx = None
         self._last_actions_mask = None
         self._last_action = None
         self.game_id = None
+        self.prev_report = None
 
         self.cumulative_score = 0
         self.snapshot_saved = False
@@ -190,9 +191,9 @@ class BaseAgent(Logging):
         self.is_training = True
         self._init()
 
-    def eval(self):
+    def eval(self, load_best=False):
         self.is_training = False
-        self._init()
+        self._init(load_best)
 
     def reset(self):
         self._initialized = False
@@ -221,7 +222,7 @@ class BaseAgent(Logging):
             total_parameters += variable_parameters
         return total_parameters
 
-    def create_n_load_model(self, placement="/device:GPU:0"):
+    def create_n_load_model(self, placement="/device:GPU:0", load_best=False):
         start_t = 0
         with tf.device(placement):
             model = self.create_model_instance()
@@ -232,8 +233,11 @@ class BaseAgent(Logging):
             train_sess.run(tf.global_variables_initializer())
             saver = tf.train.Saver(max_to_keep=self.hp.max_snapshot_to_keep,
                                    save_relative_paths=True)
-            restore_from = tf.train.latest_checkpoint(
-                os.path.join(self.model_dir, 'last_weights'))
+            if load_best:
+                restore_from = tf.train.latest_checkpoint(self.best_chkp_path)
+            else:
+                restore_from = tf.train.latest_checkpoint(self.chkp_path)
+
             if restore_from is not None:
                 # Reload weights from directory if specified
                 self.info("Try to restore parameters from: {}".format(restore_from))
@@ -255,7 +259,7 @@ class BaseAgent(Logging):
     def train_impl(self, sess, t, summary_writer, target_sess):
         raise NotImplementedError()
 
-    def _init(self):
+    def _init(self, load_best=False):
         """
         load actions, trajectories, memory, model, etc.
         """
@@ -293,8 +297,8 @@ class BaseAgent(Logging):
             self.train_summary_writer = tf.summary.FileWriter(
                 train_summary_dir, self.sess.graph)
         else:
-            self.sess, _, self.saver, self.model =\
-                self.create_n_load_model(placement="/device:GPU:1")
+            self.sess, _, self.saver, self.model = self.create_n_load_model(
+                placement="/device:GPU:1", load_best=load_best)
             self.eps = 0.05
             self.total_t = 0
         self._initialized = True
@@ -497,11 +501,11 @@ class BaseAgent(Logging):
         self.tjs.append_master_txt(obs_idx)
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, action: {},"
+            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
                        " master: {}, reward: {}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self._last_action, cleaned_obs,
-                immediate_reward, dones[0]))
+                self.in_game_t, self.eps, self.report_status(self.prev_report),
+                cleaned_obs, immediate_reward, dones[0]))
 
             tid_ = self.tjs.get_current_tid()
             sid_ = self.tjs.get_last_sid()
@@ -544,7 +548,7 @@ class BaseAgent(Logging):
         self.debug("new admissible actions: {}".format(", ".join(sorted(actions))))
 
         actions_mask = self.action_collector.extend(actions)
-        action_idx, player_t, report = self.get_an_eps_action(actions_mask)
+        action_idx, player_t, self.prev_report= self.get_an_eps_action(actions_mask)
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
         self._last_action_idx = action_idx

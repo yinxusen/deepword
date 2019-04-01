@@ -208,7 +208,7 @@ def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None,
     game_names = [os.path.basename(fn) for fn in game_files]
 
     agent = DRRNAgent(hp, model_dir)
-    agent.eval()
+    agent.eval(load_best=True)
     if eval_randomness is not None:
         agent.eps = eval_randomness
     logger.info("evaluation randomness: {}".format(agent.eps))
