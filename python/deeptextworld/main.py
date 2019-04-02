@@ -69,6 +69,27 @@ if __name__ == '__main__':
         run_eval(
             hp, model_dir, game_path=args.game_dir,
             eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
+    elif args.mode == "train-dqn":
+        from deeptextworld.train_dqn import run_main
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        log_config_file = '{}/../../conf/logging.yaml'.format(current_dir)
+        setup_logging(
+            default_path=log_config_file,
+            local_log_filename=os.path.join(model_dir, 'game_script.log'))
+        hp = load_hparams_for_training(config_file, args)
+        run_main(hp, model_dir, game_dir=args.game_dir)
+    elif args.mode == "eval-dqn":
+        from deeptextworld.train_dqn import run_eval
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        log_config_file = '{}/../../conf/logging-eval.yaml'.format(current_dir)
+        setup_logging(
+            default_path=log_config_file,
+            local_log_filename=None)
+        pre_config_file = os.path.join(model_dir, 'hparams.json')
+        hp = load_hparams_for_evaluation(pre_config_file, args)
+        run_eval(
+            hp, model_dir, game_path=args.game_dir,
+            eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))
 
