@@ -393,14 +393,19 @@ def get_best_1Daction(q_actions_t, actions, mask=None):
     :param q_actions_t: a q-vector of a state computed from TF at step t
     :param actions: action list
     """
+    action_idx, q_val = get_best_1D_q(q_actions_t, mask)
+    action = actions[action_idx]
+    return action_idx, q_val, action
+
+
+def get_best_1D_q(q_actions_t, mask=None):
     if mask:
         inv_mask = np.logical_not(mask)
         min_q_val = np.min(q_actions_t)
         q_actions_t = q_actions_t * mask + inv_mask * min_q_val
     action_idx = np.argmax(q_actions_t)
     q_val = q_actions_t[action_idx]
-    action = actions[action_idx]
-    return action_idx, q_val, action
+    return action_idx, q_val
 
 
 def choose_from_multinomial(dist):

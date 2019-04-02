@@ -3,7 +3,7 @@ from textworld import EnvInfos
 
 from deeptextworld import dqn_model
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction
+from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, get_best_1D_q
 from deeptextworld.dqn_func import get_random_1Daction_fairly
 from deeptextworld.utils import ctime
 
@@ -86,6 +86,14 @@ class DQNAgent(BaseAgent):
         reward = [m[0].reward for m in b_memory]
         is_terminal = [m[0].is_terminal for m in b_memory]
 
+        next_idx, next_states = self.memo.get_next_states(b_idx)
+        action_mask_t1 = (
+            [self.zero_mask_bytes()
+             if s.is_terminal else s.action_mask
+             for s in next_states])
+
+        action_mask_t1 = self.fromBytes(action_mask_t1)
+
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
@@ -101,12 +109,13 @@ class DQNAgent(BaseAgent):
                        self.model.src_len_: s_len})
         t2_end = ctime()
 
-        s_argmax_q = np.argmax(s_q_actions_dqn, axis=1)
         expected_q = np.zeros_like(reward)
         for i in range(len(expected_q)):
             expected_q[i] = reward[i]
             if not is_terminal[i]:
-                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q[i]]
+                s_argmax_q, _ = get_best_1D_q(
+                    s_q_actions_dqn[i, :], mask=action_mask_t1[i])
+                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
         t3 = ctime()
         _, summaries, loss_eval, abs_loss = sess.run(
