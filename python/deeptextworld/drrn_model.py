@@ -56,6 +56,20 @@ class CNNEncoderDRRN(CNNEncoderDQN):
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
         }
 
+        # use smaller config for action encoding
+        self.filter_sizes_action = [1, 2, 3]
+        self.num_filters_action = hp.num_conv_filters
+        self.num_tokens_actions = hp.num_tokens
+        self.embedding_size_action = 8
+
+        self.src_embeddings_action = tf.get_variable(
+            name="src_embeddings_action", dtype=tf.float32,
+            shape=[self.hp.vocab_size, self.embedding_size_action])
+        self.pos_embeddings_action = tf.get_variable(
+            name="pos_embeddings_action", dtype=tf.float32,
+            shape=[self.num_tokens, self.embedding_size_action])
+
+
     def get_q_actions(self):
         """
         compute the Q-vector from the relevance of hidden state and hidden actions
@@ -79,25 +93,27 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         """
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
-        with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
+        with tf.variable_scope("drrn-encoder", reuse=False):
             h_state = dqn.encoder_cnn(
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
             h_state_expanded = tf.expand_dims(h_state, axis=1)
 
-            flat_actions = tf.reshape(self.inputs["actions"],
-                                      shape=(-1, self.n_tokens_per_action))
-
-            flat_h_actions = dqn.encoder_cnn(
-                flat_actions, self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
-            h_actions = tf.reshape(flat_h_actions,
-                                   shape=(batch_size, self.n_actions, -1))
-            actions_mask = tf.expand_dims(self.inputs["actions_mask"],
-                                          axis=-1)
-            h_actions_masked = tf.multiply(h_actions, actions_mask)
+            with tf.variable_scope("drrn-action-encoder", reuse=False):
+                flat_actions = tf.reshape(self.inputs["actions"],
+                                          shape=(-1, self.n_tokens_per_action))
+                flat_h_actions = dqn.encoder_cnn(
+                    flat_actions, self.src_embeddings_action,
+                    self.pos_embeddings_action,
+                    self.filter_sizes_action, self.num_filters_action,
+                    self.embedding_size_action,
+                    self.is_infer)
+                h_actions = tf.reshape(flat_h_actions,
+                                       shape=(batch_size, self.n_actions, -1))
+                actions_mask = tf.expand_dims(self.inputs["actions_mask"],
+                                              axis=-1)
+                h_actions_masked = tf.multiply(h_actions, actions_mask)
 
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions_masked), axis=-1)
