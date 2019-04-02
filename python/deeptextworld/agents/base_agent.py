@@ -477,11 +477,9 @@ class BaseAgent(Logging):
         self.cumulative_score = scores[0]
 
         recipe = infos["extra.recipe"]
-        inventory = infos["inventory"]
         # check recipe in the beginning
         if self.in_game_t == 0:
-            master = "{} {} {}".format(
-                infos["description"][0], recipe[0], inventory[0])
+            master = "{} {}".format(recipe[0], infos["description"][0])
         else:
             master = obs[0]
         cleaned_obs = self.lower_tokenize(master)
