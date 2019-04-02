@@ -495,7 +495,7 @@ class BaseAgent(Logging):
             self.prev_master_t = cleaned_obs
             self.prev_cumulative_penalty = -0.1
 
-        if dones[0] and not infos["has_won"]:
+        if dones[0] and not infos["has_won"][0]:
             self.info("game terminate and fail,"
                       " final reward change from {} to -1".format(immediate_reward))
             immediate_reward = -1
