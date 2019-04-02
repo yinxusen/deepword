@@ -495,6 +495,11 @@ class BaseAgent(Logging):
             self.prev_master_t = cleaned_obs
             self.prev_cumulative_penalty = -0.1
 
+        if dones[0] and not infos["has_won"]:
+            self.info("game terminate and fail,"
+                      " final reward change from {} to -1".format(immediate_reward))
+            immediate_reward = -1
+
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
@@ -539,6 +544,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {"prepare meal", "eat meal", "examine cookbook"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
         actions += list(filter(
