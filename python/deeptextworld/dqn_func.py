@@ -388,11 +388,15 @@ def decoder_fix_len_cnn_multilayers(
     return q_actions
 
 
-def get_best_1Daction(q_actions_t, actions):
+def get_best_1Daction(q_actions_t, actions, mask=None):
     """
     :param q_actions_t: a q-vector of a state computed from TF at step t
     :param actions: action list
     """
+    if mask:
+        inv_mask = np.logical_not(mask)
+        min_q_val = np.min(q_actions_t)
+        q_actions_t = q_actions_t * mask + inv_mask * min_q_val
     action_idx = np.argmax(q_actions_t)
     q_val = q_actions_t[action_idx]
     action = actions[action_idx]

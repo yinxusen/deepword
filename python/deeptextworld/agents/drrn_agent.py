@@ -65,7 +65,8 @@ class DRRNAgent(BaseAgent):
                 self.model.actions_len_: [actions_len]
             })[0]
             action_idx, q_max, player_t = get_best_1Daction(
-                q_actions_t, self.action_collector.get_actions())
+                q_actions_t, self.action_collector.get_actions(),
+                mask=action_mask)
             reports += [('action', player_t), ('q_max', q_max),
                         ('q_argmax', action_idx)]
         return action_idx, player_t, reports
