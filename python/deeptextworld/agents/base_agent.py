@@ -75,7 +75,7 @@ class BaseAgent(Logging):
 
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
-        self.expanded_words = None
+        self.see_cookbook = False
 
 
     @classmethod
@@ -325,6 +325,7 @@ class BaseAgent(Logging):
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(theme_regex, recipe[0].replace("\n", "<|>"))
+        self.see_cookbook = False
         self.theme_words = None
         if theme_words_search:
             theme_words = theme_words_search.group(1)
@@ -476,10 +477,9 @@ class BaseAgent(Logging):
         immediate_reward = self.clip_reward(scores[0] - self.cumulative_score - 0.1)
         self.cumulative_score = scores[0]
 
-        recipe = infos["extra.recipe"]
-        # check recipe in the beginning
         if self.in_game_t == 0:
-            master = "{} {}".format(recipe[0], infos["description"][0])
+            # to avoid adding the text world logo in the first sentence
+            master = infos["description"][0]
         else:
             master = obs[0]
         cleaned_obs = self.lower_tokenize(master)
@@ -539,7 +539,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
-        other_valid_commands = {"prepare meal", "eat meal"}
+        other_valid_commands = {"prepare meal", "eat meal", "examine cookbook"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
@@ -552,7 +552,13 @@ class BaseAgent(Logging):
         all_actions = self.action_collector.get_actions()
 
         # use hard set actions in the beginning and the end of one episode
-        if self.in_game_t == 0:
+        if "examine cookbook" in actions and not self.see_cookbook:
+            player_t = "examine cookbook"
+            action_idx = all_actions.index(player_t)
+            self.prev_report = [('hard_set_action', action_idx),
+                                ('action', player_t)]
+            self.see_cookbook = True
+        elif self._last_action == "examine cookbook":
             player_t = "inventory"
             action_idx = all_actions.index(player_t)
             self.prev_report = [('hard_set_action', action_idx),
