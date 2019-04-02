@@ -509,9 +509,10 @@ class BaseAgent(Logging):
 
             tid_ = self.tjs.get_current_tid()
             sid_ = self.tjs.get_last_sid()
-            importance_to_repeat = 10 if immediate_reward > 0 else 1
-            if importance_to_repeat > 1:
-                self.info("encounter important sample, repeat 10 times in memo")
+            # importance_to_repeat = 10 if immediate_reward > 0 else 1
+            # if importance_to_repeat > 1:
+            #     self.info("encounter important sample, repeat 10 times in memo")
+            importance_to_repeat = 1 if immediate_reward > 0 else 1
             for _ in range(importance_to_repeat):
                 self.memo.append(DRRNMemo(
                     tid=tid_, sid=sid_,
@@ -542,13 +543,29 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
         other_valid_commands = {"prepare meal", "eat meal"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
-        actions += list(filter(lambda a: a.startswith("drop"), others))
-        actions += list(filter(lambda a: a.startswith("take"), others))
+        actions += list(filter(
+            lambda a: (a.startswith("drop") and
+                       all(map(lambda t: t not in a, self.theme_words))), others))
+        actions += list(filter(lambda a: a.startswith("take") and "knife" in a, others))
         self.debug("previous admissible actions: {}".format(", ".join(sorted(admissible_commands))))
         self.debug("new admissible actions: {}".format(", ".join(sorted(actions))))
 
         actions_mask = self.action_collector.extend(actions)
-        action_idx, player_t, self.prev_report= self.get_an_eps_action(actions_mask)
+        all_actions = self.action_collector.get_actions()
+
+        # use hard set actions in the beginning and the end of one episode
+        if self.in_game_t == 0:
+            player_t = "inventory"
+            action_idx = all_actions.index(player_t)
+            self.prev_report = [('hard_set_action', action_idx),
+                                ('action', player_t)]
+        elif self._last_action == "prepare meal" and immediate_reward > 0:
+            player_t = "eat meal"
+            action_idx = all_actions.index(player_t)
+            self.prev_report = [('hard_set_action', action_idx),
+                                ('action', player_t)]
+        else:
+            action_idx, player_t, self.prev_report= self.get_an_eps_action(actions_mask)
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
         self._last_action_idx = action_idx

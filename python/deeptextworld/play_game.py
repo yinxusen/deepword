@@ -70,8 +70,10 @@ def main(game_file):
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
         other_valid_commands = {"prepare meal", "eat meal"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
-        actions += list(filter(lambda a: a.startswith("drop"), others))
-        actions += list(filter(lambda a: a.startswith("take"), others))
+        actions += list(filter(
+            lambda a: (a.startswith("drop") and
+                       all(map(lambda t: t not in a, theme_words))), others))
+        actions += list(filter(lambda a: a.startswith("take") and "knife" in a, others))
         print("----------------------")
         print(obs[0])
         print("----------------------")
