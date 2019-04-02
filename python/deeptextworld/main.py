@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(argument_default=None)
 parser.add_argument('-m', '--model_dir', type=str)
 parser.add_argument('-d', '--data_dir', type=str)
 parser.add_argument('-c', '--config_file', type=str)
-parser.add_argument('--game_dir', type=str)
+parser.add_argument('--game_dir', type=str, help='[a dir|a game file]')
 parser.add_argument('--vocab_file', type=str)
 parser.add_argument('--tgt_vocab_file', type=str)
 parser.add_argument('--action_file', type=str)
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         pre_config_file = os.path.join(model_dir, 'hparams.json')
         hp = load_hparams_for_evaluation(pre_config_file, args)
         run_eval(
-            hp, model_dir, game_dir=args.game_dir,
+            hp, model_dir, game_path=args.game_dir,
             eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))

@@ -183,26 +183,32 @@ def run_main(hp, model_dir, game_dir, batch_size=1):
           nb_epochs=hp.annealing_eps_t, batch_size=batch_size)
 
 
-def run_eval(hp, model_dir, game_dir, batch_size=1, eval_randomness=None,
+def run_eval(hp, model_dir, game_path, batch_size=1, eval_randomness=None,
              eval_mode="all"):
     logger = logging.getLogger("eval")
     logger.info(hp.num_conv_filters)
-    games = split_train_eval(game_dir)
-    if games is None:
-        exit(-1)
-    train_games, eval_games = games
+    if os.path.isdir(game_path):
+        games = split_train_eval(game_path)
+        if games is None:
+            exit(-1)
+        train_games, eval_games = games
 
-    game_files = None
-    if eval_mode == "all":
-        # remove possible repeated games
-        game_files = list(set(train_games + eval_games))
-    elif eval_mode == "eval-train":
-        game_files = train_games
-    elif eval_mode == "eval-eval":
-        game_files = eval_games
-    else:
-        print("unknown evaluation mode. choose from [all|eval-train|eval-eval]")
+        game_files = None
+        if eval_mode == "all":
+            # remove possible repeated games
+            game_files = list(set(train_games + eval_games))
+        elif eval_mode == "eval-train":
+            game_files = train_games
+        elif eval_mode == "eval-eval":
+            game_files = eval_games
+        else:
+            print("unknown evaluation mode. choose from [all|eval-train|eval-eval]")
         exit(-1)
+    elif os.path.isfile(game_path):
+        game_files = [game_path]
+    else:
+        print("game path doesn't exist")
+        return
 
     logger.info("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
