@@ -399,7 +399,7 @@ def get_best_1Daction(q_actions_t, actions, mask=None):
 
 
 def get_best_1D_q(q_actions_t, mask=None):
-    if mask:
+    if mask is not None:
         inv_mask = np.logical_not(mask)
         min_q_val = np.min(q_actions_t)
         q_actions_t = q_actions_t * mask + inv_mask * min_q_val
