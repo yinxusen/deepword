@@ -108,7 +108,7 @@ def encoder_cnn_prepare_input_two_facets(src, src_embeddings, pos_embeddings):
 def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is_infer=False):
     layer_outputs = []
     for i, fs in enumerate(filter_sizes):
-        with tf.variable_scope("conv-avgpool-block-%s" % fs):
+        with tf.variable_scope("conv-block-%s" % fs):
             src_paddings = tf.constant([[0, 0], [fs - 1, 0], [0, 0], [0, 0]])
             src_w_pad = tf.pad(input_tensor, paddings=src_paddings, mode="CONSTANT")
             # Convolution Layer
@@ -126,7 +126,7 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is
             h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
             dropout_h = tf.layers.dropout(
                 inputs=h, rate=0.4,
-                training=(not is_infer))
+                training=(not is_infer), name="dropout")
             layer_outputs.append(dropout_h)
 
     # Combine all the pooled features

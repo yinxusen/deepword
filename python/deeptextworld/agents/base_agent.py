@@ -227,9 +227,12 @@ class BaseAgent(Logging):
             load_best=False, is_training=True):
         start_t = 0
         with tf.device(placement):
-            model = (self.create_model_instance()
-                     if is_training else
-                     self.create_eval_model_instance())
+            if is_training:
+                model = self.create_model_instance()
+                self.info("create train model")
+            else:
+                model = self.create_eval_model_instance()
+                self.info("create eval model")
         train_conf = tf.ConfigProto(log_device_placement=False,
                                     allow_soft_placement=True)
         train_sess = tf.Session(graph=model.graph, config=train_conf)
