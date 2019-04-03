@@ -1,0 +1,31 @@
+chop {f} with {o}
+close {c}
+close {d}
+cook {f} with {oven}
+cook {f} with {stove}
+cook {f} with {toaster}
+dice {f} with {o}
+drink {f}
+drop {o}
+eat {f}
+examine {o}
+examine {t}
+go east
+go north
+go south
+go west
+insert {o} into {c}
+inventory
+lock {c} with {k}
+lock {d} with {k}
+look
+open {c}
+open {d}
+prepare meal
+put {o} on {s}
+slice {f} with {o}
+take {o}
+take {o} from {c}
+take {o} from {s}
+unlock {c} with {k}
+unlock {d} with {k}
