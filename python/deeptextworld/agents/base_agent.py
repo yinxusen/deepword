@@ -222,10 +222,14 @@ class BaseAgent(Logging):
             total_parameters += variable_parameters
         return total_parameters
 
-    def create_n_load_model(self, placement="/device:GPU:0", load_best=False):
+    def create_n_load_model(
+            self, placement="/device:GPU:0",
+            load_best=False, is_training=True):
         start_t = 0
         with tf.device(placement):
-            model = self.create_model_instance()
+            model = (self.create_model_instance()
+                     if is_training else
+                     self.create_eval_model_instance())
         train_conf = tf.ConfigProto(log_device_placement=False,
                                     allow_soft_placement=True)
         train_sess = tf.Session(graph=model.graph, config=train_conf)
@@ -254,6 +258,9 @@ class BaseAgent(Logging):
         return train_sess, start_t, saver, model
 
     def create_model_instance(self):
+        raise NotImplementedError()
+
+    def create_eval_model_instance(self):
         raise NotImplementedError()
 
     def train_impl(self, sess, t, summary_writer, target_sess):
@@ -298,7 +305,8 @@ class BaseAgent(Logging):
                 train_summary_dir, self.sess.graph)
         else:
             self.sess, _, self.saver, self.model = self.create_n_load_model(
-                placement="/device:GPU:1", load_best=load_best)
+                placement="/device:GPU:1", load_best=load_best,
+                is_training=self.is_training)
             self.eps = 0.05
             self.total_t = 0
         self._initialized = True
@@ -596,7 +604,7 @@ class BaseAgent(Logging):
                             graph=self.model.graph))
                     self.debug("create and load target net")
                     self.target_sess, _, self.target_saver, self.target_model =\
-                        self.create_n_load_model()
+                        self.create_n_load_model(is_training=False)
                 else:
                     self.debug("target net is the same with nn")
                     self.target_model = self.model

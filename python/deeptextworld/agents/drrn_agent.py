@@ -76,6 +76,11 @@ class DRRNAgent(BaseAgent):
         model = drrn_model.create_train_model(model_creator, self.hp)
         return model
 
+    def create_eval_model_instance(self):
+        model_creator = getattr(drrn_model, self.hp.model_creator)
+        model = drrn_model.create_eval_model(model_creator, self.hp)
+        return model
+
     def train_impl(self, sess, t, summary_writer, target_sess):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,

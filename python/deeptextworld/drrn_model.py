@@ -20,7 +20,7 @@ class EvalDRRNModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'q_actions',
-         'src_', 'src_len_',
+         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
          'initializer'))):
     pass
 
@@ -151,13 +151,12 @@ def create_eval_model(model_creator, hp):
         model = model_creator(hp, is_infer=True)
         initializer = tf.global_variables_initializer
         inputs = model.inputs
-        src_= inputs["src"]
-        src_len_= inputs["src_len"]
         q_actions = model.get_q_actions()
     return EvalDRRNModel(
-        graph=graph, model=model,
-        q_actions=q_actions,
-        src_=src_,
-        src_len_=src_len_,
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
         initializer=initializer)
-
