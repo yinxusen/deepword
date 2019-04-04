@@ -111,12 +111,8 @@ class CNNEncoderDRRN(CNNEncoderDQN):
                     self.is_infer)
                 h_actions = tf.reshape(flat_h_actions,
                                        shape=(batch_size, self.n_actions, -1))
-                actions_mask = tf.expand_dims(self.inputs["actions_mask"],
-                                              axis=-1)
-                h_actions_masked = tf.multiply(h_actions, actions_mask)
-
             q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, h_actions_masked), axis=-1)
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
 
 

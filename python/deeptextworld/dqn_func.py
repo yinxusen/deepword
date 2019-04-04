@@ -123,7 +123,8 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is
                 input=src_w_pad, filter=w, strides=[1, 1, 1, 1],
                 padding="VALID", name="conv")
             # Apply nonlinearity
-            h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+            # h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+            h = tf.nn.tanh(tf.nn.bias_add(conv, b), name="tanh")
             dropout_h = tf.layers.dropout(
                 inputs=h, rate=0.4,
                 training=(not is_infer), name="dropout")
