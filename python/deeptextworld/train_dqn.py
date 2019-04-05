@@ -206,7 +206,7 @@ def run_eval(hp, model_dir, game_path, batch_size=1, eval_randomness=None,
             game_files = eval_games
         else:
             print("unknown evaluation mode. choose from [all|eval-train|eval-eval]")
-        exit(-1)
+            exit(-1)
     elif os.path.isfile(game_path):
         game_files = [game_path]
     else:
