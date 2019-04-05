@@ -453,7 +453,8 @@ class BaseAgent(Logging):
 
     def contain_theme_words(self, actions):
         if self.theme_words is None:
-            return actions
+            self.debug("no theme word found, use all actions")
+            return actions, []
         contained = []
         others = []
         for a in actions:
@@ -583,6 +584,10 @@ class BaseAgent(Logging):
                                 ('action', player_t)]
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
+            if not player_t in all_actions:
+                self.debug("eat meal not in action list, adding it in ...")
+                self.action_collector.extend([player_t])
+                all_actions = self.action_collector.get_actions()
             action_idx = all_actions.index(player_t)
             self.prev_report = [('hard_set_action', action_idx),
                                 ('action', player_t)]
