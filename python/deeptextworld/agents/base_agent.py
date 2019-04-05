@@ -291,9 +291,10 @@ class BaseAgent(Logging):
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
 
+        # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
            self.hp, self.token2idx, action_path,
-            with_loading=self.is_training)
+            with_loading=True)
         self.tjs = self.init_trajectory(self.hp, tjs_path,
                                         with_loading=self.is_training)
         self.memo = self.init_memo(self.hp, memo_path,
