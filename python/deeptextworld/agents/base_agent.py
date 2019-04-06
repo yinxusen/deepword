@@ -191,7 +191,7 @@ class BaseAgent(Logging):
         self.is_training = True
         self._init()
 
-    def eval(self, load_best=False):
+    def eval(self, load_best=True):
         self.is_training = False
         self._init(load_best)
 

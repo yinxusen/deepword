@@ -100,7 +100,8 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
     game_names = [os.path.basename(fn) for fn in game_files]
 
     agent = DRRNAgent(hp, model_dir)
-    agent.eval()
+    # for eval during training, set load_best=False
+    agent.eval(load_best=False)
     requested_infos = agent.select_additional_infos()
     _validate_requested_infos(requested_infos)
 
