@@ -40,6 +40,7 @@ parser.add_argument('--delay_target_network', type=int)
 parser.add_argument('--max_action_len', type=int)
 parser.add_argument('--eval_randomness', type=float)
 parser.add_argument('--eval_mode', type=str, default="all")
+parser.add_argument('--jitter_go', action='store_true')
 
 
 if __name__ == '__main__':

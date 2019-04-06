@@ -1,6 +1,7 @@
 import glob
 import hashlib
 import os
+import random
 import re
 import string
 from typing import List, Dict, Any, Optional
@@ -551,7 +552,8 @@ class BaseAgent(Logging):
         contained, others = self.contain_theme_words(admissible_commands)
         actions = ["inventory", "look"]
         actions += contained
-        actions += list(filter(lambda a: a.startswith("go"), admissible_commands))
+        admissible_go = list(filter(lambda a: a.startswith("go"), admissible_commands))
+        actions += admissible_go
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
@@ -594,6 +596,21 @@ class BaseAgent(Logging):
                                 ('action', player_t)]
         else:
             action_idx, player_t, self.prev_report= self.get_an_eps_action(actions_mask)
+
+            # add jitter to go actions to avoid overfitting
+            if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
+                    and (player_t in admissible_go)):
+                if random.random() > 0.5:
+                    original_action = player_t
+                    jitter_go_action = random.choice(admissible_go)
+                    action_idx = all_actions.index(jitter_go_action)
+                    player_t = jitter_go_action
+                    self.prev_report = ([("original action", original_action),
+                                         ("jitter go action", player_t),
+                                         ("# admissible go", len(admissible_go))])
+                else:
+                    pass
+
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
         self._last_action_idx = action_idx
