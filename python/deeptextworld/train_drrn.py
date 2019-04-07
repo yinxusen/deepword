@@ -98,6 +98,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
     logger.info('evaluation worker started ...')
     logger.info("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
+    logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
     agent = DRRNAgent(hp, model_dir)
     # for eval during training, set load_best=False
@@ -212,6 +213,7 @@ def run_eval(hp, model_dir, game_path, batch_size=1, eval_randomness=None,
 
     logger.info("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
+    logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
     agent = DRRNAgent(hp, model_dir)
     agent.eval(load_best=True)
