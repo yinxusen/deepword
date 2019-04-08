@@ -281,7 +281,7 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
     priority(file_args) > priority(cmd_args)
      unless arg in allowed_to_change set.
     """
-    allowed_to_change = ['model_dir', 'eval_episode', 'game_episode_terminal_t', 'jitter_go']
+    allowed_to_change = ['model_dir', 'eval_episode', 'game_episode_terminal_t']
     deps_to_change = ['data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
     hp = default_hparams_agent()
     # first load hp from file for choosing model_hp
