@@ -65,7 +65,8 @@ def default_hparams_agent():
         max_snapshot_to_keep=5,
         game_clazz='ZGameZorkEgg',
         delay_target_network=1,
-        jitter_go=False
+        jitter_go=False,
+        collect_floor_plan=False
     )
 
 

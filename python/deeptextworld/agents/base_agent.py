@@ -531,17 +531,19 @@ class BaseAgent(Logging):
             master = obs[0]
         cleaned_obs = self.lower_tokenize(master)
 
-        room_regex = ".*-= (.*) =-.*"
-        room_search = re.search(room_regex, cleaned_obs)
-        if room_search is not None:
-            curr_place = room_search.group(1)
-            if self.prev_place is None:
-                self.prev_place = curr_place
-        else:
-            self.debug("no match place from {}".format(cleaned_obs))
-            curr_place = self.prev_place
-        curr_map = self.floor_plan.get_map(curr_place)
-        cleaned_obs = cleaned_obs + " " + curr_map
+        curr_place = None
+        if self.hp.collect_floor_plan:
+            room_regex = ".*-= (.*) =-.*"
+            room_search = re.search(room_regex, cleaned_obs)
+            if room_search is not None:
+                curr_place = room_search.group(1)
+                if self.prev_place is None:
+                    self.prev_place = curr_place
+            else:
+                self.debug("no match place from {}".format(cleaned_obs))
+                curr_place = self.prev_place
+            curr_map = self.floor_plan.get_map(curr_place)
+            cleaned_obs = cleaned_obs + " " + curr_map
 
         if (cleaned_obs == self.prev_master_t and
             self._last_action == self.prev_player_t and immediate_reward < 0):
@@ -581,7 +583,8 @@ class BaseAgent(Logging):
                     gid=self.game_id, aid=self._last_action_idx,
                     reward=immediate_reward,
                     is_terminal=dones[0], action_mask=self._last_actions_mask))
-            if curr_place != self.prev_place and self._last_action.startswith("go"):
+            if (self.hp.collect_floor_plan and curr_place != self.prev_place
+                    and self._last_action.startswith("go")):
                 self.floor_plan.extend(
                     [(self.prev_place, self._last_action, curr_place),
                      (curr_place, self.inv_direction[self._last_action], self.prev_place)])
