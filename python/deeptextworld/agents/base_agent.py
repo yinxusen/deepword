@@ -14,6 +14,7 @@ from nltk import word_tokenize
 
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
@@ -36,6 +37,11 @@ class BaseAgent(Logging):
         self.tjs_prefix = "trajectories"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
+        self.fp_prefix = "floor_plan"
+
+        self.inv_direction = {
+            "go south": "go north", "go north": "go south",
+            "go east": "go west", "go west": "go east"}
 
         self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
         self.info(output_hparams(self.hp))
@@ -45,6 +51,7 @@ class BaseAgent(Logging):
         self.model = None
         self.target_model = None
         self.action_collector = None
+        self.floor_plan = None
 
         self._initialized = False
         self._episode_has_started = False
@@ -77,6 +84,7 @@ class BaseAgent(Logging):
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
+        self.prev_place = None
 
 
     @classmethod
@@ -126,8 +134,18 @@ class BaseAgent(Logging):
             try:
                 memory.load_memo(memo_path)
             except IOError as e:
-                self.info('load memory error: \n{}'.format(e))
+                self.info("load memory error: \n{}".format(e))
         return memory
+
+
+    def init_floor_plan(self, fp_path, with_loading=True):
+        fp = FloorPlanCollector()
+        if with_loading:
+            try:
+                fp.load_fps(fp_path)
+            except IOError as e:
+                self.info("load floor plan error: \n{}".format(e))
+        return fp
 
     @classmethod
     def lower_tokenize(cls, master):
@@ -291,15 +309,20 @@ class BaseAgent(Logging):
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
+        fp_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.fp_prefix, largest_valid_tag))
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
            self.hp, self.token2idx, action_path,
             with_loading=True)
-        self.tjs = self.init_trajectory(self.hp, tjs_path,
-                                        with_loading=self.is_training)
-        self.memo = self.init_memo(self.hp, memo_path,
-                                   with_loading=self.is_training)
+        self.tjs = self.init_trajectory(
+            self.hp, tjs_path, with_loading=self.is_training)
+        self.memo = self.init_memo(
+            self.hp, memo_path, with_loading=self.is_training)
+        self.floor_plan = self.init_floor_plan(
+            fp_path, with_loading=self.is_training)
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model()
@@ -332,9 +355,11 @@ class BaseAgent(Logging):
         self.game_id = hashlib.md5(
             (obs[0] + recipe[0]).encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
+        self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self.cumulative_score = 0
         self._episode_has_started = True
+        self.prev_place = None
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(theme_regex, recipe[0].replace("\n", "<|>"))
@@ -396,10 +421,14 @@ class BaseAgent(Logging):
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, self.total_t))
+        fp_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.fp_prefix, self.total_t))
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
         self.action_collector.save_actions(action_path)
+        self.floor_plan.save_fps(fp_path)
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
@@ -411,10 +440,14 @@ class BaseAgent(Logging):
                     self.model_dir,
                     "{}-{}.npz".format(self.memo_prefix, tag)))
                 os.remove(os.path.join(
-                    self.model_dir, "{}-{}.npz".format(self.tjs_prefix, tag)))
+                    self.model_dir,
+                    "{}-{}.npz".format(self.tjs_prefix, tag)))
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.action_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.fp_prefix, tag)))
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
         save_hparams(self.hp,
@@ -498,6 +531,18 @@ class BaseAgent(Logging):
             master = obs[0]
         cleaned_obs = self.lower_tokenize(master)
 
+        room_regex = ".*-= (.*) =-.*"
+        room_search = re.search(room_regex, cleaned_obs)
+        if room_search is not None:
+            curr_place = room_search.group(1)
+            if self.prev_place is None:
+                self.prev_place = curr_place
+        else:
+            self.debug("no match place from {}".format(cleaned_obs))
+            curr_place = self.prev_place
+        curr_map = self.floor_plan.get_map(curr_place)
+        cleaned_obs = cleaned_obs + " " + curr_map
+
         if (cleaned_obs == self.prev_master_t and
             self._last_action == self.prev_player_t and immediate_reward < 0):
             immediate_reward = max(-1.0, immediate_reward + self.prev_cumulative_penalty)
@@ -536,6 +581,11 @@ class BaseAgent(Logging):
                     gid=self.game_id, aid=self._last_action_idx,
                     reward=immediate_reward,
                     is_terminal=dones[0], action_mask=self._last_actions_mask))
+            if curr_place != self.prev_place and self._last_action.startswith("go"):
+                self.floor_plan.extend(
+                    [(self.prev_place, self._last_action, curr_place),
+                     (curr_place, self.inv_direction[self._last_action], self.prev_place)])
+                self.prev_place = curr_place
         else:
             self.info("mode: {}, master: {}, max_score: {}".format(
                 "train" if self.is_training else "eval", cleaned_obs,
