@@ -10,6 +10,7 @@ import tensorflow as tf
 
 from deeptextworld.agents.drrn_agent import DRRNAgent
 from deeptextworld.dqn_func import get_best_1Daction
+from deeptextworld.dqn_func import get_random_1Daction
 
 
 class EnsembleAgent(DRRNAgent):
@@ -166,27 +167,33 @@ class EnsembleAgent(DRRNAgent):
             self.prev_report = [('hard_set_action', action_idx),
                                 ('action', player_t)]
         else:
-            action_matrix = self.action_collector.get_action_matrix()
-            actions_len = self.action_collector.get_action_len()
-            indexed_state_t, lens_t = self.tjs.fetch_last_state()
             action_mask = self.fromBytes([actions_mask])[0]
+            if np.random.random() < self.eps:
+                action_idx, player_t = get_random_1Daction(
+                    self.action_collector.get_actions(), action_mask)
+                self.prev_report = [('random_action', action_idx),
+                                    ('action', player_t)]
+            else:
+                action_matrix = self.action_collector.get_action_matrix()
+                actions_len = self.action_collector.get_action_len()
+                indexed_state_t, lens_t = self.tjs.fetch_last_state()
 
-            q_actions_t = np.zeros(actions_len)
-            for sess, model in self.models:
-                q_vec = sess.run(model.q_actions, feed_dict={
-                    model.src_: [indexed_state_t],
-                    model.src_len_: [lens_t],
-                    model.actions_mask_: [action_mask],
-                    model.actions_: [action_matrix],
-                    model.actions_len_: [actions_len]
-                })[0]
-                q_actions_t = q_actions_t + q_vec
+                q_actions_t = np.zeros(self.hp.n_actions)
+                for sess, model in self.models:
+                    q_vec = sess.run(model.q_actions, feed_dict={
+                        model.src_: [indexed_state_t],
+                        model.src_len_: [lens_t],
+                        model.actions_mask_: [action_mask],
+                        model.actions_: [action_matrix],
+                        model.actions_len_: [actions_len]
+                    })[0]
+                    q_actions_t = q_actions_t + q_vec
 
-            action_idx, q_max, player_t = get_best_1Daction(
-                q_actions_t, self.action_collector.get_actions(),
-                mask=action_mask)
-            self.prev_report += [('action', player_t), ('q_max', q_max),
-                        ('q_argmax', action_idx)]
+                action_idx, q_max, player_t = get_best_1Daction(
+                    q_actions_t, self.action_collector.get_actions(),
+                    mask=action_mask)
+                self.prev_report = [('action', player_t), ('q_max', q_max),
+                                    ('q_argmax', action_idx)]
 
             # add jitter to go actions to avoid overfitting
             if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
