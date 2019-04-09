@@ -42,6 +42,7 @@ parser.add_argument('--eval_randomness', type=float)
 parser.add_argument('--eval_mode', type=str, default="all")
 parser.add_argument('--jitter_go', action='store_true')
 parser.add_argument('--collect_floor_plan', action='store_true')
+parser.add_argument('--start_t_ignore_model_t', action='store_true')
 
 
 if __name__ == '__main__':

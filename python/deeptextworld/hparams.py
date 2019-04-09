@@ -66,7 +66,8 @@ def default_hparams_agent():
         game_clazz='ZGameZorkEgg',
         delay_target_network=1,
         jitter_go=False,
-        collect_floor_plan=False
+        collect_floor_plan=False,
+        start_t_ignore_model_t=False
     )
 
 

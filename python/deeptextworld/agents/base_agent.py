@@ -268,9 +268,10 @@ class BaseAgent(Logging):
                 # Reload weights from directory if specified
                 self.info("Try to restore parameters from: {}".format(restore_from))
                 saver.restore(train_sess, restore_from)
-                global_step = tf.train.get_or_create_global_step()
-                trained_steps = train_sess.run(global_step)
-                start_t = trained_steps + self.hp.observation_t
+                if not self.hp.start_t_ignore_model_t:
+                    global_step = tf.train.get_or_create_global_step()
+                    trained_steps = train_sess.run(global_step)
+                    start_t = trained_steps + self.hp.observation_t
             else:
                 self.info('No checkpoint to load, training from scratch')
             trainable_vars = tf.trainable_variables()
