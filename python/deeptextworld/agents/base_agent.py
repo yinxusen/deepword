@@ -654,7 +654,8 @@ class BaseAgent(Logging):
             # add jitter to go actions to avoid overfitting
             if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
                     and (player_t in admissible_go)):
-                if (self.is_training and random.random() > 0.5) or (not self.is_training):
+                if ((self.is_training and random.random() > 1 - self.hp.jitter_train_prob)
+                        or ((not self.is_training) and random.random() > 1 - self.hp.jitter_eval_prob)):
                     original_action = player_t
                     jitter_go_action = random.choice(admissible_go)
                     action_idx = all_actions.index(jitter_go_action)
