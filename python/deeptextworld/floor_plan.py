@@ -61,6 +61,35 @@ class FloorPlanCollector(Logging):
                 " , ".join(map(lambda d_r: '{} = {}'.format(d_r[0], d_r[1]),
                                list(self.curr_fp[room].items()))))
 
+    @classmethod
+    def route_to_room(cls, ss, tt, fp, visited):
+        """
+        find the fastest route to a target room from a given room using DFS.
+        :param ss: start room
+        :param tt: target room
+        :param fp: floor plan
+        :param visited: initialized by []
+        :return: directions, rooms
+        """
+        if ss not in fp:
+            return None
+        if ss == tt:
+            return [], []
+        for d, room in fp[ss].items():
+            if room != ss and room not in visited:
+                search_level = cls.route_to_room(
+                    room, tt, fp, visited + [ss])
+                if search_level is not None:
+                    return [d] + search_level[0], [room] + search_level[1]
+        return None
+
+    def route_to_kitchen(self, room):
+        route = self.route_to_room(
+            ss=room, tt="kitchen", fp=self.curr_fp, visited=[])
+        if route is not None and len(route[0]) == 0:
+            return None
+        return route
+
     def save_fps(self, path):
         if self.curr_eid is not None:
             self.fp_base[self.curr_eid] = self.curr_fp
