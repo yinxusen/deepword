@@ -628,12 +628,7 @@ class BaseAgent(Logging):
         all_actions = self.action_collector.get_actions()
 
         # use hard set actions in the beginning and the end of one episode
-        route = self.floor_plan.route_to_kitchen(curr_place)
-        if not "examine cookbook" in actions and not self.see_cookbook and route is not None:
-            player_t = route[0][0]
-            action_idx = all_actions.index(player_t)
-            self.prev_report = [('hard_route', action_idx), ('action', player_t)]
-        elif "examine cookbook" in actions and not self.see_cookbook:
+        if "examine cookbook" in actions and not self.see_cookbook:
             player_t = "examine cookbook"
             action_idx = all_actions.index(player_t)
             self.prev_report = [('hard_set_action', action_idx),
