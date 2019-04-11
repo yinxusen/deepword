@@ -8,13 +8,16 @@ class FloorPlanCollector(Logging):
         super(FloorPlanCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self.fp_base = {}
+        self.navi_base = {}
 
         # current episode actions
         self.curr_fp = {}
+        self.curr_navi_to_kitchen = {}
         self.curr_eid = None
 
     def init(self):
         self.curr_fp = {}
+        self.curr_navi_to_kitchen = {}
         self.curr_eid = None
 
     def add_new_episode(self, eid):
@@ -34,7 +37,10 @@ class FloorPlanCollector(Logging):
         if self.curr_eid in self.fp_base:
             self.info("found existing episode: {}".format(self.curr_eid))
             self.curr_fp = self.fp_base[self.curr_eid]
+            self.curr_navi_to_kitchen = self.navi_base[self.curr_eid]
             self.info("{} floor paths loaded".format(len(self.curr_fp)))
+            self.info("{} navigation to kitchen paths loaded".format(
+                len(self.curr_navi_to_kitchen)))
         else:
             pass
 
@@ -55,11 +61,20 @@ class FloorPlanCollector(Logging):
 
     def get_map(self, room):
         if room is None or room not in self.curr_fp:
-            return "floor plan : unknown"
+            ret_val = "floor plan : unknown"
         else:
-            return "floor plan : {}".format(
+            ret_val = "floor plan : {}".format(
                 " , ".join(map(lambda d_r: '{} = {}'.format(d_r[0], d_r[1]),
                                list(self.curr_fp[room].items()))))
+            if room in self.curr_navi_to_kitchen:
+                rat = self.curr_navi_to_kitchen[room]
+            else:
+                rat = self.route_to_kitchen(room)
+                if rat is not None:
+                    self.curr_navi_to_kitchen[room] = rat
+            if rat is not None:
+                ret_val += " . " + "{} if you like kitchen".format(rat[0][0])
+        return ret_val
 
     @classmethod
     def route_to_room(cls, ss, tt, fp, visited):
@@ -93,9 +108,18 @@ class FloorPlanCollector(Logging):
     def save_fps(self, path):
         if self.curr_eid is not None:
             self.fp_base[self.curr_eid] = self.curr_fp
-        np.savez(path, fp_base=list(self.fp_base.items()))
+        if self.curr_navi_to_kitchen is not None:
+            self.navi_base[self.curr_eid] = self.curr_navi_to_kitchen
+        np.savez(
+            path, fp_base=list(self.fp_base.items()),
+            navi_base=list(self.navi_base.items()))
 
     def load_fps(self, path):
         saved = np.load(path)
         fp_base = dict(saved["fp_base"])
         self.fp_base.update(fp_base)
+        try:
+            navi_base = dict(saved["navi_base"])
+            self.navi_base.update(navi_base)
+        except Exception as e:
+            self.warning("loading navi failed: \n{}".format(e))
