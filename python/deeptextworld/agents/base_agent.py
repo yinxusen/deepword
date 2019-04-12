@@ -612,8 +612,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        # drop needs
-        # actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {"prepare meal", "eat meal", "examine cookbook"}
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
