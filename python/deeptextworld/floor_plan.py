@@ -32,6 +32,10 @@ class FloorPlanCollector(Logging):
                 self.fp_base[self.curr_eid] = {}
             self.fp_base[self.curr_eid].update(self.curr_fp)
 
+            if self.curr_eid not in self.navi_base:
+                self.navi_base[self.curr_eid] = {}
+            self.navi_base[self.curr_eid].update(self.curr_navi_to_kitchen)
+
         self.init()
         self.curr_eid = eid
         if self.curr_eid in self.fp_base:
