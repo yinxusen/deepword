@@ -169,8 +169,20 @@ def split_train_eval(game_files):
     return train_games, eval_games
 
 
-def run_main(hp, model_dir, game_dir, batch_size=1):
-    game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+def load_game_files(game_dir, game_file_names=None):
+    if game_file_names is not None:
+        with open(game_file_names, "r") as f:
+            selected_games = map(lambda x: x.strip(), f.readlines())
+        game_files = list(map(
+            lambda x: os.path.join(game_dir, "{}.ulx".format(x)),
+            selected_games))
+    else:
+        game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    return game_files
+
+
+def run_main(hp, model_dir, game_dir, f_games=None, batch_size=1):
+    game_files = load_game_files(game_dir, f_games)
     games = split_train_eval(game_files)
     if games is None:
         exit(-1)
@@ -186,11 +198,11 @@ def run_main(hp, model_dir, game_dir, batch_size=1):
           nb_epochs=hp.annealing_eps_t, batch_size=batch_size)
 
 
-def run_eval(hp, model_dir, game_path, batch_size=1, eval_randomness=None,
+def run_eval(hp, model_dir, game_path, f_games=None, batch_size=1, eval_randomness=None,
              eval_mode="all"):
     logger = logging.getLogger("eval")
     if os.path.isdir(game_path):
-        game_files = glob.glob(os.path.join(game_path, "*.ulx"))
+        game_files = load_game_files(game_path, f_games)
         games = split_train_eval(game_files)
         if games is None:
             exit(-1)
