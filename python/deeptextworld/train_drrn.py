@@ -148,10 +148,10 @@ def evaluation(hp, cv, model_dir, game_files, nb_epochs, batch_size):
                 logger.info("no better model, pass ...")
 
 
-def split_train_eval(game_dir):
+def split_train_eval(game_files):
     # have to sort first, otherwise after shuffling the result is different
     # on different platforms, e.g. Linux VS MacOS.
-    game_files = sorted(glob.glob(os.path.join(game_dir, "*.ulx")))
+    game_files = sorted(game_files)
     random.Random(42).shuffle(game_files)
     if len(game_files) == 0:
         print("no game files found!")
@@ -170,7 +170,8 @@ def split_train_eval(game_dir):
 
 
 def run_main(hp, model_dir, game_dir, batch_size=1):
-    games = split_train_eval(game_dir)
+    game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    games = split_train_eval(game_files)
     if games is None:
         exit(-1)
     train_games, eval_games = games
@@ -189,7 +190,8 @@ def run_eval(hp, model_dir, game_path, batch_size=1, eval_randomness=None,
              eval_mode="all"):
     logger = logging.getLogger("eval")
     if os.path.isdir(game_path):
-        games = split_train_eval(game_path)
+        game_files = glob.glob(os.path.join(game_path, "*.ulx"))
+        games = split_train_eval(game_files)
         if games is None:
             exit(-1)
         train_games, eval_games = games
