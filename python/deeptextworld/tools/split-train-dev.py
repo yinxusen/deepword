@@ -2,14 +2,14 @@ import glob
 import os
 import sys
 
-from deeptextworld.train_drrn import split_train_eval
+from deeptextworld.train_drrn import split_train_dev
 
 
 def split(f_games):
     with open(f_games, "r") as f:
         fnames = map(lambda n: n.strip(), f.readlines())
 
-    games = split_train_eval(fnames)
+    games = split_train_dev(fnames)
     if games is not None:
         train_set, dev_set = games
         with open("{}-train".format(f_games), "w") as ft:
