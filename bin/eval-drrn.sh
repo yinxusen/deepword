@@ -16,6 +16,6 @@ if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
 fi
 
 ./bin/run.sh python/deeptextworld/main.py \
-    --game_dir $DATAHOME -m $MODELHOME \
-    --mode eval-drrn --eval_episode 10 --eval_randomness 0.05 --eval_mode eval-train \
-    --game_episode_terminal_t 100
+    --game-path $DATAHOME -m $MODELHOME \
+    --mode eval-drrn --eval-episode 10 --eval-randomness 0.05 --eval-mode eval-train \
+    --game-episode-terminal-t 100

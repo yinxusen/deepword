@@ -29,9 +29,10 @@ fi
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-drrn \
-    --game_dir /Users/xusenyin/git-store/textworld-competition-games/train-1 \
-    --vocab_file $VOCAB_FILE \
-    --annealing_eps_t 300 --annealing_gamma_t 10 --observation_t 50 --replay_mem 100 \
-    --eval_episode 1 --embedding_size 64 \
-    --save_gap_t 50 --batch_size 32 --game_episode_terminal_t 20 --model_creator CNNEncoderDRRN
+    --game-path /Users/xusenyin/git-store/textworld-competition-games/train-1 \
+    --vocab-file $VOCAB_FILE \
+    --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
+    --eval-episode 1 --embedding-size 64 \
+    --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
+    --model-creator CNNEncoderDRRN
 popd
