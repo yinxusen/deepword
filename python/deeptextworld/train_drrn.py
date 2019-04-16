@@ -12,7 +12,6 @@ from textworld import EnvInfos
 from deeptextworld.agents.drrn_agent import DRRNAgent
 from deeptextworld.utils import ctime
 
-
 # List of additional information available during evaluation.
 AVAILABLE_INFORMATION = EnvInfos(
     description=True, inventory=True,
@@ -23,7 +22,7 @@ AVAILABLE_INFORMATION = EnvInfos(
 )
 
 
-def _validate_requested_infos(infos: EnvInfos):
+def validate_requested_infos(infos: EnvInfos):
     msg = "The following information cannot be requested: {}"
     for key in infos.basics:
         if not getattr(AVAILABLE_INFORMATION, key):
@@ -82,7 +81,7 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
     logger = logging.getLogger("eval")
     eval_results = dict()
     requested_infos = agent.select_additional_infos()
-    _validate_requested_infos(requested_infos)
+    validate_requested_infos(requested_infos)
     for game_no, game_file in enumerate(game_files):
         game_name = os.path.basename(game_file)
         env_id = textworld.gym.register_games(
@@ -128,7 +127,7 @@ def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
     agent.train()
 
     requested_infos = agent.select_additional_infos()
-    _validate_requested_infos(requested_infos)
+    validate_requested_infos(requested_infos)
 
     env_id = textworld.gym.register_games(
         game_files, requested_infos,
@@ -259,7 +258,8 @@ def train_n_eval(hp, model_dir, game_dir, f_games=None, batch_size=1):
     eval_worker.daemon = True
     eval_worker.start()
 
-    nb_epochs = (hp.annealing_eps_t // len(train_games)) + 1
+    # nb epochs could only be an estimation since steps per episode is unknown
+    nb_epochs = (hp.annealing_eps_t // len(train_games) // 10) + 1
 
     train(hp, cond_of_eval, model_dir, train_games,
           nb_epochs=nb_epochs, batch_size=batch_size)
