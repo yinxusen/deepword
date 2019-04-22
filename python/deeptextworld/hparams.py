@@ -52,12 +52,12 @@ def default_hparams_agent():
         n_actions=128,
         n_tokens_per_action=10,
         sos='<S>',
-        eos='</S>',
-        padding_val='<PAD>',
-        unk_val='<UNK>',
         sos_id=0,
+        eos='</S>',
         eos_id=0,
+        padding_val='[PAD]',
         padding_val_id=0,
+        unk_val='[UNK]',
         unk_val_id=0,
         tgt_sos_id=0,
         tgt_eos_id=1,
@@ -188,6 +188,26 @@ def default_hparams_CNNEncoderDRRN():
         num_turns=21,
         num_tokens=1000,
         num_conv_filters=32
+    )
+
+
+def default_hparams_BertCNNEncoderDRRN():
+    return tf.contrib.training.HParams(
+        agent_clazz='Agent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=21,
+        num_tokens=512,
+        num_conv_filters=32,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0
     )
 
 

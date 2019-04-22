@@ -87,8 +87,7 @@ class BaseAgent(Logging):
         self.prev_place = None
 
 
-    @classmethod
-    def init_tokens(cls, hp):
+    def init_tokens(self, hp):
         """
         :param hp:
         :return:
@@ -147,16 +146,11 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
-    @classmethod
-    def lower_tokenize(cls, master):
+    def tokenize(self, master):
+        """
+        Tokenize and lowercase master. A space-chained tokens will be returned.
+        """
         return ' '.join([t.lower() for t in word_tokenize(master)])
-
-    def preprocess_master_output(self, master):
-        return ' '.join(
-            map(lambda t: t.lower(),
-                filter(lambda t: t.isalpha(),
-                       word_tokenize(
-                           master.translate(self.empty_trans_table)))))
 
     @classmethod
     def report_status(cls, lst_of_status):
@@ -530,7 +524,7 @@ class BaseAgent(Logging):
             master = infos["description"][0]
         else:
             master = obs[0]
-        cleaned_obs = self.lower_tokenize(master)
+        cleaned_obs = self.tokenize(master)
 
         curr_place = None
         if self.hp.collect_floor_plan:
@@ -574,16 +568,14 @@ class BaseAgent(Logging):
 
             tid_ = self.tjs.get_current_tid()
             sid_ = self.tjs.get_last_sid()
-            # importance_to_repeat = 10 if immediate_reward > 0 else 1
-            # if importance_to_repeat > 1:
-            #     self.info("encounter important sample, repeat 10 times in memo")
-            importance_to_repeat = 1 if immediate_reward > 0 else 1
-            for _ in range(importance_to_repeat):
-                self.memo.append(DRRNMemo(
-                    tid=tid_, sid=sid_,
-                    gid=self.game_id, aid=self._last_action_idx,
-                    reward=immediate_reward,
-                    is_terminal=dones[0], action_mask=self._last_actions_mask))
+
+            # add into memory
+            self.memo.append(DRRNMemo(
+                tid=tid_, sid=sid_,
+                gid=self.game_id, aid=self._last_action_idx,
+                reward=immediate_reward,
+                is_terminal=dones[0], action_mask=self._last_actions_mask))
+
             if (self.hp.collect_floor_plan and curr_place != self.prev_place
                     and self._last_action.startswith("go")):
                 self.floor_plan.extend(

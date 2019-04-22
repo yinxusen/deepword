@@ -4,7 +4,6 @@ from textworld import EnvInfos
 from deeptextworld import drrn_model
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, get_best_1D_q
-from deeptextworld.dqn_func import get_random_1Daction_fairly
 from deeptextworld.utils import ctime
 
 

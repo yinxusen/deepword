@@ -4,9 +4,10 @@ import tensorflow as tf
 
 import deeptextworld.dqn_func as dqn
 from deeptextworld.dqn_model import CNNEncoderDQN
+from deeptextworld.bert_layer import BertLayer
 
 
-class TrainDRRNModel(
+class TrainBertDRRNModel(
     collections.namedtuple(
         'TrainModel',
         ('graph', 'model', 'q_actions','train_op', 'loss', 'train_summary_op',
@@ -16,7 +17,7 @@ class TrainDRRNModel(
     pass
 
 
-class EvalDRRNModel(
+class EvalBertDRRNModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'q_actions',
@@ -25,7 +26,7 @@ class EvalDRRNModel(
     pass
 
 
-class CNNEncoderDRRN(CNNEncoderDQN):
+class BertCNNEncoderDRRN(CNNEncoderDQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """
         inputs:
@@ -41,7 +42,7 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         :param src_embeddings:
         :param is_infer:
         """
-        super(CNNEncoderDRRN, self).__init__(hp, src_embeddings, is_infer)
+        super(BertCNNEncoderDRRN, self).__init__(hp, src_embeddings, is_infer)
         self.n_actions = self.hp.n_actions
         self.n_tokens_per_action = self.hp.n_tokens_per_action
         self.inputs = {
@@ -50,8 +51,8 @@ class CNNEncoderDRRN(CNNEncoderDQN):
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
-            "actions": tf.placeholder(tf.int32, [None, self.n_actions,
-                                                 self.n_tokens_per_action]),
+            "actions": tf.placeholder(
+                tf.int32, [None, self.n_actions, self.n_tokens_per_action]),
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
         }
@@ -80,26 +81,50 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         """
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
+        # src = tf.pad(
+        #     self.inputs["src"], paddings=tf.constant([[0, 0], [1, 0]]),
+        #     mode="CONSTANT", constant_values=self.hp.cls_val_id)
+        src = self.inputs["src"]
+        src_len = self.inputs["src_len"]
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=self.num_tokens, dtype=tf.int32)
+        src_segment_ids = tf.zeros_like(src, dtype=tf.int32)
+
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(-1, self.n_tokens_per_action))
+        # actions = tf.pad(
+        #     actions, paddings=tf.constant([[0, 0], [1, 0]]),
+        #     mode="CONSTANT", constant_values=self.hp.cls_val_id)
+        actions_len = tf.reshape(
+            self.inputs["actions_len"], shape=(-1,))
+        actions_token_masks = tf.sequence_mask(
+            actions_len, maxlen=self.n_tokens_per_action, dtype=tf.int32)
+        actions_segment_ids = tf.zeros_like(actions, dtype=tf.int32)
+
         with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state = dqn.encoder_cnn(
-                self.inputs["src"], self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
+            bert_layer = BertLayer(n_fine_tune_layers=3)
+            with tf.variable_scope("bert-cnn-encoder", reuse=False):
+                bert_output = bert_layer([src, src_masks, src_segment_ids])
+                h_cnn = dqn.encoder_cnn_base(
+                    bert_output, self.filter_sizes, self.num_filters,
+                    self.hp.embedding_size, self.is_infer)
+                pooled = tf.reduce_max(h_cnn, axis=1)
+                num_filters_total = self.num_filters * len(self.filter_sizes)
+                h_state = tf.reshape(pooled, [-1, num_filters_total])
+
             new_h = dqn.decoder_dense_classification(h_state, 32)
             h_state_expanded = tf.expand_dims(new_h, axis=1)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
-                flat_actions = tf.reshape(
-                    self.inputs["actions"],
-                    shape=(-1, self.n_tokens_per_action))
-                flat_actions_len = tf.reshape(
-                    self.inputs["actions_len"],
-                    shape=(-1,))
-                flat_h_actions = dqn.encoder_lstm(
-                    flat_actions, flat_actions_len,
-                    self.src_embeddings,
-                    num_units=32,
-                    num_layers=1)[-1].h
+                bert_output_actions = bert_layer(
+                    [actions, actions_token_masks, actions_segment_ids])
+                encoder_cell = tf.nn.rnn_cell.MultiRNNCell(
+                    [tf.nn.rnn_cell.LSTMCell(32) for _ in range(1)])
+                sequence_output, inner_state = tf.keras.layers.RNN(
+                    encoder_cell, bert_output_actions,
+                    sequence_length=actions_len,
+                    initial_state=None, dtype=tf.float32)
+                flat_h_actions = inner_state[-1].h
                 h_actions = tf.reshape(flat_h_actions,
                                        shape=(batch_size, self.n_actions, -1))
             q_actions = tf.reduce_sum(
@@ -117,7 +142,7 @@ def create_train_model(model_creator, hp):
         loss, train_op, abs_loss = model.get_train_op(q_actions)
         loss_summary = tf.summary.scalar("loss", loss)
         train_summary_op = tf.summary.merge([loss_summary])
-    return TrainDRRNModel(
+    return TrainBertDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
@@ -141,7 +166,7 @@ def create_eval_model(model_creator, hp):
         q_actions = model.get_q_actions()
         # still need to put them here, otherwise the loaded model could not be trained
         _ = model.get_train_op(q_actions)
-    return EvalDRRNModel(
+    return EvalBertDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
         src_len_=inputs["src_len"],

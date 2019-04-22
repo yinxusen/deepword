@@ -81,7 +81,7 @@ class EnsembleAgent(DRRNAgent):
             master = infos["description"][0]
         else:
             master = obs[0]
-        cleaned_obs = self.lower_tokenize(master)
+        cleaned_obs = self.tokenize(master)
 
         if (cleaned_obs == self.prev_master_t and
             self._last_action == self.prev_player_t and immediate_reward < 0):
