@@ -56,7 +56,7 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
         }
-
+        self.bert_layer = BertLayer(n_fine_tune_layers=0)
 
     def get_q_actions(self):
         """
@@ -102,9 +102,9 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         actions_segment_ids = tf.zeros_like(actions, dtype=tf.int32)
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            bert_layer = BertLayer(n_fine_tune_layers=3)
             with tf.variable_scope("bert-cnn-encoder", reuse=False):
-                bert_output = bert_layer([src, src_masks, src_segment_ids])
+                bert_output = self.bert_layer([src, src_masks, src_segment_ids])
+                bert_output = tf.expand_dims(bert_output, axis=-1)
                 h_cnn = dqn.encoder_cnn_base(
                     bert_output, self.filter_sizes, self.num_filters,
                     self.hp.embedding_size, self.is_infer)
@@ -116,11 +116,11 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             h_state_expanded = tf.expand_dims(new_h, axis=1)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
-                bert_output_actions = bert_layer(
+                bert_output_actions = self.bert_layer(
                     [actions, actions_token_masks, actions_segment_ids])
                 encoder_cell = tf.nn.rnn_cell.MultiRNNCell(
                     [tf.nn.rnn_cell.LSTMCell(32) for _ in range(1)])
-                sequence_output, inner_state = tf.keras.layers.RNN(
+                sequence_output, inner_state = tf.nn.dynamic_rnn(
                     encoder_cell, bert_output_actions,
                     sequence_length=actions_len,
                     initial_state=None, dtype=tf.float32)
@@ -130,6 +130,18 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
+
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_1Daction(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.hp.n_actions, self.inputs["b_weight"])
+        var_list = tf.trainable_variables(scope="drrn-encoder")
+        trainable_var_list = list(filter(
+            lambda v: v not in self.bert_layer.non_trainable_variables,
+            var_list))
+        train_op = self.optimizer.minimize(
+            loss, global_step=self.global_step, var_list=trainable_var_list)
+        return loss, train_op, abs_loss
 
 
 def create_train_model(model_creator, hp):

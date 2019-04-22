@@ -18,12 +18,14 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_MultiChannelCNNEncoderDQN()
     elif model_creator == 'CNNEncoderDecoderDQN':
         model_hparams = default_hparams_CNNEncoderDecoderDQN()
-    elif model_creator == 'CNNEncoderDRRN':
-        model_hparams = default_hparams_CNNEncoderDRRN()
     elif model_creator == 'CNNEDMultiLayerDQN':
         model_hparams = default_hparams_CNNEDMultiLayerDQN()
     elif model_creator == 'CNNEncoderMultiLayerDQN':
         model_hparams = default_hparams_CNNEncoderMultiLayerDQN()
+    elif model_creator == 'CNNEncoderDRRN':
+        model_hparams = default_hparams_CNNEncoderDRRN()
+    elif model_creator == 'BertCNNEncoderDRRN':
+        model_hparams = default_hparams_BertCNNEncoderDRRN()
     else:
         raise ValueError('unknown model creator: {}'.format(model_creator))
     return model_hparams
@@ -197,9 +199,9 @@ def default_hparams_BertCNNEncoderDRRN():
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
         save_gap_t=1000,
-        embedding_size=64,
+        embedding_size=768,
         learning_rate=1e-5,
-        num_turns=21,
+        num_turns=11,
         num_tokens=512,
         num_conv_filters=32,
         cls_val="[CLS]",

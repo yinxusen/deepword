@@ -61,7 +61,7 @@ if __name__ == '__main__':
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
 
     if args.mode == "train-drrn":
-        from deeptextworld.train_drrn import train_n_eval
+        from deeptextworld.train_bert_drrn import train_n_eval
         hp = load_hparams_for_training(config_file, args)
         train_n_eval(hp, model_dir, game_dir=game_path, f_games=args.f_games)
     elif args.mode == "eval-drrn":

@@ -37,8 +37,12 @@ def load_uniq_lines(fname):
     return uniq(lines)
 
 
-def load_vocab(vocab_file):
+def load_lower_vocab(vocab_file):
         return list(map(lambda t: t.lower(), load_uniq_lines(vocab_file)))
+
+
+def load_vocab(vocab_file):
+        return load_uniq_lines(vocab_file)
 
 
 def load_actions(action_file):

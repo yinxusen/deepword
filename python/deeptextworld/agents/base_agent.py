@@ -18,7 +18,7 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_vocab, load_actions, ctime
+from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, ctime
 
 
 class DRRNMemo(collections.namedtuple(
@@ -95,7 +95,7 @@ class BaseAgent(Logging):
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
         additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
-        tokens = additional_tokens + list(load_vocab(hp.vocab_file))
+        tokens = additional_tokens + list(load_lower_vocab(hp.vocab_file))
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
         new_hp.set_hparam('sos_id', token2idx[hp.sos])

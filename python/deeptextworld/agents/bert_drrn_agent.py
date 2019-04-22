@@ -1,4 +1,3 @@
-import tensorflow_hub as hub
 from bert.tokenization import FullTokenizer
 
 from deeptextworld import bert_drrn_model
@@ -12,11 +11,6 @@ class BertDRRNAgent(DRRNAgent):
     """
     def __init__(self, hp, model_dir):
         super(BertDRRNAgent, self).__init__(hp, model_dir)
-        self.bert_module = hub.Module(
-            self.hp.bert_path,
-            trainable=self.hp.trainable,
-            name="bert_drrn_module"
-        )
         self.tokenizer = FullTokenizer(
             vocab_file=hp.vocab_file, do_lower_case=True)
 
@@ -28,6 +22,7 @@ class BertDRRNAgent(DRRNAgent):
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
         tokens = list(load_vocab(hp.vocab_file))
+        print(tokens[:10])
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
         new_hp.set_hparam('sos_id', token2idx[hp.sos])

@@ -112,7 +112,7 @@ def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is
             src_paddings = tf.constant([[0, 0], [fs - 1, 0], [0, 0], [0, 0]])
             src_w_pad = tf.pad(input_tensor, paddings=src_paddings, mode="CONSTANT")
             # Convolution Layer
-            filter_shape = [fs, embedding_size, 2, num_filters]
+            filter_shape = [fs, embedding_size, 1, num_filters]
             w = tf.get_variable(
                 name="W",
                 initializer=lambda: tf.truncated_normal(filter_shape, stddev=0.1))

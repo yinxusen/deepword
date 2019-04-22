@@ -9,7 +9,7 @@ class BertLayer(tf.layers.Layer):
         self.trainable = True
         self.output_size = 768
         self.bert_module = None
-        self.bert_path = None
+        self.bert_path = "https://tfhub.dev/google/bert_uncased_L-12_H-768_A-12/1"
 
     def build(self, input_shape):
         self.bert_module = hub.Module(
@@ -25,7 +25,10 @@ class BertLayer(tf.layers.Layer):
                           not "/cls/" in var.name]
 
         # Select how many layers to fine tune
-        trainable_vars = trainable_vars[-self.n_fine_tune_layers:]
+        if self.n_fine_tune_layers <= 0:
+            trainable_vars = []
+        else:
+            trainable_vars = trainable_vars[-self.n_fine_tune_layers:]
 
         # Add to trainable weights
         for var in trainable_vars:
@@ -49,4 +52,4 @@ class BertLayer(tf.layers.Layer):
 
     # TODO: wrong output shape
     def compute_output_shape(self, input_shape):
-        return input_shape[0], self.output_size
+        return input_shape[0], input_shape[1], self.output_size
