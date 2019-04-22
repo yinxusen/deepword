@@ -209,7 +209,8 @@ def default_hparams_BertCNNEncoderDRRN():
         sep_val="[SEP]",
         sep_val_id=0,
         mask_val="[MASK]",
-        mask_val_id=0
+        mask_val_id=0,
+        bert_ckpt_dir=""
     )
 
 

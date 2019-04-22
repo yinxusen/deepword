@@ -15,6 +15,7 @@ else
 fi
 
 MODELHOME="$PDIR/../experiments-drrn/agent-drrn-test"
+BERT_CKPT_DIR="$MODELHOME/bert-model"
 
 VOCAB_FILE="$PDIR/resources/bert-vocab.txt"
 
@@ -34,5 +35,6 @@ pushd $PDIR
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
-    --model-creator BertCNNEncoderDRRN
+    --model-creator BertCNNEncoderDRRN \
+    --bert-ckpt-dir $BERT_CKPT_DIR
 popd

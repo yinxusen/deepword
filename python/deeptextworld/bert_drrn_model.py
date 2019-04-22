@@ -1,16 +1,17 @@
 import collections
+import re
 
 import tensorflow as tf
+from bert import modeling
 
 import deeptextworld.dqn_func as dqn
 from deeptextworld.dqn_model import CNNEncoderDQN
-from deeptextworld.bert_layer import BertLayer
 
 
 class TrainBertDRRNModel(
     collections.namedtuple(
         'TrainModel',
-        ('graph', 'model', 'q_actions','train_op', 'loss', 'train_summary_op',
+        ('graph', 'model', 'q_actions', 'train_op', 'loss', 'train_summary_op',
          'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss',
          'initializer'))):
@@ -56,7 +57,9 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
         }
-        self.bert_layer = BertLayer(n_fine_tune_layers=0)
+        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(self.bert_init_ckpt_dir)
 
     def get_q_actions(self):
         """
@@ -81,32 +84,42 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         """
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
-        # src = tf.pad(
-        #     self.inputs["src"], paddings=tf.constant([[0, 0], [1, 0]]),
-        #     mode="CONSTANT", constant_values=self.hp.cls_val_id)
         src = self.inputs["src"]
         src_len = self.inputs["src_len"]
         src_masks = tf.sequence_mask(
             src_len, maxlen=self.num_tokens, dtype=tf.int32)
-        src_segment_ids = tf.zeros_like(src, dtype=tf.int32)
 
         actions = tf.reshape(
             self.inputs["actions"], shape=(-1, self.n_tokens_per_action))
-        # actions = tf.pad(
-        #     actions, paddings=tf.constant([[0, 0], [1, 0]]),
-        #     mode="CONSTANT", constant_values=self.hp.cls_val_id)
         actions_len = tf.reshape(
             self.inputs["actions_len"], shape=(-1,))
         actions_token_masks = tf.sequence_mask(
             actions_len, maxlen=self.n_tokens_per_action, dtype=tf.int32)
-        actions_segment_ids = tf.zeros_like(actions, dtype=tf.int32)
+
+        bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+        with tf.variable_scope("bert-embedding"):
+            bert_model = modeling.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=src, input_mask=src_masks, scope="bert")
+            src_bert_embeddings = bert_model.sequence_output
+        # TODO: I don't understand the reuse behavior for nested variable_scope
+        with tf.variable_scope("bert-embedding", reuse=True):
+            bert_action_model = modeling.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=actions, input_mask=actions_token_masks, scope="bert")
+            actions_bert_embeddings = bert_action_model.sequence_output
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-embedding/bert/"})
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            with tf.variable_scope("bert-cnn-encoder", reuse=False):
-                bert_output = self.bert_layer([src, src_masks, src_segment_ids])
-                bert_output = tf.expand_dims(bert_output, axis=-1)
+            with tf.variable_scope("cnn-encoder", reuse=False):
+                src_bert_embeddings = tf.expand_dims(src_bert_embeddings,
+                                                     axis=-1)
                 h_cnn = dqn.encoder_cnn_base(
-                    bert_output, self.filter_sizes, self.num_filters,
+                    src_bert_embeddings, self.filter_sizes, self.num_filters,
                     self.hp.embedding_size, self.is_infer)
                 pooled = tf.reduce_max(h_cnn, axis=1)
                 num_filters_total = self.num_filters * len(self.filter_sizes)
@@ -116,12 +129,10 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             h_state_expanded = tf.expand_dims(new_h, axis=1)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
-                bert_output_actions = self.bert_layer(
-                    [actions, actions_token_masks, actions_segment_ids])
                 encoder_cell = tf.nn.rnn_cell.MultiRNNCell(
                     [tf.nn.rnn_cell.LSTMCell(32) for _ in range(1)])
                 sequence_output, inner_state = tf.nn.dynamic_rnn(
-                    encoder_cell, bert_output_actions,
+                    encoder_cell, actions_bert_embeddings,
                     sequence_length=actions_len,
                     initial_state=None, dtype=tf.float32)
                 flat_h_actions = inner_state[-1].h
@@ -135,12 +146,15 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         loss, abs_loss = dqn.l2_loss_1Daction(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
-        var_list = tf.trainable_variables(scope="drrn-encoder")
-        trainable_var_list = list(filter(
-            lambda v: v not in self.bert_layer.non_trainable_variables,
-            var_list))
+        tvars_bert = tf.trainable_variables(scope="drrn-encoder/bert-embedding")
+        freeze_vars = set(filter(
+            lambda v: "layer_11" not in v.name or "pooler" not in v.name,
+            tvars_bert))
+
+        tvars = list(filter(lambda v: v not in freeze_vars,
+                            tf.trainable_variables(scope="drrn-encoder")))
         train_op = self.optimizer.minimize(
-            loss, global_step=self.global_step, var_list=trainable_var_list)
+            loss, global_step=self.global_step, var_list=tvars)
         return loss, train_op, abs_loss
 
 

@@ -268,10 +268,6 @@ class BaseAgent(Logging):
                     start_t = trained_steps + self.hp.observation_t
             else:
                 self.info('No checkpoint to load, training from scratch')
-            trainable_vars = tf.trainable_variables()
-            self.info('trainable variables: {}'.format(trainable_vars))
-            self.info('count of trainable vars w/o src_embeddings: {}'.format(
-                self.count_trainable(trainable_vars, mask='src_embeddings')))
         return train_sess, start_t, saver, model
 
     def create_model_instance(self):
