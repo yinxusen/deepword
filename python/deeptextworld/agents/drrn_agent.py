@@ -182,8 +182,6 @@ class BertDRRNAgent(DRRNAgent):
         print(tokens[:10])
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
-        new_hp.set_hparam('sos_id', token2idx[hp.sos])
-        new_hp.set_hparam('eos_id', token2idx[hp.eos])
         new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
         new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
         # bert specific tokens

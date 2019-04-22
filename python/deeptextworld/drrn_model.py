@@ -226,13 +226,12 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         loss, abs_loss = dqn.l2_loss_1Daction(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
-        tvars_bert = tf.trainable_variables(scope="drrn-encoder/bert-embedding")
-        freeze_vars = set(filter(
-            lambda v: "layer_11" not in v.name or "pooler" not in v.name,
+        tvars_bert = tf.trainable_variables(scope="bert-embedding")
+        allowed_tvars_bert = list(filter(
+            lambda v: "layer_11" in v.name or "pooler" in v.name,
             tvars_bert))
-
-        tvars = list(filter(lambda v: v not in freeze_vars,
-                            tf.trainable_variables(scope="drrn-encoder")))
+        tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
+        tvars = tvars_drrn + allowed_tvars_bert
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step, var_list=tvars)
         return loss, train_op, abs_loss
