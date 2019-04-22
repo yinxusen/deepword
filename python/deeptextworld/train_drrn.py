@@ -9,7 +9,7 @@ import gym
 import textworld.gym
 from textworld import EnvInfos
 
-from deeptextworld.agents.drrn_agent import DRRNAgent
+from deeptextworld.agents import drrn_agent
 from deeptextworld.utils import ctime
 
 # List of additional information available during evaluation.
@@ -123,7 +123,8 @@ def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
     logger = logging.getLogger('train')
     logger.info("load {} game files".format(len(game_files)))
 
-    agent = DRRNAgent(hp, model_dir)
+    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     agent.train()
 
     requested_infos = agent.select_additional_infos()
@@ -155,7 +156,8 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent = DRRNAgent(hp, model_dir)
+    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
     agent.eval(load_best=False)
 
@@ -307,7 +309,8 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent = DRRNAgent(hp, model_dir)
+    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:
         agent.eps = eval_randomness

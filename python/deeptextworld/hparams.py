@@ -181,7 +181,7 @@ def default_hparams_MultiChannelCNNEncoderDQN():
 
 def default_hparams_CNNEncoderDRRN():
     return tf.contrib.training.HParams(
-        agent_clazz='Agent',
+        agent_clazz='DRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
         save_gap_t=1000,
@@ -195,7 +195,7 @@ def default_hparams_CNNEncoderDRRN():
 
 def default_hparams_BertCNNEncoderDRRN():
     return tf.contrib.training.HParams(
-        agent_clazz='Agent',
+        agent_clazz='BertDRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
         save_gap_t=1000,
