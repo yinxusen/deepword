@@ -26,6 +26,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_CNNEncoderDRRN()
     elif model_creator == 'BertCNNEncoderDRRN':
         model_hparams = default_hparams_BertCNNEncoderDRRN()
+    elif model_creator == 'BertEncoderDRRN':
+        model_hparams = default_hparams_BertEncoderDRRN()
     else:
         raise ValueError('unknown model creator: {}'.format(model_creator))
     return model_hparams
@@ -204,6 +206,26 @@ def default_hparams_BertCNNEncoderDRRN():
         num_turns=11,
         num_tokens=512,
         num_conv_filters=32,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        bert_ckpt_dir=""
+    )
+
+
+def default_hparams_BertEncoderDRRN():
+    return tf.contrib.training.HParams(
+        agent_clazz='BertDRRNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=768,
+        learning_rate=1e-5,
+        num_turns=11,
+        num_tokens=511,  # note that we need to insert [CLS] in the beginning
         cls_val="[CLS]",
         cls_val_id=0,
         sep_val="[SEP]",

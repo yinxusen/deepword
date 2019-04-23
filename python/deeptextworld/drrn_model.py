@@ -3,7 +3,7 @@ import tensorflow as tf
 from bert import modeling
 
 import deeptextworld.dqn_func as dqn
-from deeptextworld.dqn_model import CNNEncoderDQN
+from deeptextworld.dqn_model import BaseDQN, CNNEncoderDQN
 
 
 class TrainDRRNModel(
@@ -105,6 +105,144 @@ class CNNEncoderDRRN(CNNEncoderDQN):
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
+
+
+class BertEncoderDRRN(BaseDQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(BertEncoderDRRN, self).__init__(hp, src_embeddings, is_infer)
+        self.n_actions = self.hp.n_actions
+        self.num_tokens = hp.num_tokens
+        self.n_tokens_per_action = self.hp.n_tokens_per_action
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.float32, [None]),
+            "action_idx": tf.placeholder(tf.int32, [None]),
+            "b_weight": tf.placeholder(tf.float32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None]),
+            "actions": tf.placeholder(
+                tf.int32, [None, self.n_actions, self.n_tokens_per_action]),
+            "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
+        }
+        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(self.bert_init_ckpt_dir)
+
+    def get_q_actions(self):
+        """
+        compute the Q-vector from the relevance of hidden state and hidden actions
+        h_state: (batch_size, n_hidden_state)
+        h_state_expanded: (batch_size, 1, n_hidden_state)
+
+        h_actions_expanded: (1, n_actions, n_hidden_state)
+        actions_mask: (batch_size, n_actions, 1)
+        h_actions_masked: (batch_size, n_actions, n_hidden_state)
+
+        **h_actions_masked = h_actions_expanded * actions_mask**
+
+        q_actions: (batch_size, n_actions)
+
+        **q_actions = \sum_k h_state_expanded_{ijk} * h_actions_masked_{ijk}**
+
+        i: batch_size
+        j: n_actions
+        k: n_hidden_state
+        :return:
+        """
+        batch_size = tf.shape(self.inputs["src_len"])[0]
+
+        src = self.inputs["src"]
+        src_len = self.inputs["src_len"]
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=self.num_tokens, dtype=tf.int32)
+
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(-1, self.n_tokens_per_action))
+        actions_len = tf.reshape(
+            self.inputs["actions_len"], shape=(-1,))
+        actions_token_masks = tf.sequence_mask(
+            actions_len, maxlen=self.n_tokens_per_action, dtype=tf.int32)
+
+        bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+
+        # padding the [CLS] in the beginning
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = tf.pad(
+            src_masks, paddings=paddings, mode="CONSTANT",
+            constant_values=1)
+        actions_w_pad = tf.pad(
+            actions, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        actions_token_masks_w_pad = tf.pad(
+            actions_token_masks, paddings=paddings, mode="CONSTANT",
+            constant_values=1)
+
+        with tf.variable_scope("bert-state-encoder"):
+            bert_model = modeling.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=src_w_pad, input_mask=src_masks_w_pad)
+            h_state = bert_model.pooled_output
+        with tf.variable_scope("bert-action-encoder"):
+            bert_action_model = modeling.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=actions_w_pad, input_mask=actions_token_masks_w_pad)
+            flat_h_actions = bert_action_model.pooled_output
+            h_actions = tf.reshape(
+                flat_h_actions,
+                shape=(batch_size, self.n_actions, -1))
+
+        with tf.variable_scope("drrn-encoder", reuse=False):
+            h_state_expanded = tf.expand_dims(h_state, axis=1)
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-action-encoder/bert/"})
+
+        return q_actions
+
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_1Daction(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.hp.n_actions, self.inputs["b_weight"])
+        tvars_bert_state = tf.trainable_variables(scope="bert-state-encoder")
+        tvars_bert_action = tf.trainable_variables(scope="bert-action-encoder")
+
+        allowed_tvars_state = list(filter(
+            lambda v: "layer_11" in v.name or "pooler" in v.name,
+            tvars_bert_state))
+        allowed_tvars_action = list(filter(
+            lambda v: "layer_11" in v.name or "pooler" in v.name,
+            tvars_bert_action))
+
+        tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
+        tvars = tvars_drrn + allowed_tvars_state + allowed_tvars_action
+        train_op = self.optimizer.minimize(
+            loss, global_step=self.global_step, var_list=tvars)
+        return loss, train_op, abs_loss
 
 
 class BertCNNEncoderDRRN(CNNEncoderDQN):
