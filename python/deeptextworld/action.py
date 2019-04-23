@@ -117,6 +117,14 @@ class ActionCollector(Logging):
         else:
             return self.actions_base[eid]
 
+    def get_action2idx(self, eid=None):
+        if eid is None or eid == self.curr_eid:
+            return self.action2idx
+        else:
+            action2idx = dict(
+                [(a, i) for (i, a) in enumerate(self.actions_base[eid])])
+            return action2idx
+
     def size(self):
         return self.curr_aid
 

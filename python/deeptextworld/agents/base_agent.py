@@ -353,7 +353,8 @@ class BaseAgent(Logging):
         self.prev_place = None
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
-        theme_words_search = re.search(theme_regex, recipe[0].replace("\n", "<|>"))
+        theme_words_search = re.search(
+            theme_regex, recipe[0].replace("\n", "<|>"))
         self.see_cookbook = False
         self.theme_words = None
         if theme_words_search:
@@ -491,6 +492,218 @@ class BaseAgent(Logging):
 
         return contained, others
 
+    @classmethod
+    def get_room_name(cls, master):
+        """
+        Extract and lower room name.
+        Return None if not exist.
+        :param master:
+        :return:
+        """
+        room_regex = ".*-= (.*) =-.*"
+        room_search = re.search(room_regex, master)
+        if room_search is not None:
+            room_name = room_search.group(1).lower()
+        else:
+            room_name = None
+        return room_name
+
+    def filter_admissible_actions(self, admissible_actions):
+        """
+        Filter unnecessary actions.
+        :param admissible_actions:
+        :return:
+        """
+        contained, others = self.contain_theme_words(admissible_actions)
+        actions = ["inventory", "look"] + contained
+        actions = list(filter(lambda c: not c.startswith("examine"), actions))
+        actions = list(filter(lambda c: not c.startswith("close"), actions))
+        actions = list(filter(lambda c: not c.startswith("insert"), actions))
+        actions = list(filter(lambda c: not c.startswith("eat"), actions))
+        actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        actions = list(filter(lambda c: not c.startswith("put"), actions))
+        other_valid_commands = {
+            "prepare meal", "eat meal", "examine cookbook"
+        }
+        actions += list(filter(
+            lambda a: a in other_valid_commands, admissible_actions))
+        actions += list(filter(
+            lambda a: a.startswith("go"), admissible_actions))
+        actions += list(filter(
+            lambda a: (a.startswith("drop") and
+                       all(map(lambda t: t not in a, self.theme_words))),
+            others))
+        actions += list(filter(
+            lambda a: a.startswith("take") and "knife" in a, others))
+        actions += list(filter(lambda a: a.startswith("open"), others))
+        self.debug("previous admissible actions: {}".format(
+            ", ".join(sorted(admissible_actions))))
+        self.debug("new admissible actions: {}".format(
+            ", ".join(sorted(actions))))
+        return actions
+
+    def rule_base_policy(self, actions, all_actions, immediate_reward):
+        # use hard set actions in the beginning and the end of one episode
+        if "examine cookbook" in actions and not self.see_cookbook:
+            player_t = "examine cookbook"
+            self.see_cookbook = True
+        elif self._last_action == "examine cookbook":
+            player_t = "inventory"
+        elif self._last_action == "prepare meal" and immediate_reward > 0:
+            player_t = "eat meal"
+        else:
+            player_t = None
+
+        if player_t is not None:
+            if not player_t in all_actions:
+                self.debug("eat meal not in action list, adding it in ...")
+                self.action_collector.extend([player_t])
+                all_actions = self.action_collector.get_actions()
+            action_idx = all_actions.index(player_t)
+        else:
+            action_idx = None
+        report_txt = [('hard_set_action', action_idx), ('action', player_t)]
+        return action_idx, player_t, report_txt
+
+    def jitter_go_action(
+            self, action_idx, player_t, report_txt, actions, all_actions):
+        admissible_go_actions = list(
+            filter(lambda a: a.startswith("go"), actions))
+        if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
+                and (player_t in admissible_go_actions)):
+            if ((self.is_training and
+                 random.random() > 1 - self.hp.jitter_train_prob)
+                    or ((not self.is_training) and
+                        random.random() > 1 - self.hp.jitter_eval_prob)):
+                original_action = player_t
+                jitter_go_action = random.choice(admissible_go_actions)
+                action_idx = all_actions.index(jitter_go_action)
+                player_t = jitter_go_action
+                report_txt = (
+                    [("original action", original_action),
+                     ("jitter go action", player_t),
+                     ("# admissible go", len(admissible_go_actions))])
+            else:
+                pass
+        else:
+            pass
+        return action_idx, player_t, report_txt
+
+    def choose_action(
+            self, actions, all_actions, actions_mask, immediate_reward):
+        """
+        Choose an action by
+          1) try rule-based policy;
+          2) try epsilon search learned policy;
+          3) jitter go
+        :param actions:
+        :param all_actions:
+        :param actions_mask:
+        :param immediate_reward:
+        :return:
+        """
+        action_idx, player_t, report_txt = self.rule_base_policy(
+            actions, all_actions, immediate_reward)
+        if action_idx is None:
+            action_idx, player_t, report_txt = self.get_an_eps_action(
+                actions_mask)
+            action_idx, player_t, report_txt = self.jitter_go_action(
+                action_idx, player_t, report_txt, actions, all_actions)
+        return action_idx, player_t, report_txt
+
+    def get_instant_reward(self, score, master, is_terminal, has_won):
+        instant_reward = self.clip_reward(score - self.cumulative_score - 0.1)
+        self.cumulative_score = score
+        if (master == self.prev_master_t and
+            self._last_action == self.prev_player_t and instant_reward < 0):
+            instant_reward = max(
+                -1.0, instant_reward + self.prev_cumulative_penalty)
+            self.debug("repeated bad try, decrease reward by {},"
+                       " reward changed to {}".format(
+                self.prev_cumulative_penalty, instant_reward))
+            self.prev_cumulative_penalty = self.prev_cumulative_penalty - 0.1
+        else:
+            self.prev_player_t = self._last_action
+            self.prev_master_t = master
+            self.prev_cumulative_penalty = -0.1
+
+        if is_terminal and not has_won:
+            self.info("game terminate and fail, final reward change"
+                      " from {} to -1".format(instant_reward))
+            instant_reward = -1
+        return instant_reward
+
+    def patch_floor_plan(self, master, cleaned_obs):
+        """collect floor plan during playing and patch master"""
+        room_name = self.get_room_name(master)
+        if room_name is not None:
+            curr_place = room_name
+            if self.prev_place is None:
+                self.prev_place = curr_place
+        else:
+            self.debug("no match place from {}".format(cleaned_obs))
+            curr_place = self.prev_place
+        curr_map = self.floor_plan.get_map(curr_place)
+        cleaned_obs = cleaned_obs + " " + curr_map
+        if (curr_place != self.prev_place and
+                self._last_action.startswith("go")):
+            self.floor_plan.extend(
+                [(self.prev_place, self._last_action, curr_place),
+                 (curr_place, self.inv_direction[self._last_action],
+                  self.prev_place)])
+            self.prev_place = curr_place
+        return cleaned_obs
+
+    def train_one_batch(self):
+        """
+        Train one batch of samples.
+        Load target model if not exist, save current model when necessary.
+        """
+        if self.total_t == self.hp.observation_t:
+            self.epoch_start_t = ctime()
+        # prepare target nn
+        if self.target_model is None:
+            if self.hp.delay_target_network != 0:
+                # save model for loading of target net
+                self.debug("save nn for target net")
+                self.saver.save(
+                    self.sess, self.chkp_prefix,
+                    global_step=tf.train.get_or_create_global_step(
+                        graph=self.model.graph))
+                self.debug("create and load target net")
+                self.target_sess, _, self.target_saver, self.target_model =\
+                    self.create_n_load_model(is_training=False)
+            else:
+                self.debug("target net is the same with nn")
+                self.target_model = self.model
+                self.target_sess = self.sess
+                self.target_saver = self.saver
+
+        self.eps = self.annealing_eps(
+            self.hp.init_eps, self.hp.final_eps,
+            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
+        self.train_impl(self.sess, self.total_t,
+                        self.train_summary_writer, self.target_sess)
+
+        if self.time_to_save():
+            epoch_end_t = ctime()
+            delta_time = epoch_end_t - self.epoch_start_t
+            self.info('current epoch end')
+            reports_time = [
+                ('epoch time', delta_time),
+                ('#batches per epoch', self.hp.save_gap_t),
+                ('avg step time',
+                 delta_time * 1.0 / self.hp.save_gap_t)]
+            self.info(self.report_status(reports_time))
+            self.save_snapshot()
+            restore_from = tf.train.latest_checkpoint(
+                os.path.join(self.model_dir, 'last_weights'))
+            self.target_saver.restore(self.target_sess, restore_from)
+            self.info("target net load from: {}".format(restore_from))
+            self.snapshot_saved = True
+            self.info("snapshot saved, ready for evaluation")
+            self.epoch_start_t = ctime()
+
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
         """
@@ -512,45 +725,15 @@ class BaseAgent(Logging):
             self._start_episode(obs, infos)
 
         assert len(obs) == 1, "cannot handle batch game training"
-        immediate_reward = self.clip_reward(scores[0] - self.cumulative_score - 0.1)
-        self.cumulative_score = scores[0]
 
-        if self.in_game_t == 0:
-            # to avoid adding the text world logo in the first sentence
-            master = infos["description"][0]
-        else:
-            master = obs[0]
+        master = infos["description"][0] if self.in_game_t == 0 else obs[0]
         cleaned_obs = self.tokenize(master)
 
-        curr_place = None
+        instant_reward = self.get_instant_reward(
+            scores[0], cleaned_obs, dones[0], infos["has_won"][0])
+
         if self.hp.collect_floor_plan:
-            room_regex = ".*-= (.*) =-.*"
-            room_search = re.search(room_regex, cleaned_obs)
-            if room_search is not None:
-                curr_place = room_search.group(1)
-                if self.prev_place is None:
-                    self.prev_place = curr_place
-            else:
-                self.debug("no match place from {}".format(cleaned_obs))
-                curr_place = self.prev_place
-            curr_map = self.floor_plan.get_map(curr_place)
-            cleaned_obs = cleaned_obs + " " + curr_map
-
-        if (cleaned_obs == self.prev_master_t and
-            self._last_action == self.prev_player_t and immediate_reward < 0):
-            immediate_reward = max(-1.0, immediate_reward + self.prev_cumulative_penalty)
-            self.debug("repeated bad try, decrease reward by {}, reward changed to {}".format(
-                self.prev_cumulative_penalty, immediate_reward))
-            self.prev_cumulative_penalty = self.prev_cumulative_penalty - 0.1
-        else:
-            self.prev_player_t = self._last_action
-            self.prev_master_t = cleaned_obs
-            self.prev_cumulative_penalty = -0.1
-
-        if dones[0] and not infos["has_won"][0]:
-            self.info("game terminate and fail,"
-                      " final reward change from {} to -1".format(immediate_reward))
-            immediate_reward = -1
+            cleaned_obs = self.patch_floor_plan(master, cleaned_obs)
 
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
@@ -560,24 +743,13 @@ class BaseAgent(Logging):
                        " master: {}, reward: {}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
-                cleaned_obs, immediate_reward, dones[0]))
-
-            tid_ = self.tjs.get_current_tid()
-            sid_ = self.tjs.get_last_sid()
-
+                cleaned_obs, instant_reward, dones[0]))
             # add into memory
             self.memo.append(DRRNMemo(
-                tid=tid_, sid=sid_,
+                tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
                 gid=self.game_id, aid=self._last_action_idx,
-                reward=immediate_reward,
+                reward=instant_reward,
                 is_terminal=dones[0], action_mask=self._last_actions_mask))
-
-            if (self.hp.collect_floor_plan and curr_place != self.prev_place
-                    and self._last_action.startswith("go")):
-                self.floor_plan.extend(
-                    [(self.prev_place, self._last_action, curr_place),
-                     (curr_place, self.inv_direction[self._last_action], self.prev_place)])
-                self.prev_place = curr_place
         else:
             self.info("mode: {}, master: {}, max_score: {}".format(
                 "train" if self.is_training else "eval", cleaned_obs,
@@ -589,121 +761,24 @@ class BaseAgent(Logging):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
 
-        # populate my own admissible actions
-        admissible_commands = infos["admissible_commands"][0]
-        contained, others = self.contain_theme_words(admissible_commands)
-        actions = ["inventory", "look"]
-        actions += contained
-        admissible_go = list(filter(lambda a: a.startswith("go"), admissible_commands))
-        actions += admissible_go
-        actions = list(filter(lambda c: not c.startswith("examine"), actions))
-        actions = list(filter(lambda c: not c.startswith("close"), actions))
-        actions = list(filter(lambda c: not c.startswith("insert"), actions))
-        actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        actions = list(filter(lambda c: not c.startswith("drop"), actions))
-        actions = list(filter(lambda c: not c.startswith("put"), actions))
-        other_valid_commands = {"prepare meal", "eat meal", "examine cookbook"}
-        actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
-        actions += list(filter(
-            lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self.theme_words))), others))
-        actions += list(filter(lambda a: a.startswith("take") and "knife" in a, others))
-        actions += list(filter(lambda a: a.startswith("open"), others))
-        self.debug("previous admissible actions: {}".format(", ".join(sorted(admissible_commands))))
-        self.debug("new admissible actions: {}".format(", ".join(sorted(actions))))
-
+        actions = self.filter_admissible_actions(
+            infos["admissible_commands"][0])
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
-        # use hard set actions in the beginning and the end of one episode
-        if "examine cookbook" in actions and not self.see_cookbook:
-            player_t = "examine cookbook"
-            action_idx = all_actions.index(player_t)
-            self.prev_report = [('hard_set_action', action_idx),
-                                ('action', player_t)]
-            self.see_cookbook = True
-        elif self._last_action == "examine cookbook":
-            player_t = "inventory"
-            action_idx = all_actions.index(player_t)
-            self.prev_report = [('hard_set_action', action_idx),
-                                ('action', player_t)]
-        elif self._last_action == "prepare meal" and immediate_reward > 0:
-            player_t = "eat meal"
-            if not player_t in all_actions:
-                self.debug("eat meal not in action list, adding it in ...")
-                self.action_collector.extend([player_t])
-                all_actions = self.action_collector.get_actions()
-            action_idx = all_actions.index(player_t)
-            self.prev_report = [('hard_set_action', action_idx),
-                                ('action', player_t)]
-        else:
-            action_idx, player_t, self.prev_report= self.get_an_eps_action(actions_mask)
-
-            # add jitter to go actions to avoid overfitting
-            if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
-                    and (player_t in admissible_go)):
-                if ((self.is_training and random.random() > 1 - self.hp.jitter_train_prob)
-                        or ((not self.is_training) and random.random() > 1 - self.hp.jitter_eval_prob)):
-                    original_action = player_t
-                    jitter_go_action = random.choice(admissible_go)
-                    action_idx = all_actions.index(jitter_go_action)
-                    player_t = jitter_go_action
-                    self.prev_report = ([("original action", original_action),
-                                         ("jitter go action", player_t),
-                                         ("# admissible go", len(admissible_go))])
-                else:
-                    pass
+        action_idx, player_t, self.prev_report = self.choose_action(
+            actions, all_actions, actions_mask, instant_reward)
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
+
         self._last_action_idx = action_idx
         self._last_actions_mask = actions_mask
         self._last_action = player_t
+
         if self.is_training and self.total_t >= self.hp.observation_t:
-            if self.total_t == self.hp.observation_t:
-                self.epoch_start_t = ctime()
-            # prepare target nn
-            if self.target_model is None:
-                if self.hp.delay_target_network != 0:
-                    # save model for loading of target net
-                    self.debug("save nn for target net")
-                    self.saver.save(
-                        self.sess, self.chkp_prefix,
-                        global_step=tf.train.get_or_create_global_step(
-                            graph=self.model.graph))
-                    self.debug("create and load target net")
-                    self.target_sess, _, self.target_saver, self.target_model =\
-                        self.create_n_load_model(is_training=False)
-                else:
-                    self.debug("target net is the same with nn")
-                    self.target_model = self.model
-                    self.target_sess = self.sess
-                    self.target_saver = self.saver
+            self.train_one_batch()
 
-            self.eps = self.annealing_eps(
-                self.hp.init_eps, self.hp.final_eps,
-                self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-            self.train_impl(self.sess, self.total_t,
-                            self.train_summary_writer, self.target_sess)
-
-            if self.time_to_save():
-                epoch_end_t = ctime()
-                delta_time = epoch_end_t - self.epoch_start_t
-                self.info('current epoch end')
-                reports_time = [
-                    ('epoch time', delta_time),
-                    ('#batches per epoch', self.hp.save_gap_t),
-                    ('avg step time',
-                     delta_time * 1.0 / self.hp.save_gap_t)]
-                self.info(self.report_status(reports_time))
-                self.save_snapshot()
-                restore_from = tf.train.latest_checkpoint(
-                    os.path.join(self.model_dir, 'last_weights'))
-                self.target_saver.restore(self.target_sess, restore_from)
-                self.info("target net load from: {}".format(restore_from))
-                self.snapshot_saved = True
-                self.info("snapshot saved, ready for evaluation")
-                self.epoch_start_t = ctime()
         self.total_t += 1
         self.in_game_t += 1
         return [player_t] * len(obs)
