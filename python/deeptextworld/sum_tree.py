@@ -51,7 +51,7 @@ class SumTree(object):
          / \ / \
 tree_index  0 0  0  We fill the leaves from left to right
         """
-
+        prev_data = self.data[self.data_pointer]
         # Update data frame
         self.data[self.data_pointer] = data
 
@@ -63,6 +63,7 @@ tree_index  0 0  0  We fill the leaves from left to right
 
         if self.data_pointer >= self.capacity:  # If we're above the capacity, you go back to first index (we overwrite)
             self.data_pointer = 0
+        return prev_data
 
     """
     Update the leaf priority score and propagate the change through tree

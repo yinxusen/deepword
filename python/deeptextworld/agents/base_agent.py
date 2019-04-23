@@ -745,11 +745,15 @@ class BaseAgent(Logging):
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
                 cleaned_obs, instant_reward, dones[0]))
             # add into memory
-            self.memo.append(DRRNMemo(
+            prev_data = self.memo.append(DRRNMemo(
                 tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
                 gid=self.game_id, aid=self._last_action_idx,
                 reward=instant_reward,
                 is_terminal=dones[0], action_mask=self._last_actions_mask))
+            if isinstance(prev_data, DRRNMemo):
+                if prev_data.is_terminal:
+                    self.debug("tjs delete {}".format(prev_data.tid))
+                    self.tjs.request_delete_key(prev_data.tid)
         else:
             self.info("mode: {}, master: {}, max_score: {}".format(
                 "train" if self.is_training else "eval", cleaned_obs,

@@ -41,9 +41,10 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
         if max_priority == 0:
             max_priority = self.absolute_error_upper
 
-        self.tree.add(max_priority, experience)  # set the max p for new p
+        prev_data = self.tree.add(max_priority, experience)  # set the max p for new p
         if self.used_buffer_size < self.tree.capacity:
             self.used_buffer_size += 1
+        return prev_data
 
     """
     - First, to sample a minibatch of k size, the range [0, priority_total] is / into k ranges.
