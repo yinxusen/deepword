@@ -200,7 +200,8 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
                                                      axis=-1)
                 h_cnn = dqn.encoder_cnn_base(
                     src_bert_embeddings, self.filter_sizes, self.num_filters,
-                    self.hp.embedding_size, self.is_infer)
+                    num_channels=1, embedding_size=self.hp.embedding_size,
+                    is_infer=self.is_infer)
                 pooled = tf.reduce_max(h_cnn, axis=1)
                 num_filters_total = self.num_filters * len(self.filter_sizes)
                 h_state = tf.reshape(pooled, [-1, num_filters_total])

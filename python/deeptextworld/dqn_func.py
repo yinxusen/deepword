@@ -105,17 +105,21 @@ def encoder_cnn_prepare_input_two_facets(src, src_embeddings, pos_embeddings):
     return src_emb_expanded
 
 
-def encoder_cnn_base(input_tensor, filter_sizes, num_filters, embedding_size, is_infer=False):
+def encoder_cnn_base(
+        input_tensor, filter_sizes, num_filters, num_channels, embedding_size,
+        is_infer=False):
     layer_outputs = []
     for i, fs in enumerate(filter_sizes):
         with tf.variable_scope("conv-block-%s" % fs):
             src_paddings = tf.constant([[0, 0], [fs - 1, 0], [0, 0], [0, 0]])
-            src_w_pad = tf.pad(input_tensor, paddings=src_paddings, mode="CONSTANT")
+            src_w_pad = tf.pad(
+                input_tensor, paddings=src_paddings, mode="CONSTANT")
             # Convolution Layer
-            filter_shape = [fs, embedding_size, 2, num_filters]
+            filter_shape = [fs, embedding_size, num_channels, num_filters]
             w = tf.get_variable(
                 name="W",
-                initializer=lambda: tf.truncated_normal(filter_shape, stddev=0.1))
+                initializer=lambda: tf.truncated_normal(
+                    filter_shape, stddev=0.1))
             b = tf.get_variable(
                 name="b",
                 initializer=lambda: tf.constant(0.1, shape=[num_filters]))
@@ -142,8 +146,9 @@ def encoder_cnn_block(
         embedding_size, is_infer=False):
     in_tn = encoder_cnn_prepare_input_two_facets(
         src, src_embeddings, pos_embeddings)
-    return encoder_cnn_base(in_tn, filter_sizes, num_filters,
-                            embedding_size, is_infer)
+    return encoder_cnn_base(
+        in_tn, filter_sizes, num_filters, num_channels=2,
+        embedding_size=embedding_size, is_infer=is_infer)
 
 
 def encoder_cnn(
@@ -191,6 +196,7 @@ def encoder_cnn_multilayers(
                     in_tn,
                     filter_sizes=[filter_size],
                     num_filters=embedding_size,
+                    num_channels=2,
                     embedding_size=embedding_size)
                 out_tns.append(h_cnn)
                 in_tn = tf.expand_dims(h_cnn, axis=-1)
