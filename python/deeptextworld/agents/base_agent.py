@@ -569,7 +569,7 @@ class BaseAgent(Logging):
             self, action_idx, player_t, report_txt, actions, all_actions):
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if (self.hp.jitter_go and (self.prev_report[0][0] == "action")
+        if (self.hp.jitter_go and (report_txt[0][0] == "action")
                 and (player_t in admissible_go_actions)):
             if ((self.is_training and
                  random.random() > 1 - self.hp.jitter_train_prob)
