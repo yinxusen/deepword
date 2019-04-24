@@ -209,7 +209,8 @@ class BertEncoderDRRN(BaseDQN):
                 shape=(batch_size, self.n_actions, -1))
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state_expanded = tf.expand_dims(h_state, axis=1)
+            new_h = dqn.decoder_dense_classification(h_state, 768)
+            h_state_expanded = tf.expand_dims(new_h, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
 
