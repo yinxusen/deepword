@@ -65,19 +65,11 @@ class FloorPlanCollector(Logging):
 
     def get_map(self, room):
         if room is None or room not in self.curr_fp:
-            ret_val = "floor plan : unknown"
+            ret_val = []
         else:
-            ret_val = "floor plan : {}".format(
-                " , ".join(map(lambda d_r: '{} = {}'.format(d_r[0], d_r[1]),
-                               list(self.curr_fp[room].items()))))
-            if room in self.curr_navi_to_kitchen:
-                rat = self.curr_navi_to_kitchen[room]
-            else:
-                rat = self.route_to_kitchen(room)
-                if rat is not None:
-                    self.curr_navi_to_kitchen[room] = rat
-            if rat is not None:
-                ret_val += " . " + "{} if you like kitchen".format(rat[0][0])
+            ret_val = list(map(
+                lambda d_r: "{} to {}".format(d_r[0], d_r[1]),
+                list(self.curr_fp[room].items())))
         return ret_val
 
     @classmethod
