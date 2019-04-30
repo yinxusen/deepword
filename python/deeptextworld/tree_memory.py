@@ -101,11 +101,6 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
 
         return b_idx, memory_b, b_ISWeights
 
-    def get_next_states(self, b_idx):
-        next_idx = [(i+1)%self.tree.capacity for i in b_idx]
-        next_states = [self.tree.data[i] for i in next_idx]
-        return next_idx, next_states
-
     """
     Update the priorities on the tree
     """
