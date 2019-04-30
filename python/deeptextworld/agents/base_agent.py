@@ -385,11 +385,16 @@ class BaseAgent(Logging):
         #     self.tjs.request_delete_key(to_delete_tj_id)
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
             self.mode(), self.in_game_t, scores[0], infos["has_won"]))
+        # TODO: make clear of what need to clean before & after an episode.
         self._episode_has_started = False
         self._last_action_idx = None
         self._last_actions_mask = None
         self._last_action = None
         self.game_id = None
+        self.prev_report = None
+        self.prev_cumulative_penalty = -0.1
+        self.prev_player_t = None
+        self.prev_master_t = None
 
     def save_best_model(self):
         self.info("save the best model so far")
@@ -635,7 +640,9 @@ class BaseAgent(Logging):
             self.prev_master_t = master
             self.prev_cumulative_penalty = -0.1
 
-        if is_terminal and not has_won:
+        # only penalize the final score if the agent choose a bad action.
+        # do not penalize if failed because of out-of-steps.
+        if is_terminal and not has_won and "you lost" in master:
             self.info("game terminate and fail, final reward change"
                       " from {} to -1".format(instant_reward))
             instant_reward = -1
@@ -770,12 +777,6 @@ class BaseAgent(Logging):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        # notice the position of all(dones)
-        # make sure add the last action-master pair into memory
-        if all(dones):
-            self._end_episode(obs, scores, infos)
-            return  # Nothing to return.
-
         actions = self.filter_admissible_actions(
             infos["admissible_commands"][0])
         actions = self.go_with_floor_plan(actions, curr_place)
@@ -788,6 +789,12 @@ class BaseAgent(Logging):
                 instant_reward, dones[0], self._last_actions_mask, actions_mask)
         else:
             pass
+
+        # notice the position of all(dones)
+        # make sure add the last action-master pair into memory
+        if all(dones):
+            self._end_episode(obs, scores, infos)
+            return  # Nothing to return.
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
