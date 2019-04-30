@@ -206,6 +206,7 @@ def default_hparams_BertCNNEncoderDRRN():
         num_turns=11,
         num_tokens=512,
         num_conv_filters=32,
+        bert_num_hidden_layers=1,
         cls_val="[CLS]",
         cls_val_id=0,
         sep_val="[SEP]",

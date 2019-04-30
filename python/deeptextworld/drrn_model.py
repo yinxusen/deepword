@@ -316,6 +316,7 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             actions_len, maxlen=self.n_tokens_per_action, dtype=tf.int32)
 
         bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+        bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
         with tf.variable_scope("bert-embedding"):
             bert_model = modeling.BertModel(
                 config=bert_config, is_training=(not self.is_infer),
