@@ -47,6 +47,7 @@ parser.add_argument('--jitter-eval-prob', type=float)
 parser.add_argument('--collect-floor-plan', action='store_true')
 parser.add_argument('--start-t-ignore-model-t', action='store_true')
 parser.add_argument('--bert-ckpt-dir', type=str)
+parser.add_argument('--bert-num-hidden-layers', type=int)
 
 
 if __name__ == '__main__':
