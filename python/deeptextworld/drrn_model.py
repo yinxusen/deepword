@@ -338,6 +338,8 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             with tf.variable_scope("cnn-encoder", reuse=False):
                 src_bert_embeddings = tf.expand_dims(src_bert_embeddings,
                                                      axis=-1)
+                # when use bert, there is no need to add pos emb since bert
+                # contains that.
                 h_cnn = dqn.encoder_cnn_base(
                     src_bert_embeddings, self.filter_sizes, self.num_filters,
                     num_channels=1, embedding_size=self.hp.embedding_size,
@@ -368,11 +370,14 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
         tvars_bert = tf.trainable_variables(scope="bert-embedding")
+        # allow the last layer of bert to be fine-tuned.
+        train_layer = self.hp.bert_num_hidden_layers - 1
         allowed_tvars_bert = list(filter(
-            lambda v: "layer_11" in v.name or "pooler" in v.name,
+            lambda v: "layer_{}".format(train_layer) in v.name,
             tvars_bert))
         tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
         tvars = tvars_drrn + allowed_tvars_bert
+        print("trainable: {}".format(tvars))
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step, var_list=tvars)
         return loss, train_op, abs_loss
