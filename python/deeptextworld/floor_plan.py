@@ -65,12 +65,8 @@ class FloorPlanCollector(Logging):
 
     def get_map(self, room):
         if room is None or room not in self.curr_fp:
-            ret_val = []
-        else:
-            ret_val = list(map(
-                lambda d_r: "{} to {}".format(d_r[0], d_r[1]),
-                list(self.curr_fp[room].items())))
-        return ret_val
+            return dict()
+        return self.curr_fp[room]
 
     @classmethod
     def route_to_room(cls, ss, tt, fp, visited):

@@ -25,38 +25,8 @@ from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, \
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
     ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask",
-     "go_room_action_ids", "next_go_room_action_ids"))):
+     "action_mask", "next_action_mask"))):
     pass
-
-
-ROOMS = [
-    'backyard',
-    'bedroom',
-    'corridor',
-    'driveway',
-    'garden',
-    'kitchen',
-    'livingroom',
-    'pantry',
-    'shed',
-    'street',
-    'bathroom',
-    'supermarket']
-
-DIRECTIONS = ["east", "west", "north", "south"]
-
-GO_ROOMS = ["go {} to {}".format(d, r) for d in DIRECTIONS for r in ROOMS]
-
-GO_ACTIONS = ["go {}".format(d) for d in DIRECTIONS]
-
-GR2IDX = dict([(gr, idx) for idx, gr in enumerate(GO_ROOMS)])
-
-GA2IDX = dict([(ga, idx) for idx, ga in enumerate(GO_ACTIONS)])
-
-GR2GA = dict([(gr, " ".join(gr.split()[:2])) for gr in GO_ROOMS])
-
-IDX_GR2GA = dict([(GR2IDX[gr], GA2IDX[ga]) for gr, ga in GR2GA.items()])
 
 
 class BaseAgent(Logging):
@@ -146,9 +116,6 @@ class BaseAgent(Logging):
                 action_collector.extend(load_actions(hp.action_file))
             except IOError as e:
                 self.info("load actions error: \n{}".format(e))
-        # init go_rooms directions
-        action_collector.add_new_episode(eid=-1)
-        action_collector.extend(GO_ROOMS)
         return action_collector
 
     def init_trajectory(self, hp, tjs_path, with_loading=True):
@@ -227,12 +194,11 @@ class BaseAgent(Logging):
         return bit_mask_vec.tobytes()
 
 
-    def get_an_eps_action(self, action_mask, go_room_action_ids):
+    def get_an_eps_action(self, action_mask):
         """
         get either an random action index with action string
         or the best predicted action index with action string.
         :param action_mask:
-        :param go_room_action_ids:
         """
         raise NotImplementedError()
 
@@ -379,11 +345,10 @@ class BaseAgent(Logging):
         self.tjs.add_new_tj()
         recipe = infos["extra.recipe"]
         # use stronger game identity
+        master_without_logo = infos["description"][0].replace("\n", " ")
         self.game_id = hashlib.md5(
-            (obs[0] + recipe[0]).encode("utf-8")).hexdigest()
+            (master_without_logo + recipe[0]).encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
-        # extend go actions first to make sure the positions of go actions
-        self.action_collector.extend(GO_ACTIONS)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self.cumulative_score = 0
@@ -401,11 +366,6 @@ class BaseAgent(Logging):
                 filter(lambda w: w != "",
                        map(lambda w: w.strip(), theme_words.split("<|>"))))
             self.debug("theme words: {}".format(", ".join(self.theme_words)))
-
-        self.info(
-            "mode: {}, master: {}, max_score: {}".format(
-                "train" if self.is_training else "eval", obs[0],
-                infos["max_score"]))
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -585,6 +545,11 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(actions))))
         return actions
 
+    def go_with_floor_plan(self, actions, room):
+        local_map = self.floor_plan.get_map(room)
+        return (["{} to {}".format(a, local_map.get(a))
+                 if a in local_map else a for a in actions])
+
     def rule_base_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
         if "examine cookbook" in actions and not self.see_cookbook:
@@ -633,8 +598,7 @@ class BaseAgent(Logging):
         return action_idx, player_t, report_txt
 
     def choose_action(
-            self, actions, all_actions, actions_mask, go_room_action_ids,
-            immediate_reward):
+            self, actions, all_actions, actions_mask, immediate_reward):
         """
         Choose an action by
           1) try rule-based policy;
@@ -650,7 +614,7 @@ class BaseAgent(Logging):
             actions, all_actions, immediate_reward)
         if action_idx is None:
             action_idx, player_t, report_txt = self.get_an_eps_action(
-                actions_mask, go_room_action_ids)
+                actions_mask)
             action_idx, player_t, report_txt = self.jitter_go_action(
                 action_idx, player_t, report_txt, actions, all_actions)
         return action_idx, player_t, report_txt
@@ -688,7 +652,7 @@ class BaseAgent(Logging):
             # self.debug("no match place from {}".format(master))
             curr_place = self.prev_place
         if (curr_place != self.prev_place and
-                self._last_action.startswith("go")):
+                self._last_action in self.inv_direction):
             self.floor_plan.extend(
                 [(self.prev_place, self._last_action, curr_place),
                  (curr_place, self.inv_direction[self._last_action],
@@ -746,22 +710,17 @@ class BaseAgent(Logging):
             self.epoch_start_t = ctime()
 
     def feed_memory(
-            self, instant_reward, is_terminal,
-            action_mask, next_action_mask,
-            go_room_action_ids, next_go_room_action_ids):
-
-        prev_data = self.memo.append(DRRNMemo(
+            self, instant_reward, is_terminal, action_mask, next_action_mask):
+        original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_idx,
             reward=instant_reward, is_terminal=is_terminal,
-            action_mask=action_mask, next_action_mask=next_action_mask,
-            go_room_action_ids=go_room_action_ids,
-            next_go_room_action_ids=next_go_room_action_ids
+            action_mask=action_mask, next_action_mask=next_action_mask
         ))
-        if isinstance(prev_data, DRRNMemo):
-            if prev_data.is_terminal:
-                self.debug("tjs delete {}".format(prev_data.tid))
-                self.tjs.request_delete_key(prev_data.tid)
+        if isinstance(original_data, DRRNMemo):
+            if original_data.is_terminal:
+                self.debug("tjs delete {}".format(original_data.tid))
+                self.tjs.request_delete_key(original_data.tid)
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
@@ -791,6 +750,18 @@ class BaseAgent(Logging):
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
+        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
+                       " master: {}, reward: {}, is_terminal: {}".format(
+                "train" if self.is_training else "eval", self.total_t,
+                self.in_game_t, self.eps, self.report_status(self.prev_report),
+                cleaned_obs, instant_reward, dones[0]))
+        else:
+            self.info(
+                "mode: {}, master: {}, max_score: {}".format(
+                    "train" if self.is_training else "eval", cleaned_obs,
+                    infos["max_score"]))
+
         if self.hp.collect_floor_plan:
             curr_place = self.collect_floor_plan(master)
         else:
@@ -807,30 +778,19 @@ class BaseAgent(Logging):
 
         actions = self.filter_admissible_actions(
             infos["admissible_commands"][0])
+        actions = self.go_with_floor_plan(actions, curr_place)
+        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
-        prev_go_room_action_ids = list(map(lambda m: GR2IDX[m],
-                         self.floor_plan.get_map(self.prev_place)))
-        curr_go_room_action_ids = list(map(lambda m: GR2IDX[m],
-                         self.floor_plan.get_map(curr_place)))
-
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
-                       " master: {}, reward: {}, is_terminal: {}".format(
-                "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self.report_status(self.prev_report),
-                cleaned_obs, instant_reward, dones[0]))
-
             self.feed_memory(
-                instant_reward, dones[0],
-                self._last_actions_mask, actions_mask,
-                prev_go_room_action_ids,
-                curr_go_room_action_ids)
+                instant_reward, dones[0], self._last_actions_mask, actions_mask)
+        else:
+            pass
 
         action_idx, player_t, self.prev_report = self.choose_action(
-            actions, all_actions, actions_mask,
-            curr_go_room_action_ids, instant_reward)
+            actions, all_actions, actions_mask, instant_reward)
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
@@ -845,4 +805,7 @@ class BaseAgent(Logging):
 
         self.total_t += 1
         self.in_game_t += 1
+        # revert back go actions for the game playing
+        if player_t.startswith("go"):
+            player_t = " ".join(player_t.split()[:2])
         return [player_t] * len(obs)

@@ -3,7 +3,7 @@ from bert.tokenization import FullTokenizer
 from textworld import EnvInfos
 
 from deeptextworld import drrn_model
-from deeptextworld.agents.base_agent import BaseAgent, IDX_GR2GA
+from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
 from deeptextworld.hparams import copy_hparams
@@ -42,7 +42,7 @@ class DRRNAgent(BaseAgent):
             request_infos.admissible_commands = True
         return request_infos
 
-    def get_an_eps_action(self, action_mask, go_room_action_ids):
+    def get_an_eps_action(self, action_mask):
         """
         get either an random action index with action string
         or the best predicted action index with action string.
@@ -56,17 +56,15 @@ class DRRNAgent(BaseAgent):
             reports += [('random_action', action_idx),
                         ('action', player_t)]
         else:
-            action_matrix, actions_len = self.change_go_actions(
-                go_room_action_ids,
-                self.action_collector.get_action_matrix(-1),
-                self.game_id)
+            action_matrix = self.action_collector.get_action_matrix()
+            action_len = self.action_collector.get_action_len()
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
                 self.model.src_: [indexed_state_t],
                 self.model.src_len_: [lens_t],
                 self.model.actions_mask_: [action_mask],
                 self.model.actions_: [action_matrix],
-                self.model.actions_len_: [actions_len]
+                self.model.actions_len_: [action_len]
             })[0]
             action_idx, q_max, player_t = get_best_1Daction(
                 q_actions_t, self.action_collector.get_actions(),
@@ -85,21 +83,6 @@ class DRRNAgent(BaseAgent):
         model = drrn_model.create_eval_model(model_creator, self.hp)
         return model
 
-    def change_go_actions(
-            self, go_room_actions_ids, go_room_action_matrix, game_id):
-        """
-        change `go west` to `go west to kitchen`, etc.
-        make sure go east/ go west/ go north/ go south
-          are indexed as 0, 1, 2, 3, respectively.
-        deepcopy is required since we need to change the action matrix and lens
-        """
-        am = np.copy(self.action_collector.get_action_matrix(game_id))
-        al = np.copy(self.action_collector.get_action_len(game_id))
-        for aid in go_room_actions_ids:
-            am[IDX_GR2GA[aid], :] = go_room_action_matrix[aid]
-            al[IDX_GR2GA[aid]] = 4
-        return am, al
-
     def train_impl(self, sess, t, summary_writer, target_sess):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
@@ -117,9 +100,6 @@ class DRRNAgent(BaseAgent):
         is_terminal = [m[0].is_terminal for m in b_memory]
         action_mask = [m[0].action_mask for m in b_memory]
         next_action_mask = [m[0].next_action_mask for m in b_memory]
-        go_room_action_ids = [m[0].go_room_action_ids for m in b_memory]
-        next_go_room_action_ids = [m[0].next_go_room_action_ids for m in b_memory]
-
 
         action_mask_t = self.fromBytes(action_mask)
         action_mask_t1 = self.fromBytes(next_action_mask)
@@ -127,29 +107,26 @@ class DRRNAgent(BaseAgent):
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
-        go_rooms = self.action_collector.get_action_matrix(eid=-1)
-
-        action_matrix_len_t1 = (
-            [self.change_go_actions(next_go_room_action_ids[i], go_rooms, gid)
-             for i, gid in enumerate(game_id)])
-        action_matrix_t1 = [aml[0] for aml in action_matrix_len_t1]
-        actions_len_t1 = [aml[1] for aml in action_matrix_len_t1]
+        # make sure the p_states and s_states are in the same game.
+        # otherwise, it won't make sense to use the same action matrix.
+        action_matrix = [self.action_collector.get_action_matrix(gid) for gid in game_id]
+        action_len = [self.action_collector.get_action_len(gid) for gid in game_id]
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(
             self.target_model.q_actions,
             feed_dict={self.target_model.src_: s_states,
                        self.target_model.src_len_: s_len,
-                       self.target_model.actions_: action_matrix_t1,
-                       self.target_model.actions_len_: actions_len_t1,
+                       self.target_model.actions_: action_matrix,
+                       self.target_model.actions_len_: action_len,
                        self.target_model.actions_mask_: action_mask_t1})
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
             feed_dict={self.model.src_: s_states,
                        self.model.src_len_: s_len,
-                       self.model.actions_: action_matrix_t1,
-                       self.model.actions_len_: actions_len_t1,
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len,
                        self.model.actions_mask_: action_mask_t1})
         t2_end = ctime()
 
@@ -161,20 +138,6 @@ class DRRNAgent(BaseAgent):
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
-        action_matrix_len_t = (
-            [self.change_go_actions(go_room_action_ids[i], go_rooms, gid)
-             for i, gid in enumerate(game_id)])
-        action_matrix_t = [aml[0] for aml in action_matrix_len_t]
-        actions_len_t = [aml[1] for aml in action_matrix_len_t]
-
-        for i in range(len(b_idx)):
-            if action_id[i] < 4:
-                self.info("action_idx: {}".format(action_id[i]))
-                self.info("ids_map: {}".format(go_room_action_ids[i]))
-                self.info("action_matrix_t: {}".format(action_matrix_t[i][:10]))
-                self.info("ids_map_t1: {}".format(next_go_room_action_ids[i]))
-                self.info("action_matrix_t1: {}".format(action_matrix_t1[i][:10]))
-
         t3 = ctime()
         _, summaries, loss_eval, abs_loss = sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
@@ -185,8 +148,8 @@ class DRRNAgent(BaseAgent):
                        self.model.action_idx_: action_id,
                        self.model.actions_mask_: action_mask_t,
                        self.model.expected_q_: expected_q,
-                       self.model.actions_: action_matrix_t,
-                       self.model.actions_len_: actions_len_t})
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len})
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
