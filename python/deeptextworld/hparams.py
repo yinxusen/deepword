@@ -24,6 +24,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_CNNEncoderMultiLayerDQN()
     elif model_creator == 'CNNEncoderDRRN':
         model_hparams = default_hparams_CNNEncoderDRRN()
+    elif model_creator == 'CNNAttnEncoderDRRN':
+        model_hparams = default_hparams_CNNAttnEncoderDRRN()
     elif model_creator == 'BertCNNEncoderDRRN':
         model_hparams = default_hparams_BertCNNEncoderDRRN()
     elif model_creator == 'BertEncoderDRRN':
@@ -182,6 +184,20 @@ def default_hparams_MultiChannelCNNEncoderDQN():
 
 
 def default_hparams_CNNEncoderDRRN():
+    return tf.contrib.training.HParams(
+        agent_clazz='DRRNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=21,
+        num_tokens=1000,
+        num_conv_filters=32
+    )
+
+
+def default_hparams_CNNAttnEncoderDRRN():
     return tf.contrib.training.HParams(
         agent_clazz='DRRNAgent',
         tjs_creator='SingleChannelTrajectory',

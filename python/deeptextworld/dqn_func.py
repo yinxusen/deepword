@@ -174,6 +174,36 @@ def encoder_cnn(
     return inner_states
 
 
+def encoder_attn_cnn(
+        src, src_embeddings, pos_embeddings, max_src_len,
+        filter_sizes, num_filters, embedding_size, is_infer=False):
+    """
+    encode state with CNN, refer to
+    Convolutional Neural Networks for Sentence Classification
+    :param src: placeholder, (tf.int32, [None, None])
+    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+    :param pos_emb: position embedding, (tf.float32, [src_len, embedding_size])
+    :param filter_sizes: list of ints, e.g. [3, 4, 5]
+    :param num_filters: number of filters of each filter_size
+    :param embedding_size: embedding size
+    """
+    with tf.variable_scope("cnn_encoder"):
+        h_cnn = encoder_cnn_block(
+            src, src_embeddings, pos_embeddings, filter_sizes, num_filters,
+            embedding_size, is_infer)
+        pool_shape = [max_src_len, len(filter_sizes) * num_filters]
+        w_pool = tf.get_variable(
+            "w_pool",
+            initializer=lambda: tf.truncated_normal(pool_shape, stddev=0.1),
+            dtype=tf.float32)
+        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, w_pool)
+        pooled = tf.reduce_sum(
+            tf.multiply(h_cnn, tf.expand_dims(w_pool, axis=0)), axis=1)
+        num_filters_total = num_filters * len(filter_sizes)
+        inner_states = tf.reshape(pooled, [-1, num_filters_total])
+    return inner_states
+
+
 def encoder_cnn_multilayers(
         src, src_embeddings, pos_embeddings, num_layers, filter_size, embedding_size):
     """
