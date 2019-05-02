@@ -102,6 +102,7 @@ class BaseAgent(Logging):
         self.target_model = None
         self.action_collector = None
         self.floor_plan = None
+        self.dp = None
 
         self._initialized = False
         self._episode_has_started = False
@@ -336,6 +337,11 @@ class BaseAgent(Logging):
         if self._initialized:
             self.error("the agent was initialized")
             return
+
+        if self.hp.apply_dependency_parser:
+            # TODO: stride_len is hard fix here for maximum n-gram filter size 5
+            self.dp = DependencyParserReorder(
+                padding_val=self.hp.padding_val, stride_len=4)
 
         valid_tags = self.get_compatible_snapshot_tag()
         largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
@@ -800,7 +806,10 @@ class BaseAgent(Logging):
         assert len(obs) == 1, "cannot handle batch game training"
 
         master = infos["description"][0] if self.in_game_t == 0 else obs[0]
-        cleaned_obs = self.tokenize(master)
+        if self.hp.apply_dependency_parser:
+            cleaned_obs = self.dp.reorder(self.tokenize(master))
+        else:
+            cleaned_obs = self.tokenize(master)
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
