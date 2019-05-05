@@ -176,7 +176,6 @@ class BertDRRNAgent(DRRNAgent):
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
         tokens = list(load_vocab(hp.vocab_file))
-        print(tokens[:10])
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
         new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
