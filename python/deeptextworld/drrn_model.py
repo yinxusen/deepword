@@ -459,7 +459,6 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
             tvars_bert))
         tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
         tvars = tvars_drrn + allowed_tvars_bert
-        print("trainable: {}".format(tvars))
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step, var_list=tvars)
         return loss, train_op, abs_loss
