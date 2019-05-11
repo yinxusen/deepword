@@ -199,11 +199,11 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             eval_results = run_agent_eval(
                 agent, game_files, nb_episodes, hp.game_episode_terminal_t)
             eval_end_t = ctime()
-            agg_res, total_scores, total_steps = agg_results(eval_results)
+            agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
             logger.info("eval_results: {}".format(eval_results))
             logger.info("eval aggregated results: {}".format(agg_res))
-            logger.info("total scores: {}, total steps: {}".format(
-                total_scores, total_steps))
+            logger.info("total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
+                total_scores, total_steps, n_won))
             logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or
                     ((total_scores == prev_total_scores) and
@@ -346,11 +346,11 @@ def run_eval(
     eval_results = run_agent_eval(
         agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
     eval_end_t = ctime()
-    agg_res, total_scores, total_steps = agg_results(eval_results)
+    agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))
     logger.info("eval aggregated results: {}".format(agg_res))
-    logger.info("total scores: {}, total steps: {}".format(
-        total_scores, total_steps))
+    logger.info("total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
+        total_scores, total_steps, n_won))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
@@ -363,13 +363,21 @@ def agg_results(eval_results):
     ret_val = {}
     total_scores = 0
     total_steps = 0
+    all_scores = 0
+    all_episodes = 0
+    all_won = 0
     for game_id in eval_results:
         res = eval_results[game_id]
         agg_score = sum(map(lambda r: r[0], res))
         agg_max_score = sum(map(lambda r: r[1], res))
+        all_scores += agg_max_score
+        all_episodes += len(res)
         agg_step = sum(map(lambda r: r[2], res))
         agg_nb_won = len(list(filter(lambda r: r[3] , res)))
+        all_won += agg_nb_won
         ret_val[game_id] = (agg_score, agg_max_score, agg_step, agg_nb_won)
         total_scores += agg_score
         total_steps += agg_step
-    return ret_val, total_scores, total_steps
+    all_steps = all_episodes * 100
+    return (ret_val, total_scores * 1. / all_scores,
+            total_steps * 1. / all_steps, all_won * 1. / all_episodes)

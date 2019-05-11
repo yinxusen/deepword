@@ -201,7 +201,12 @@ class BaseAgent(Logging):
         """
         Tokenize and lowercase master. A space-chained tokens will be returned.
         """
-        return ' '.join([t.lower() for t in word_tokenize(master)])
+        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
+        lines = filter(lambda l: l.strip() != "", master.split("\n"))
+        tokenized_lines = list(map(
+            lambda l: ' '.join([t.lower() for t in word_tokenize(l)]), lines))
+        padded = padding_sent + padding_sent.join(tokenized_lines) + padding_sent
+        return padded
 
     @classmethod
     def report_status(cls, lst_of_status):
@@ -685,9 +690,9 @@ class BaseAgent(Logging):
             self._last_action == self.prev_player_t and instant_reward < 0):
             instant_reward = max(
                 -1.0, instant_reward + self.prev_cumulative_penalty)
-            self.debug("repeated bad try, decrease reward by {},"
-                       " reward changed to {}".format(
-                self.prev_cumulative_penalty, instant_reward))
+            # self.debug("repeated bad try, decrease reward by {},"
+            #            " reward changed to {}".format(
+            #     self.prev_cumulative_penalty, instant_reward))
             self.prev_cumulative_penalty = self.prev_cumulative_penalty - 0.1
         else:
             self.prev_player_t = self._last_action
@@ -837,7 +842,7 @@ class BaseAgent(Logging):
         actions = self.filter_admissible_actions(
             infos["admissible_commands"][0])
         actions = self.go_with_floor_plan(actions, curr_place)
-        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
+        # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
