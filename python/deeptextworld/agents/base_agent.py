@@ -136,6 +136,7 @@ class BaseAgent(Logging):
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
+        self.opening = None
 
 
     def init_tokens(self, hp):
@@ -413,7 +414,7 @@ class BaseAgent(Logging):
         self.cumulative_score = 0
         self._episode_has_started = True
         self.prev_place = None
-        self.opening = None
+        self.opening = self.tokenize(infos["description"][0])
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -826,7 +827,6 @@ class BaseAgent(Logging):
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
                 cleaned_obs, instant_reward, dones[0]))
-            self.opening = cleaned_obs
         else:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
@@ -862,6 +862,7 @@ class BaseAgent(Logging):
             return  # Nothing to return.
         if instant_reward > 0:
             self.info("start a new trajectory for the next right move")
+            self.info("add opening: {}".format(self.opening))
             self.tjs.add_new_tj()
             self.see_cookbook = False
             obs_idx = self.index_string(self.opening.split())
