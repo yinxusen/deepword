@@ -850,7 +850,8 @@ class BaseAgent(Logging):
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.feed_memory(
-                instant_reward, dones[0], self._last_actions_mask, actions_mask)
+                instant_reward, True if instant_reward > 0 else dones[0],
+                self._last_actions_mask, actions_mask)
         else:
             pass
 
