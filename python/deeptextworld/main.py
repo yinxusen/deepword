@@ -50,6 +50,7 @@ parser.add_argument('--bert-ckpt-dir', type=str)
 parser.add_argument('--bert-num-hidden-layers', type=int)
 parser.add_argument('--apply-dependency-parser', action='store_true')
 parser.add_argument('--use-original-actions', action='store_true')
+parser.add_argument('--split-recipe', action='store_true')
 parser.add_argument('--n-actions', type=int)
 
 

@@ -69,12 +69,15 @@ class DependencyParserReorder(Logging):
             else:
                 self.info("found parsed {}".format(s))
             tree_strs.append(self.parsed_sentences[s])
-        return self.sep_sent + self.sep_sent.join(tree_strs) + self.sep_sent
+        return self.sep_sent.join(tree_strs)
 
     def reorder(self, master):
         if master == "":
             return master
-        return self.reorder_block(master)
+        lines = map(lambda l: l.lower(),
+                    filter(lambda l: l.strip() != "", master.split("\n")))
+        reordered_lines = map(lambda l: self.reorder_block(l), lines)
+        return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
 
 
 class BaseAgent(Logging):
@@ -814,7 +817,7 @@ class BaseAgent(Logging):
 
         master = infos["description"][0] if self.in_game_t == 0 else obs[0]
         if self.hp.apply_dependency_parser:
-            cleaned_obs = self.dp.reorder(self.tokenize(master))
+            cleaned_obs = self.dp.reorder(master)
         else:
             cleaned_obs = self.tokenize(master)
 
@@ -863,13 +866,14 @@ class BaseAgent(Logging):
         if all(dones):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
-        if instant_reward > 0:
-            self.info("start a new trajectory for the next right move")
-            self.info("add opening: {}".format(self.opening))
-            self.tjs.add_new_tj()
-            self.see_cookbook = False
-            obs_idx = self.index_string(self.opening.split())
-            self.tjs.append_master_txt(obs_idx)
+        if self.hp.split_recipe:
+            if instant_reward > 0:
+                self.info("start a new trajectory for the next right move")
+                self.info("add opening: {}".format(self.opening))
+                self.tjs.add_new_tj()
+                self.see_cookbook = False
+                obs_idx = self.index_string(self.opening.split())
+                self.tjs.append_master_txt(obs_idx)
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)

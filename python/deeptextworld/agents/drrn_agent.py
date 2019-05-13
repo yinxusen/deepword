@@ -66,11 +66,13 @@ class DRRNAgent(BaseAgent):
                 self.model.actions_: [action_matrix],
                 self.model.actions_len_: [action_len]
             })[0]
+            actions = self.action_collector.get_actions()
             action_idx, q_max, player_t = get_best_1Daction(
-                q_actions_t, self.action_collector.get_actions(),
+                q_actions_t, actions,
                 mask=action_mask)
+            choose_bin = list(reversed(sorted(zip(list(q_actions_t), list(action_mask), actions), key=lambda x: x[0])))
             reports += [('action', player_t), ('q_max', q_max),
-                        ('q_argmax', action_idx)]
+                        ('q_argmax', action_idx), ('choose_bin', choose_bin)]
         return action_idx, player_t, reports
 
     def create_model_instance(self):
