@@ -206,7 +206,7 @@ def default_hparams_CNNAttnEncoderDRRN():
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
-        num_turns=21,
+        num_turns=11,
         num_tokens=1000,
         num_conv_filters=32
     )

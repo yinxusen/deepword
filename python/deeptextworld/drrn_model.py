@@ -125,6 +125,7 @@ class CNNAttnEncoderDRRN(CNNEncoderDRRN):
         """
         super(CNNAttnEncoderDRRN, self).__init__(hp, src_embeddings, is_infer)
         self.num_tokens = self.hp.num_tokens
+        self.num_features = len(self.filter_sizes) * self.num_filters
 
     def get_q_actions(self):
         """
@@ -150,43 +151,25 @@ class CNNAttnEncoderDRRN(CNNEncoderDRRN):
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state = dqn.encoder_attn_cnn(
+            h_state = dqn.encoder_cnn(
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
-                self.num_tokens,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = dqn.decoder_dense_classification(h_state, 32)
-            h_state_expanded = tf.expand_dims(new_h, axis=1)
+            h_state_expanded = tf.expand_dims(h_state, axis=1)
+        with tf.variable_scope("drrn-encoder", reuse=True):
+            flat_actions = tf.reshape(
+                self.inputs["actions"], shape=(-1, self.n_tokens_per_action))
+            flat_h_actions = dqn.encoder_cnn(
+                flat_actions, self.src_embeddings, self.pos_embeddings,
+                self.filter_sizes, self.num_filters, self.hp.embedding_size,
+                self.is_infer)
+            h_actions = tf.reshape(
+                flat_h_actions,
+                shape=(batch_size, self.n_actions, -1))
 
-            with tf.variable_scope("drrn-action-encoder", reuse=False):
-                flat_actions = tf.reshape(
-                    self.inputs["actions"],
-                    shape=(-1, self.n_tokens_per_action))
-                flat_actions_len = tf.reshape(
-                    self.inputs["actions_len"],
-                    shape=(-1,))
-                flat_h_actions = dqn.encoder_lstm(
-                    flat_actions, flat_actions_len,
-                    self.src_embeddings,
-                    num_units=32,
-                    num_layers=1)[-1].h
-                h_actions = tf.reshape(flat_h_actions,
-                                       shape=(batch_size, self.n_actions, -1))
-            q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, h_actions), axis=-1)
+        q_actions = tf.reduce_sum(
+            tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
-
-    def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_1Daction(
-            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.hp.n_actions, self.inputs["b_weight"])
-        reg_variables = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        l1_rg = tf.contrib.layers.l1_regularizer(scale=0.5)
-        reg_term = tf.contrib.layers.apply_regularization(
-            l1_rg, reg_variables)
-        loss += reg_term
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op, abs_loss
 
 
 class BertEncoderDRRN(BaseDQN):
