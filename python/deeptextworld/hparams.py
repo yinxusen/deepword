@@ -76,7 +76,8 @@ def default_hparams_agent():
         jitter_train_prob=0.5,
         collect_floor_plan=False,
         start_t_ignore_model_t=False,
-        apply_dependency_parser=False
+        apply_dependency_parser=False,
+        use_original_actions=False
     )
 
 

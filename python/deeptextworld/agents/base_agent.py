@@ -841,10 +841,13 @@ class BaseAgent(Logging):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        actions = self.filter_admissible_actions(
-            infos["admissible_commands"][0])
+        if self.hp.use_original_actions:
+            actions = infos["admissible_commands"][0]
+        else:
+            actions = self.filter_admissible_actions(
+                infos["admissible_commands"][0])
         actions = self.go_with_floor_plan(actions, curr_place)
-        # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
+        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
