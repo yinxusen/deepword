@@ -855,8 +855,17 @@ class BaseAgent(Logging):
         all_actions = self.action_collector.get_actions()
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
+            # TODO: to be very careful here. we need to end the trajectory
+            # TODO: if we split games into multi small games.
+            # TODO: so accordingly, we need to make the state final
+            # TODO: Be sure don't do it if not split games.
+            if self.hp.split_recipe:
+                game_terminal = True if instant_reward > 0 else dones[0]
+            else:
+                game_terminal = dones[0]
+
             self.feed_memory(
-                instant_reward, True if instant_reward > 0 else dones[0],
+                instant_reward, game_terminal,
                 self._last_actions_mask, actions_mask)
         else:
             pass
