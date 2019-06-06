@@ -21,6 +21,7 @@ from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, \
     ctime
+from deeptextworld.dqn_func import get_random_1Daction
 
 
 class DRRNMemo(collections.namedtuple(
@@ -201,16 +202,27 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
+    def _padding_lines(self, sents):
+        """
+        add padding sentence between lines
+        """
+        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
+        padded = padding_sent + padding_sent.join(sents) + padding_sent
+        return padded
+
     def tokenize(self, master):
         """
         Tokenize and lowercase master. A space-chained tokens will be returned.
+        # TODO: sentences that are tokenized cannot use tokenize again.
         """
-        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
-        lines = filter(lambda l: l.strip() != "", master.split("\n"))
-        tokenized_lines = list(map(
-            lambda l: ' '.join([t.lower() for t in word_tokenize(l)]), lines))
-        padded = padding_sent + padding_sent.join(tokenized_lines) + padding_sent
-        return padded
+        sents = sent_tokenize(master)
+        tokenized = map(
+            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]),
+            sents)
+        if self.hp.use_padding_over_lines:
+            return self._padding_lines(tokenized)
+        else:
+            return " ".join(tokenized)
 
     @classmethod
     def report_status(cls, lst_of_status):
@@ -666,6 +678,32 @@ class BaseAgent(Logging):
             pass
         return action_idx, player_t, report_txt
 
+    def random_walk_for_collecting_fp(self, actions, all_actions):
+        action_idx, player_t = None, None
+
+        if self.hp.collect_floor_plan:
+            # collecting floor plan by choosing random action
+            # if there are still go actions without room name
+            # Notice that only choosing "go" actions cannot finish
+            # collecting floor plan because there is the need to open doors
+            # Notice also that only allow random walk in the first 50 steps
+            self.debug(actions)
+            cardinal_go = list(
+                filter(lambda a: a.startswith("go") and len(a.split()) == 2,
+                       actions))
+            if self.in_game_t < 50 and len(cardinal_go) != 0:
+                open_actions = list(
+                    filter(lambda a: a.startswith("open"), actions))
+                admissible_actions = cardinal_go + open_actions
+                _, player_t = get_random_1Daction(admissible_actions)
+                action_idx = all_actions.index(player_t)
+            else:
+                pass
+        else:
+            pass
+        report_txt = [('random_walk_action', action_idx), ('action', player_t)]
+        return action_idx, player_t, report_txt
+
     def choose_action(
             self, actions, all_actions, actions_mask, immediate_reward):
         """
@@ -682,10 +720,13 @@ class BaseAgent(Logging):
         action_idx, player_t, report_txt = self.rule_base_policy(
             actions, all_actions, immediate_reward)
         if action_idx is None:
-            action_idx, player_t, report_txt = self.get_an_eps_action(
-                actions_mask)
-            action_idx, player_t, report_txt = self.jitter_go_action(
-                action_idx, player_t, report_txt, actions, all_actions)
+            (action_idx, player_t, report_txt
+             ) = self.random_walk_for_collecting_fp(actions, all_actions)
+            if action_idx is None:
+                action_idx, player_t, report_txt = self.get_an_eps_action(
+                    actions_mask)
+                action_idx, player_t, report_txt = self.jitter_go_action(
+                    action_idx, player_t, report_txt, actions, all_actions)
         return action_idx, player_t, report_txt
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
@@ -809,7 +850,6 @@ class BaseAgent(Logging):
             The states for finished games are simply copy over until all
             games are done.
         """
-
         if not self._episode_has_started:
             self._start_episode(obs, infos)
 

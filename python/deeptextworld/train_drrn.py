@@ -91,31 +91,6 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
         env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
 
-        pre_set_eps = agent.eps
-        if agent.hp.collect_floor_plan:
-            agent.eps = 1.
-            # TODO: hard set two episodes to collect floor plan
-            for episode_no in range(2):
-                logger.info(
-                    "fp_episode_no/game_no/game_name: {}/{}/{}".format(
-                    episode_no, game_no, game_name))
-                obs, infos = game_env.reset()
-                scores = [0] * len(obs)
-                dones = [False] * len(obs)
-                steps = [0] * len(obs)
-                while not all(dones):
-                    # Increase step counts.
-                    steps = ([step + int(not done)
-                              for step, done in zip(steps, dones)])
-                    commands = agent.act(obs, scores, dones, infos)
-                    obs, scores, dones, infos = game_env.step(commands)
-
-                # Let the agent knows the game is done.
-                agent.act(obs, scores, dones, infos)
-        else:
-            pass
-
-        agent.eps = pre_set_eps
         for episode_no in range(nb_episodes):
             logger.info(
                 "episode_no/game_no/game_name: {}/{}/{}".format(
