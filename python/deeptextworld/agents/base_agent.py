@@ -216,10 +216,9 @@ class BaseAgent(Logging):
         Tokenize and lowercase master. A space-chained tokens will be returned.
         # TODO: sentences that are tokenized cannot use tokenize again.
         """
-        sents = sent_tokenize(master)
+        lines = filter(lambda l: l.strip() != "", master.split("\n"))
         tokenized = map(
-            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]),
-            sents)
+            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]), lines)
         if self.hp.use_padding_over_lines:
             return self._padding_lines(tokenized)
         else:
