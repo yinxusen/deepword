@@ -206,7 +206,8 @@ class BaseAgent(Logging):
         """
         add padding sentence between lines
         """
-        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
+        padding_sent = " {} ".format(
+            " ".join([self.hp.padding_val] * self.hp.padding_sent_size))
         padded = padding_sent + padding_sent.join(sents) + padding_sent
         return padded
 
@@ -604,7 +605,8 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        # in some games, drop-xxx is always needed
+        # actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
             "prepare meal", "eat meal", "examine cookbook"
@@ -613,10 +615,9 @@ class BaseAgent(Logging):
             lambda a: a in other_valid_commands, admissible_actions))
         actions += list(filter(
             lambda a: a.startswith("go"), admissible_actions))
-        actions += list(filter(
-            lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self.theme_words))),
-            others))
+        # there is no need to filter drop-xxx without theme words, because
+        # `others` variable doesn't contain actions with theme words.
+        actions += list(filter(lambda a: (a.startswith("drop")), others))
         actions += list(filter(
             lambda a: a.startswith("take") and "knife" in a, others))
         actions += list(filter(lambda a: a.startswith("open"), others))
