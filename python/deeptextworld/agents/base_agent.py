@@ -608,7 +608,7 @@ class BaseAgent(Logging):
         # actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
-            "prepare meal", "eat meal", "examine cookbook"
+            "prepare meal", "eat meal"
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
@@ -633,10 +633,10 @@ class BaseAgent(Logging):
 
     def rule_base_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if "examine cookbook" in actions and not self.see_cookbook:
-            player_t = "examine cookbook"
+        if "prepare meal" in actions and not self.see_cookbook:
+            player_t = "prepare meal"
             self.see_cookbook = True
-        elif self._last_action == "examine cookbook":
+        elif self._last_action == "prepare meal" and immediate_reward <= 0:
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
@@ -834,6 +834,9 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
+    def remove_padding(self, s):
+        return " ".join(filter(lambda t: t != self.hp.padding_val, s.split()))
+
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
         """
@@ -865,16 +868,16 @@ class BaseAgent(Logging):
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
-                       " master: {}, reward: {}, is_terminal: {}".format(
+            self.info("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
+                      " master: {}, reward: {:.2f}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
-                cleaned_obs, instant_reward, dones[0]))
+                self.remove_padding(cleaned_obs), instant_reward, dones[0]))
         else:
-            self.info(
-                "mode: {}, master: {}, max_score: {}".format(
-                    "train" if self.is_training else "eval", cleaned_obs,
-                    infos["max_score"]))
+            self.info("mode: {}, master: {}, max_score: {}".format(
+                "train" if self.is_training else "eval",
+                self.remove_padding(cleaned_obs),
+                infos["max_score"]))
 
         if self.hp.collect_floor_plan:
             curr_place = self.collect_floor_plan(master)
@@ -890,7 +893,7 @@ class BaseAgent(Logging):
             actions = self.filter_admissible_actions(
                 infos["admissible_commands"][0])
         actions = self.go_with_floor_plan(actions, curr_place)
-        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
+        self.debug("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
@@ -917,8 +920,8 @@ class BaseAgent(Logging):
             return  # Nothing to return.
         if self.hp.split_recipe:
             if instant_reward > 0:
-                self.info("start a new trajectory for the next right move")
-                self.info("add opening: {}".format(self.opening))
+                self.debug("start a new trajectory for the next right move")
+                self.debug("add opening: {}".format(self.opening))
                 self.tjs.add_new_tj()
                 self.see_cookbook = False
                 obs_idx = self.index_string(self.opening.split())
