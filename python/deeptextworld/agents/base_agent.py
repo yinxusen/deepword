@@ -66,9 +66,9 @@ class DependencyParserReorder(Logging):
             if not s in self.parsed_sentences:
                 t_str = self.reorder_sent(s)
                 self.parsed_sentences[s] = t_str
-                self.info("parse {} into {}".format(s, t_str))
+                self.debug("parse {} into {}".format(s, t_str))
             else:
-                self.info("found parsed {}".format(s))
+                self.debug("found parsed {}".format(s))
             tree_strs.append(self.parsed_sentences[s])
         return self.sep_sent.join(tree_strs)
 
@@ -748,8 +748,8 @@ class BaseAgent(Logging):
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not has_won and "you lost" in master:
-            self.info("game terminate and fail, final reward change"
-                      " from {} to -1".format(instant_reward))
+            self.debug("game terminate and fail, final reward change"
+                       " from {} to -1".format(instant_reward))
             instant_reward = -1
         return instant_reward
 

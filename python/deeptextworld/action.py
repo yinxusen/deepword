@@ -48,10 +48,10 @@ class ActionCollector(Logging):
             eid = self._ctime()
 
         if eid == self.curr_eid:
-            self.info("continue current episode: {}".format(eid))
+            self.debug("continue current episode: {}".format(eid))
             return
 
-        self.info("add new episode in actions: {}".format(eid))
+        self.debug("add new episode in actions: {}".format(eid))
 
         if self.size() != 0 and self.curr_eid is not None:
             self.actions_base[self.curr_eid] = self.actions[:self.size()]
@@ -61,14 +61,14 @@ class ActionCollector(Logging):
         self.init()
         self.curr_eid = eid
         if self.curr_eid in self.actions_base:
-            self.info("found existing episode: {}".format(self.curr_eid))
+            self.debug("found existing episode: {}".format(self.curr_eid))
             self.curr_aid = len(self.actions_base[self.curr_eid])
             self.actions[:self.size()] = self.actions_base[self.curr_eid]
             self.action_matrix = self.action_matrix_base[self.curr_eid]
             self.action_len = self.action_len_base[self.curr_eid]
             self.action2idx = dict([(a, i) for (i, a) in
                                     enumerate(self.actions)])
-            self.info("{} actions loaded".format(self.size()))
+            self.debug("{} actions loaded".format(self.size()))
         else:
             pass
 

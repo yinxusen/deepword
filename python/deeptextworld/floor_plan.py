@@ -22,10 +22,10 @@ class FloorPlanCollector(Logging):
 
     def add_new_episode(self, eid):
         if eid == self.curr_eid:
-            self.info("continue current episode: {}".format(eid))
+            self.debug("continue current episode: {}".format(eid))
             return
 
-        self.info("add new episode in floor plan: {}".format(eid))
+        self.debug("add new episode in floor plan: {}".format(eid))
 
         if self.curr_eid is not None:
             if self.curr_eid not in self.fp_base:
@@ -39,11 +39,11 @@ class FloorPlanCollector(Logging):
         self.init()
         self.curr_eid = eid
         if self.curr_eid in self.fp_base:
-            self.info("found existing episode: {}".format(self.curr_eid))
+            self.debug("found existing episode: {}".format(self.curr_eid))
             self.curr_fp = self.fp_base[self.curr_eid]
             self.curr_navi_to_kitchen = self.navi_base[self.curr_eid]
-            self.info("{} floor paths loaded".format(len(self.curr_fp)))
-            self.info("{} navigation to kitchen paths loaded".format(
+            self.debug("{} floor paths loaded".format(len(self.curr_fp)))
+            self.debug("{} navigation to kitchen paths loaded".format(
                 len(self.curr_navi_to_kitchen)))
         else:
             pass
@@ -54,7 +54,7 @@ class FloorPlanCollector(Logging):
             if p1 not in self.curr_fp:
                 self.curr_fp[p1] = {}
             if d not in self.curr_fp[p1]:
-                self.info("find new path: {} + {} -> {}".format(p1, d, p2))
+                self.debug("find new path: {} + {} -> {}".format(p1, d, p2))
                 self.curr_fp[p1][d] = p2
             else:
                 if p2 != self.curr_fp[p1][d]:
