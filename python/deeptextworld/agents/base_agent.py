@@ -872,7 +872,7 @@ class BaseAgent(Logging):
                       " master: {}, reward: {:.2f}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
-                self.remove_padding(cleaned_obs), instant_reward, dones[0]))
+                cleaned_obs, instant_reward, dones[0]))
         else:
             self.info("mode: {}, master: {}, max_score: {}".format(
                 "train" if self.is_training else "eval",
