@@ -80,7 +80,10 @@ def default_hparams_agent():
         use_original_actions=False,
         split_recipe=False,
         use_padding_over_lines=False,
-        padding_sent_size=1
+        padding_sent_size=1,
+        use_glove=False,
+        glove_path='',
+        glove_trainable=False
     )
 
 

@@ -128,6 +128,7 @@ class BaseAgent(Logging):
         self._last_action = None
         self.game_id = None
         self.prev_report = None
+        self.glove_embeddings = None
 
         self.cumulative_score = 0
         self.snapshot_saved = False
@@ -151,7 +152,7 @@ class BaseAgent(Logging):
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
         additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
-        tokens = additional_tokens + list(load_lower_vocab(hp.vocab_file))
+        tokens = additional_tokens + load_lower_vocab(hp.vocab_file)
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
         new_hp.set_hparam('sos_id', token2idx[hp.sos])
@@ -159,6 +160,27 @@ class BaseAgent(Logging):
         new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
         new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
         return new_hp, tokens, token2idx
+
+    @classmethod
+    def init_glove(cls, glove_path):
+        with open(glove_path, "r") as f:
+            glove = list(map(lambda s: s.strip().split(), f.readlines()))
+        glove_tokens = list(map(lambda x: x[0], glove))
+        glove_embeddings = np.asarray(
+            list(map(lambda x: x[1:], glove)), dtype=np.float32)
+        return glove_tokens, glove_embeddings
+
+    def get_glove_embeddings(self):
+        glove_tokens, glove_embeddings = self.init_glove(self.hp.glove_path)
+        unk_embedding = np.zeros(
+            (1, glove_embeddings.shape[1]), dtype=np.float32)
+        glove_w_unk_embeddings = np.concatenate(
+            [glove_embeddings, unk_embedding], axis=0)
+        glove_token2idx = get_token2idx(glove_tokens)
+        index_from_glove = list(map(
+            lambda t: glove_token2idx.get(t, -1), self.tokens))
+        src_embeddings = glove_w_unk_embeddings[index_from_glove, :]
+        return src_embeddings
 
     def init_actions(self, hp, token2idx, action_path, with_loading=True):
         action_collector = ActionCollector(
@@ -343,9 +365,19 @@ class BaseAgent(Logging):
         return train_sess, start_t, saver, model
 
     def create_model_instance(self):
+        if self.hp.use_glove and self.glove_embeddings is None:
+            self.glove_embeddings = self.get_glove_embeddings()
+        return self.create_model_instance_impl()
+
+    def create_model_instance_impl(self):
         raise NotImplementedError()
 
     def create_eval_model_instance(self):
+        if self.hp.use_glove and self.glove_embeddings is None:
+            self.glove_embeddings = self.get_glove_embeddings()
+        return self.create_eval_model_instance_impl()
+
+    def create_eval_model_instance_impl(self):
         raise NotImplementedError()
 
     def train_impl(self, sess, t, summary_writer, target_sess):

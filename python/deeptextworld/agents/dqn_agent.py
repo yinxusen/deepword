@@ -66,12 +66,12 @@ class DQNAgent(BaseAgent):
                         ('q_argmax', action_idx)]
         return action_idx, player_t, reports
 
-    def create_model_instance(self):
+    def create_model_instance_impl(self):
         model_creator = getattr(dqn_model, self.hp.model_creator)
         model = dqn_model.create_train_model(model_creator, self.hp)
         return model
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance_impl(self):
         model_creator = getattr(dqn_model, self.hp.model_creator)
         model = dqn_model.create_eval_model(model_creator, self.hp)
         return model

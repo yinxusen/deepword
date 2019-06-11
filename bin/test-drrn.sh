@@ -17,6 +17,7 @@ fi
 MODELHOME="$PDIR/../experiments-drrn/agent-drrn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
+GLOVE_PATH="$HOME/local/opt/glove-models/glove.6B/glove.6B.50d.txt"
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
@@ -34,5 +35,6 @@ pushd $PDIR
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
-    --model-creator CNNEncoderDRRN --use-padding-over-lines --padding-sent-size 1
+    --model-creator CNNEncoderDRRN --use-padding-over-lines --padding-sent-size 1 \
+    --learning-rate 0.0001 --use-glove --glove-path $GLOVE_PATH --embedding-size 50 --glove-trainable
 popd
