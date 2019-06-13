@@ -631,7 +631,7 @@ class BaseAgent(Logging):
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
-        actions = ["inventory", "look"] + contained
+        actions = ["inventory", "look", "prepare meal"] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
@@ -640,7 +640,7 @@ class BaseAgent(Logging):
         # actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
-            "prepare meal", "eat meal"
+            "eat meal"
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
