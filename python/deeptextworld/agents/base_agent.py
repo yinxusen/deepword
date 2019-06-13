@@ -142,6 +142,7 @@ class BaseAgent(Logging):
         self.theme_words = None
         self.see_cookbook = False
         self.opening = None
+        self.cnt_master = None
 
 
     def init_tokens(self, hp):
@@ -449,6 +450,7 @@ class BaseAgent(Logging):
         """
         if not self._initialized:
             self._init()
+        self.cnt_master = {}
         self.tjs.add_new_tj()
         recipe = infos["extra.recipe"]
         # use stronger game identity
@@ -672,6 +674,8 @@ class BaseAgent(Logging):
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
+        elif self._last_action.startswith("take"):
+            player_t = "inventory"
         else:
             player_t = None
 
@@ -762,7 +766,14 @@ class BaseAgent(Logging):
         return action_idx, player_t, report_txt
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(score - self.cumulative_score - 0.1)
+        step_penalty = 0.1
+        repeat_penalty = self.cumulative_score
+        appearance_penalty = float((self.cnt_master.get(master, 0) - 1) / 10)
+        self.debug(
+            "step penalty {}, repeat penalty {}, appearance penalty {}".format(
+                step_penalty, repeat_penalty, appearance_penalty))
+        instant_reward = self.clip_reward(
+            score - step_penalty - repeat_penalty - appearance_penalty)
         self.cumulative_score = score
         if (master == self.prev_master_t and
             self._last_action == self.prev_player_t and instant_reward < 0):
@@ -896,6 +907,11 @@ class BaseAgent(Logging):
         else:
             cleaned_obs = self.tokenize(master)
 
+        # count appearance of masters
+        if not cleaned_obs in self.cnt_master:
+            self.cnt_master[cleaned_obs] = 0
+        self.cnt_master[cleaned_obs] += 1
+
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
@@ -956,6 +972,7 @@ class BaseAgent(Logging):
                 self.debug("add opening: {}".format(self.opening))
                 self.tjs.add_new_tj()
                 self.see_cookbook = False
+                self.cnt_master = {}
                 obs_idx = self.index_string(self.opening.split())
                 self.tjs.append_master_txt(obs_idx)
 
