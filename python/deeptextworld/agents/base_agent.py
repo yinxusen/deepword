@@ -143,6 +143,7 @@ class BaseAgent(Logging):
         self.see_cookbook = False
         self.opening = None
         self.cnt_master = None
+        self.cnt_prepare_meal = 0
 
 
     def init_tokens(self, hp):
@@ -451,6 +452,7 @@ class BaseAgent(Logging):
         if not self._initialized:
             self._init()
         self.cnt_master = {}
+        self.cnt_prepare_meal = 0
         self.tjs.add_new_tj()
         recipe = infos["extra.recipe"]
         # use stronger game identity
@@ -638,7 +640,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        # actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
             "eat meal"
@@ -657,6 +659,8 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(admissible_actions))))
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
+        if self.cnt_prepare_meal > 5:
+            actions.remove("prepare meal")
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -673,8 +677,8 @@ class BaseAgent(Logging):
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
-        elif self._last_action.startswith("take"):
-            player_t = "inventory"
+        # elif self._last_action.startswith("take"):
+        #     player_t = "inventory"
         else:
             player_t = None
 
@@ -767,7 +771,8 @@ class BaseAgent(Logging):
     def get_instant_reward(self, score, master, is_terminal, has_won):
         step_penalty = 0.1
         repeat_penalty = self.cumulative_score
-        appearance_penalty = float((self.cnt_master.get(master, 0) - 1) / 10)
+        # appearance_penalty = float((self.cnt_master.get(master, 0) - 1) / 10)
+        appearance_penalty = 0
         self.debug(
             "step penalty {}, repeat penalty {}, appearance penalty {}".format(
                 step_penalty, repeat_penalty, appearance_penalty))
@@ -972,11 +977,14 @@ class BaseAgent(Logging):
                 self.tjs.add_new_tj()
                 self.see_cookbook = False
                 self.cnt_master = {}
+                self.cnt_prepare_meal = 0
                 obs_idx = self.index_string(self.opening.split())
                 self.tjs.append_master_txt(obs_idx)
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
+        if player_t == "prepare meal":
+            self.cnt_prepare_meal += 1
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
