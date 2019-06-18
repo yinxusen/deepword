@@ -141,6 +141,7 @@ class BaseAgent(Logging):
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
+        self.use_look = False
         self.opening = None
         self.cnt_master = None
         self.cnt_prepare_meal = 0
@@ -437,7 +438,8 @@ class BaseAgent(Logging):
             self.sess, _, self.saver, self.model = self.create_n_load_model(
                 placement="/device:GPU:1", load_best=load_best,
                 is_training=self.is_training)
-            self.eps = 0.05
+            # default eps changes to zero for eval
+            self.eps = 0.
             self.total_t = 0
         self._initialized = True
 
@@ -466,6 +468,7 @@ class BaseAgent(Logging):
         self._episode_has_started = True
         self.prev_place = None
         self.opening = self.tokenize(infos["description"][0])
+        self.use_look = False
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -673,7 +676,10 @@ class BaseAgent(Logging):
 
     def rule_based_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if "prepare meal" in actions and not self.see_cookbook:
+        if not self.use_look:
+            player_t = "look"
+            self.use_look = True
+        elif "prepare meal" in actions and not self.see_cookbook:
             player_t = "prepare meal"
             self.see_cookbook = True
         elif self._last_action == "prepare meal" and immediate_reward <= 0:
@@ -926,7 +932,7 @@ class BaseAgent(Logging):
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.info("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
+            self.info("mode: {}, t: {}, in_game_t: {}, eps: {:.2f}, {},"
                       " master: {}, reward: {:.2f}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
@@ -979,13 +985,13 @@ class BaseAgent(Logging):
         if self.hp.split_recipe:
             if instant_reward > 0:
                 self.debug("start a new trajectory for the next right move")
-                self.debug("add opening: {}".format(self.opening))
                 self.tjs.add_new_tj()
                 self.see_cookbook = False
+                self.use_look = False
                 self.cnt_master = {}
                 self.cnt_prepare_meal = 0
-                obs_idx = self.index_string(self.opening.split())
-                self.tjs.append_master_txt(obs_idx)
+                # add a master placeholder
+                self.tjs.append_master_txt([0])
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)

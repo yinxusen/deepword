@@ -36,5 +36,8 @@ pushd $PDIR
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
     --model-creator CNNEncoderDRRN --use-padding-over-lines --padding-sent-size 1 \
-    --learning-rate 0.0001 --use-glove --glove-path $GLOVE_PATH --embedding-size 50 --glove-trainable
+    --learning-rate 0.0001 \
+    --use-glove --glove-path $GLOVE_PATH --embedding-size 50 --glove-trainable \
+    --use-appearance-penalty --use-all-drop-actions \
+    --split-recipe --collect-floor-plan
 popd
