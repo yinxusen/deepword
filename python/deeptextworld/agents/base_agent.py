@@ -643,7 +643,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        if not self.hp.use_all_drop_actions:
+        if self.hp.mask_drop_ingredients:
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         else:
             pass
@@ -665,8 +665,8 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(admissible_actions))))
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
-        if self.cnt_prepare_meal > 5:
-            actions.remove("prepare meal")
+        # if self.cnt_prepare_meal > 5:
+        #     actions.remove("prepare meal")
         return actions
 
     def go_with_floor_plan(self, actions, room):

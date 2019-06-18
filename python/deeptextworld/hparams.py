@@ -85,7 +85,7 @@ def default_hparams_agent():
         glove_path='',
         glove_trainable=False,
         use_appearance_penalty=False,
-        use_all_drop_actions=False
+        mask_drop_ingredients=False
     )
 
 
