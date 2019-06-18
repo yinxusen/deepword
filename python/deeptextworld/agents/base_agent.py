@@ -623,7 +623,7 @@ class BaseAgent(Logging):
         :param master:
         :return:
         """
-        room_regex = ".*-= (.*) =-.*"
+        room_regex = "^\s*-= (.*) =-.*"
         room_search = re.search(room_regex, master)
         if room_search is not None:
             room_name = room_search.group(1).lower()
