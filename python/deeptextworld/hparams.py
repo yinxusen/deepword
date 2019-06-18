@@ -83,7 +83,9 @@ def default_hparams_agent():
         padding_sent_size=1,
         use_glove=False,
         glove_path='',
-        glove_trainable=False
+        glove_trainable=False,
+        use_appearance_penalty=False,
+        use_all_drop_actions=False
     )
 
 
@@ -199,7 +201,7 @@ def default_hparams_CNNEncoderDRRN():
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
-        num_turns=21,
+        num_turns=11,
         num_tokens=1000,
         num_conv_filters=32
     )

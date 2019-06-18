@@ -640,7 +640,10 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        # actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        if not self.hp.use_all_drop_actions:
+            actions = list(filter(lambda c: not c.startswith("drop"), actions))
+        else:
+            pass
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
             "eat meal"
@@ -668,7 +671,7 @@ class BaseAgent(Logging):
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
-    def rule_base_policy(self, actions, all_actions, immediate_reward):
+    def rule_based_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
         if "prepare meal" in actions and not self.see_cookbook:
             player_t = "prepare meal"
@@ -677,8 +680,8 @@ class BaseAgent(Logging):
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
-        # elif self._last_action.startswith("take"):
-        #     player_t = "inventory"
+        elif self._last_action.startswith("take"):
+            player_t = "inventory"
         else:
             player_t = None
 
@@ -756,7 +759,7 @@ class BaseAgent(Logging):
         :param immediate_reward:
         :return:
         """
-        action_idx, player_t, report_txt = self.rule_base_policy(
+        action_idx, player_t, report_txt = self.rule_based_policy(
             actions, all_actions, immediate_reward)
         if action_idx is None:
             (action_idx, player_t, report_txt
@@ -771,8 +774,11 @@ class BaseAgent(Logging):
     def get_instant_reward(self, score, master, is_terminal, has_won):
         step_penalty = 0.1
         repeat_penalty = self.cumulative_score
-        # appearance_penalty = float((self.cnt_master.get(master, 0) - 1) / 10)
-        appearance_penalty = 0
+        if self.hp.use_appearance_penalty:
+            appearance_penalty = float(
+                (self.cnt_master.get(master, 0) - 1) / 10)
+        else:
+            appearance_penalty = 0
         self.debug(
             "step penalty {}, repeat penalty {}, appearance penalty {}".format(
                 step_penalty, repeat_penalty, appearance_penalty))

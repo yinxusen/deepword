@@ -57,6 +57,8 @@ parser.add_argument('--padding-sent-size', type=int)
 parser.add_argument('--use-glove', action='store_true')
 parser.add_argument('--glove-trainable', action='store_true')
 parser.add_argument('--glove-path', type=str)
+parser.add_argument('--use-appearance-penalty', action='store_true')
+parser.add_argument('--use-all-drop-actions', action='store_true')
 
 
 if __name__ == '__main__':
