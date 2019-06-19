@@ -1,5 +1,4 @@
 import collections
-
 import tensorflow as tf
 
 import deeptextworld.dqn_func as dqn
@@ -34,9 +33,7 @@ class BaseDQN(object):
                 name="src_embeddings", dtype=tf.float32,
                 shape=[hp.vocab_size, hp.embedding_size])
         else:
-            self.src_embeddings = tf.get_variable(
-                name="src_embeddings", initializer=src_embeddings,
-                trainable=self.hp.glove_trainable, dtype=tf.float32)
+            self.src_embeddings = src_embeddings
 
         self.global_step = tf.train.get_or_create_global_step()
         self.optimizer = tf.train.AdamOptimizer(self.hp.learning_rate)

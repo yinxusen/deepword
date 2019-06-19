@@ -66,9 +66,9 @@ class DependencyParserReorder(Logging):
             if not s in self.parsed_sentences:
                 t_str = self.reorder_sent(s)
                 self.parsed_sentences[s] = t_str
-                self.debug("parse {} into {}".format(s, t_str))
+                self.info("parse {} into {}".format(s, t_str))
             else:
-                self.debug("found parsed {}".format(s))
+                self.info("found parsed {}".format(s))
             tree_strs.append(self.parsed_sentences[s])
         return self.sep_sent.join(tree_strs)
 
@@ -128,7 +128,6 @@ class BaseAgent(Logging):
         self._last_action = None
         self.game_id = None
         self.prev_report = None
-        self.glove_embeddings = None
 
         self.cumulative_score = 0
         self.snapshot_saved = False
@@ -141,10 +140,7 @@ class BaseAgent(Logging):
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
-        self.use_look = False
         self.opening = None
-        self.cnt_master = None
-        self.cnt_action = None
 
 
     def init_tokens(self, hp):
@@ -155,7 +151,7 @@ class BaseAgent(Logging):
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
         additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
-        tokens = additional_tokens + load_lower_vocab(hp.vocab_file)
+        tokens = additional_tokens + list(load_lower_vocab(hp.vocab_file))
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
         new_hp.set_hparam('sos_id', token2idx[hp.sos])
@@ -163,27 +159,6 @@ class BaseAgent(Logging):
         new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
         new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
         return new_hp, tokens, token2idx
-
-    @classmethod
-    def init_glove(cls, glove_path):
-        with open(glove_path, "r") as f:
-            glove = list(map(lambda s: s.strip().split(), f.readlines()))
-        glove_tokens = list(map(lambda x: x[0], glove))
-        glove_embeddings = np.asarray(
-            list(map(lambda x: x[1:], glove)), dtype=np.float32)
-        return glove_tokens, glove_embeddings
-
-    def get_glove_embeddings(self):
-        glove_tokens, glove_embeddings = self.init_glove(self.hp.glove_path)
-        unk_embedding = np.zeros(
-            (1, glove_embeddings.shape[1]), dtype=np.float32)
-        glove_w_unk_embeddings = np.concatenate(
-            [glove_embeddings, unk_embedding], axis=0)
-        glove_token2idx = get_token2idx(glove_tokens)
-        index_from_glove = list(map(
-            lambda t: glove_token2idx.get(t, -1), self.tokens))
-        src_embeddings = glove_w_unk_embeddings[index_from_glove, :]
-        return src_embeddings
 
     def init_actions(self, hp, token2idx, action_path, with_loading=True):
         action_collector = ActionCollector(
@@ -231,8 +206,7 @@ class BaseAgent(Logging):
         """
         add padding sentence between lines
         """
-        padding_sent = " {} ".format(
-            " ".join([self.hp.padding_val] * self.hp.padding_sent_size))
+        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
         padded = padding_sent + padding_sent.join(sents) + padding_sent
         return padded
 
@@ -241,9 +215,10 @@ class BaseAgent(Logging):
         Tokenize and lowercase master. A space-chained tokens will be returned.
         # TODO: sentences that are tokenized cannot use tokenize again.
         """
-        lines = filter(lambda l: l.strip() != "", master.split("\n"))
+        sents = sent_tokenize(master)
         tokenized = map(
-            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]), lines)
+            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]),
+            sents)
         if self.hp.use_padding_over_lines:
             return self._padding_lines(tokenized)
         else:
@@ -368,19 +343,9 @@ class BaseAgent(Logging):
         return train_sess, start_t, saver, model
 
     def create_model_instance(self):
-        if self.hp.use_glove and self.glove_embeddings is None:
-            self.glove_embeddings = self.get_glove_embeddings()
-        return self.create_model_instance_impl()
-
-    def create_model_instance_impl(self):
         raise NotImplementedError()
 
     def create_eval_model_instance(self):
-        if self.hp.use_glove and self.glove_embeddings is None:
-            self.glove_embeddings = self.get_glove_embeddings()
-        return self.create_eval_model_instance_impl()
-
-    def create_eval_model_instance_impl(self):
         raise NotImplementedError()
 
     def train_impl(self, sess, t, summary_writer, target_sess):
@@ -438,8 +403,7 @@ class BaseAgent(Logging):
             self.sess, _, self.saver, self.model = self.create_n_load_model(
                 placement="/device:GPU:1", load_best=load_best,
                 is_training=self.is_training)
-            # default eps changes to zero for eval
-            self.eps = 0.
+            self.eps = 0.05
             self.total_t = 0
         self._initialized = True
 
@@ -453,8 +417,6 @@ class BaseAgent(Logging):
         """
         if not self._initialized:
             self._init()
-        self.cnt_master = {}
-        self.cnt_action = {}
         self.tjs.add_new_tj()
         recipe = infos["extra.recipe"]
         # use stronger game identity
@@ -468,7 +430,6 @@ class BaseAgent(Logging):
         self._episode_has_started = True
         self.prev_place = None
         self.opening = self.tokenize(infos["description"][0])
-        self.use_look = False
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -623,7 +584,7 @@ class BaseAgent(Logging):
         :param master:
         :return:
         """
-        room_regex = "^\s*-= (.*) =-.*"
+        room_regex = ".*-= (.*) =-.*"
         room_search = re.search(room_regex, master)
         if room_search is not None:
             room_name = room_search.group(1).lower()
@@ -638,26 +599,24 @@ class BaseAgent(Logging):
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
-        actions = ["inventory", "look", "prepare meal"] + contained
+        actions = ["inventory", "look"] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        if self.hp.mask_drop_ingredients:
-            actions = list(filter(lambda c: not c.startswith("drop"), actions))
-        else:
-            pass
+        actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
-            "eat meal"
+            "prepare meal", "eat meal", "examine cookbook"
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
         actions += list(filter(
             lambda a: a.startswith("go"), admissible_actions))
-        # there is no need to filter drop-xxx without theme words, because
-        # `others` variable doesn't contain actions with theme words.
-        actions += list(filter(lambda a: (a.startswith("drop")), others))
+        actions += list(filter(
+            lambda a: (a.startswith("drop") and
+                       all(map(lambda t: t not in a, self.theme_words))),
+            others))
         actions += list(filter(
             lambda a: a.startswith("take") and "knife" in a, others))
         actions += list(filter(lambda a: a.startswith("open"), others))
@@ -665,14 +624,6 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(admissible_actions))))
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
-        for a in self.cnt_action:
-            if self.cnt_action[a] > 5:
-                try:
-                    actions.remove(a)
-                except:
-                    pass
-                # self.info("remove {} once".format(a))
-                # self.cnt_action[a] -= 1
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -680,20 +631,15 @@ class BaseAgent(Logging):
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
-    def rule_based_policy(self, actions, all_actions, immediate_reward):
+    def rule_base_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if not self.use_look:
-            player_t = "look"
-            self.use_look = True
-        elif "prepare meal" in actions and not self.see_cookbook:
-            player_t = "prepare meal"
+        if "examine cookbook" in actions and not self.see_cookbook:
+            player_t = "examine cookbook"
             self.see_cookbook = True
-        elif self._last_action == "prepare meal" and immediate_reward <= 0:
+        elif self._last_action == "examine cookbook":
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
-        # elif self._last_action.startswith("take"):
-        #     player_t = "inventory"
         else:
             player_t = None
 
@@ -771,7 +717,7 @@ class BaseAgent(Logging):
         :param immediate_reward:
         :return:
         """
-        action_idx, player_t, report_txt = self.rule_based_policy(
+        action_idx, player_t, report_txt = self.rule_base_policy(
             actions, all_actions, immediate_reward)
         if action_idx is None:
             (action_idx, player_t, report_txt
@@ -784,18 +730,7 @@ class BaseAgent(Logging):
         return action_idx, player_t, report_txt
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        step_penalty = 0.1
-        repeat_penalty = self.cumulative_score
-        if self.hp.use_appearance_penalty:
-            appearance_penalty = float(
-                (self.cnt_master.get(master, 0) - 1) / 10)
-        else:
-            appearance_penalty = 0
-        self.debug(
-            "step penalty {}, repeat penalty {}, appearance penalty {}".format(
-                step_penalty, repeat_penalty, appearance_penalty))
-        instant_reward = self.clip_reward(
-            score - step_penalty - repeat_penalty - appearance_penalty)
+        instant_reward = self.clip_reward(score - self.cumulative_score - 0.1)
         self.cumulative_score = score
         if (master == self.prev_master_t and
             self._last_action == self.prev_player_t and instant_reward < 0):
@@ -813,8 +748,8 @@ class BaseAgent(Logging):
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not has_won and "you lost" in master:
-            self.debug("game terminate and fail, final reward change"
-                       " from {} to -1".format(instant_reward))
+            self.info("game terminate and fail, final reward change"
+                      " from {} to -1".format(instant_reward))
             instant_reward = -1
         return instant_reward
 
@@ -899,9 +834,6 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
-    def remove_padding(self, s):
-        return " ".join(filter(lambda t: t != self.hp.padding_val, s.split()))
-
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
         """
@@ -929,25 +861,20 @@ class BaseAgent(Logging):
         else:
             cleaned_obs = self.tokenize(master)
 
-        # count appearance of masters
-        if not cleaned_obs in self.cnt_master:
-            self.cnt_master[cleaned_obs] = 0
-        self.cnt_master[cleaned_obs] += 1
-
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.info("mode: {}, t: {}, in_game_t: {}, eps: {:.2f}, {},"
-                      " master: {}, reward: {:.2f}, is_terminal: {}".format(
+            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
+                       " master: {}, reward: {}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
                 self.in_game_t, self.eps, self.report_status(self.prev_report),
                 cleaned_obs, instant_reward, dones[0]))
         else:
-            self.info("mode: {}, master: {}, max_score: {}".format(
-                "train" if self.is_training else "eval",
-                self.remove_padding(cleaned_obs),
-                infos["max_score"]))
+            self.info(
+                "mode: {}, master: {}, max_score: {}".format(
+                    "train" if self.is_training else "eval", cleaned_obs,
+                    infos["max_score"]))
 
         if self.hp.collect_floor_plan:
             curr_place = self.collect_floor_plan(master)
@@ -963,7 +890,7 @@ class BaseAgent(Logging):
             actions = self.filter_admissible_actions(
                 infos["admissible_commands"][0])
         actions = self.go_with_floor_plan(actions, curr_place)
-        self.debug("admissible actions: {}".format(", ".join(sorted(actions))))
+        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
@@ -990,21 +917,15 @@ class BaseAgent(Logging):
             return  # Nothing to return.
         if self.hp.split_recipe:
             if instant_reward > 0:
-                self.debug("start a new trajectory for the next right move")
+                self.info("start a new trajectory for the next right move")
+                self.info("add opening: {}".format(self.opening))
                 self.tjs.add_new_tj()
                 self.see_cookbook = False
-                self.use_look = False
-                self.cnt_master = {}
-                self.cnt_action = {}
-                # add a master placeholder
-                self.tjs.append_master_txt([0])
+                obs_idx = self.index_string(self.opening.split())
+                self.tjs.append_master_txt(obs_idx)
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
-
-        if player_t not in self.cnt_action:
-            self.cnt_action[player_t] = 0
-        self.cnt_action[player_t] += 1
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])

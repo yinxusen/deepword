@@ -1,6 +1,4 @@
 import collections
-
-import numpy as np
 import tensorflow as tf
 from bert import modeling
 
@@ -449,10 +447,10 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         return loss, train_op, abs_loss
 
 
-def create_train_model(model_creator, hp, src_embeddings=None):
+def create_train_model(model_creator, hp):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp, src_embeddings)
+        model = model_creator(hp)
         initializer = tf.global_variables_initializer
         inputs = model.inputs
         q_actions = model.get_q_actions()
@@ -474,10 +472,10 @@ def create_train_model(model_creator, hp, src_embeddings=None):
         initializer=initializer)
 
 
-def create_eval_model(model_creator, hp, src_embeddings=None):
+def create_eval_model(model_creator, hp):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp, src_embeddings, is_infer=True)
+        model = model_creator(hp, is_infer=True)
         initializer = tf.global_variables_initializer
         inputs = model.inputs
         q_actions = model.get_q_actions()

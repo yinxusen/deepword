@@ -70,25 +70,19 @@ class DRRNAgent(BaseAgent):
             action_idx, q_max, player_t = get_best_1Daction(
                 q_actions_t, actions,
                 mask=action_mask)
-            # choose_bin = list(reversed(sorted(
-            #     zip(list(q_actions_t), list(action_mask), actions),
-            #     key=lambda x: x[0])))
-            # reports += [('action', player_t), ('q_max', q_max),
-            #             ('q_argmax', action_idx), ('choose_bin', choose_bin)]
-            reports += [('action', player_t), ('q_max', "{:.2f}".format(q_max)),
-                        ('q_argmax', action_idx)]
+            choose_bin = list(reversed(sorted(zip(list(q_actions_t), list(action_mask), actions), key=lambda x: x[0])))
+            reports += [('action', player_t), ('q_max', q_max),
+                        ('q_argmax', action_idx), ('choose_bin', choose_bin)]
         return action_idx, player_t, reports
 
-    def create_model_instance_impl(self):
+    def create_model_instance(self):
         model_creator = getattr(drrn_model, self.hp.model_creator)
-        model = drrn_model.create_train_model(
-            model_creator, self.hp, self.glove_embeddings)
+        model = drrn_model.create_train_model(model_creator, self.hp)
         return model
 
-    def create_eval_model_instance_impl(self):
+    def create_eval_model_instance(self):
         model_creator = getattr(drrn_model, self.hp.model_creator)
-        model = drrn_model.create_eval_model(
-            model_creator, self.hp, self.glove_embeddings)
+        model = drrn_model.create_eval_model(model_creator, self.hp)
         return model
 
     def train_impl(self, sess, t, summary_writer, target_sess):
@@ -162,7 +156,7 @@ class DRRNAgent(BaseAgent):
 
         self.memo.batch_update(b_idx, abs_loss)
 
-        self.debug('loss: {}'.format(loss_eval))
+        self.info('loss: {}'.format(loss_eval))
         self.debug('t1: {}, t2: {}, t3: {}'.format(
             t1_end-t1, t2_end-t2, t3_end-t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
