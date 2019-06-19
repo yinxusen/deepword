@@ -144,7 +144,7 @@ class BaseAgent(Logging):
         self.use_look = False
         self.opening = None
         self.cnt_master = None
-        self.cnt_prepare_meal = 0
+        self.cnt_action = None
 
 
     def init_tokens(self, hp):
@@ -454,7 +454,7 @@ class BaseAgent(Logging):
         if not self._initialized:
             self._init()
         self.cnt_master = {}
-        self.cnt_prepare_meal = 0
+        self.cnt_action = {}
         self.tjs.add_new_tj()
         recipe = infos["extra.recipe"]
         # use stronger game identity
@@ -665,8 +665,14 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(admissible_actions))))
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
-        # if self.cnt_prepare_meal > 5:
-        #     actions.remove("prepare meal")
+        for a in self.cnt_action:
+            if self.cnt_action[a] > 5:
+                try:
+                    actions.remove(a)
+                except:
+                    pass
+                # self.info("remove {} once".format(a))
+                # self.cnt_action[a] -= 1
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -686,8 +692,8 @@ class BaseAgent(Logging):
             player_t = "inventory"
         elif self._last_action == "prepare meal" and immediate_reward > 0:
             player_t = "eat meal"
-        elif self._last_action.startswith("take"):
-            player_t = "inventory"
+        # elif self._last_action.startswith("take"):
+        #     player_t = "inventory"
         else:
             player_t = None
 
@@ -989,14 +995,16 @@ class BaseAgent(Logging):
                 self.see_cookbook = False
                 self.use_look = False
                 self.cnt_master = {}
-                self.cnt_prepare_meal = 0
+                self.cnt_action = {}
                 # add a master placeholder
                 self.tjs.append_master_txt([0])
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
-        if player_t == "prepare meal":
-            self.cnt_prepare_meal += 1
+
+        if player_t not in self.cnt_action:
+            self.cnt_action[player_t] = 0
+        self.cnt_action[player_t] += 1
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
