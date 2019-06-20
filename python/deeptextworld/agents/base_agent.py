@@ -141,6 +141,7 @@ class BaseAgent(Logging):
         self.theme_words = None
         self.see_cookbook = False
         self.opening = None
+        self.use_grill = None
 
 
     def init_tokens(self, hp):
@@ -430,6 +431,7 @@ class BaseAgent(Logging):
         self._episode_has_started = True
         self.prev_place = None
         self.opening = self.tokenize(infos["description"][0])
+        self.use_grill = False
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -606,7 +608,10 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
-        # actions = list(filter(lambda c: not "BBQ" not in c.split(), actions))
+        if not self.use_grill:
+            actions = list(filter(lambda c: not "BBQ" in c.split(), actions))
+        else:
+            self.debug("BBQ is not filtered")
         other_valid_commands = {
             "prepare meal", "eat meal", "examine cookbook"
         }
@@ -861,6 +866,12 @@ class BaseAgent(Logging):
             cleaned_obs = self.dp.reorder(master)
         else:
             cleaned_obs = self.tokenize(master)
+
+        if (not self.use_grill) and (
+                self._last_action == "examine cookbook") and (
+                "grill" in cleaned_obs.split()):
+            self.debug("this game uses grill")
+            self.use_grill = True
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
