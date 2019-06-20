@@ -53,6 +53,7 @@ parser.add_argument('--use-original-actions', action='store_true')
 parser.add_argument('--split-recipe', action='store_true')
 parser.add_argument('--use-padding-over-lines', action='store_true')
 parser.add_argument('--n-actions', type=int)
+parser.add_argument('--drop-w-theme-words', action='store_true')
 
 
 if __name__ == '__main__':
