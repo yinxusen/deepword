@@ -81,6 +81,9 @@ class DependencyParserReorder(Logging):
         return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
 
 
+a_examine_cookbook = "examine cookbook"
+a_prepare_meal = ""
+
 class BaseAgent(Logging):
     """
     """
@@ -142,6 +145,7 @@ class BaseAgent(Logging):
         self.see_cookbook = False
         self.opening = None
         self.use_grill = None
+        self.cnt_action = None
 
 
     def init_tokens(self, hp):
@@ -432,6 +436,7 @@ class BaseAgent(Logging):
         self.prev_place = None
         self.opening = self.tokenize(infos["description"][0])
         self.use_grill = False
+        self.cnt_action = np.zeros(self.hp.n_actions)
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -586,7 +591,7 @@ class BaseAgent(Logging):
         :param master:
         :return:
         """
-        room_regex = ".*-= (.*) =-.*"
+        room_regex = "^\s*-= (.*) =-.*"
         room_search = re.search(room_regex, master)
         if room_search is not None:
             room_name = room_search.group(1).lower()
@@ -938,6 +943,12 @@ class BaseAgent(Logging):
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
+
+        if "hard_set_action" not in list(map(lambda x: x[0], self.prev_report)):
+            self.cnt_action[action_idx] += 0.1
+            self.debug(self.cnt_action)
+        else:
+            self.debug("cnt action ignore hard_set_action")
 
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
