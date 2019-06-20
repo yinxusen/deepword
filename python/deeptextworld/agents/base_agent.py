@@ -82,7 +82,15 @@ class DependencyParserReorder(Logging):
 
 
 a_examine_cookbook = "examine cookbook"
-a_prepare_meal = ""
+a_prepare_meal = "prepare meal"
+a_eat_meal = "eat meal"
+a_look = "look"
+a_inventory = "inventory"
+a_go_north = "go north"
+a_go_south = "go south"
+a_go_east = "go east"
+a_go_west = "go west"
+
 
 class BaseAgent(Logging):
     """
@@ -97,8 +105,8 @@ class BaseAgent(Logging):
         self.fp_prefix = "floor_plan"
 
         self.inv_direction = {
-            "go south": "go north", "go north": "go south",
-            "go east": "go west", "go west": "go east"}
+            a_go_south: a_go_north, a_go_north: a_go_south,
+            a_go_east: a_go_west, a_go_west: a_go_east}
 
         self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
         self.info(output_hparams(self.hp))
@@ -606,7 +614,7 @@ class BaseAgent(Logging):
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
-        actions = ["inventory", "look"] + contained
+        actions = [a_inventory, a_look] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
@@ -618,7 +626,7 @@ class BaseAgent(Logging):
         else:
             self.debug("BBQ is not filtered")
         other_valid_commands = {
-            "prepare meal", "eat meal", "examine cookbook"
+            a_prepare_meal, a_eat_meal, a_examine_cookbook
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
@@ -642,15 +650,15 @@ class BaseAgent(Logging):
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
-    def rule_base_policy(self, actions, all_actions, immediate_reward):
+    def rule_based_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if "examine cookbook" in actions and not self.see_cookbook:
-            player_t = "examine cookbook"
+        if a_examine_cookbook in actions and not self.see_cookbook:
+            player_t = a_examine_cookbook
             self.see_cookbook = True
-        elif self._last_action == "examine cookbook":
-            player_t = "inventory"
-        elif self._last_action == "prepare meal" and immediate_reward > 0:
-            player_t = "eat meal"
+        elif self._last_action == a_examine_cookbook:
+            player_t = a_inventory
+        elif self._last_action == a_prepare_meal and immediate_reward > 0:
+            player_t = a_eat_meal
         else:
             player_t = None
 
@@ -728,7 +736,7 @@ class BaseAgent(Logging):
         :param immediate_reward:
         :return:
         """
-        action_idx, player_t, report_txt = self.rule_base_policy(
+        action_idx, player_t, report_txt = self.rule_based_policy(
             actions, all_actions, immediate_reward)
         if action_idx is None:
             (action_idx, player_t, report_txt
@@ -873,7 +881,7 @@ class BaseAgent(Logging):
             cleaned_obs = self.tokenize(master)
 
         if (not self.use_grill) and (
-                self._last_action == "examine cookbook") and (
+                self._last_action == a_examine_cookbook) and (
                 "grill" in cleaned_obs.split()):
             self.debug("this game uses grill")
             self.use_grill = True
