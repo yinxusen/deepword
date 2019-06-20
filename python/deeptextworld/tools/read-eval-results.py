@@ -44,19 +44,22 @@ def main(f_result):
     # k_tier6_2 = list(filter(lambda k: "go12" in k and "recipe2" in k, all_keys))
     # k_tier6_3 = list(filter(lambda k: "go12" in k and "recipe3" in k, all_keys))
 
+    k_wo_drop = list(filter(lambda k: "drop" not in k, all_keys))
+    k_w_drop = list(filter(lambda k: "drop" in k, all_keys))
+
     k_r1 = list(filter(lambda k: "recipe1" in k, all_keys))
 
     all_tiers_keys = [k_tier1, k_tier2, k_tier3,
                       k_tier4,
                       k_tier5,
                       k_tier6,
-                      all_keys, k_r1]
+                      all_keys, k_wo_drop, k_w_drop]
     all_tiers_names = ["tier1", "tier2", "tier3",
                        "tier4",
                        "tier5",
                        "tier6",
                        "all-tiers",
-                       "all-recipe1"]
+                       "w/o drop", "w/ drop"]
     for nn, kk in zip(all_tiers_names, all_tiers_keys):
         res = ",".join(
             map(lambda x: "{:.2f}".format(x), summary_from_keys(kk, j_result)))

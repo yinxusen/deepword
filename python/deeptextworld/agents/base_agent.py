@@ -156,6 +156,9 @@ class BaseAgent(Logging):
         self.use_grill = None
         self.cnt_action = None
 
+        self.action_recorder = None
+        self.winning_recorder = None
+        self.per_game_recorder = None
 
     def init_tokens(self, hp):
         """
@@ -419,6 +422,8 @@ class BaseAgent(Logging):
                 is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
+        self.action_recorder = {}
+        self.winning_recorder = {}
         self._initialized = True
 
     def _start_episode(
@@ -446,6 +451,10 @@ class BaseAgent(Logging):
         self.opening = self.tokenize(infos["description"][0])
         self.use_grill = False
         self.cnt_action = np.zeros(self.hp.n_actions)
+        if self.game_id not in self.action_recorder:
+            self.action_recorder[self.game_id] = None
+            self.winning_recorder[self.game_id] = None
+        self.per_game_recorder = []
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
@@ -478,6 +487,8 @@ class BaseAgent(Logging):
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
             self.mode(), self.in_game_t, scores[0], infos["has_won"]))
         # TODO: make clear of what need to clean before & after an episode.
+        self.winning_recorder[self.game_id] = infos["has_won"][0]
+        self.action_recorder[self.game_id] = self.per_game_recorder
         self._episode_has_started = False
         self._last_action_idx = None
         self._last_actions_mask = None
@@ -646,6 +657,18 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
+        if ((self.winning_recorder[self.game_id] is not None) and
+                (not self.winning_recorder[self.game_id]) and
+                (len(self.action_recorder[self.game_id]) > 0) and
+                (len(self.action_recorder[self.game_id]) < 100)):
+            action_to_remove = self.action_recorder[self.game_id][-1]
+            try:
+                actions.remove(action_to_remove)
+                self.debug(
+                    "action {} is removed according to action recorder".format(
+                        action_to_remove))
+            except Exception as _:
+                pass
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -655,7 +678,10 @@ class BaseAgent(Logging):
 
     def rule_based_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if a_examine_cookbook in actions and not self.see_cookbook:
+        if ((self.winning_recorder[self.game_id] is not None) and
+                self.winning_recorder[self.game_id]):
+            player_t = self.action_recorder[self.game_id][self.in_game_t]
+        elif a_examine_cookbook in actions and not self.see_cookbook:
             player_t = a_examine_cookbook
             self.see_cookbook = True
         elif self._last_action == a_examine_cookbook and immediate_reward <= 0:
@@ -958,6 +984,8 @@ class BaseAgent(Logging):
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
+
+        self.per_game_recorder.append(player_t)
 
         if "hard_set_action" not in list(map(lambda x: x[0], self.prev_report)):
             self.cnt_action[action_idx] += 0.1
