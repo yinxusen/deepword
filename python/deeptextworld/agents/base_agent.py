@@ -81,8 +81,9 @@ class DependencyParserReorder(Logging):
         return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
 
 
-a_examine_cookbook = "examine cookbook"
+# a_examine_cookbook = "examine cookbook"
 a_prepare_meal = "prepare meal"
+a_examine_cookbook = a_prepare_meal
 a_eat_meal = "eat meal"
 a_look = "look"
 a_inventory = "inventory"
@@ -644,6 +645,7 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(admissible_actions))))
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
+        actions = list(set(actions))
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -656,7 +658,7 @@ class BaseAgent(Logging):
         if a_examine_cookbook in actions and not self.see_cookbook:
             player_t = a_examine_cookbook
             self.see_cookbook = True
-        elif self._last_action == a_examine_cookbook:
+        elif self._last_action == a_examine_cookbook and immediate_reward <= 0:
             player_t = a_inventory
         elif self._last_action == a_prepare_meal and immediate_reward > 0:
             player_t = a_eat_meal
@@ -883,12 +885,16 @@ class BaseAgent(Logging):
 
         if (not self.use_grill) and (
                 self._last_action == a_examine_cookbook) and (
-                "grill" in cleaned_obs.split()):
+                "grilled" in cleaned_obs.split()):
             self.debug("this game uses grill")
             self.use_grill = True
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
+
+        # use see cookbook again if gain one reward
+        if instant_reward > 0:
+            self.see_cookbook = False
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
