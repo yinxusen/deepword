@@ -403,7 +403,7 @@ class BaseAgent(Logging):
             self.sess, _, self.saver, self.model = self.create_n_load_model(
                 placement="/device:GPU:1", load_best=load_best,
                 is_training=self.is_training)
-            self.eps = 0.05
+            self.eps = 0
             self.total_t = 0
         self._initialized = True
 
@@ -606,6 +606,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
+        # actions = list(filter(lambda c: not "BBQ" not in c.split(), actions))
         other_valid_commands = {
             "prepare meal", "eat meal", "examine cookbook"
         }
