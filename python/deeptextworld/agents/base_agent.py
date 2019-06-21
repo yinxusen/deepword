@@ -634,10 +634,10 @@ class BaseAgent(Logging):
         if not self.hp.drop_w_theme_words:
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
-        if not self.use_grill:
-            actions = list(filter(lambda c: not "BBQ" in c.split(), actions))
-        else:
-            self.debug("BBQ is not filtered")
+        # if not self.use_grill:
+        #     actions = list(filter(lambda c: not "bbq" in c.split(), actions))
+        # else:
+        #     self.debug("bbq is not filtered")
         other_valid_commands = {
             a_prepare_meal, a_eat_meal, a_examine_cookbook
         }
@@ -657,18 +657,19 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
-        if ((self.winning_recorder[self.game_id] is not None) and
-                (not self.winning_recorder[self.game_id]) and
-                (len(self.action_recorder[self.game_id]) > 0) and
-                (len(self.action_recorder[self.game_id]) < 100)):
-            action_to_remove = self.action_recorder[self.game_id][-1]
-            try:
-                actions.remove(action_to_remove)
-                self.debug(
-                    "action {} is removed according to action recorder".format(
-                        action_to_remove))
-            except Exception as _:
-                pass
+        if not self.is_training:
+            if ((self.winning_recorder[self.game_id] is not None) and
+                    (not self.winning_recorder[self.game_id]) and
+                    (len(self.action_recorder[self.game_id]) > 0) and
+                    (len(self.action_recorder[self.game_id]) < 100)):
+                action_to_remove = self.action_recorder[self.game_id][-1]
+                try:
+                    actions.remove(action_to_remove)
+                    self.debug(
+                        "action {} is removed according to action recorder".format(
+                            action_to_remove))
+                except Exception as _:
+                    pass
         return actions
 
     def go_with_floor_plan(self, actions, room):
@@ -678,7 +679,8 @@ class BaseAgent(Logging):
 
     def rule_based_policy(self, actions, all_actions, immediate_reward):
         # use hard set actions in the beginning and the end of one episode
-        if ((self.winning_recorder[self.game_id] is not None) and
+        if ((not self.is_training) and
+                (self.winning_recorder[self.game_id] is not None) and
                 self.winning_recorder[self.game_id]):
             player_t = self.action_recorder[self.game_id][self.in_game_t]
         elif a_examine_cookbook in actions and not self.see_cookbook:
@@ -942,11 +944,12 @@ class BaseAgent(Logging):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
+        # Notice that some actions contain capital letters, e.g. BBQ
+        actions = [a.lower() for a in infos["admissible_commands"][0]]
         if self.hp.use_original_actions:
-            actions = infos["admissible_commands"][0]
+            pass
         else:
-            actions = self.filter_admissible_actions(
-                infos["admissible_commands"][0])
+            actions = self.filter_admissible_actions(actions)
         actions = self.go_with_floor_plan(actions, curr_place)
         self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
