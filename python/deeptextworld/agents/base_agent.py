@@ -619,7 +619,7 @@ class BaseAgent(Logging):
             room_name = None
         return room_name
 
-    def filter_admissible_actions(self, admissible_actions):
+    def filter_admissible_actions(self, admissible_actions, curr_place=None):
         """
         Filter unnecessary actions.
         :param admissible_actions:
@@ -631,7 +631,8 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
-        if not self.hp.drop_w_theme_words:
+        # don't drop useful ingredients if not in kitchen
+        if (curr_place != "kitchen") or (not self.hp.drop_w_theme_words):
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         # if not self.use_grill:
@@ -949,7 +950,7 @@ class BaseAgent(Logging):
         if self.hp.use_original_actions:
             pass
         else:
-            actions = self.filter_admissible_actions(actions)
+            actions = self.filter_admissible_actions(actions, curr_place)
         actions = self.go_with_floor_plan(actions, curr_place)
         self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
