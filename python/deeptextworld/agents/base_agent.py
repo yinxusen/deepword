@@ -684,7 +684,7 @@ class BaseAgent(Logging):
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
-    def rule_based_policy(self, actions, all_actions, immediate_reward):
+    def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
         if ((not self.is_training) and
                 (self.winning_recorder[self.game_id] is not None) and
@@ -693,9 +693,9 @@ class BaseAgent(Logging):
         elif a_examine_cookbook in actions and not self.see_cookbook:
             player_t = a_examine_cookbook
             self.see_cookbook = True
-        elif self._last_action == a_examine_cookbook and immediate_reward <= 0:
+        elif self._last_action == a_examine_cookbook and instant_reward <= 0:
             player_t = a_inventory
-        elif self._last_action == a_prepare_meal and immediate_reward > 0:
+        elif self._last_action == a_prepare_meal and instant_reward > 0:
             player_t = a_eat_meal
         else:
             player_t = None
@@ -762,7 +762,7 @@ class BaseAgent(Logging):
         return action_idx, player_t, report_txt
 
     def choose_action(
-            self, actions, all_actions, actions_mask, immediate_reward):
+            self, actions, all_actions, actions_mask, instant_reward):
         """
         Choose an action by
           1) try rule-based policy;
@@ -771,11 +771,11 @@ class BaseAgent(Logging):
         :param actions:
         :param all_actions:
         :param actions_mask:
-        :param immediate_reward:
+        :param instant_reward:
         :return:
         """
         action_idx, player_t, report_txt = self.rule_based_policy(
-            actions, all_actions, immediate_reward)
+            actions, all_actions, instant_reward)
         if action_idx is None:
             (action_idx, player_t, report_txt
              ) = self.random_walk_for_collecting_fp(actions, all_actions)
