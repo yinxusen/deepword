@@ -152,7 +152,6 @@ class BaseAgent(Logging):
         self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
-        self.opening = None
         self.cnt_action = None
 
         self.action_recorder = None
@@ -449,7 +448,6 @@ class BaseAgent(Logging):
         self.cumulative_score = 0
         self._episode_has_started = True
         self.prev_place = None
-        self.opening = self.tokenize(infos["description"][0])
         self.cnt_action = np.zeros(self.hp.n_actions)
         if self.game_id not in self.action_recorder:
             self.action_recorder[self.game_id] = None
@@ -959,17 +957,8 @@ class BaseAgent(Logging):
         all_actions = self.action_collector.get_actions()
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            # TODO: to be very careful here. we need to end the trajectory
-            # TODO: if we split games into multi small games.
-            # TODO: so accordingly, we need to make the state final
-            # TODO: Be sure don't do it if not split games.
-            if self.hp.split_recipe:
-                game_terminal = True if instant_reward > 0 else dones[0]
-            else:
-                game_terminal = dones[0]
-
             self.feed_memory(
-                instant_reward, game_terminal,
+                instant_reward, dones[0],
                 self._last_actions_mask, actions_mask)
         else:
             pass
@@ -979,14 +968,6 @@ class BaseAgent(Logging):
         if all(dones):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
-        if self.hp.split_recipe:
-            if instant_reward > 0:
-                self.info("start a new trajectory for the next right move")
-                self.info("add opening: {}".format(self.opening))
-                self.tjs.add_new_tj()
-                self.see_cookbook = False
-                obs_idx = self.index_string(self.opening.split())
-                self.tjs.append_master_txt(obs_idx)
 
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
