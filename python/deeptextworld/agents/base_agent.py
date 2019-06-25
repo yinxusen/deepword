@@ -135,6 +135,7 @@ class BaseAgent(Logging):
         self.best_chkp_prefix = os.path.join(self.best_chkp_path, 'after-epoch')
         self.saver = None
         self.target_saver = None
+
         self._last_action_idx = None
         self._last_actions_mask = None
         self._last_action = None
@@ -149,7 +150,6 @@ class BaseAgent(Logging):
         self.prev_master_t = None
         self.prev_place = None
 
-        self.empty_trans_table = str.maketrans("", "", string.punctuation)
         self.theme_words = None
         self.see_cookbook = False
         self.cnt_action = None
@@ -810,22 +810,25 @@ class BaseAgent(Logging):
             instant_reward = -1
         return instant_reward
 
-    def collect_floor_plan(self, master):
-        """collect floor plan during playing and patch master"""
+    def collect_floor_plan(self, master, prev_place):
+        """
+        collect floor plan with latest master.
+        if the current place doesn't match the previous place, and a go action
+        is used to get the master, then we need to update the floor plan.
+
+        :param master:
+        :param prev_place: the name of previous place
+        :return: the name of current place
+        """
         room_name = self.get_room_name(master)
-        if room_name is not None:
-            curr_place = room_name
-            if self.prev_place is None:
-                self.prev_place = curr_place
-        else:
-            # self.debug("no match place from {}".format(master))
-            curr_place = self.prev_place
-        if (curr_place != self.prev_place and
+        curr_place = room_name if room_name is not None else prev_place
+
+        if (curr_place != prev_place and
                 self._last_action in self.inv_direction):
             self.floor_plan.extend(
-                [(self.prev_place, self._last_action, curr_place),
+                [(prev_place, self._last_action, curr_place),
                  (curr_place, self.inv_direction[self._last_action],
-                  self.prev_place)])
+                  prev_place)])
         return curr_place
 
     def train_one_batch(self):
@@ -891,27 +894,9 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
-    def act(self, obs: List[str], scores: List[int], dones: List[bool],
-            infos: Dict[str, List[Any]]) -> Optional[List[str]]:
-        """
-        Acts upon the current list of observations.
-        One text command must be returned for each observation.
-        :param obs:
-        :param scores: score obtained so far for each game
-        :param dones: whether a game is finished
-        :param infos:
-        :return:
-
-        Notes:
-            Commands returned for games marked as `done` have no effect.
-            The states for finished games are simply copy over until all
-            games are done.
-        """
-        if not self._episode_has_started:
-            self._start_episode(obs, infos)
-
-        assert len(obs) == 1, "cannot handle batch game training"
-
+    def collect_new_sample(
+            self, obs: List[str], scores: List[int], dones: List[bool],
+            infos: Dict[str, List[Any]]):
         master = infos["description"][0] if self.in_game_t == 0 else obs[0]
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
@@ -938,14 +923,14 @@ class BaseAgent(Logging):
                     infos["max_score"]))
 
         if self.hp.collect_floor_plan:
-            curr_place = self.collect_floor_plan(master)
+            curr_place, = self.collect_floor_plan(master, self.prev_place)
+            self.prev_place = curr_place
         else:
             curr_place = None
 
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        # Notice that some actions contain capital letters, e.g. BBQ
         actions = [a.lower() for a in infos["admissible_commands"][0]]
         if self.hp.use_original_actions:
             pass
@@ -963,12 +948,10 @@ class BaseAgent(Logging):
         else:
             pass
 
-        # notice the position of all(dones)
-        # make sure add the last action-master pair into memory
-        if all(dones):
-            self._end_episode(obs, scores, infos)
-            return  # Nothing to return.
+        return actions, all_actions, actions_mask, instant_reward
 
+    def next_step_action(
+            self, actions, all_actions, actions_mask, instant_reward):
         action_idx, player_t, self.prev_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
 
@@ -986,7 +969,40 @@ class BaseAgent(Logging):
         self._last_action_idx = action_idx
         self._last_actions_mask = actions_mask
         self._last_action = player_t
-        self.prev_place = curr_place
+        return player_t
+
+    def act(self, obs: List[str], scores: List[int], dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Optional[List[str]]:
+        """
+        Acts upon the current list of observations.
+        One text command must be returned for each observation.
+        :param obs:
+        :param scores: score obtained so far for each game
+        :param dones: whether a game is finished
+        :param infos:
+        :return:
+
+        Notes:
+            Commands returned for games marked as `done` have no effect.
+            The states for finished games are simply copy over until all
+            games are done.
+        """
+        if not self._episode_has_started:
+            self._start_episode(obs, infos)
+
+        assert len(obs) == 1, "cannot handle batch game training"
+
+        (actions, all_actions, actions_mask, instant_reward
+         ) = self.collect_new_sample(obs, scores, dones, infos)
+
+        # notice the position of all(dones)
+        # make sure add the last action-master pair into memory
+        if all(dones):
+            self._end_episode(obs, scores, infos)
+            return  # Nothing to return.
+
+        player_t = self.next_step_action(
+            actions, all_actions, actions_mask, instant_reward)
 
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
