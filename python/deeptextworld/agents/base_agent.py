@@ -135,29 +135,29 @@ class BaseAgent(Logging):
         self.best_chkp_prefix = os.path.join(self.best_chkp_path, 'after-epoch')
         self.saver = None
         self.target_saver = None
+        self.snapshot_saved = False
+        self.epoch_start_t = 0
 
         self._last_action_idx = None
         self._last_actions_mask = None
         self._last_action = None
+        self._last_report = None
+
+        self._cumulative_score = 0
+        self._cumulative_penalty = -0.1
+        self._prev_last_action = None
+        self._prev_master = None
+        self._prev_place = None
+
         self.game_id = None
-        self.prev_report = None
+        self._theme_words = None
+        self.__see_cookbook = False
+        self._cnt_action = None
 
-        self.cumulative_score = 0
-        self.snapshot_saved = False
-        self.epoch_start_t = 0
-        self.prev_cumulative_penalty = -0.1
-        self.prev_player_t = None
-        self.prev_master_t = None
-        self.prev_place = None
-
-        self.theme_words = None
-        self.see_cookbook = False
-        self.cnt_action = None
-
-        self.action_recorder = None
-        self.winning_recorder = None
-        self.per_game_recorder = None
-        self.actions_to_remove = None
+        self.__action_recorder = None
+        self.__winning_recorder = None
+        self.__per_game_recorder = None
+        self.__actions_to_remove = None
 
     def init_tokens(self, hp):
         """
@@ -348,7 +348,8 @@ class BaseAgent(Logging):
 
             if restore_from is not None:
                 # Reload weights from directory if specified
-                self.info("Try to restore parameters from: {}".format(restore_from))
+                self.info(
+                    "Try to restore parameters from: {}".format(restore_from))
                 saver.restore(train_sess, restore_from)
                 if not self.hp.start_t_ignore_model_t:
                     global_step = tf.train.get_or_create_global_step()
@@ -421,9 +422,9 @@ class BaseAgent(Logging):
                 is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
-        self.action_recorder = {}
-        self.actions_to_remove = {}
-        self.winning_recorder = {}
+        self.__action_recorder = {}
+        self.__actions_to_remove = {}
+        self.__winning_recorder = {}
         self._initialized = True
 
     def _start_episode(
@@ -445,27 +446,27 @@ class BaseAgent(Logging):
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
-        self.cumulative_score = 0
+        self._cumulative_score = 0
         self._episode_has_started = True
-        self.prev_place = None
-        self.cnt_action = np.zeros(self.hp.n_actions)
-        if self.game_id not in self.action_recorder:
-            self.action_recorder[self.game_id] = None
-            self.winning_recorder[self.game_id] = None
-            self.actions_to_remove[self.game_id] = set()
-        self.per_game_recorder = []
+        self._prev_place = None
+        self._cnt_action = np.zeros(self.hp.n_actions)
+        if self.game_id not in self.__action_recorder:
+            self.__action_recorder[self.game_id] = None
+            self.__winning_recorder[self.game_id] = None
+            self.__actions_to_remove[self.game_id] = set()
+        self.__per_game_recorder = []
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
             theme_regex, recipe[0].replace("\n", "<|>"))
-        self.see_cookbook = False
-        self.theme_words = None
+        self.__see_cookbook = False
+        self._theme_words = None
         if theme_words_search:
             theme_words = theme_words_search.group(1)
-            self.theme_words = list(
+            self._theme_words = list(
                 filter(lambda w: w != "",
                        map(lambda w: w.strip(), theme_words.split("<|>"))))
-            self.debug("theme words: {}".format(", ".join(self.theme_words)))
+            self.debug("theme words: {}".format(", ".join(self._theme_words)))
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -486,26 +487,27 @@ class BaseAgent(Logging):
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
             self.mode(), self.in_game_t, scores[0], infos["has_won"]))
         # TODO: make clear of what need to clean before & after an episode.
-        self.winning_recorder[self.game_id] = infos["has_won"][0]
-        self.action_recorder[self.game_id] = self.per_game_recorder
+        self.__winning_recorder[self.game_id] = infos["has_won"][0]
+        self.__action_recorder[self.game_id] = self.__per_game_recorder
         if ((not infos["has_won"][0]) and
-                (0 < len(self.per_game_recorder) < 100)):
-            if self.per_game_recorder[-1] not in self.per_game_recorder[:-1]:
-                self.actions_to_remove[self.game_id].add(
-                    self.per_game_recorder[-1])
+                (0 < len(self.__per_game_recorder) < 100)):
+            if (self.__per_game_recorder[-1] not in
+                    self.__per_game_recorder[:-1]):
+                self.__actions_to_remove[self.game_id].add(
+                    self.__per_game_recorder[-1])
             else:
                 pass  # repeat dangerous actions
         self.debug("actions to remove {} for game {}".format(
-            self.actions_to_remove[self.game_id], self.game_id))
+            self.__actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_action_idx = None
         self._last_actions_mask = None
         self._last_action = None
         self.game_id = None
-        self.prev_report = None
-        self.prev_cumulative_penalty = -0.1
-        self.prev_player_t = None
-        self.prev_master_t = None
+        self._last_report = None
+        self._cumulative_penalty = -0.1
+        self._prev_last_action = None
+        self._prev_master = None
 
     def save_best_model(self):
         self.info("save the best model so far")
@@ -598,13 +600,13 @@ class BaseAgent(Logging):
         return any(map(lambda w: w in sentence, words))
 
     def contain_theme_words(self, actions):
-        if self.theme_words is None:
+        if self._theme_words is None:
             self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
         others = []
         for a in actions:
-            if self.contain_words(a, self.theme_words):
+            if self.contain_words(a, self._theme_words):
                 contained.append(a)
             else:
                 others.append(a)
@@ -652,7 +654,7 @@ class BaseAgent(Logging):
             lambda a: a.startswith("go"), admissible_actions))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self.theme_words))),
+                       all(map(lambda t: t not in a, self._theme_words))),
             others))
         actions += list(filter(
             lambda a: a.startswith("take") and "knife" in a, others))
@@ -663,9 +665,9 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
         if not self.is_training:
-            if ((self.winning_recorder[self.game_id] is not None) and
-                    (not self.winning_recorder[self.game_id])):
-                for a2remove in self.actions_to_remove[self.game_id]:
+            if ((self.__winning_recorder[self.game_id] is not None) and
+                    (not self.__winning_recorder[self.game_id])):
+                for a2remove in self.__actions_to_remove[self.game_id]:
                     try:
                         actions.remove(a2remove)
                         self.debug(
@@ -687,12 +689,12 @@ class BaseAgent(Logging):
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
         if ((not self.is_training) and
-                (self.winning_recorder[self.game_id] is not None) and
-                self.winning_recorder[self.game_id]):
-            player_t = self.action_recorder[self.game_id][self.in_game_t]
-        elif a_examine_cookbook in actions and not self.see_cookbook:
+                (self.__winning_recorder[self.game_id] is not None) and
+                self.__winning_recorder[self.game_id]):
+            player_t = self.__action_recorder[self.game_id][self.in_game_t]
+        elif a_examine_cookbook in actions and not self.__see_cookbook:
             player_t = a_examine_cookbook
-            self.see_cookbook = True
+            self.__see_cookbook = True
         elif self._last_action == a_examine_cookbook and instant_reward <= 0:
             player_t = a_inventory
         elif self._last_action == a_prepare_meal and instant_reward > 0:
@@ -787,20 +789,20 @@ class BaseAgent(Logging):
         return action_idx, player_t, report_txt
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(score - self.cumulative_score - 0.1)
-        self.cumulative_score = score
-        if (master == self.prev_master_t and
-            self._last_action == self.prev_player_t and instant_reward < 0):
+        instant_reward = self.clip_reward(score - self._cumulative_score - 0.1)
+        self._cumulative_score = score
+        if (master == self._prev_master and
+            self._last_action == self._prev_last_action and instant_reward < 0):
             instant_reward = max(
-                -1.0, instant_reward + self.prev_cumulative_penalty)
+                -1.0, instant_reward + self._cumulative_penalty)
             # self.debug("repeated bad try, decrease reward by {},"
             #            " reward changed to {}".format(
             #     self.prev_cumulative_penalty, instant_reward))
-            self.prev_cumulative_penalty = self.prev_cumulative_penalty - 0.1
+            self._cumulative_penalty = self._cumulative_penalty - 0.1
         else:
-            self.prev_player_t = self._last_action
-            self.prev_master_t = master
-            self.prev_cumulative_penalty = -0.1
+            self._prev_last_action = self._last_action
+            self._prev_master = master
+            self._cumulative_penalty = -0.1
 
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
@@ -908,13 +910,13 @@ class BaseAgent(Logging):
 
         # use see cookbook again if gain one reward
         if instant_reward > 0:
-            self.see_cookbook = False
+            self.__see_cookbook = False
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
                        " master: {}, reward: {}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self.report_status(self.prev_report),
+                self.in_game_t, self.eps, self.report_status(self._last_report),
                 cleaned_obs, instant_reward, dones[0]))
         else:
             self.info(
@@ -923,8 +925,8 @@ class BaseAgent(Logging):
                     infos["max_score"]))
 
         if self.hp.collect_floor_plan:
-            curr_place, = self.collect_floor_plan(master, self.prev_place)
-            self.prev_place = curr_place
+            curr_place, = self.collect_floor_plan(master, self._prev_place)
+            self._prev_place = curr_place
         else:
             curr_place = None
 
@@ -952,14 +954,15 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions, all_actions, actions_mask, instant_reward):
-        action_idx, player_t, self.prev_report = self.choose_action(
+        action_idx, player_t, self._last_report = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
 
-        self.per_game_recorder.append(player_t)
+        self.__per_game_recorder.append(player_t)
 
-        if "hard_set_action" not in list(map(lambda x: x[0], self.prev_report)):
-            self.cnt_action[action_idx] += 0.1
-            self.debug(self.cnt_action)
+        if "hard_set_action" not in list(
+                map(lambda x: x[0], self._last_report)):
+            self._cnt_action[action_idx] += 0.1
+            self.debug(self._cnt_action)
         else:
             self.debug("cnt action ignore hard_set_action")
 

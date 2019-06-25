@@ -136,7 +136,7 @@ class EnsembleAgent(DRRNAgent):
         actions += list(filter(lambda a: a in other_valid_commands, admissible_commands))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self.theme_words))), others))
+                       all(map(lambda t: t not in a, self._theme_words))), others))
         actions += list(filter(lambda a: a.startswith("take") and "knife" in a, others))
         actions += list(filter(lambda a: a.startswith("open"), others))
         self.debug("previous admissible actions: {}".format(", ".join(sorted(admissible_commands))))
