@@ -159,6 +159,7 @@ class BaseAgent(Logging):
         self.action_recorder = None
         self.winning_recorder = None
         self.per_game_recorder = None
+        self.actions_to_remove = None
 
     def init_tokens(self, hp):
         """
@@ -423,6 +424,7 @@ class BaseAgent(Logging):
             self.eps = 0
             self.total_t = 0
         self.action_recorder = {}
+        self.actions_to_remove = {}
         self.winning_recorder = {}
         self._initialized = True
 
@@ -454,6 +456,7 @@ class BaseAgent(Logging):
         if self.game_id not in self.action_recorder:
             self.action_recorder[self.game_id] = None
             self.winning_recorder[self.game_id] = None
+            self.actions_to_remove[self.game_id] = []
         self.per_game_recorder = []
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
@@ -489,6 +492,12 @@ class BaseAgent(Logging):
         # TODO: make clear of what need to clean before & after an episode.
         self.winning_recorder[self.game_id] = infos["has_won"][0]
         self.action_recorder[self.game_id] = self.per_game_recorder
+        if not infos["has_won"][0] and 0 < len(self.per_game_recorder) < 100:
+            if self.per_game_recorder[-1] not in self.per_game_recorder[:-1]:
+                self.actions_to_remove[self.game_id].append(
+                    self.per_game_recorder[-1])
+            else:
+                pass  # repeat dangerous actions
         self._episode_has_started = False
         self._last_action_idx = None
         self._last_actions_mask = None
@@ -660,17 +669,17 @@ class BaseAgent(Logging):
         actions = list(set(actions))
         if not self.is_training:
             if ((self.winning_recorder[self.game_id] is not None) and
-                    (not self.winning_recorder[self.game_id]) and
-                    (len(self.action_recorder[self.game_id]) > 0) and
-                    (len(self.action_recorder[self.game_id]) < 100)):
-                action_to_remove = self.action_recorder[self.game_id][-1]
-                try:
-                    actions.remove(action_to_remove)
-                    self.debug(
-                        "action {} is removed according to action recorder".format(
-                            action_to_remove))
-                except Exception as _:
-                    pass
+                    (not self.winning_recorder[self.game_id])):
+                for a2remove in self.actions_to_remove:
+                    try:
+                        actions.remove(a2remove)
+                        self.debug(
+                            "action {} is removed".format(
+                                a2remove))
+                    except ValueError as _:
+                        self.debug(
+                            "action {} is not found when remove".format(
+                                a2remove))
         return actions
 
     def go_with_floor_plan(self, actions, room):
