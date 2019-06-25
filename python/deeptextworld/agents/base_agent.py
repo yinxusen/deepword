@@ -153,7 +153,6 @@ class BaseAgent(Logging):
         self.theme_words = None
         self.see_cookbook = False
         self.opening = None
-        self.use_grill = None
         self.cnt_action = None
 
         self.action_recorder = None
@@ -451,7 +450,6 @@ class BaseAgent(Logging):
         self._episode_has_started = True
         self.prev_place = None
         self.opening = self.tokenize(infos["description"][0])
-        self.use_grill = False
         self.cnt_action = np.zeros(self.hp.n_actions)
         if self.game_id not in self.action_recorder:
             self.action_recorder[self.game_id] = None
@@ -647,10 +645,6 @@ class BaseAgent(Logging):
         if (curr_place != "kitchen") or (not self.hp.drop_w_theme_words):
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
-        # if not self.use_grill:
-        #     actions = list(filter(lambda c: not "bbq" in c.split(), actions))
-        # else:
-        #     self.debug("bbq is not filtered")
         other_valid_commands = {
             a_prepare_meal, a_eat_meal, a_examine_cookbook
         }
@@ -925,12 +919,6 @@ class BaseAgent(Logging):
             cleaned_obs = self.dp.reorder(master)
         else:
             cleaned_obs = self.tokenize(master)
-
-        if (not self.use_grill) and (
-                self._last_action == a_examine_cookbook) and (
-                "grilled" in cleaned_obs.split()):
-            self.debug("this game uses grill")
-            self.use_grill = True
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
