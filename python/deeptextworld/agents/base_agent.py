@@ -456,7 +456,7 @@ class BaseAgent(Logging):
         if self.game_id not in self.action_recorder:
             self.action_recorder[self.game_id] = None
             self.winning_recorder[self.game_id] = None
-            self.actions_to_remove[self.game_id] = []
+            self.actions_to_remove[self.game_id] = set()
         self.per_game_recorder = []
 
         theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
@@ -492,12 +492,15 @@ class BaseAgent(Logging):
         # TODO: make clear of what need to clean before & after an episode.
         self.winning_recorder[self.game_id] = infos["has_won"][0]
         self.action_recorder[self.game_id] = self.per_game_recorder
-        if not infos["has_won"][0] and 0 < len(self.per_game_recorder) < 100:
+        if ((not infos["has_won"][0]) and
+                (0 < len(self.per_game_recorder) < 100)):
             if self.per_game_recorder[-1] not in self.per_game_recorder[:-1]:
-                self.actions_to_remove[self.game_id].append(
+                self.actions_to_remove[self.game_id].add(
                     self.per_game_recorder[-1])
             else:
                 pass  # repeat dangerous actions
+        self.debug("actions to remove {} for game {}".format(
+            self.actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_action_idx = None
         self._last_actions_mask = None
@@ -670,7 +673,7 @@ class BaseAgent(Logging):
         if not self.is_training:
             if ((self.winning_recorder[self.game_id] is not None) and
                     (not self.winning_recorder[self.game_id])):
-                for a2remove in self.actions_to_remove:
+                for a2remove in self.actions_to_remove[self.game_id]:
                     try:
                         actions.remove(a2remove)
                         self.debug(
@@ -680,6 +683,8 @@ class BaseAgent(Logging):
                         self.debug(
                             "action {} is not found when remove".format(
                                 a2remove))
+            else:
+                pass
         return actions
 
     def go_with_floor_plan(self, actions, room):
