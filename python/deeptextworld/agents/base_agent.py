@@ -88,9 +88,9 @@ class DependencyParserReorder(Logging):
         return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
 
 
-# a_examine_cookbook = "examine cookbook"
+ACT_EXAMINE_COOKBOOK = "examine cookbook"
 ACT_PREPARE_MEAL = "prepare meal"
-ACT_EXAMINE_COOKBOOK = ACT_PREPARE_MEAL
+# ACT_EXAMINE_COOKBOOK = ACT_PREPARE_MEAL
 ACT_EAT_MEAL = "eat meal"
 ACT_LOOK = "look"
 ACT_INVENTORY = "inventory"
