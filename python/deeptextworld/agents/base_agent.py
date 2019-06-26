@@ -3,7 +3,6 @@ import hashlib
 import os
 import random
 import re
-import string
 from typing import List, Dict, Any, Optional
 
 import collections
@@ -15,13 +14,13 @@ from nltk.parse.corenlp import CoreNLPDependencyParser
 
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, \
     ctime
-from deeptextworld.dqn_func import get_random_1Daction
 
 
 class DRRNMemo(collections.namedtuple(
@@ -29,6 +28,14 @@ class DRRNMemo(collections.namedtuple(
     ("tid", "sid", "gid", "aid", "reward", "is_terminal",
      "action_mask", "next_action_mask"))):
     pass
+
+
+class ActionDesc(collections.namedtuple(
+    "ActionDesc",
+    ("action_type", "action_idx", "action"))):
+    def __repr__(self):
+        return "action_type: {}, action_idx: {}, action: {}".format(
+            self.action_type, self.action_idx, self.action)
 
 
 class DependencyParserReorder(Logging):
@@ -82,15 +89,21 @@ class DependencyParserReorder(Logging):
 
 
 # a_examine_cookbook = "examine cookbook"
-a_prepare_meal = "prepare meal"
-a_examine_cookbook = a_prepare_meal
-a_eat_meal = "eat meal"
-a_look = "look"
-a_inventory = "inventory"
-a_go_north = "go north"
-a_go_south = "go south"
-a_go_east = "go east"
-a_go_west = "go west"
+ACT_PREPARE_MEAL = "prepare meal"
+ACT_EXAMINE_COOKBOOK = ACT_PREPARE_MEAL
+ACT_EAT_MEAL = "eat meal"
+ACT_LOOK = "look"
+ACT_INVENTORY = "inventory"
+ACT_GN = "go north"
+ACT_GS = "go south"
+ACT_GE = "go east"
+ACT_GW = "go west"
+
+ACT_TYPE_RND_CHOOSE = "random_choose_action"
+ACT_TYPE_RULE = "rule_based_action"
+ACT_TYPE_RND_WALK = "random_walk_action"
+ACT_TYPE_NN = "learned_action"
+ACT_TYPE_JITTER = "jitter_action"
 
 
 class BaseAgent(Logging):
@@ -106,8 +119,8 @@ class BaseAgent(Logging):
         self.fp_prefix = "floor_plan"
 
         self.inv_direction = {
-            a_go_south: a_go_north, a_go_north: a_go_south,
-            a_go_east: a_go_west, a_go_west: a_go_east}
+            ACT_GS: ACT_GN, ACT_GN: ACT_GS,
+            ACT_GE: ACT_GW, ACT_GW: ACT_GE}
 
         self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
         self.info(output_hparams(self.hp))
@@ -138,10 +151,8 @@ class BaseAgent(Logging):
         self.snapshot_saved = False
         self.epoch_start_t = 0
 
-        self._last_action_idx = None
         self._last_actions_mask = None
-        self._last_action = None
-        self._last_report = None
+        self._last_action_desc = None
 
         self._cumulative_score = 0
         self._cumulative_penalty = -0.1
@@ -500,11 +511,9 @@ class BaseAgent(Logging):
         self.debug("actions to remove {} for game {}".format(
             self.__actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
-        self._last_action_idx = None
         self._last_actions_mask = None
-        self._last_action = None
         self.game_id = None
-        self._last_report = None
+        self._last_action_desc = None
         self._cumulative_penalty = -0.1
         self._prev_last_action = None
         self._prev_master = None
@@ -636,7 +645,7 @@ class BaseAgent(Logging):
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
-        actions = [a_inventory, a_look] + contained
+        actions = [ACT_INVENTORY, ACT_LOOK] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
@@ -646,7 +655,7 @@ class BaseAgent(Logging):
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
-            a_prepare_meal, a_eat_meal, a_examine_cookbook
+            ACT_PREPARE_MEAL, ACT_EAT_MEAL, ACT_EXAMINE_COOKBOOK
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
@@ -691,54 +700,56 @@ class BaseAgent(Logging):
         if ((not self.is_training) and
                 (self.__winning_recorder[self.game_id] is not None) and
                 self.__winning_recorder[self.game_id]):
-            player_t = self.__action_recorder[self.game_id][self.in_game_t]
-        elif a_examine_cookbook in actions and not self.__see_cookbook:
-            player_t = a_examine_cookbook
+            action = self.__action_recorder[self.game_id][self.in_game_t]
+        elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
+            action = ACT_EXAMINE_COOKBOOK
             self.__see_cookbook = True
-        elif self._last_action == a_examine_cookbook and instant_reward <= 0:
-            player_t = a_inventory
-        elif self._last_action == a_prepare_meal and instant_reward > 0:
-            player_t = a_eat_meal
+        elif (self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
+        elif (self._last_action_desc.action == ACT_PREPARE_MEAL and
+              instant_reward > 0):
+            action = ACT_EAT_MEAL
         else:
-            player_t = None
+            action = None
 
-        if player_t is not None:
-            if not player_t in all_actions:
+        if action is not None:
+            if not action in all_actions:
                 self.debug("eat meal not in action list, adding it in ...")
-                self.action_collector.extend([player_t])
+                self.action_collector.extend([action])
                 all_actions = self.action_collector.get_actions()
-            action_idx = all_actions.index(player_t)
+            action_idx = all_actions.index(action)
         else:
             action_idx = None
-        report_txt = [('hard_set_action', action_idx), ('action', player_t)]
-        return action_idx, player_t, report_txt
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
+        return action_desc
 
     def jitter_go_action(
-            self, action_idx, player_t, report_txt, actions, all_actions):
+            self, prev_action_desc, actions, all_actions):
+        action_desc = None
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if (self.hp.jitter_go and (report_txt[0][0] == "action")
-                and (player_t in admissible_go_actions)):
+        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN)
+                and (prev_action_desc.action in admissible_go_actions)):
             if ((self.is_training and
                  random.random() > 1 - self.hp.jitter_train_prob)
                     or ((not self.is_training) and
                         random.random() > 1 - self.hp.jitter_eval_prob)):
-                original_action = player_t
                 jitter_go_action = random.choice(admissible_go_actions)
                 action_idx = all_actions.index(jitter_go_action)
-                player_t = jitter_go_action
-                report_txt = (
-                    [("original action", original_action),
-                     ("jitter go action", player_t),
-                     ("# admissible go", len(admissible_go_actions))])
+                action = jitter_go_action
+                action_desc = ActionDesc(
+                    action_type=ACT_TYPE_JITTER, action_idx=action_idx,
+                    action=action)
             else:
                 pass
         else:
             pass
-        return action_idx, player_t, report_txt
+        return action_desc if action_desc is not None else prev_action_desc
 
     def random_walk_for_collecting_fp(self, actions, all_actions):
-        action_idx, player_t = None, None
+        action_idx, action = None, None
 
         if self.hp.collect_floor_plan:
             # collecting floor plan by choosing random action
@@ -754,14 +765,16 @@ class BaseAgent(Logging):
                 open_actions = list(
                     filter(lambda a: a.startswith("open"), actions))
                 admissible_actions = cardinal_go + open_actions
-                _, player_t = get_random_1Daction(admissible_actions)
-                action_idx = all_actions.index(player_t)
+                _, action = get_random_1Daction(admissible_actions)
+                action_idx = all_actions.index(action)
             else:
                 pass
         else:
             pass
-        report_txt = [('random_walk_action', action_idx), ('action', player_t)]
-        return action_idx, player_t, report_txt
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_RND_WALK, action_idx=action_idx,
+            action=action)
+        return action_desc
 
     def choose_action(
             self, actions, all_actions, actions_mask, instant_reward):
@@ -776,23 +789,23 @@ class BaseAgent(Logging):
         :param instant_reward:
         :return:
         """
-        action_idx, player_t, report_txt = self.rule_based_policy(
+        action_desc = self.rule_based_policy(
             actions, all_actions, instant_reward)
-        if action_idx is None:
-            (action_idx, player_t, report_txt
-             ) = self.random_walk_for_collecting_fp(actions, all_actions)
-            if action_idx is None:
-                action_idx, player_t, report_txt = self.get_an_eps_action(
-                    actions_mask)
-                action_idx, player_t, report_txt = self.jitter_go_action(
-                    action_idx, player_t, report_txt, actions, all_actions)
-        return action_idx, player_t, report_txt
+        if action_desc.action_idx is None:
+            action_desc = self.random_walk_for_collecting_fp(
+                actions, all_actions)
+            if action_desc.action_idx is None:
+                action_desc = self.get_an_eps_action(actions_mask)
+                action_desc = self.jitter_go_action(
+                    action_desc, actions, all_actions)
+        return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
         instant_reward = self.clip_reward(score - self._cumulative_score - 0.1)
         self._cumulative_score = score
         if (master == self._prev_master and
-            self._last_action == self._prev_last_action and instant_reward < 0):
+            self._last_action_desc.action == self._prev_last_action and
+                instant_reward < 0):
             instant_reward = max(
                 -1.0, instant_reward + self._cumulative_penalty)
             # self.debug("repeated bad try, decrease reward by {},"
@@ -800,7 +813,7 @@ class BaseAgent(Logging):
             #     self.prev_cumulative_penalty, instant_reward))
             self._cumulative_penalty = self._cumulative_penalty - 0.1
         else:
-            self._prev_last_action = self._last_action
+            self._prev_last_action = self._last_action_desc.action
             self._prev_master = master
             self._cumulative_penalty = -0.1
 
@@ -826,10 +839,10 @@ class BaseAgent(Logging):
         curr_place = room_name if room_name is not None else prev_place
 
         if (curr_place != prev_place and
-                self._last_action in self.inv_direction):
+                self._last_action_desc.action in self.inv_direction):
             self.floor_plan.extend(
-                [(prev_place, self._last_action, curr_place),
-                 (curr_place, self.inv_direction[self._last_action],
+                [(prev_place, self._last_action_desc.action, curr_place),
+                 (curr_place, self.inv_direction[self._last_action_desc.action],
                   prev_place)])
         return curr_place
 
@@ -887,7 +900,7 @@ class BaseAgent(Logging):
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=self._last_action_idx,
+            gid=self.game_id, aid=self._last_action_desc.action_idx,
             reward=instant_reward, is_terminal=is_terminal,
             action_mask=action_mask, next_action_mask=next_action_mask
         ))
@@ -916,7 +929,7 @@ class BaseAgent(Logging):
             self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
                        " master: {}, reward: {}, is_terminal: {}".format(
                 "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self.report_status(self._last_report),
+                self.in_game_t, self.eps, self._last_action_desc,
                 cleaned_obs, instant_reward, dones[0]))
         else:
             self.info(
@@ -954,13 +967,14 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions, all_actions, actions_mask, instant_reward):
-        action_idx, player_t, self._last_report = self.choose_action(
+        self._last_action_desc = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
+        action = self._last_action_desc.action
+        action_idx = self._last_action_desc.action_idx
 
-        self.__per_game_recorder.append(player_t)
+        self.__per_game_recorder.append(action)
 
-        if "hard_set_action" not in list(
-                map(lambda x: x[0], self._last_report)):
+        if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
             self.debug(self._cnt_action)
         else:
@@ -969,10 +983,8 @@ class BaseAgent(Logging):
         self.tjs.append_player_txt(
             self.action_collector.get_action_matrix()[action_idx])
 
-        self._last_action_idx = action_idx
         self._last_actions_mask = actions_mask
-        self._last_action = player_t
-        return player_t
+        return action
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:
