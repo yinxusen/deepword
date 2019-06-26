@@ -665,6 +665,11 @@ class BaseAgent(Logging):
             lambda a: (a.startswith("drop") and
                        all(map(lambda t: t not in a, self._theme_words))),
             others))
+        # meal should never be dropped
+        try:
+            actions.remove("drop meal")
+        except ValueError as _:
+            pass
         actions += list(filter(
             lambda a: a.startswith("take") and "knife" in a, others))
         actions += list(filter(lambda a: a.startswith("open"), others))
