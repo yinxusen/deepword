@@ -704,10 +704,12 @@ class BaseAgent(Logging):
         elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self.__see_cookbook = True
-        elif (self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
-        elif (self._last_action_desc.action == ACT_PREPARE_MEAL and
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_PREPARE_MEAL and
               instant_reward > 0):
             action = ACT_EAT_MEAL
         else:
@@ -804,6 +806,7 @@ class BaseAgent(Logging):
         instant_reward = self.clip_reward(score - self._cumulative_score - 0.1)
         self._cumulative_score = score
         if (master == self._prev_master and
+            self._last_action_desc is not None and
             self._last_action_desc.action == self._prev_last_action and
                 instant_reward < 0):
             instant_reward = max(
@@ -813,7 +816,9 @@ class BaseAgent(Logging):
             #     self.prev_cumulative_penalty, instant_reward))
             self._cumulative_penalty = self._cumulative_penalty - 0.1
         else:
-            self._prev_last_action = self._last_action_desc.action
+            self._prev_last_action = (
+                self._last_action_desc.action
+                if self._last_action_desc is not None else None)
             self._prev_master = master
             self._cumulative_penalty = -0.1
 
@@ -839,6 +844,7 @@ class BaseAgent(Logging):
         curr_place = room_name if room_name is not None else prev_place
 
         if (curr_place != prev_place and
+                self._last_action_desc is not None and
                 self._last_action_desc.action in self.inv_direction):
             self.floor_plan.extend(
                 [(prev_place, self._last_action_desc.action, curr_place),
