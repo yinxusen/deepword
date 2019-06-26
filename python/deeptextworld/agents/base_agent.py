@@ -163,6 +163,7 @@ class BaseAgent(Logging):
         self.game_id = None
         self._theme_words = None
         self._inventory = None
+        self.__obs = None
         self.__see_cookbook = False
         self._cnt_action = None
 
@@ -452,9 +453,9 @@ class BaseAgent(Logging):
         self.tjs.add_new_tj()
         # recipe = infos["extra.recipe"]
         # use stronger game identity
-        master_without_logo = infos["description"][0].replace("\n", " ")
-        self.game_id = hashlib.md5(
-            master_without_logo.encode("utf-8")).hexdigest()
+        # master_without_logo = infos["description"][0].replace("\n", " ")
+        master = obs[0]
+        self.game_id = hashlib.md5(master.encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -469,6 +470,8 @@ class BaseAgent(Logging):
         self.__per_game_recorder = []
         self.__see_cookbook = False
         self._theme_words = None
+        self._inventory = []
+        self.__obs = None
         # self.get_theme_words(recipe[0])
 
     def get_theme_words(self, recipe):
@@ -936,10 +939,45 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
+    def remove_logo(self, first_master):
+        lines = first_master.split("\n")
+        start_line = 0
+        room_regex = "^\s*-= (.*) =-.*"
+        for i, l in enumerate(lines):
+            room_search = re.search(room_regex, l)
+            if room_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        modified_master = "\n".join(lines[start_line:])
+        self.debug("after logo removing: {}".format(modified_master))
+        return modified_master
+
+    def is_negative(self, cleaned_obj):
+        negative_stems = ["n't", "not"]
+        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
+
+    def update_inventory(self, action):
+        verb = action.split()[0]
+        noun = " ".join(action.split()[1:])
+        if verb == "drop":
+            try:
+                self._inventory.remove(noun)
+            except ValueError as e:
+                pass
+        elif verb == "take":
+            try:
+                self._inventory.append(noun)
+            except ValueError as e:
+                pass
+        else:
+            raise ValueError("unknown action verb: {}".format(action))
+
     def collect_new_sample(
             self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]):
-        master = infos["description"][0] if self.in_game_t == 0 else obs[0]
+        master = self.remove_logo(obs[0]) if self.in_game_t == 0 else obs[0]
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
         else:
@@ -951,7 +989,25 @@ class BaseAgent(Logging):
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
                 self.get_theme_words(master)
-        self.get_inventory(infos["inventory"][0])
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action == ACT_INVENTORY:
+                self.get_inventory(master)
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action.startswith("drop"):
+                if not self.is_negative(cleaned_obs):
+                    self.update_inventory(self._last_action_desc.action)
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action.startswith("take"):
+                if (not self.is_negative(cleaned_obs)) and ("too many things" not in cleaned_obs):
+                    self.update_inventory(self._last_action_desc.action)
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action.startswith("open"):
+                if not self.is_negative(cleaned_obs) and "already open" not in cleaned_obs:
+                    self.__obs += " " + cleaned_obs
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action == ACT_LOOK:
+                self.__obs = cleaned_obs
+
         self.debug("theme words: {}".format(self._theme_words))
         self.debug("inventory: {}".format(self._inventory))
 
@@ -973,9 +1029,15 @@ class BaseAgent(Logging):
 
         if self.hp.collect_floor_plan:
             curr_place = self.collect_floor_plan(master, self._prev_place)
+            # if place changed, then master should be changed
+            if curr_place != self._prev_place:
+                self.__obs = cleaned_obs
             self._prev_place = curr_place
         else:
             curr_place = None
+
+
+        self.debug("obs is {}".format(self.__obs))
 
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
@@ -985,7 +1047,7 @@ class BaseAgent(Logging):
             actions = [a.lower() for a in infos["admissible_commands"][0]]
         else:
             self.debug("generate admissible actions")
-            obs = self.tokenize(infos["description"][0])
+            obs = self.__obs
             inventory = self._inventory
             theme_words = self._theme_words if self._theme_words is not None else []
             actions = self.get_admissible_actions(obs, inventory, theme_words)
@@ -1058,7 +1120,7 @@ class BaseAgent(Logging):
         if "knife" in obs:
             all_actions += ["take knife"]
         for t in theme_words:
-            if t in obs:
+            if t in obs and t not in inventory:
                 all_actions += ["take {}".format(t)]
 
         for i in inventory:
