@@ -944,7 +944,7 @@ class BaseAgent(Logging):
                     infos["max_score"]))
 
         if self.hp.collect_floor_plan:
-            curr_place, = self.collect_floor_plan(master, self._prev_place)
+            curr_place = self.collect_floor_plan(master, self._prev_place)
             self._prev_place = curr_place
         else:
             curr_place = None
