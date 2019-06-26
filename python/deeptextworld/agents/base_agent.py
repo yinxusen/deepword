@@ -162,6 +162,7 @@ class BaseAgent(Logging):
 
         self.game_id = None
         self._theme_words = None
+        self._inventory = None
         self.__see_cookbook = False
         self._cnt_action = None
 
@@ -449,11 +450,11 @@ class BaseAgent(Logging):
         if not self._initialized:
             self._init()
         self.tjs.add_new_tj()
-        recipe = infos["extra.recipe"]
+        # recipe = infos["extra.recipe"]
         # use stronger game identity
         master_without_logo = infos["description"][0].replace("\n", " ")
         self.game_id = hashlib.md5(
-            (master_without_logo + recipe[0]).encode("utf-8")).hexdigest()
+            master_without_logo.encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -466,18 +467,33 @@ class BaseAgent(Logging):
             self.__winning_recorder[self.game_id] = None
             self.__actions_to_remove[self.game_id] = set()
         self.__per_game_recorder = []
-
-        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
-        theme_words_search = re.search(
-            theme_regex, recipe[0].replace("\n", "<|>"))
         self.__see_cookbook = False
         self._theme_words = None
+        # self.get_theme_words(recipe[0])
+
+    def get_theme_words(self, recipe):
+        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+        theme_words_search = re.search(
+            theme_regex, recipe.replace("\n", "<|>"))
         if theme_words_search:
             theme_words = theme_words_search.group(1)
             self._theme_words = list(
                 filter(lambda w: w != "",
                        map(lambda w: w.strip(), theme_words.split("<|>"))))
             self.debug("theme words: {}".format(", ".join(self._theme_words)))
+        else:
+            self.debug("no recipe found")
+
+    def get_inventory(self, inventory_list):
+        items = list(filter(
+            lambda s: len(s) != 0,
+            map(lambda s: s.strip(), inventory_list.split("\n"))))
+        if len(items) > 1:
+            # remove the first a/an/the/some ...
+            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
+        else:
+            items = []
+        self._inventory = items
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -932,6 +948,13 @@ class BaseAgent(Logging):
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
+                self.get_theme_words(master)
+        self.get_inventory(infos["inventory"][0])
+        self.debug("theme words: {}".format(self._theme_words))
+        self.debug("inventory: {}".format(self._inventory))
+
         # use see cookbook again if gain one reward
         if instant_reward > 0:
             self.__see_cookbook = False
@@ -957,7 +980,15 @@ class BaseAgent(Logging):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        actions = [a.lower() for a in infos["admissible_commands"][0]]
+        if self.is_training:
+            self.debug("use admissible actions")
+            actions = [a.lower() for a in infos["admissible_commands"][0]]
+        else:
+            self.debug("generate admissible actions")
+            obs = self.tokenize(infos["description"][0])
+            inventory = self._inventory
+            theme_words = self._theme_words if self._theme_words is not None else []
+            actions = self.get_admissible_actions(obs, inventory, theme_words)
         if self.hp.use_original_actions:
             pass
         else:
@@ -996,6 +1027,49 @@ class BaseAgent(Logging):
 
         self._last_actions_mask = actions_mask
         return action
+
+    def get_admissible_actions(self, obs, inventory, theme_words):
+        all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
+        inventory_sent = " ".join(inventory)
+
+        if "cookbook" in obs:
+            all_actions += [ACT_EXAMINE_COOKBOOK]
+
+        for d in ["north", "south", "east", "west"]:
+            if d in obs.split():
+                all_actions += ["go {}".format(d)]
+
+        if "fridge" in obs:
+            all_actions += ["open fridge"]
+        if "door" in obs:
+            all_actions += ["open door"]
+
+        cookwares = ["stove", "oven", "bbq"]
+        knife_usage = ["dice", "slice", "chop"]
+        for c in cookwares:
+            if c in obs:
+                for t in theme_words:
+                    if t in inventory_sent:
+                        all_actions += ["cook {} with {}".format(t, c)]
+        if "knife" in inventory_sent:
+            all_actions += [
+                "{} {} with knife".format(k, f)
+                for k in knife_usage for f in theme_words]
+        if "knife" in obs:
+            all_actions += ["take knife"]
+        for t in theme_words:
+            if t in obs:
+                all_actions += ["take {}".format(t)]
+
+        for i in inventory:
+            if all(map(lambda tw: tw not in i, theme_words)):
+                all_actions += ["drop {}".format(i)]
+
+        if "meal" in inventory_sent:
+            all_actions += [ACT_EAT_MEAL]
+
+        return all_actions
+
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Optional[List[str]]:

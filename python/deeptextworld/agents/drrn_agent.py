@@ -38,9 +38,9 @@ class DRRNAgent(BaseAgent):
             request_infos.verbs = False
             request_infos.max_score = True
             request_infos.has_won = True
-            request_infos.has_lost = True
-            request_infos.extras = ["recipe"]
-            request_infos.admissible_commands = True
+            request_infos.has_lost = False
+            # request_infos.extras = ["recipe"]
+            request_infos.admissible_commands = False
         return request_infos
 
     def get_an_eps_action(self, action_mask):
