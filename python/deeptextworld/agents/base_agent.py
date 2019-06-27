@@ -725,6 +725,8 @@ class BaseAgent(Logging):
                 (self.__winning_recorder[self.game_id] is not None) and
                 self.__winning_recorder[self.game_id]):
             action = self.__action_recorder[self.game_id][self.in_game_t]
+        elif "meal" in self._inventory:
+            action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self.__see_cookbook = True
@@ -732,10 +734,6 @@ class BaseAgent(Logging):
               self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_PREPARE_MEAL and
-              instant_reward > 0):
-            action = ACT_EAT_MEAL
         else:
             action = None
 
@@ -783,10 +781,8 @@ class BaseAgent(Logging):
             # Notice that only choosing "go" actions cannot finish
             # collecting floor plan because there is the need to open doors
             # Notice also that only allow random walk in the first 50 steps
-            self.debug(actions)
-            cardinal_go = list(
-                filter(lambda a: a.startswith("go") and len(a.split()) == 2,
-                       actions))
+            cardinal_go = list(filter(
+                lambda a: a.startswith("go") and len(a.split()) == 2, actions))
             if self.in_game_t < 50 and len(cardinal_go) != 0:
                 open_actions = list(
                     filter(lambda a: a.startswith("open"), actions))
@@ -1129,9 +1125,9 @@ class BaseAgent(Logging):
             if t in obs and t not in inventory:
                 all_actions += ["take {}".format(t)]
 
-        for i in inventory:
-            if all(map(lambda tw: tw not in i, theme_words)):
-                all_actions += ["drop {}".format(i)]
+        # active drop actions only after we know the theme words
+        if len(theme_words) != 0:
+            all_actions += ["drop {}".format(i) for i in inventory]
 
         if "meal" in inventory_sent:
             all_actions += [ACT_EAT_MEAL]
