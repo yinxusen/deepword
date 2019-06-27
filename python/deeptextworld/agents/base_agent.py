@@ -657,6 +657,10 @@ class BaseAgent(Logging):
             room_name = None
         return room_name
 
+    def is_observation(self, master):
+        """if there is room name then it's an observation other a dialogue"""
+        return self.get_room_name(master) is not None
+
     def filter_admissible_actions(self, admissible_actions, curr_place=None):
         """
         Filter unnecessary actions.
@@ -823,7 +827,11 @@ class BaseAgent(Logging):
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(score - self._cumulative_score - 0.1)
+        negative_response_penalty = 0
+        if (not self.is_observation(master)) and self.is_negative(master):
+            negative_response_penalty = 0.5
+        instant_reward = self.clip_reward(
+            score - self._cumulative_score - 0.1 - negative_response_penalty)
         self._cumulative_score = score
         if (master == self._prev_master and
             self._last_action_desc is not None and
