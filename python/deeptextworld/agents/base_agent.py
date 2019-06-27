@@ -1116,6 +1116,10 @@ class BaseAgent(Logging):
                     if t in inventory_sent:
                         all_actions += ["cook {} with {}".format(t, c)]
         if "knife" in inventory_sent:
+            for t in theme_words:
+                if t in inventory_sent:
+                    all_actions += (
+                        ["{} {} with knife".format(k, t) for k in knife_usage])
             all_actions += [
                 "{} {} with knife".format(k, f)
                 for k in knife_usage for f in theme_words]
