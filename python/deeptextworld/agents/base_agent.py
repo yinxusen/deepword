@@ -1090,6 +1090,10 @@ class BaseAgent(Logging):
         self._last_actions_mask = actions_mask
         return action
 
+    def get_possible_closed_doors(self, obs):
+        doors = re.findall(r'a closed ([a-z \-]+ door)', obs)
+        return doors
+
     def get_admissible_actions(self, obs, inventory, theme_words):
         all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
         inventory_sent = " ".join(inventory)
@@ -1104,7 +1108,9 @@ class BaseAgent(Logging):
         if "fridge" in obs:
             all_actions += ["open fridge"]
         if "door" in obs:
-            all_actions += ["open door"]
+            doors = self.get_possible_closed_doors(obs)
+            for d in doors:
+                all_actions += ["open {}".format(d)]
 
         cookwares = ["stove", "oven", "bbq"]
         knife_usage = ["dice", "slice", "chop"]
