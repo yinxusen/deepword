@@ -1090,6 +1090,12 @@ class BaseAgent(Logging):
         doors = re.findall(r'a closed ([a-z \-]+ door)', obs)
         return doors
 
+    def retrieve_item_from_inventory(self, inventory, item):
+        for i in inventory:
+            if item in i:
+                return i
+        return None
+
     def get_admissible_actions(self, obs, inventory, theme_words):
         all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
         inventory_sent = " ".join(inventory)
@@ -1114,15 +1120,20 @@ class BaseAgent(Logging):
             if c in obs:
                 for t in theme_words:
                     if t in inventory_sent:
-                        all_actions += ["cook {} with {}".format(t, c)]
+                        t_with_status = self.retrieve_item_from_inventory(inventory, t)
+                        if t_with_status is None:
+                            t_with_status = t
+                        all_actions += ["cook {} with {}".format(t_with_status, c)]
         if "knife" in inventory_sent:
             for t in theme_words:
                 if t in inventory_sent:
+                    t_with_status = self.retrieve_item_from_inventory(
+                        inventory, t)
+                    if t_with_status is None:
+                        t_with_status = t
                     all_actions += (
-                        ["{} {} with knife".format(k, t) for k in knife_usage])
-            all_actions += [
-                "{} {} with knife".format(k, f)
-                for k in knife_usage for f in theme_words]
+                        ["{} {} with knife".format(k, t_with_status)
+                         for k in knife_usage])
         if "knife" in obs:
             all_actions += ["take knife"]
         for t in theme_words:
