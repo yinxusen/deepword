@@ -1038,15 +1038,12 @@ class BaseAgent(Logging):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        if self.is_training:
-            self.debug("use admissible actions")
-            actions = [a.lower() for a in infos["admissible_commands"][0]]
-        else:
-            self.debug("generate admissible actions")
-            obs = self.__obs
-            inventory = self._inventory
-            theme_words = self._theme_words if self._theme_words is not None else []
-            actions = self.get_admissible_actions(obs, inventory, theme_words)
+        self.debug("generate admissible actions")
+        obs = self.__obs
+        inventory = self._inventory
+        theme_words = self._theme_words if self._theme_words is not None else []
+        actions = self.get_admissible_actions(obs, inventory, theme_words)
+
         if self.hp.use_original_actions:
             pass
         else:
