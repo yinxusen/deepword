@@ -674,7 +674,8 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         # don't drop useful ingredients if not in kitchen
-        if (curr_place != "kitchen") or (not self.hp.drop_w_theme_words):
+        # while other items can be dropped anywhere
+        if curr_place != "kitchen":
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
@@ -1141,13 +1142,22 @@ class BaseAgent(Logging):
                          for k in knife_usage])
         if "knife" in obs:
             all_actions += ["take knife"]
+
         for t in theme_words:
             if t in obs and t not in inventory:
                 all_actions += ["take {}".format(t)]
 
         # active drop actions only after we know the theme words
+        drop_actions = []
         if len(theme_words) != 0:
-            all_actions += ["drop {}".format(i) for i in inventory]
+            for i in inventory:
+                if all(map(lambda tw: tw not in i, theme_words)):
+                    drop_actions += ["drop {}".format(i)]
+            # drop useless items first
+            # if there is no useless items, drop useful ingredients
+            if len(drop_actions) == 0:
+                drop_actions += ["drop {}".format(i) for i in inventory]
+            all_actions += drop_actions
 
         if "meal" in inventory_sent:
             all_actions += [ACT_EAT_MEAL]

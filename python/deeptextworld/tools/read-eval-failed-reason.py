@@ -6,23 +6,23 @@ def parse_one_game(g_name, j_game):
     run1 = j_game["runs"][0]
     run2 = j_game["runs"][1]
     run_last = j_game["runs"][-1]
-    g_type = g_name.split("-")[2]
+    g_type = g_name.split(".")[0]
     # if run1["has_won"] or run2["has_won"]:
     if run_last["has_won"]:
-        return ("{:>40}".format(g_type),
-                "{:6}".format(""),
-                "{:30}".format(""),
+        return ("{:6}".format(""),
+                "{:40}".format(""),
                 "{:3}".format(""),
                 "{:6}".format(""),
-                "{:30}".format(""),
-                "{:3}".format(""))
-    return ("{:>40}".format(g_type),
+                "{:40}".format(""),
+                "{:3}".format(""),
+                "{}".format(g_type))
+    return ("{:6}".format("true" if run1["has_won"] else "false"),
+            "{:40}".format(run1["commands"][-1][:40]),
+            "{:3d}".format(run1["steps"]),
             "{:6}".format("true" if run_last["has_won"] else "false"),
-            "{:30}".format(run_last["commands"][-1][:30]),
+            "{:40}".format(run_last["commands"][-1][:40]),
             "{:3d}".format(run_last["steps"]),
-            "{:6}".format("true" if run2["has_won"] else "false"),
-            "{:30}".format(run2["commands"][-1][:30]),
-            "{:3d}".format(run2["steps"]))
+            "{}".format(g_type))
 
 
 def count_failed_twice(g_name, j_game):
