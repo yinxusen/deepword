@@ -731,7 +731,11 @@ class BaseAgent(Logging):
         if ((not self.is_training) and
                 (self.__winning_recorder[self.game_id] is not None) and
                 self.__winning_recorder[self.game_id]):
-            action = self.__action_recorder[self.game_id][self.in_game_t]
+            try:
+                action = self.__action_recorder[self.game_id][self.in_game_t]
+            except IndexError as _:
+                self.debug("same game ID for different games error")
+                action = None
         elif "meal" in self._inventory:
             action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
