@@ -166,6 +166,7 @@ class BaseAgent(Logging):
         self.__obs = None
         self.__see_cookbook = False
         self._cnt_action = None
+        self.__has_drop_useless_items = False
 
         self.__action_recorder = None
         self.__winning_recorder = None
@@ -469,6 +470,7 @@ class BaseAgent(Logging):
             self.__actions_to_remove[self.game_id] = set()
         self.__per_game_recorder = []
         self.__see_cookbook = False
+        self.__has_drop_useless_items = False
         self._theme_words = None
         self._inventory = []
         self.__obs = None
@@ -1153,9 +1155,10 @@ class BaseAgent(Logging):
             for i in inventory:
                 if all(map(lambda tw: tw not in i, theme_words)):
                     drop_actions += ["drop {}".format(i)]
+                    self.__has_drop_useless_items = True
             # drop useless items first
             # if there is no useless items, drop useful ingredients
-            if len(drop_actions) == 0:
+            if (not self.__has_drop_useless_items) and (len(drop_actions) == 0):
                 drop_actions += ["drop {}".format(i) for i in inventory]
             all_actions += drop_actions
 
