@@ -1000,7 +1000,6 @@ class BaseAgent(Logging):
             raise ValueError("unknown action verb: {}".format(action))
 
     def get_connections(self, raw_recipe, theme_words):
-        print(raw_recipe)
         connections = {}
         lines = list(map(lambda l: l.strip(), raw_recipe.split("\n")))
         lines = list(filter(lambda l: l != "", lines))
