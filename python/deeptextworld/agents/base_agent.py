@@ -1007,6 +1007,7 @@ class BaseAgent(Logging):
             if self._last_action_desc.action.startswith("drop"):
                 if not self.is_negative(cleaned_obs):
                     self.update_inventory(self._last_action_desc.action)
+                    self.__require_drop_actions = False
         if self._last_action_desc is not None:
             if self._last_action_desc.action.startswith("take"):
                 if (not self.is_negative(cleaned_obs)) and ("too many things" not in cleaned_obs):
