@@ -441,6 +441,8 @@ class BaseAgent(Logging):
         self.__action_recorder = {}
         self.__actions_to_remove = {}
         self.__winning_recorder = {}
+        self._theme_words = {}
+        self.__connections = {}
         self._initialized = True
 
     def _start_episode(
