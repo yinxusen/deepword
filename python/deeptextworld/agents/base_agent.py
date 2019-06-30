@@ -745,6 +745,10 @@ class BaseAgent(Logging):
               self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action.startswith("take") and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
         else:
             action = None
 
