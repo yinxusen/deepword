@@ -166,7 +166,7 @@ class BaseAgent(Logging):
         self.__obs = None
         self.__see_cookbook = False
         self._cnt_action = None
-        self.__has_drop_useless_items = False
+        self.__require_drop_actions = False
 
         self.__action_recorder = None
         self.__winning_recorder = None
@@ -470,7 +470,7 @@ class BaseAgent(Logging):
             self.__actions_to_remove[self.game_id] = set()
         self.__per_game_recorder = []
         self.__see_cookbook = False
-        self.__has_drop_useless_items = False
+        self.__require_drop_actions = False
         self._theme_words = None
         self._inventory = []
         self.__obs = None
@@ -1011,6 +1011,9 @@ class BaseAgent(Logging):
             if self._last_action_desc.action.startswith("take"):
                 if (not self.is_negative(cleaned_obs)) and ("too many things" not in cleaned_obs):
                     self.update_inventory(self._last_action_desc.action)
+                    self.__require_drop_actions = False
+                if "too many things" in cleaned_obs:
+                    self.__require_drop_actions = True
         if self._last_action_desc is not None:
             if self._last_action_desc.action.startswith("open"):
                 if not self.is_negative(cleaned_obs) and "already open" not in cleaned_obs:
@@ -1159,10 +1162,9 @@ class BaseAgent(Logging):
             for i in inventory:
                 if all(map(lambda tw: tw not in i, theme_words)):
                     drop_actions += ["drop {}".format(i)]
-                    self.__has_drop_useless_items = True
             # drop useless items first
             # if there is no useless items, drop useful ingredients
-            if (not self.__has_drop_useless_items) and (len(drop_actions) == 0):
+            if self.__require_drop_actions and (len(drop_actions) == 0):
                 drop_actions += ["drop {}".format(i) for i in inventory]
             all_actions += drop_actions
 
