@@ -670,6 +670,25 @@ class BaseAgent(Logging):
         """if there is room name then it's an observation other a dialogue"""
         return self.get_room_name(master) is not None
 
+    def filter_contradicted_actions(self, actions):
+        contradicted = [False] * len(actions)
+        for i in range(len(actions)):
+            tokens = actions[i].split()
+            if "dice" in tokens and "diced" in tokens:
+                contradicted[i] = True
+            if "chop" in tokens and "chopped" in tokens:
+                contradicted[i] = True
+            if "slice" in tokens and "sliced" in tokens:
+                contradicted[i] = True
+            if "bbq" in tokens and "grilled" in tokens:
+                contradicted[i] = True
+            if "stove" in tokens and "fried" in tokens:
+                contradicted[i] = True
+            if "oven" in tokens and "roasted" in tokens:
+                contradicted[i] = True
+        valid_actions = filter(lambda a_c: not a_c[1], zip(actions, contradicted))
+        return list(map(lambda a_c: a_c[0], valid_actions))
+
     def filter_admissible_actions(self, admissible_actions, curr_place=None):
         """
         Filter unnecessary actions.
@@ -711,6 +730,7 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
+        actions = self.filter_contradicted_actions(actions)
         if not self.is_training:
             if ((self.__winning_recorder[self.game_id] is not None) and
                     (not self.__winning_recorder[self.game_id])):
