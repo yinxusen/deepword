@@ -1000,6 +1000,7 @@ class BaseAgent(Logging):
             raise ValueError("unknown action verb: {}".format(action))
 
     def get_connections(self, raw_recipe, theme_words):
+        print(raw_recipe)
         connections = {}
         lines = list(map(lambda l: l.strip(), raw_recipe.split("\n")))
         lines = list(filter(lambda l: l != "", lines))
@@ -1016,10 +1017,13 @@ class BaseAgent(Logging):
         for l in lines:
             for t in theme_words:
                 if t in l:
-                    connections[t] = l.split()[0]
+                    if t not in connections:
+                        connections[t] = set()
+                    connections[t].add(l.split()[0])
                 else:
                     pass
         self.__connections[self.game_id] = connections
+        self.debug("connections: {}".format(self.__connections[self.game_id]))
 
     def collect_new_sample(
             self, obs: List[str], scores: List[int], dones: List[bool],
@@ -1098,7 +1102,7 @@ class BaseAgent(Logging):
         obs = self.__obs
         inventory = self._inventory
         theme_words = self._theme_words[self.game_id] if self._theme_words[self.game_id] is not None else []
-        connections = self.__connections[self.game_id] if self.__connections[self.game_id] is not None else []
+        connections = self.__connections[self.game_id] if self.__connections[self.game_id] is not None else {}
         actions = self.get_admissible_actions(obs, inventory, theme_words, connections)
 
         if self.hp.use_original_actions:
@@ -1177,7 +1181,7 @@ class BaseAgent(Logging):
             if c in obs:
                 for t in theme_words:
                     if t in inventory_sent:
-                        if (t in connections) and ((connections[t] == v) or (connections[t] not in all_possible_verbs)):
+                        if (t in connections) and ((v in connections[t]) or all(map(lambda x: x not in all_possible_verbs, connections[t]))):
                             t_with_status = self.retrieve_item_from_inventory(inventory, t)
                             if t_with_status is None:
                                 t_with_status = t
@@ -1192,7 +1196,7 @@ class BaseAgent(Logging):
                     if t_with_status is None:
                         t_with_status = t
                     for k, v in zip(knife_usage, knife_verbs):
-                        if (t in connections) and ((connections[t] == v) or (connections[t] not in all_possible_verbs)):
+                        if (t in connections) and ((v in connections[t]) or all(map(lambda x: x not in all_possible_verbs, connections[t]))):
                             all_actions += ["{} {} with knife".format(k, t_with_status)]
                         else:
                             pass
