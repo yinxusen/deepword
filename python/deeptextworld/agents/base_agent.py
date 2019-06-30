@@ -165,6 +165,7 @@ class BaseAgent(Logging):
         self._inventory = None
         self.__obs = None
         self.__see_cookbook = False
+        self.__see_inventory = False
         self._cnt_action = None
         self.__require_drop_actions = False
 
@@ -172,6 +173,7 @@ class BaseAgent(Logging):
         self.__winning_recorder = None
         self.__per_game_recorder = None
         self.__actions_to_remove = None
+        self.__connections = None
 
     def init_tokens(self, hp):
         """
@@ -468,10 +470,12 @@ class BaseAgent(Logging):
             self.__action_recorder[self.game_id] = None
             self.__winning_recorder[self.game_id] = None
             self.__actions_to_remove[self.game_id] = set()
+            self._theme_words[self.game_id] = None
+            self.__connections[self.game_id] = None
         self.__per_game_recorder = []
         self.__see_cookbook = False
+        self.__see_inventory = False
         self.__require_drop_actions = False
-        self._theme_words = None
         self._inventory = []
         self.__obs = None
         # self.get_theme_words(recipe[0])
@@ -482,10 +486,11 @@ class BaseAgent(Logging):
             theme_regex, recipe.replace("\n", "<|>"))
         if theme_words_search:
             theme_words = theme_words_search.group(1)
-            self._theme_words = list(
+            self._theme_words[self.game_id] = list(
                 filter(lambda w: w != "",
                        map(lambda w: w.strip(), theme_words.split("<|>"))))
-            self.debug("theme words: {}".format(", ".join(self._theme_words)))
+            self.debug("theme words: {}".format(
+                ", ".join(self._theme_words[self.game_id])))
         else:
             self.debug("no recipe found")
 
@@ -630,13 +635,13 @@ class BaseAgent(Logging):
         return any(map(lambda w: w in sentence, words))
 
     def contain_theme_words(self, actions):
-        if self._theme_words is None:
+        if self._theme_words[self.game_id] is None:
             self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
         others = []
         for a in actions:
-            if self.contain_words(a, self._theme_words):
+            if self.contain_words(a, self._theme_words[self.game_id]):
                 contained.append(a)
             else:
                 others.append(a)
@@ -689,7 +694,7 @@ class BaseAgent(Logging):
             lambda a: a.startswith("go"), admissible_actions))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self._theme_words))),
+                       all(map(lambda t: t not in a, self._theme_words[self.game_id]))),
             others))
         # meal should never be dropped
         try:
@@ -736,6 +741,9 @@ class BaseAgent(Logging):
             except IndexError as _:
                 self.debug("same game ID for different games error")
                 action = None
+        elif ACT_INVENTORY in actions and not self.__see_inventory:
+            action = ACT_INVENTORY
+            self.__see_inventory = True
         elif "meal" in self._inventory:
             action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
@@ -989,6 +997,28 @@ class BaseAgent(Logging):
         else:
             raise ValueError("unknown action verb: {}".format(action))
 
+    def get_connections(self, raw_recipe, theme_words):
+        connections = {}
+        lines = list(map(lambda l: l.strip(), raw_recipe.split("\n")))
+        lines = list(filter(lambda l: l != "", lines))
+        start_line = 0
+        directions_regex = "^\sDirections"
+        for i, l in enumerate(lines):
+            d_search = re.search(directions_regex, l)
+            if d_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        lines = lines[start_line:]
+        for l in lines:
+            for t in theme_words:
+                if t in l:
+                    connections[t] = l.split()[0]
+                else:
+                    pass
+        self.__connections[self.game_id] = connections
+
     def collect_new_sample(
             self, obs: List[str], scores: List[int], dones: List[bool],
             infos: Dict[str, List[Any]]):
@@ -1004,6 +1034,7 @@ class BaseAgent(Logging):
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
                 self.get_theme_words(master)
+                self.get_connections(master, self._theme_words[self.game_id])
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_INVENTORY:
                 self.get_inventory(master)
@@ -1027,7 +1058,7 @@ class BaseAgent(Logging):
             if self._last_action_desc.action == ACT_LOOK:
                 self.__obs = cleaned_obs
 
-        self.debug("theme words: {}".format(self._theme_words))
+        self.debug("theme words: {}".format(self._theme_words[self.game_id]))
         self.debug("inventory: {}".format(self._inventory))
 
         # use see cookbook again if gain one reward
@@ -1064,8 +1095,9 @@ class BaseAgent(Logging):
         self.debug("generate admissible actions")
         obs = self.__obs
         inventory = self._inventory
-        theme_words = self._theme_words if self._theme_words is not None else []
-        actions = self.get_admissible_actions(obs, inventory, theme_words)
+        theme_words = self._theme_words[self.game_id] if self._theme_words[self.game_id] is not None else []
+        connections = self.__connections[self.game_id] if self.__connections[self.game_id] is not None else []
+        actions = self.get_admissible_actions(obs, inventory, theme_words, connections)
 
         if self.hp.use_original_actions:
             pass
@@ -1116,7 +1148,7 @@ class BaseAgent(Logging):
                 return i
         return None
 
-    def get_admissible_actions(self, obs, inventory, theme_words):
+    def get_admissible_actions(self, obs, inventory, theme_words, connections):
         all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
         inventory_sent = " ".join(inventory)
 
@@ -1135,15 +1167,21 @@ class BaseAgent(Logging):
                 all_actions += ["open {}".format(d)]
 
         cookwares = ["stove", "oven", "bbq"]
+        cook_verbs = ["fry", "roast", "grill"]
         knife_usage = ["dice", "slice", "chop"]
-        for c in cookwares:
+        knife_verbs = ["dice", "slice", "chop"]
+        all_possible_verbs = cook_verbs + knife_verbs
+        for c, v in zip(cookwares, cook_verbs):
             if c in obs:
                 for t in theme_words:
                     if t in inventory_sent:
-                        t_with_status = self.retrieve_item_from_inventory(inventory, t)
-                        if t_with_status is None:
-                            t_with_status = t
-                        all_actions += ["cook {} with {}".format(t_with_status, c)]
+                        if (t in connections) and ((connections[t] == v) or (connections[t] not in all_possible_verbs)):
+                            t_with_status = self.retrieve_item_from_inventory(inventory, t)
+                            if t_with_status is None:
+                                t_with_status = t
+                            all_actions += ["cook {} with {}".format(t_with_status, c)]
+                        else:
+                            pass
         if "knife" in inventory_sent:
             for t in theme_words:
                 if t in inventory_sent:
@@ -1151,9 +1189,11 @@ class BaseAgent(Logging):
                         inventory, t)
                     if t_with_status is None:
                         t_with_status = t
-                    all_actions += (
-                        ["{} {} with knife".format(k, t_with_status)
-                         for k in knife_usage])
+                    for k, v in zip(knife_usage, knife_verbs):
+                        if (t in connections) and ((connections[t] == v) or (connections[t] not in all_possible_verbs)):
+                            all_actions += ["{} {} with knife".format(k, t_with_status)]
+                        else:
+                            pass
         if "knife" in obs:
             all_actions += ["take knife"]
 
