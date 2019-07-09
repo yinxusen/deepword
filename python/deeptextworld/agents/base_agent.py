@@ -1,3 +1,4 @@
+import collections
 import glob
 import hashlib
 import os
@@ -5,15 +6,14 @@ import random
 import re
 from typing import List, Dict, Any, Optional
 
-import collections
 import numpy as np
 import tensorflow as tf
 from bitarray import bitarray
 from nltk import word_tokenize, sent_tokenize
-from nltk.parse.corenlp import CoreNLPDependencyParser
 
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
@@ -38,54 +38,6 @@ class ActionDesc(collections.namedtuple(
             self.action_type, self.action_idx, self.action)
 
 
-class DependencyParserReorder(Logging):
-    """
-    Use dependency parser to reorder master sentences.
-    Make sure to open Stanford CoreNLP server first.
-    """
-    def __init__(self, padding_val, stride_len):
-        super(DependencyParserReorder, self).__init__()
-        # be sure of starting CoreNLP server first
-        self.parser = CoreNLPDependencyParser()
-        # use dict to avoid parse the same sentences.
-        self.parsed_sentences = dict()
-        self.sep_sent = (" " + " ".join([padding_val] * stride_len)
-                         + " ")
-
-    def reorder_sent(self, sent):
-        tree = next(self.parser.raw_parse(sent)).tree()
-        t_labels = ([
-            [head.label()] +
-            [child if type(child) is str else child.label() for child in head]
-            for head in tree.subtrees()])
-        t_str = [" ".join(labels) for labels in t_labels]
-        return self.sep_sent.join(t_str)
-
-    def reorder_block(self, master):
-        """
-        Notice that four padding letters " O O O O " can only work up to 5-gram
-        :param master:
-        :return:
-        """
-        sent_list = list(filter(lambda sent: sent != "", sent_tokenize(master)))
-        tree_strs = []
-        for s in sent_list:
-            if not s in self.parsed_sentences:
-                t_str = self.reorder_sent(s)
-                self.parsed_sentences[s] = t_str
-                self.info("parse {} into {}".format(s, t_str))
-            else:
-                self.info("found parsed {}".format(s))
-            tree_strs.append(self.parsed_sentences[s])
-        return self.sep_sent.join(tree_strs)
-
-    def reorder(self, master):
-        if master == "":
-            return master
-        lines = map(lambda l: l.lower(),
-                    filter(lambda l: l.strip() != "", master.split("\n")))
-        reordered_lines = map(lambda l: self.reorder_block(l), lines)
-        return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
 
 
 ACT_EXAMINE_COOKBOOK = "examine cookbook"
@@ -165,12 +117,110 @@ class BaseAgent(Logging):
 
         self._see_cookbook = False
         self._cnt_action = None
-        self._see_inventory = False
 
         self._action_recorder = {}
         self._winning_recorder = {}
         self._per_game_recorder = None
         self._actions_to_remove = {}
+
+    @classmethod
+    def report_status(cls, lst_of_status):
+        return ', '.join(
+            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
+
+    @classmethod
+    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
+        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
+        return min(gamma_t, final_gamma)
+
+    @classmethod
+    def annealing_eps(cls, init_eps, final_eps, t, total_t):
+        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
+        return max(eps_t, final_eps)
+
+    @classmethod
+    def fromBytes(cls, action_mask):
+        retval = []
+        for mask in action_mask:
+           bit_mask = bitarray(endian='little')
+           bit_mask.frombytes(mask)
+           bit_mask[-1] = False
+           retval.append(bit_mask.tolist())
+        return np.asarray(retval, dtype=np.int32)
+
+    @classmethod
+    def count_trainable(cls, trainable_vars, mask=None):
+        total_parameters = 0
+        if mask is not None:
+            if type(mask) is list:
+                trainable_vars = filter(lambda v: v.op.name not in mask,
+                                        trainable_vars)
+            elif type(mask) is str:
+                trainable_vars = filter(lambda v: v.op.name != mask,
+                                        trainable_vars)
+            else:
+                pass
+        else:
+            pass
+        for variable in trainable_vars:
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim.value
+            total_parameters += variable_parameters
+        return total_parameters
+
+    @classmethod
+    def get_theme_words(cls, recipe):
+        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+        theme_words_search = re.search(
+            theme_regex, recipe.replace("\n", "<|>"))
+        if theme_words_search:
+            theme_words = theme_words_search.group(1)
+            theme_words = list(
+                filter(lambda w: w != "",
+                       map(lambda w: w.strip(), theme_words.split("<|>"))))
+        else:
+            theme_words = None
+        return theme_words
+
+    @classmethod
+    def get_path_tags(cls, path, prefix):
+        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
+                              recursive=False)
+        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
+                   map(lambda p: os.path.basename(p), all_paths))
+        return tags
+
+    @classmethod
+    def clip_reward(cls, reward):
+        """clip reward into [-1, 1]"""
+        return max(min(reward, 1), -1)
+
+    @classmethod
+    def contain_words(cls, sentence, words):
+        return any(map(lambda w: w in sentence, words))
+
+    @classmethod
+    def get_room_name(cls, master):
+        """
+        Extract and lower room name.
+        Return None if not exist.
+        :param master:
+        :return:
+        """
+        room_regex = "^\s*-= (.*) =-.*"
+        room_search = re.search(room_regex, master)
+        if room_search is not None:
+            room_name = room_search.group(1).lower()
+        else:
+            room_name = None
+        return room_name
+
+    @classmethod
+    def negative_response_reward(cls, master):
+        return 0
 
     def init_tokens(self, hp):
         """
@@ -251,34 +301,9 @@ class BaseAgent(Logging):
         else:
             return " ".join(tokenized)
 
-    @classmethod
-    def report_status(cls, lst_of_status):
-        return ', '.join(
-            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
-
-    @classmethod
-    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
-        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
-        return min(gamma_t, final_gamma)
-
-    @classmethod
-    def annealing_eps(cls, init_eps, final_eps, t, total_t):
-        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
-        return max(eps_t, final_eps)
-
     def index_string(self, sentence):
         indexed = [self.token2idx.get(t, self.hp.unk_val_id) for t in sentence]
         return indexed
-
-    @classmethod
-    def fromBytes(cls, action_mask):
-        retval = []
-        for mask in action_mask:
-           bit_mask = bitarray(endian='little')
-           bit_mask.frombytes(mask)
-           bit_mask[-1] = False
-           retval.append(bit_mask.tolist())
-        return np.asarray(retval, dtype=np.int32)
 
     def zero_mask_bytes(self):
         """
@@ -309,29 +334,6 @@ class BaseAgent(Logging):
     def reset(self):
         self._initialized = False
         self._init()
-
-    @classmethod
-    def count_trainable(cls, trainable_vars, mask=None):
-        total_parameters = 0
-        if mask is not None:
-            if type(mask) is list:
-                trainable_vars = filter(lambda v: v.op.name not in mask,
-                                        trainable_vars)
-            elif type(mask) is str:
-                trainable_vars = filter(lambda v: v.op.name != mask,
-                                        trainable_vars)
-            else:
-                pass
-        else:
-            pass
-        for variable in trainable_vars:
-            # shape is an array of tf.Dimension
-            shape = variable.get_shape()
-            variable_parameters = 1
-            for dim in shape:
-                variable_parameters *= dim.value
-            total_parameters += variable_parameters
-        return total_parameters
 
     def create_n_load_model(
             self, placement="/device:GPU:0",
@@ -470,24 +472,9 @@ class BaseAgent(Logging):
             self._theme_words[self.game_id] = None
         self._per_game_recorder = []
         self._see_cookbook = False
-        self._see_inventory = False
         if "recipe" in infos:
             self._theme_words[self.game_id] = self.get_theme_words(
                 infos["recipe"][0])
-
-    @classmethod
-    def get_theme_words(cls, recipe):
-        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
-        theme_words_search = re.search(
-            theme_regex, recipe.replace("\n", "<|>"))
-        if theme_words_search:
-            theme_words = theme_words_search.group(1)
-            theme_words = list(
-                filter(lambda w: w != "",
-                       map(lambda w: w.strip(), theme_words.split("<|>"))))
-        else:
-            theme_words = None
-        return theme_words
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -586,19 +573,6 @@ class BaseAgent(Logging):
                      os.path.join(self.model_dir, 'hparams.json'),
                      use_relative_path=True)
 
-    @classmethod
-    def get_path_tags(cls, path, prefix):
-        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
-                              recursive=False)
-        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
-                   map(lambda p: os.path.basename(p), all_paths))
-        return tags
-
-    @classmethod
-    def clip_reward(cls, reward):
-        """clip reward into [-1, 1]"""
-        return max(min(reward, 1), -1)
-
     def get_compatible_snapshot_tag(self):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
@@ -614,10 +588,6 @@ class BaseAgent(Logging):
         trained_steps = self.total_t - self.hp.observation_t + 1
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
-    @classmethod
-    def contain_words(cls, sentence, words):
-        return any(map(lambda w: w in sentence, words))
-
     def contain_theme_words(self, actions):
         if self._theme_words[self.game_id] is None:
             self.debug("no theme word found, use all actions")
@@ -631,22 +601,6 @@ class BaseAgent(Logging):
                 others.append(a)
 
         return contained, others
-
-    @classmethod
-    def get_room_name(cls, master):
-        """
-        Extract and lower room name.
-        Return None if not exist.
-        :param master:
-        :return:
-        """
-        room_regex = "^\s*-= (.*) =-.*"
-        room_search = re.search(room_regex, master)
-        if room_search is not None:
-            room_name = room_search.group(1).lower()
-        else:
-            room_name = None
-        return room_name
 
     def filter_admissible_actions(self, admissible_actions):
         """
@@ -674,7 +628,8 @@ class BaseAgent(Logging):
             lambda a: a.startswith("go"), admissible_actions))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self._theme_words[self.game_id]))),
+                       all(map(lambda t: t not in a,
+                               self._theme_words[self.game_id]))),
             others))
         # meal should never be dropped
         try:
@@ -721,11 +676,6 @@ class BaseAgent(Logging):
             except IndexError as _:
                 self.debug("same game ID for different games error")
                 action = None
-        elif ACT_INVENTORY in actions and not self._see_inventory:
-            action = ACT_INVENTORY
-            self._see_inventory = True
-        elif "meal" in self._inventory:
-            action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self._see_cookbook = True
@@ -824,10 +774,6 @@ class BaseAgent(Logging):
                 action_desc = self.jitter_go_action(
                     action_desc, actions, all_actions)
         return action_desc
-
-    @classmethod
-    def negative_response_reward(cls, master):
-        return 0
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
         instant_reward = self.clip_reward(
@@ -1073,16 +1019,9 @@ class GenBaseAgent(BaseAgent):
         super(GenBaseAgent, self).__init__(hp, model_dir)
         self._require_drop_actions = False
         self._inventory = None
+        self._see_inventory = False
         self._obs = None
         self._connections = {}
-
-    def _start_episode_impl(self, obs, infos):
-        super(GenBaseAgent, self)._start_episode_impl(obs, infos)
-        if self.game_id not in self._action_recorder:
-            self._connections[self.game_id] = None
-        self._require_drop_actions = False
-        self._inventory = []
-        self._obs = None
 
     @classmethod
     def filter_contradicted_actions(cls, actions):
@@ -1116,6 +1055,102 @@ class GenBaseAgent(BaseAgent):
             if item in i:
                 return i
         return None
+
+    @classmethod
+    def update_inventory(cls, action, inventory_list):
+        action_obj = " ".join(action.split()[1:])
+        if action.startswith("drop"):
+            try:
+                inventory_list.remove(action_obj)
+            except ValueError as _:
+                pass
+        elif action.startswith("take"):
+            try:
+                if action_obj not in inventory_list:
+                    inventory_list.append(action_obj)
+            except ValueError as _:
+                pass
+        else:
+            raise ValueError("unknown action verb: {}".format(action))
+
+    @classmethod
+    def remove_logo(cls, first_master):
+        lines = first_master.split("\n")
+        start_line = 0
+        room_regex = "^\s*-= (.*) =-.*"
+        for i, l in enumerate(lines):
+            room_search = re.search(room_regex, l)
+            if room_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        modified_master = "\n".join(lines[start_line:])
+        return modified_master
+
+    @classmethod
+    def is_negative(cls, cleaned_obj):
+        negative_stems = ["n't", "not"]
+        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
+
+    @classmethod
+    def is_observation(cls, master):
+        """if there is room name then it's an observation other a dialogue"""
+        return cls.get_room_name(master) is not None
+
+    @classmethod
+    def get_connections(cls, raw_recipe, theme_words):
+        connections = {}
+        lines = list(filter(
+            lambda line: line != "",
+            map(lambda line: line.strip(), raw_recipe.split("\n"))))
+        start_line = 0
+        directions_regex = "^\sDirections"
+        for i, l in enumerate(lines):
+            d_search = re.search(directions_regex, l)
+            if d_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        lines = lines[start_line:]
+        for l in lines:
+            for t in theme_words:
+                if t in l:
+                    if t not in connections:
+                        connections[t] = set()
+                    connections[t].add(l.split()[0])
+                else:
+                    pass
+        return connections
+
+    @classmethod
+    def get_inventory(cls, inventory_list):
+        items = list(filter(
+            lambda s: len(s) != 0,
+            map(lambda s: s.strip(), inventory_list.split("\n"))))
+        if len(items) > 1:
+            # remove the first a/an/the/some ...
+            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
+        else:
+            items = []
+        return items
+
+    @classmethod
+    def negative_response_reward(cls, master):
+        negative_response_penalty = 0
+        if (not cls.is_observation(master)) and cls.is_negative(master):
+            negative_response_penalty = 0.5
+        return negative_response_penalty
+
+    def _start_episode_impl(self, obs, infos):
+        super(GenBaseAgent, self)._start_episode_impl(obs, infos)
+        if self.game_id not in self._action_recorder:
+            self._connections[self.game_id] = None
+        self._require_drop_actions = False
+        self._inventory = []
+        self._obs = None
+        self._see_inventory = False
 
     def get_admissible_actions(self, infos=None):
         obs = self._obs
@@ -1192,88 +1227,8 @@ class GenBaseAgent(BaseAgent):
 
         return all_actions
 
-    @classmethod
-    def update_inventory(cls, action, inventory_list):
-        action_obj = " ".join(action.split()[1:])
-        if action.startswith("drop"):
-            try:
-                inventory_list.remove(action_obj)
-            except ValueError as _:
-                pass
-        elif action.startswith("take"):
-            try:
-                if action_obj not in inventory_list:
-                    inventory_list.append(action_obj)
-            except ValueError as _:
-                pass
-        else:
-            raise ValueError("unknown action verb: {}".format(action))
-
-    @classmethod
-    def remove_logo(cls, first_master):
-        lines = first_master.split("\n")
-        start_line = 0
-        room_regex = "^\s*-= (.*) =-.*"
-        for i, l in enumerate(lines):
-            room_search = re.search(room_regex, l)
-            if room_search is not None:
-                start_line = i
-                break
-            else:
-                pass
-        modified_master = "\n".join(lines[start_line:])
-        return modified_master
-
     def _get_master_starter(self, obs, infos):
         return self.remove_logo(obs[0])
-
-    @classmethod
-    def is_negative(cls, cleaned_obj):
-        negative_stems = ["n't", "not"]
-        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
-
-    @classmethod
-    def is_observation(self, master):
-        """if there is room name then it's an observation other a dialogue"""
-        return self.get_room_name(master) is not None
-
-    @classmethod
-    def get_connections(cls, raw_recipe, theme_words):
-        connections = {}
-        lines = list(filter(
-            lambda line: line != "",
-            map(lambda line: line.strip(), raw_recipe.split("\n"))))
-        start_line = 0
-        directions_regex = "^\sDirections"
-        for i, l in enumerate(lines):
-            d_search = re.search(directions_regex, l)
-            if d_search is not None:
-                start_line = i
-                break
-            else:
-                pass
-        lines = lines[start_line:]
-        for l in lines:
-            for t in theme_words:
-                if t in l:
-                    if t not in connections:
-                        connections[t] = set()
-                    connections[t].add(l.split()[0])
-                else:
-                    pass
-        return connections
-
-    @classmethod
-    def get_inventory(cls, inventory_list):
-        items = list(filter(
-            lambda s: len(s) != 0,
-            map(lambda s: s.strip(), inventory_list.split("\n"))))
-        if len(items) > 1:
-            # remove the first a/an/the/some ...
-            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
-        else:
-            items = []
-        return items
 
     def game_status_update(self, master, cleaned_obs, infos):
         """
@@ -1328,9 +1283,43 @@ class GenBaseAgent(BaseAgent):
         self.debug("inventory: {}".format(self._inventory))
         self.debug("obs: {}".format(self._obs))
 
-    @classmethod
-    def negative_response_reward(cls, master):
-        negative_response_penalty = 0
-        if (not cls.is_observation(master)) and cls.is_negative(master):
-            negative_response_penalty = 0.5
-        return negative_response_penalty
+    def rule_based_policy(self, actions, all_actions, instant_reward):
+        # use hard set actions in the beginning and the end of one episode
+        if ((not self.is_training) and
+                (self._winning_recorder[self.game_id] is not None) and
+                self._winning_recorder[self.game_id]):
+            try:
+                action = self._action_recorder[self.game_id][self.in_game_t]
+            except IndexError as _:
+                self.debug("same game ID for different games error")
+                action = None
+        elif ACT_INVENTORY in actions and not self._see_inventory:
+            action = ACT_INVENTORY
+            self._see_inventory = True
+        elif "meal" in self._inventory:
+            action = ACT_EAT_MEAL
+        elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
+            action = ACT_EXAMINE_COOKBOOK
+            self._see_cookbook = True
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action.startswith("take") and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
+        else:
+            action = None
+
+        if action is not None:
+            if action not in all_actions:
+                self.debug("eat meal not in action list, adding it in ...")
+                self.action_collector.extend([action])
+                all_actions = self.action_collector.get_actions()
+            action_idx = all_actions.index(action)
+        else:
+            action_idx = None
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
+        return action_desc
