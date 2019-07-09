@@ -158,20 +158,19 @@ class BaseAgent(Logging):
         self._prev_last_action = None
         self._prev_master = None
         self._prev_place = None
+        self._curr_place = None
 
         self.game_id = None
-        self._theme_words = None
-        self._inventory = None
-        self._obs = None
-        self._see_cookbook = False
-        self._see_inventory = False
-        self._cnt_action = None
+        self._theme_words = {}
 
-        self._action_recorder = None
-        self._winning_recorder = None
+        self._see_cookbook = False
+        self._cnt_action = None
+        self._see_inventory = False
+
+        self._action_recorder = {}
+        self._winning_recorder = {}
         self._per_game_recorder = None
-        self._actions_to_remove = None
-        self._connections = None
+        self._actions_to_remove = {}
 
     def init_tokens(self, hp):
         """
@@ -436,11 +435,6 @@ class BaseAgent(Logging):
                 is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
-        self._action_recorder = {}
-        self._actions_to_remove = {}
-        self._winning_recorder = {}
-        self._theme_words = {}
-        self._connections = {}
 
     def _get_master_starter(self, obs, infos):
         assert "description" in infos
@@ -467,19 +461,19 @@ class BaseAgent(Logging):
         self._cumulative_score = 0
         self._episode_has_started = True
         self._prev_place = None
+        self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
         if self.game_id not in self._action_recorder:
             self._action_recorder[self.game_id] = None
             self._winning_recorder[self.game_id] = None
             self._actions_to_remove[self.game_id] = set()
             self._theme_words[self.game_id] = None
-            self._connections[self.game_id] = None
         self._per_game_recorder = []
         self._see_cookbook = False
         self._see_inventory = False
-        self._require_drop_actions = False
-        self._inventory = []
-        self._obs = None
+        if "recipe" in infos:
+            self._theme_words[self.game_id] = self.get_theme_words(
+                infos["recipe"][0])
 
     @classmethod
     def get_theme_words(cls, recipe):
@@ -654,7 +648,7 @@ class BaseAgent(Logging):
             room_name = None
         return room_name
 
-    def filter_admissible_actions(self, admissible_actions, curr_place=None):
+    def filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
         :param admissible_actions:
@@ -668,7 +662,7 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         # don't drop useful ingredients if not in kitchen
         # while other items can be dropped anywhere
-        if curr_place != "kitchen":
+        if self._curr_place != "kitchen":
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
@@ -712,8 +706,8 @@ class BaseAgent(Logging):
                 pass
         return actions
 
-    def go_with_floor_plan(self, actions, room):
-        local_map = self.floor_plan.get_map(room)
+    def go_with_floor_plan(self, actions):
+        local_map = self.floor_plan.get_map(self._curr_place)
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
@@ -831,12 +825,14 @@ class BaseAgent(Logging):
                     action_desc, actions, all_actions)
         return action_desc
 
+    @classmethod
+    def negative_response_reward(cls, master):
+        return 0
+
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        negative_response_penalty = 0
-        if (not self.is_observation(master)) and self.is_negative(master):
-            negative_response_penalty = 0.5
         instant_reward = self.clip_reward(
-            score - self._cumulative_score - 0.1 - negative_response_penalty)
+            score - self._cumulative_score - 0.1 -
+            self.negative_response_reward(master))
         self._cumulative_score = score
         if (master == self._prev_master and
             self._last_action_desc is not None and
@@ -948,87 +944,15 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
-
-    @classmethod
-    def is_negative(cls, cleaned_obj):
-        negative_stems = ["n't", "not"]
-        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
-
-    def is_observation(self, master):
-        """if there is room name then it's an observation other a dialogue"""
-        return self.get_room_name(master) is not None
-
-    @classmethod
-    def get_connections(cls, raw_recipe, theme_words):
-        connections = {}
-        lines = list(filter(
-            lambda line: line != "",
-            map(lambda line: line.strip(), raw_recipe.split("\n"))))
-        start_line = 0
-        directions_regex = "^\sDirections"
-        for i, l in enumerate(lines):
-            d_search = re.search(directions_regex, l)
-            if d_search is not None:
-                start_line = i
-                break
-            else:
-                pass
-        lines = lines[start_line:]
-        for l in lines:
-            for t in theme_words:
-                if t in l:
-                    if t not in connections:
-                        connections[t] = set()
-                    connections[t].add(l.split()[0])
-                else:
-                    pass
-        return connections
-
-    @classmethod
-    def get_inventory(cls, inventory_list):
-        items = list(filter(
-            lambda s: len(s) != 0,
-            map(lambda s: s.strip(), inventory_list.split("\n"))))
-        if len(items) > 1:
-            # remove the first a/an/the/some ...
-            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
-        else:
-            items = []
-        return items
-
     def game_status_update(self, master, cleaned_obs, infos):
-        """
-        Update game status according to observations and instant rewards.
-        the following vars are updated:
-          1. theme words
-          2. connections
-          3. inventory
-          4. observation
-          5. whether requires drop actions or not
-
-        :param master:
-        :param cleaned_obs:
-        :param infos:
-        :return:
-        """
-        assert "admissible_actions" in infos
-        recipe = infos["recipe"][0]
-        inventory = infos["inventory"][0]
-        obs = infos["observation"][0]
-        if self.hp.apply_dependency_parser:
-            cleaned_obs = self.dp.reorder(obs)
+        if self.hp.collect_floor_plan:
+            self._curr_place = self.collect_floor_plan(master, self._prev_place)
         else:
-            cleaned_obs = self.tokenize(obs)
-        self._theme_words[self.game_id] = self.get_theme_words(recipe)
-        self._connections[self.game_id] = self.get_connections(
-            recipe, self._theme_words[self.game_id])
-        self._inventory = self.get_inventory(inventory)
-        self._obs = cleaned_obs
+            self._curr_place = None
 
-    def get_admissible_actions(
-            self, obs, inventory, theme_words, connections, infos):
-        assert "admissible_actions" in infos
-        return infos["admissible_actions"][0]
+    def get_admissible_actions(self, infos=None):
+        assert infos is not None and "admissible_actions" in infos
+        return [a.lower() for a in infos["admissible_commands"][0]]
 
     def collect_new_sample(self, obs, scores, dones, infos):
         master = (self._get_master_starter(obs, infos)
@@ -1042,55 +966,29 @@ class BaseAgent(Logging):
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
         self.game_status_update(master, cleaned_obs, infos)
-        self.debug("theme words: {}".format(self._theme_words[self.game_id]))
-        self.debug("inventory: {}".format(self._inventory))
-        self.debug("obs: {}".format(self._obs))
 
         # use see cookbook again if gain one reward
         if instant_reward > 0:
             self._see_cookbook = False
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
-                       " master: {}, reward: {}, is_terminal: {}".format(
-                "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self._last_action_desc,
-                cleaned_obs, instant_reward, dones[0]))
+            self.debug(
+                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+                " reward: {}, is_terminal: {}".format(
+                    self.mode(), self.total_t,
+                    self.in_game_t, self.eps, self._last_action_desc,
+                    cleaned_obs, instant_reward, dones[0]))
         else:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
-                    "train" if self.is_training else "eval", cleaned_obs,
-                    infos["max_score"]))
-
-        if self.hp.collect_floor_plan:
-            curr_place = self.collect_floor_plan(master, self._prev_place)
-            # if place changed, then master should be changed
-            if curr_place != self._prev_place:
-                self._obs = cleaned_obs
-            self._prev_place = curr_place
-        else:
-            curr_place = None
+                    self.mode(), cleaned_obs, infos["max_score"]))
 
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        self.debug("get admissible actions")
-        obs = self._obs
-        inventory = self._inventory
-        theme_words = (
-            self._theme_words[self.game_id]
-            if self._theme_words[self.game_id] is not None else [])
-        connections = (
-            self._connections[self.game_id]
-            if self._connections[self.game_id] is not None else {})
-        actions = self.get_admissible_actions(
-            obs, inventory, theme_words, connections, infos)
-
-        if self.hp.use_original_actions:
-            pass
-        else:
-            actions = self.filter_admissible_actions(actions, curr_place)
-        actions = self.go_with_floor_plan(actions, curr_place)
+        actions = self.get_admissible_actions(infos)
+        actions = self.filter_admissible_actions(actions)
+        actions = self.go_with_floor_plan(actions)
         self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
@@ -1163,6 +1061,7 @@ class BaseAgent(Logging):
 
         self.total_t += 1
         self.in_game_t += 1
+        self._prev_place = self._curr_place
         # revert back go actions for the game playing
         if player_t.startswith("go"):
             player_t = " ".join(player_t.split()[:2])
@@ -1173,12 +1072,17 @@ class GenBaseAgent(BaseAgent):
     def __init__(self, hp, model_dir):
         super(GenBaseAgent, self).__init__(hp, model_dir)
         self._require_drop_actions = False
-
-    def _init_impl(self, load_best=False):
-        super(GenBaseAgent, self)._init_impl(load_best)
+        self._inventory = None
+        self._obs = None
+        self._connections = {}
 
     def _start_episode_impl(self, obs, infos):
         super(GenBaseAgent, self)._start_episode_impl(obs, infos)
+        if self.game_id not in self._action_recorder:
+            self._connections[self.game_id] = None
+        self._require_drop_actions = False
+        self._inventory = []
+        self._obs = None
 
     @classmethod
     def filter_contradicted_actions(cls, actions):
@@ -1213,8 +1117,11 @@ class GenBaseAgent(BaseAgent):
                 return i
         return None
 
-    def get_admissible_actions(
-            self, obs, inventory, theme_words, connections, infos):
+    def get_admissible_actions(self, infos=None):
+        obs = self._obs
+        inventory = self._inventory
+        theme_words = self._theme_words[self.game_id]
+        connections = self._connections[self.game_id]
 
         all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
         inventory_sent = " ".join(inventory)
@@ -1320,6 +1227,54 @@ class GenBaseAgent(BaseAgent):
     def _get_master_starter(self, obs, infos):
         return self.remove_logo(obs[0])
 
+    @classmethod
+    def is_negative(cls, cleaned_obj):
+        negative_stems = ["n't", "not"]
+        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
+
+    @classmethod
+    def is_observation(self, master):
+        """if there is room name then it's an observation other a dialogue"""
+        return self.get_room_name(master) is not None
+
+    @classmethod
+    def get_connections(cls, raw_recipe, theme_words):
+        connections = {}
+        lines = list(filter(
+            lambda line: line != "",
+            map(lambda line: line.strip(), raw_recipe.split("\n"))))
+        start_line = 0
+        directions_regex = "^\sDirections"
+        for i, l in enumerate(lines):
+            d_search = re.search(directions_regex, l)
+            if d_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        lines = lines[start_line:]
+        for l in lines:
+            for t in theme_words:
+                if t in l:
+                    if t not in connections:
+                        connections[t] = set()
+                    connections[t].add(l.split()[0])
+                else:
+                    pass
+        return connections
+
+    @classmethod
+    def get_inventory(cls, inventory_list):
+        items = list(filter(
+            lambda s: len(s) != 0,
+            map(lambda s: s.strip(), inventory_list.split("\n"))))
+        if len(items) > 1:
+            # remove the first a/an/the/some ...
+            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
+        else:
+            items = []
+        return items
+
     def game_status_update(self, master, cleaned_obs, infos):
         """
         Update game status according to observations and instant rewards.
@@ -1335,7 +1290,7 @@ class GenBaseAgent(BaseAgent):
         :param infos:
         :return:
         """
-
+        super(GenBaseAgent, self).game_status_update(master, cleaned_obs, infos)
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
                 self._theme_words[self.game_id] = self.get_theme_words(
@@ -1361,10 +1316,21 @@ class GenBaseAgent(BaseAgent):
                 if ((not self.is_negative(cleaned_obs)) and
                         ("already open" not in cleaned_obs)):
                     self._obs += " " + cleaned_obs
-            elif self._last_action_desc.action == ACT_LOOK:
+            elif (self._last_action_desc.action == ACT_LOOK or
+                  self._prev_place != self._curr_place):
                 self._obs = cleaned_obs
             else:
                 pass
         else:
             self.warning(
                 "last action description is None, nothing to update")
+        self.debug("theme words: {}".format(self._theme_words[self.game_id]))
+        self.debug("inventory: {}".format(self._inventory))
+        self.debug("obs: {}".format(self._obs))
+
+    @classmethod
+    def negative_response_reward(cls, master):
+        negative_response_penalty = 0
+        if (not cls.is_observation(master)) and cls.is_negative(master):
+            negative_response_penalty = 0.5
+        return negative_response_penalty
