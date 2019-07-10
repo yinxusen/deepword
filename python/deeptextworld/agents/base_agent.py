@@ -916,7 +916,7 @@ class BaseAgent(Logging):
             self._see_cookbook = False
 
     def get_admissible_actions(self, infos=None):
-        assert infos is not None and "admissible_actions" in infos
+        assert infos is not None and "admissible_commands" in infos
         return [a.lower() for a in infos["admissible_commands"][0]]
 
     def update_status(self, obs, scores, dones, infos):
@@ -1043,6 +1043,11 @@ class GenBaseAgent(BaseAgent):
 
     @classmethod
     def filter_contradicted_actions(cls, actions):
+        """
+        TODO: useless for now
+        :param actions:
+        :return:
+        """
         contradicted = [False] * len(actions)
         for i in range(len(actions)):
             tokens = actions[i].split()
