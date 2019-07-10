@@ -688,6 +688,10 @@ class BaseAgent(Logging):
             except IndexError as _:
                 self.debug("same game ID for different games error")
                 action = None
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_PREPARE_MEAL and
+              instant_reward > 0):
+            action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self._see_cookbook = True
@@ -902,17 +906,21 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
-    def game_status_update(self, master, cleaned_obs, infos):
+    def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:
             self._curr_place = self.collect_floor_plan(master, self._prev_place)
         else:
             self._curr_place = None
+        # use see cookbook again if gain one reward
+        if instant_reward > 0:
+            self._see_cookbook = False
 
     def get_admissible_actions(self, infos=None):
         assert infos is not None and "admissible_actions" in infos
         return [a.lower() for a in infos["admissible_commands"][0]]
 
-    def collect_new_sample(self, obs, scores, dones, infos):
+    def update_status(self, obs, scores, dones, infos):
+        self._prev_place = self._curr_place
         master = (self._get_master_starter(obs, infos)
                   if self.in_game_t == 0 else obs[0])
         if self.hp.apply_dependency_parser:
@@ -923,11 +931,7 @@ class BaseAgent(Logging):
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos["has_won"][0])
 
-        self.game_status_update(master, cleaned_obs, infos)
-
-        # use see cookbook again if gain one reward
-        if instant_reward > 0:
-            self._see_cookbook = False
+        self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.debug(
@@ -940,7 +944,9 @@ class BaseAgent(Logging):
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
                     self.mode(), cleaned_obs, infos["max_score"]))
+        return cleaned_obs, instant_reward
 
+    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
@@ -1001,9 +1007,10 @@ class BaseAgent(Logging):
             self._start_episode(obs, infos)
 
         assert len(obs) == 1, "cannot handle batch game training"
-
+        cleaned_obs, instant_reward = self.update_status(
+            obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
-         ) = self.collect_new_sample(obs, scores, dones, infos)
+         ) = self.collect_new_sample(cleaned_obs, instant_reward, dones, infos)
 
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
@@ -1019,7 +1026,6 @@ class BaseAgent(Logging):
 
         self.total_t += 1
         self.in_game_t += 1
-        self._prev_place = self._curr_place
         # revert back go actions for the game playing
         if player_t.startswith("go"):
             player_t = " ".join(player_t.split()[:2])
@@ -1251,7 +1257,7 @@ class GenBaseAgent(BaseAgent):
     def _get_master_starter(self, obs, infos):
         return self.remove_logo(obs[0])
 
-    def game_status_update(self, master, cleaned_obs, infos):
+    def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         """
         Update game status according to observations and instant rewards.
         the following vars are updated:
@@ -1266,7 +1272,8 @@ class GenBaseAgent(BaseAgent):
         :param infos:
         :return:
         """
-        super(GenBaseAgent, self).game_status_update(master, cleaned_obs, infos)
+        super(GenBaseAgent, self).update_status_impl(
+            master, cleaned_obs, instant_reward, infos)
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
                 self._theme_words[self.game_id] = self.get_theme_words(
