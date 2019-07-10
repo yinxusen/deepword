@@ -1,6 +1,5 @@
 import numpy as np
 from bert.tokenization import FullTokenizer
-from textworld import EnvInfos
 
 from deeptextworld import drrn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
@@ -16,32 +15,6 @@ class DRRNAgent(BaseAgent):
     """
     def __init__(self, hp, model_dir):
         super(DRRNAgent, self).__init__(hp, model_dir)
-
-    def select_additional_infos(self) -> EnvInfos:
-        """
-        additional information needed when playing the game
-        """
-        request_infos = EnvInfos()
-        if self.is_training:
-            request_infos.description = False
-            request_infos.inventory = False
-            request_infos.entities = False
-            request_infos.verbs = False
-            request_infos.max_score = True
-            request_infos.has_won = True
-            # request_infos.extras = ["recipe"]
-            request_infos.admissible_commands = False
-        else:
-            request_infos.description = False
-            request_infos.inventory = False
-            request_infos.entities = False
-            request_infos.verbs = False
-            request_infos.max_score = True
-            request_infos.has_won = True
-            request_infos.has_lost = False
-            # request_infos.extras = ["recipe"]
-            request_infos.admissible_commands = False
-        return request_infos
 
     def get_an_eps_action(self, action_mask):
         """

@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 from bitarray import bitarray
 from nltk import word_tokenize, sent_tokenize
+from textworld import EnvInfos
 
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
@@ -36,8 +37,6 @@ class ActionDesc(collections.namedtuple(
     def __repr__(self):
         return "action_type: {}, action_idx: {}, action: {}".format(
             self.action_type, self.action_idx, self.action)
-
-
 
 
 ACT_EXAMINE_COOKBOOK = "examine cookbook"
@@ -221,6 +220,19 @@ class BaseAgent(Logging):
     @classmethod
     def negative_response_reward(cls, master):
         return 0
+
+    def select_additional_infos(self):
+        """
+        additional information needed when playing the game
+        requested infos here are required to run the Agent
+        """
+        return EnvInfos(
+            description=True,
+            inventory=True,
+            max_score=True,
+            has_won=True,
+            admissible_commands=True,
+            extras=['recipe'])
 
     def init_tokens(self, hp):
         """
@@ -1142,6 +1154,15 @@ class GenBaseAgent(BaseAgent):
         if (not cls.is_observation(master)) and cls.is_negative(master):
             negative_response_penalty = 0.5
         return negative_response_penalty
+
+    def select_additional_infos(self):
+        """
+        additional information needed when playing the game
+        requested infos here are required to run the Agent
+        """
+        return EnvInfos(
+            max_score=True,
+            has_won=True)
 
     def _start_episode_impl(self, obs, infos):
         super(GenBaseAgent, self)._start_episode_impl(obs, infos)
