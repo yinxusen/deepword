@@ -1,3 +1,4 @@
+import collections
 import glob
 import hashlib
 import os
@@ -5,15 +6,15 @@ import random
 import re
 from typing import List, Dict, Any, Optional
 
-import collections
 import numpy as np
 import tensorflow as tf
 from bitarray import bitarray
 from nltk import word_tokenize, sent_tokenize
-from nltk.parse.corenlp import CoreNLPDependencyParser
+from textworld import EnvInfos
 
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
@@ -38,59 +39,8 @@ class ActionDesc(collections.namedtuple(
             self.action_type, self.action_idx, self.action)
 
 
-class DependencyParserReorder(Logging):
-    """
-    Use dependency parser to reorder master sentences.
-    Make sure to open Stanford CoreNLP server first.
-    """
-    def __init__(self, padding_val, stride_len):
-        super(DependencyParserReorder, self).__init__()
-        # be sure of starting CoreNLP server first
-        self.parser = CoreNLPDependencyParser()
-        # use dict to avoid parse the same sentences.
-        self.parsed_sentences = dict()
-        self.sep_sent = (" " + " ".join([padding_val] * stride_len)
-                         + " ")
-
-    def reorder_sent(self, sent):
-        tree = next(self.parser.raw_parse(sent)).tree()
-        t_labels = ([
-            [head.label()] +
-            [child if type(child) is str else child.label() for child in head]
-            for head in tree.subtrees()])
-        t_str = [" ".join(labels) for labels in t_labels]
-        return self.sep_sent.join(t_str)
-
-    def reorder_block(self, master):
-        """
-        Notice that four padding letters " O O O O " can only work up to 5-gram
-        :param master:
-        :return:
-        """
-        sent_list = list(filter(lambda sent: sent != "", sent_tokenize(master)))
-        tree_strs = []
-        for s in sent_list:
-            if not s in self.parsed_sentences:
-                t_str = self.reorder_sent(s)
-                self.parsed_sentences[s] = t_str
-                self.info("parse {} into {}".format(s, t_str))
-            else:
-                self.info("found parsed {}".format(s))
-            tree_strs.append(self.parsed_sentences[s])
-        return self.sep_sent.join(tree_strs)
-
-    def reorder(self, master):
-        if master == "":
-            return master
-        lines = map(lambda l: l.lower(),
-                    filter(lambda l: l.strip() != "", master.split("\n")))
-        reordered_lines = map(lambda l: self.reorder_block(l), lines)
-        return self.sep_sent + self.sep_sent.join(reordered_lines) + self.sep_sent
-
-
 ACT_EXAMINE_COOKBOOK = "examine cookbook"
 ACT_PREPARE_MEAL = "prepare meal"
-# ACT_EXAMINE_COOKBOOK = ACT_PREPARE_MEAL
 ACT_EAT_MEAL = "eat meal"
 ACT_LOOK = "look"
 ACT_INVENTORY = "inventory"
@@ -104,6 +54,13 @@ ACT_TYPE_RULE = "rule_based_action"
 ACT_TYPE_RND_WALK = "random_walk_action"
 ACT_TYPE_NN = "learned_action"
 ACT_TYPE_JITTER = "jitter_action"
+
+K_RECIPE = "extra.recipe"
+K_DESC = "description"
+K_INVENTORY = "inventory"
+K_MAX_SCORE = "max_score"
+K_HAS_WON = "has_won"
+K_ADMISSIBLE_ACTIONS = "admissible_commands"
 
 
 class BaseAgent(Logging):
@@ -159,16 +116,130 @@ class BaseAgent(Logging):
         self._prev_last_action = None
         self._prev_master = None
         self._prev_place = None
+        self._curr_place = None
 
         self.game_id = None
-        self._theme_words = None
-        self.__see_cookbook = False
+        self._theme_words = {}
+
+        self._see_cookbook = False
         self._cnt_action = None
 
-        self.__action_recorder = None
-        self.__winning_recorder = None
-        self.__per_game_recorder = None
-        self.__actions_to_remove = None
+        self._action_recorder = {}
+        self._winning_recorder = {}
+        self._per_game_recorder = None
+        self._actions_to_remove = {}
+
+    @classmethod
+    def report_status(cls, lst_of_status):
+        return ', '.join(
+            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
+
+    @classmethod
+    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
+        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
+        return min(gamma_t, final_gamma)
+
+    @classmethod
+    def annealing_eps(cls, init_eps, final_eps, t, total_t):
+        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
+        return max(eps_t, final_eps)
+
+    @classmethod
+    def fromBytes(cls, action_mask):
+        retval = []
+        for mask in action_mask:
+           bit_mask = bitarray(endian='little')
+           bit_mask.frombytes(mask)
+           bit_mask[-1] = False
+           retval.append(bit_mask.tolist())
+        return np.asarray(retval, dtype=np.int32)
+
+    @classmethod
+    def count_trainable(cls, trainable_vars, mask=None):
+        total_parameters = 0
+        if mask is not None:
+            if type(mask) is list:
+                trainable_vars = filter(lambda v: v.op.name not in mask,
+                                        trainable_vars)
+            elif type(mask) is str:
+                trainable_vars = filter(lambda v: v.op.name != mask,
+                                        trainable_vars)
+            else:
+                pass
+        else:
+            pass
+        for variable in trainable_vars:
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim.value
+            total_parameters += variable_parameters
+        return total_parameters
+
+    @classmethod
+    def get_theme_words(cls, recipe):
+        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+        theme_words_search = re.search(
+            theme_regex, recipe.replace("\n", "<|>"))
+        if theme_words_search:
+            theme_words = theme_words_search.group(1)
+            theme_words = list(
+                filter(lambda w: w != "",
+                       map(lambda w: w.strip(), theme_words.split("<|>"))))
+        else:
+            theme_words = None
+        return theme_words
+
+    @classmethod
+    def get_path_tags(cls, path, prefix):
+        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
+                              recursive=False)
+        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
+                   map(lambda p: os.path.basename(p), all_paths))
+        return tags
+
+    @classmethod
+    def clip_reward(cls, reward):
+        """clip reward into [-1, 1]"""
+        return max(min(reward, 1), -1)
+
+    @classmethod
+    def contain_words(cls, sentence, words):
+        return any(map(lambda w: w in sentence, words))
+
+    @classmethod
+    def get_room_name(cls, master):
+        """
+        Extract and lower room name.
+        Return None if not exist.
+        :param master:
+        :return:
+        """
+        room_regex = "^\s*-= (.*) =-.*"
+        room_search = re.search(room_regex, master)
+        if room_search is not None:
+            room_name = room_search.group(1).lower()
+        else:
+            room_name = None
+        return room_name
+
+    @classmethod
+    def negative_response_reward(cls, master):
+        return 0
+
+    def select_additional_infos(self):
+        """
+        additional information needed when playing the game
+        requested infos here are required to run the Agent
+        """
+        return EnvInfos(
+            description=True,
+            inventory=True,
+            max_score=True,
+            has_won=True,
+            admissible_commands=True,
+            extras=['recipe'])
 
     def init_tokens(self, hp):
         """
@@ -209,7 +280,6 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
 
-
     def init_memo(self, hp, memo_path, with_loading=True):
         memory = TreeMemory(capacity=hp.replay_mem)
         if with_loading:
@@ -218,7 +288,6 @@ class BaseAgent(Logging):
             except IOError as e:
                 self.info("load memory error: \n{}".format(e))
         return memory
-
 
     def init_floor_plan(self, fp_path, with_loading=True):
         fp = FloorPlanCollector()
@@ -251,34 +320,9 @@ class BaseAgent(Logging):
         else:
             return " ".join(tokenized)
 
-    @classmethod
-    def report_status(cls, lst_of_status):
-        return ', '.join(
-            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
-
-    @classmethod
-    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
-        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
-        return min(gamma_t, final_gamma)
-
-    @classmethod
-    def annealing_eps(cls, init_eps, final_eps, t, total_t):
-        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
-        return max(eps_t, final_eps)
-
     def index_string(self, sentence):
         indexed = [self.token2idx.get(t, self.hp.unk_val_id) for t in sentence]
         return indexed
-
-    @classmethod
-    def fromBytes(cls, action_mask):
-        retval = []
-        for mask in action_mask:
-           bit_mask = bitarray(endian='little')
-           bit_mask.frombytes(mask)
-           bit_mask[-1] = False
-           retval.append(bit_mask.tolist())
-        return np.asarray(retval, dtype=np.int32)
 
     def zero_mask_bytes(self):
         """
@@ -289,7 +333,6 @@ class BaseAgent(Logging):
         bit_mask_vec[::] = False
         bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
         return bit_mask_vec.tobytes()
-
 
     def get_an_eps_action(self, action_mask):
         """
@@ -310,29 +353,6 @@ class BaseAgent(Logging):
     def reset(self):
         self._initialized = False
         self._init()
-
-    @classmethod
-    def count_trainable(cls, trainable_vars, mask=None):
-        total_parameters = 0
-        if mask is not None:
-            if type(mask) is list:
-                trainable_vars = filter(lambda v: v.op.name not in mask,
-                                        trainable_vars)
-            elif type(mask) is str:
-                trainable_vars = filter(lambda v: v.op.name != mask,
-                                        trainable_vars)
-            else:
-                pass
-        else:
-            pass
-        for variable in trainable_vars:
-            # shape is an array of tf.Dimension
-            shape = variable.get_shape()
-            variable_parameters = 1
-            for dim in shape:
-                variable_parameters *= dim.value
-            total_parameters += variable_parameters
-        return total_parameters
 
     def create_n_load_model(
             self, placement="/device:GPU:0",
@@ -386,7 +406,10 @@ class BaseAgent(Logging):
         if self._initialized:
             self.error("the agent was initialized")
             return
+        self._init_impl(load_best)
+        self._initialized = True
 
+    def _init_impl(self, load_best=False):
         if self.hp.apply_dependency_parser:
             # TODO: stride_len is hard fix here for maximum n-gram filter size 5
             self.dp = DependencyParserReorder(
@@ -411,7 +434,7 @@ class BaseAgent(Logging):
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
-           self.hp, self.token2idx, action_path,
+            self.hp, self.token2idx, action_path,
             with_loading=True)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
@@ -433,13 +456,12 @@ class BaseAgent(Logging):
                 is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
-        self.__action_recorder = {}
-        self.__actions_to_remove = {}
-        self.__winning_recorder = {}
-        self._initialized = True
 
-    def _start_episode(
-            self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
+    def _get_master_starter(self, obs, infos):
+        assert K_DESC in infos, "request description is required"
+        return infos[K_DESC][0]
+
+    def _start_episode(self, obs, infos):
         """
         Prepare the agent for the upcoming episode.
         :param obs: initial feedback from each game
@@ -448,36 +470,33 @@ class BaseAgent(Logging):
         """
         if not self._initialized:
             self._init()
+        self._start_episode_impl(obs, infos)
+
+    def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
-        recipe = infos["extra.recipe"]
-        # use stronger game identity
-        master_without_logo = infos["description"][0].replace("\n", " ")
-        self.game_id = hashlib.md5(
-            (master_without_logo + recipe[0]).encode("utf-8")).hexdigest()
+        master_starter = self._get_master_starter(obs, infos)
+        self.game_id = hashlib.md5(master_starter.encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self._cumulative_score = 0
         self._episode_has_started = True
         self._prev_place = None
+        self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
-        if self.game_id not in self.__action_recorder:
-            self.__action_recorder[self.game_id] = None
-            self.__winning_recorder[self.game_id] = None
-            self.__actions_to_remove[self.game_id] = set()
-        self.__per_game_recorder = []
-
-        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
-        theme_words_search = re.search(
-            theme_regex, recipe[0].replace("\n", "<|>"))
-        self.__see_cookbook = False
-        self._theme_words = None
-        if theme_words_search:
-            theme_words = theme_words_search.group(1)
-            self._theme_words = list(
-                filter(lambda w: w != "",
-                       map(lambda w: w.strip(), theme_words.split("<|>"))))
-            self.debug("theme words: {}".format(", ".join(self._theme_words)))
+        if self.game_id not in self._action_recorder:
+            self._action_recorder[self.game_id] = []
+        if self.game_id not in self._winning_recorder:
+            self._winning_recorder[self.game_id] = False
+        if self.game_id not in self._actions_to_remove:
+            self._actions_to_remove[self.game_id] = set()
+        if self.game_id not in self._theme_words:
+            self._theme_words[self.game_id] = []
+        self._per_game_recorder = []
+        self._see_cookbook = False
+        if K_RECIPE in infos:
+            self._theme_words[self.game_id] = self.get_theme_words(
+                infos[K_RECIPE][0])
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -496,20 +515,20 @@ class BaseAgent(Logging):
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
-            self.mode(), self.in_game_t, scores[0], infos["has_won"]))
+            self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
         # TODO: make clear of what need to clean before & after an episode.
-        self.__winning_recorder[self.game_id] = infos["has_won"][0]
-        self.__action_recorder[self.game_id] = self.__per_game_recorder
-        if ((not infos["has_won"][0]) and
-                (0 < len(self.__per_game_recorder) < 100)):
-            if (self.__per_game_recorder[-1] not in
-                    self.__per_game_recorder[:-1]):
-                self.__actions_to_remove[self.game_id].add(
-                    self.__per_game_recorder[-1])
+        self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
+        self._action_recorder[self.game_id] = self._per_game_recorder
+        if ((not infos[K_HAS_WON][0]) and
+                (0 < len(self._per_game_recorder) < 100)):
+            if (self._per_game_recorder[-1] not in
+                    self._per_game_recorder[:-1]):
+                self._actions_to_remove[self.game_id].add(
+                    self._per_game_recorder[-1])
             else:
                 pass  # repeat dangerous actions
         self.debug("actions to remove {} for game {}".format(
-            self.__actions_to_remove[self.game_id], self.game_id))
+            self._actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_actions_mask = None
         self.game_id = None
@@ -576,19 +595,6 @@ class BaseAgent(Logging):
                      os.path.join(self.model_dir, 'hparams.json'),
                      use_relative_path=True)
 
-    @classmethod
-    def get_path_tags(cls, path, prefix):
-        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
-                              recursive=False)
-        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
-                   map(lambda p: os.path.basename(p), all_paths))
-        return tags
-
-    @classmethod
-    def clip_reward(cls, reward):
-        """clip reward into [-1, 1]"""
-        return max(min(reward, 1), -1)
-
     def get_compatible_snapshot_tag(self):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
@@ -604,41 +610,21 @@ class BaseAgent(Logging):
         trained_steps = self.total_t - self.hp.observation_t + 1
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
-    @classmethod
-    def contain_words(cls, sentence, words):
-        return any(map(lambda w: w in sentence, words))
-
     def contain_theme_words(self, actions):
-        if self._theme_words is None:
+        if self._theme_words[self.game_id] is None:
             self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
         others = []
         for a in actions:
-            if self.contain_words(a, self._theme_words):
+            if self.contain_words(a, self._theme_words[self.game_id]):
                 contained.append(a)
             else:
                 others.append(a)
 
         return contained, others
 
-    @classmethod
-    def get_room_name(cls, master):
-        """
-        Extract and lower room name.
-        Return None if not exist.
-        :param master:
-        :return:
-        """
-        room_regex = "^\s*-= (.*) =-.*"
-        room_search = re.search(room_regex, master)
-        if room_search is not None:
-            room_name = room_search.group(1).lower()
-        else:
-            room_name = None
-        return room_name
-
-    def filter_admissible_actions(self, admissible_actions, curr_place=None):
+    def filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
         :param admissible_actions:
@@ -651,7 +637,8 @@ class BaseAgent(Logging):
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
         actions = list(filter(lambda c: not c.startswith("eat"), actions))
         # don't drop useful ingredients if not in kitchen
-        if (curr_place != "kitchen") or (not self.hp.drop_w_theme_words):
+        # while other items can be dropped anywhere
+        if self._curr_place != "kitchen":
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
@@ -663,7 +650,8 @@ class BaseAgent(Logging):
             lambda a: a.startswith("go"), admissible_actions))
         actions += list(filter(
             lambda a: (a.startswith("drop") and
-                       all(map(lambda t: t not in a, self._theme_words))),
+                       all(map(lambda t: t not in a,
+                               self._theme_words[self.game_id]))),
             others))
         # meal should never be dropped
         try:
@@ -679,9 +667,9 @@ class BaseAgent(Logging):
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
         if not self.is_training:
-            if ((self.__winning_recorder[self.game_id] is not None) and
-                    (not self.__winning_recorder[self.game_id])):
-                for a2remove in self.__actions_to_remove[self.game_id]:
+            if ((self._winning_recorder[self.game_id] is not None) and
+                    (not self._winning_recorder[self.game_id])):
+                for a2remove in self._actions_to_remove[self.game_id]:
                     try:
                         actions.remove(a2remove)
                         self.debug(
@@ -695,33 +683,41 @@ class BaseAgent(Logging):
                 pass
         return actions
 
-    def go_with_floor_plan(self, actions, room):
-        local_map = self.floor_plan.get_map(room)
+    def go_with_floor_plan(self, actions):
+        local_map = self.floor_plan.get_map(self._curr_place)
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
         if ((not self.is_training) and
-                (self.__winning_recorder[self.game_id] is not None) and
-                self.__winning_recorder[self.game_id]):
-            action = self.__action_recorder[self.game_id][self.in_game_t]
-        elif ACT_EXAMINE_COOKBOOK in actions and not self.__see_cookbook:
+                (self._winning_recorder[self.game_id] is not None) and
+                self._winning_recorder[self.game_id]):
+            try:
+                action = self._action_recorder[self.game_id][self.in_game_t]
+            except IndexError as _:
+                self.debug("same game ID for different games error")
+                action = None
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_PREPARE_MEAL and
+              instant_reward > 0):
+            action = ACT_EAT_MEAL
+        elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
-            self.__see_cookbook = True
+            self._see_cookbook = True
         elif (self._last_action_desc is not None and
               self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
         elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_PREPARE_MEAL and
-              instant_reward > 0):
-            action = ACT_EAT_MEAL
+              self._last_action_desc.action.startswith("take") and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
         else:
             action = None
 
         if action is not None:
-            if not action in all_actions:
+            if action not in all_actions:
                 self.debug("eat meal not in action list, adding it in ...")
                 self.action_collector.extend([action])
                 all_actions = self.action_collector.get_actions()
@@ -764,10 +760,8 @@ class BaseAgent(Logging):
             # Notice that only choosing "go" actions cannot finish
             # collecting floor plan because there is the need to open doors
             # Notice also that only allow random walk in the first 50 steps
-            self.debug(actions)
-            cardinal_go = list(
-                filter(lambda a: a.startswith("go") and len(a.split()) == 2,
-                       actions))
+            cardinal_go = list(filter(
+                lambda a: a.startswith("go") and len(a.split()) == 2, actions))
             if self.in_game_t < 50 and len(cardinal_go) != 0:
                 open_actions = list(
                     filter(lambda a: a.startswith("open"), actions))
@@ -808,7 +802,9 @@ class BaseAgent(Logging):
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(score - self._cumulative_score - 0.1)
+        instant_reward = self.clip_reward(
+            score - self._cumulative_score - 0.1 -
+            self.negative_response_reward(master))
         self._cumulative_score = score
         if (master == self._prev_master and
             self._last_action_desc is not None and
@@ -920,49 +916,53 @@ class BaseAgent(Logging):
                 self.debug("tjs delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
 
-    def collect_new_sample(
-            self, obs: List[str], scores: List[int], dones: List[bool],
-            infos: Dict[str, List[Any]]):
-        master = infos["description"][0] if self.in_game_t == 0 else obs[0]
+    def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
+        if self.hp.collect_floor_plan:
+            self._curr_place = self.collect_floor_plan(master, self._prev_place)
+        else:
+            self._curr_place = None
+        # use see cookbook again if gain one reward
+        if instant_reward > 0:
+            self._see_cookbook = False
+
+    def get_admissible_actions(self, infos=None):
+        assert infos is not None and K_ADMISSIBLE_ACTIONS in infos
+        return [a.lower() for a in infos[K_ADMISSIBLE_ACTIONS][0]]
+
+    def update_status(self, obs, scores, dones, infos):
+        self._prev_place = self._curr_place
+        master = (self._get_master_starter(obs, infos)
+                  if self.in_game_t == 0 else obs[0])
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
         else:
             cleaned_obs = self.tokenize(master)
 
         instant_reward = self.get_instant_reward(
-            scores[0], cleaned_obs, dones[0], infos["has_won"][0])
+            scores[0], cleaned_obs, dones[0], infos[K_HAS_WON][0])
 
-        # use see cookbook again if gain one reward
-        if instant_reward > 0:
-            self.__see_cookbook = False
+        self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug("mode: {}, t: {}, in_game_t: {}, eps: {}, {},"
-                       " master: {}, reward: {}, is_terminal: {}".format(
-                "train" if self.is_training else "eval", self.total_t,
-                self.in_game_t, self.eps, self._last_action_desc,
-                cleaned_obs, instant_reward, dones[0]))
+            self.debug(
+                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+                " reward: {}, is_terminal: {}".format(
+                    self.mode(), self.total_t,
+                    self.in_game_t, self.eps, self._last_action_desc,
+                    cleaned_obs, instant_reward, dones[0]))
         else:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
-                    "train" if self.is_training else "eval", cleaned_obs,
-                    infos["max_score"]))
+                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        return cleaned_obs, instant_reward
 
-        if self.hp.collect_floor_plan:
-            curr_place = self.collect_floor_plan(master, self._prev_place)
-            self._prev_place = curr_place
-        else:
-            curr_place = None
-
+    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
 
-        actions = [a.lower() for a in infos["admissible_commands"][0]]
-        if self.hp.use_original_actions:
-            pass
-        else:
-            actions = self.filter_admissible_actions(actions, curr_place)
-        actions = self.go_with_floor_plan(actions, curr_place)
+        actions = self.get_admissible_actions(infos)
+        actions = self.filter_admissible_actions(actions)
+        actions = self.go_with_floor_plan(actions)
         self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
@@ -983,7 +983,7 @@ class BaseAgent(Logging):
         action = self._last_action_desc.action
         action_idx = self._last_action_desc.action_idx
 
-        self.__per_game_recorder.append(action)
+        self._per_game_recorder.append(action)
 
         if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
@@ -1017,9 +1017,10 @@ class BaseAgent(Logging):
             self._start_episode(obs, infos)
 
         assert len(obs) == 1, "cannot handle batch game training"
-
+        cleaned_obs, instant_reward = self.update_status(
+            obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
-         ) = self.collect_new_sample(obs, scores, dones, infos)
+         ) = self.collect_new_sample(cleaned_obs, instant_reward, dones, infos)
 
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
@@ -1039,3 +1040,334 @@ class BaseAgent(Logging):
         if player_t.startswith("go"):
             player_t = " ".join(player_t.split()[:2])
         return [player_t] * len(obs)
+
+
+class GenBaseAgent(BaseAgent):
+    def __init__(self, hp, model_dir):
+        super(GenBaseAgent, self).__init__(hp, model_dir)
+        self._require_drop_actions = False
+        self._inventory = None
+        self._see_inventory = False
+        self._obs = None
+        self._connections = {}
+
+    @classmethod
+    def filter_contradicted_actions(cls, actions):
+        """
+        TODO: useless for now
+        :param actions:
+        :return:
+        """
+        contradicted = [False] * len(actions)
+        for i in range(len(actions)):
+            tokens = actions[i].split()
+            if "dice" in tokens and "diced" in tokens:
+                contradicted[i] = True
+            if "chop" in tokens and "chopped" in tokens:
+                contradicted[i] = True
+            if "slice" in tokens and "sliced" in tokens:
+                contradicted[i] = True
+            if "bbq" in tokens and "grilled" in tokens:
+                contradicted[i] = True
+            if "stove" in tokens and "fried" in tokens:
+                contradicted[i] = True
+            if "oven" in tokens and "roasted" in tokens:
+                contradicted[i] = True
+        valid_actions = filter(
+            lambda a_c: not a_c[1], zip(actions, contradicted))
+        return list(map(lambda a_c: a_c[0], valid_actions))
+
+    @classmethod
+    def get_possible_closed_doors(cls, obs):
+        doors = re.findall(r'a closed ([a-z \-]+ door)', obs)
+        return doors
+
+    @classmethod
+    def retrieve_name_from_inventory(cls, inventory, item):
+        for i in inventory:
+            if item in i:
+                return i
+        return None
+
+    @classmethod
+    def update_inventory(cls, action, inventory_list):
+        action_obj = " ".join(action.split()[1:])
+        if action.startswith("drop"):
+            new_inventory_list = list(filter(
+                lambda x: x != action_obj, inventory_list))
+        elif action.startswith("take"):
+            new_inventory_list = inventory_list + [action_obj]
+        else:
+            raise ValueError("unknown action verb: {}".format(action))
+        return new_inventory_list
+
+    @classmethod
+    def remove_logo(cls, first_master):
+        lines = first_master.split("\n")
+        start_line = 0
+        room_regex = "^\s*-= (.*) =-.*"
+        for i, l in enumerate(lines):
+            room_search = re.search(room_regex, l)
+            if room_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        modified_master = "\n".join(lines[start_line:])
+        return modified_master
+
+    @classmethod
+    def is_negative(cls, cleaned_obj):
+        negative_stems = ["n't", "not"]
+        return any(map(lambda nt: nt in cleaned_obj.split(), negative_stems))
+
+    @classmethod
+    def is_observation(cls, master):
+        """if there is room name then it's an observation other a dialogue"""
+        return cls.get_room_name(master) is not None
+
+    @classmethod
+    def get_connections(cls, raw_recipe, theme_words):
+        connections = {}
+        lines = list(filter(
+            lambda line: line != "",
+            map(lambda line: line.strip(), raw_recipe.split("\n"))))
+        start_line = 0
+        directions_regex = "^\sDirections"
+        for i, l in enumerate(lines):
+            d_search = re.search(directions_regex, l)
+            if d_search is not None:
+                start_line = i
+                break
+            else:
+                pass
+        lines = lines[start_line:]
+        for l in lines:
+            for t in theme_words:
+                if t in l:
+                    if t not in connections:
+                        connections[t] = set()
+                    connections[t].add(l.split()[0])
+                else:
+                    pass
+        return connections
+
+    @classmethod
+    def get_inventory(cls, inventory_list):
+        items = list(filter(
+            lambda s: len(s) != 0,
+            map(lambda s: s.strip(), inventory_list.split("\n"))))
+        if len(items) > 1:
+            # remove the first a/an/the/some ...
+            items = list(map(lambda i: " ".join(i.split()[1:]), items[1:]))
+        else:
+            items = []
+        return items
+
+    @classmethod
+    def negative_response_reward(cls, master):
+        negative_response_penalty = 0
+        if (not cls.is_observation(master)) and cls.is_negative(master):
+            negative_response_penalty = 0.5
+        return negative_response_penalty
+
+    def select_additional_infos(self):
+        """
+        additional information needed when playing the game
+        requested infos here are required to run the Agent
+        """
+        return EnvInfos(
+            max_score=True,
+            has_won=True)
+
+    def _start_episode_impl(self, obs, infos):
+        super(GenBaseAgent, self)._start_episode_impl(obs, infos)
+        if self.game_id not in self._connections:
+            self._connections[self.game_id] = {}
+        self._require_drop_actions = False
+        self._inventory = []
+        self._obs = None
+        self._see_inventory = False
+
+    def get_admissible_actions(self, infos=None):
+        obs = self._obs
+        inventory = self._inventory
+        theme_words = self._theme_words[self.game_id]
+        connections = self._connections[self.game_id]
+
+        all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
+        inventory_sent = " ".join(inventory)
+
+        if "cookbook" in obs:
+            all_actions += [ACT_EXAMINE_COOKBOOK]
+
+        for d in ["north", "south", "east", "west"]:
+            if d in obs.split():
+                all_actions += ["go {}".format(d)]
+
+        if "fridge" in obs:
+            all_actions += ["open fridge"]
+        if "door" in obs:
+            doors = self.get_possible_closed_doors(obs)
+            for d in doors:
+                all_actions += ["open {}".format(d)]
+
+        cookwares = ["stove", "oven", "bbq"]
+        cook_verbs = ["fry", "roast", "grill"]
+        knife_usage = ["dice", "slice", "chop"]
+        knife_verbs = ["dice", "slice", "chop"]
+        all_possible_verbs = cook_verbs + knife_verbs
+        for c, v in zip(cookwares, cook_verbs):
+            if c in obs:
+                for t in theme_words:
+                    if t in inventory_sent:
+                        if (t in connections) and (
+                                (v in connections[t]) or
+                                all(map(lambda x: x not in all_possible_verbs,
+                                        connections[t]))):
+                            t_with_status = self.retrieve_name_from_inventory(
+                                inventory, t)
+                            if t_with_status is None:
+                                t_with_status = t
+                            all_actions += (
+                                ["cook {} with {}".format(t_with_status, c)])
+                        else:
+                            pass
+        if "knife" in inventory_sent:
+            for t in theme_words:
+                if t in inventory_sent:
+                    t_with_status = self.retrieve_name_from_inventory(
+                        inventory, t)
+                    if t_with_status is None:
+                        t_with_status = t
+                    for k, v in zip(knife_usage, knife_verbs):
+                        if (t in connections) and (
+                                (v in connections[t]) or
+                                all(map(lambda x: x not in all_possible_verbs,
+                                        connections[t]))):
+                            all_actions += (
+                                ["{} {} with knife".format(k, t_with_status)])
+                        else:
+                            pass
+        if "knife" in obs:
+            all_actions += ["take knife"]
+
+        for t in theme_words:
+            if t in obs and t not in inventory:
+                all_actions += ["take {}".format(t)]
+
+        # active drop actions only after we know the theme words
+        drop_actions = []
+        if len(theme_words) != 0:
+            for i in inventory:
+                if all(map(lambda tw: tw not in i, theme_words)):
+                    drop_actions += ["drop {}".format(i)]
+            # drop useless items first
+            # if there is no useless items, drop useful ingredients
+            if self._require_drop_actions and (len(drop_actions) == 0):
+                drop_actions += ["drop {}".format(i) for i in inventory]
+            all_actions += drop_actions
+
+        if "meal" in inventory_sent:
+            all_actions += [ACT_EAT_MEAL]
+
+        return all_actions
+
+    def _get_master_starter(self, obs, infos):
+        return self.remove_logo(obs[0])
+
+    def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
+        """
+        Update game status according to observations and instant rewards.
+        the following vars are updated:
+          1. theme words
+          2. connections
+          3. inventory
+          4. observation
+          5. whether requires drop actions or not
+
+        :param master:
+        :param cleaned_obs:
+        :param infos:
+        :return:
+        """
+        super(GenBaseAgent, self).update_status_impl(
+            master, cleaned_obs, instant_reward, infos)
+        if self._curr_place != self._prev_place:
+            self._obs = cleaned_obs
+        if self._last_action_desc is not None:
+            if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
+                self._theme_words[self.game_id] = self.get_theme_words(
+                    master)
+                self._connections[self.game_id] = self.get_connections(
+                    master, self._theme_words[self.game_id])
+            elif self._last_action_desc.action == ACT_INVENTORY:
+                self._inventory = self.get_inventory(master)
+            elif self._last_action_desc.action.startswith("drop"):
+                if not self.is_negative(cleaned_obs):
+                    self._inventory = self.update_inventory(
+                        self._last_action_desc.action, self._inventory)
+                    self._require_drop_actions = False
+            elif self._last_action_desc.action.startswith("take"):
+                if ((not self.is_negative(cleaned_obs)) and
+                        ("too many things" not in cleaned_obs)):
+                    self._inventory = self.update_inventory(
+                        self._last_action_desc.action, self._inventory)
+                    self._require_drop_actions = False
+                if "too many things" in cleaned_obs:
+                    self._require_drop_actions = True
+            elif self._last_action_desc.action.startswith("open"):
+                if ((not self.is_negative(cleaned_obs)) and
+                        ("already open" not in cleaned_obs)):
+                    self._obs += " " + cleaned_obs
+            elif self._last_action_desc.action == ACT_LOOK:
+                self._obs = cleaned_obs
+            else:
+                pass
+        else:
+            self.debug(
+                "last action description is None, nothing to update")
+        self.debug("theme words: {}".format(self._theme_words[self.game_id]))
+        self.debug("inventory: {}".format(self._inventory))
+        self.debug("obs: {}".format(self._obs))
+
+    def rule_based_policy(self, actions, all_actions, instant_reward):
+        # use hard set actions in the beginning and the end of one episode
+        if ((not self.is_training) and
+                (self._winning_recorder[self.game_id] is not None) and
+                self._winning_recorder[self.game_id]):
+            try:
+                action = self._action_recorder[self.game_id][self.in_game_t]
+            except IndexError as _:
+                self.debug("same game ID for different games error")
+                action = None
+        elif ACT_INVENTORY in actions and not self._see_inventory:
+            action = ACT_INVENTORY
+            self._see_inventory = True
+        elif "meal" in self._inventory:
+            action = ACT_EAT_MEAL
+        elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
+            action = ACT_EXAMINE_COOKBOOK
+            self._see_cookbook = True
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
+        elif (self._last_action_desc is not None and
+              self._last_action_desc.action.startswith("take") and
+              instant_reward <= 0):
+            action = ACT_INVENTORY
+        else:
+            action = None
+
+        if action is not None:
+            if action not in all_actions:
+                self.debug("eat meal not in action list, adding it in ...")
+                self.action_collector.extend([action])
+                all_actions = self.action_collector.get_actions()
+            action_idx = all_actions.index(action)
+        else:
+            action_idx = None
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
+        return action_desc
