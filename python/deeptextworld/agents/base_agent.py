@@ -1316,7 +1316,7 @@ class GenBaseAgent(BaseAgent):
             else:
                 pass
         else:
-            self.warning(
+            self.debug(
                 "last action description is None, nothing to update")
         self.debug("theme words: {}".format(self._theme_words[self.game_id]))
         self.debug("inventory: {}".format(self._inventory))
