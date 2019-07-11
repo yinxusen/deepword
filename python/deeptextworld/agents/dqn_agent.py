@@ -46,7 +46,7 @@ class DQNAgent(BaseAgent):
         or the best predicted action index with action string.
         :param action_mask:
         """
-        action_mask = self.fromBytes([action_mask])[0]
+        action_mask = self.from_bytes([action_mask])[0]
         reports = []
         if np.random.random() < self.eps:
             action_idx, player_t = get_random_1Daction(
@@ -97,7 +97,7 @@ class DQNAgent(BaseAgent):
              if s.is_terminal else s.action_mask
              for s in next_states])
 
-        action_mask_t1 = self.fromBytes(action_mask_t1)
+        action_mask_t1 = self.from_bytes(action_mask_t1)
 
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)

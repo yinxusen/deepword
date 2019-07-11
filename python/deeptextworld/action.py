@@ -5,9 +5,11 @@ from nltk import word_tokenize
 
 from deeptextworld.log import Logging
 
+
 class ActionCollector(Logging):
-    def __init__(self, n_actions=200, n_tokens=10,
-                 token2idx=None, unk_val_id=None, padding_val_id=None):
+    def __init__(
+            self, n_actions=200, n_tokens=10,
+            token2idx=None, unk_val_id=None, padding_val_id=None):
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self.actions_base = {}
@@ -77,11 +79,18 @@ class ActionCollector(Logging):
         return word_tokenize(action)
 
     def extend(self, actions):
+        """
+        Extend actions into ActionCollector.
+        Fail if #actions larger than hp.n_actions - 1.
+        :param actions:
+        :return:
+        """
         bit_mask_vec = bitarray(self.n_actions, endian="little")
         bit_mask_vec[::] = False
         bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
         for a in actions:
-            if not a in self.action2idx:
+            if a not in self.action2idx:
+                assert self.curr_aid < self.n_actions - 1, "n_actions too small"
                 self.action2idx[a] = self.curr_aid
                 action_idx = ([self.token2idx.get(i, self.unk_val_id)
                                for i in self._preprocess_action(a)])

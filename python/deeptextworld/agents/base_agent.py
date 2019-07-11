@@ -145,14 +145,19 @@ class BaseAgent(Logging):
         return max(eps_t, final_eps)
 
     @classmethod
-    def fromBytes(cls, action_mask):
-        retval = []
-        for mask in action_mask:
-           bit_mask = bitarray(endian='little')
-           bit_mask.frombytes(mask)
-           bit_mask[-1] = False
-           retval.append(bit_mask.tolist())
-        return np.asarray(retval, dtype=np.int32)
+    def from_bytes(cls, byte_action_masks):
+        """
+        Convert a list of byte-array masks to a list of np-array masks.
+        :param byte_action_masks:
+        :return:
+        """
+        vec_action_masks = []
+        for mask in byte_action_masks:
+            bit_mask = bitarray(endian='little')
+            bit_mask.frombytes(mask)
+            bit_mask[-1] = False
+            vec_action_masks.append(bit_mask.tolist())
+        return np.asarray(vec_action_masks, dtype=np.int32)
 
     @classmethod
     def count_trainable(cls, trainable_vars, mask=None):

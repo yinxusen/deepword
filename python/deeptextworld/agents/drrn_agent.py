@@ -22,7 +22,7 @@ class DRRNAgent(BaseAgent):
         or the best predicted action index with action string.
         :param action_mask:
         """
-        action_mask = self.fromBytes([action_mask])[0]
+        action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
             action_idx, action = get_random_1Daction(
                 self.action_collector.get_actions(), action_mask)
@@ -76,8 +76,8 @@ class DRRNAgent(BaseAgent):
         action_mask = [m[0].action_mask for m in b_memory]
         next_action_mask = [m[0].next_action_mask for m in b_memory]
 
-        action_mask_t = self.fromBytes(action_mask)
-        action_mask_t1 = self.fromBytes(next_action_mask)
+        action_mask_t = self.from_bytes(action_mask)
+        action_mask_t1 = self.from_bytes(next_action_mask)
 
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)

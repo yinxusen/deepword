@@ -167,7 +167,7 @@ class EnsembleAgent(DRRNAgent):
             self.prev_report = [('hard_set_action', action_idx),
                                 ('action', player_t)]
         else:
-            action_mask = self.fromBytes([actions_mask])[0]
+            action_mask = self.from_bytes([actions_mask])[0]
             if np.random.random() < self.eps:
                 action_idx, player_t = get_random_1Daction(
                     self.action_collector.get_actions(), action_mask)
