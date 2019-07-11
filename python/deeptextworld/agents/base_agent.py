@@ -485,13 +485,13 @@ class BaseAgent(Logging):
         self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
         if self.game_id not in self._action_recorder:
-            self._action_recorder[self.game_id] = None
+            self._action_recorder[self.game_id] = []
         if self.game_id not in self._winning_recorder:
-            self._winning_recorder[self.game_id] = None
+            self._winning_recorder[self.game_id] = False
         if self.game_id not in self._actions_to_remove:
             self._actions_to_remove[self.game_id] = set()
         if self.game_id not in self._theme_words:
-            self._theme_words[self.game_id] = None
+            self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
         if K_RECIPE in infos:
@@ -1093,18 +1093,13 @@ class GenBaseAgent(BaseAgent):
     def update_inventory(cls, action, inventory_list):
         action_obj = " ".join(action.split()[1:])
         if action.startswith("drop"):
-            try:
-                inventory_list.remove(action_obj)
-            except ValueError as _:
-                pass
+            new_inventory_list = list(filter(
+                lambda x: x != action_obj, inventory_list))
         elif action.startswith("take"):
-            try:
-                if action_obj not in inventory_list:
-                    inventory_list.append(action_obj)
-            except ValueError as _:
-                pass
+            new_inventory_list = inventory_list + [action_obj]
         else:
             raise ValueError("unknown action verb: {}".format(action))
+        return new_inventory_list
 
     @classmethod
     def remove_logo(cls, first_master):
@@ -1188,7 +1183,7 @@ class GenBaseAgent(BaseAgent):
     def _start_episode_impl(self, obs, infos):
         super(GenBaseAgent, self)._start_episode_impl(obs, infos)
         if self.game_id not in self._connections:
-            self._connections[self.game_id] = None
+            self._connections[self.game_id] = {}
         self._require_drop_actions = False
         self._inventory = []
         self._obs = None
