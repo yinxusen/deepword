@@ -55,6 +55,13 @@ ACT_TYPE_RND_WALK = "random_walk_action"
 ACT_TYPE_NN = "learned_action"
 ACT_TYPE_JITTER = "jitter_action"
 
+K_RECIPE = "extra.recipe"
+K_DESC = "description"
+K_INVENTORY = "inventory"
+K_MAX_SCORE = "max_score"
+K_HAS_WON = "has_won"
+K_ADMISSIBLE_ACTIONS = "admissible_commands"
+
 
 class BaseAgent(Logging):
     """
@@ -451,8 +458,8 @@ class BaseAgent(Logging):
             self.total_t = 0
 
     def _get_master_starter(self, obs, infos):
-        assert "description" in infos
-        return infos["description"][0]
+        assert K_DESC in infos, "request description is required"
+        return infos[K_DESC][0]
 
     def _start_episode(self, obs, infos):
         """
@@ -484,9 +491,9 @@ class BaseAgent(Logging):
             self._theme_words[self.game_id] = None
         self._per_game_recorder = []
         self._see_cookbook = False
-        if "recipe" in infos:
+        if K_RECIPE in infos:
             self._theme_words[self.game_id] = self.get_theme_words(
-                infos["recipe"][0])
+                infos[K_RECIPE][0])
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -505,11 +512,11 @@ class BaseAgent(Logging):
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
-            self.mode(), self.in_game_t, scores[0], infos["has_won"]))
+            self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
         # TODO: make clear of what need to clean before & after an episode.
-        self._winning_recorder[self.game_id] = infos["has_won"][0]
+        self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
         self._action_recorder[self.game_id] = self._per_game_recorder
-        if ((not infos["has_won"][0]) and
+        if ((not infos[K_HAS_WON][0]) and
                 (0 < len(self._per_game_recorder) < 100)):
             if (self._per_game_recorder[-1] not in
                     self._per_game_recorder[:-1]):
@@ -916,8 +923,8 @@ class BaseAgent(Logging):
             self._see_cookbook = False
 
     def get_admissible_actions(self, infos=None):
-        assert infos is not None and "admissible_commands" in infos
-        return [a.lower() for a in infos["admissible_commands"][0]]
+        assert infos is not None and K_ADMISSIBLE_ACTIONS in infos
+        return [a.lower() for a in infos[K_ADMISSIBLE_ACTIONS][0]]
 
     def update_status(self, obs, scores, dones, infos):
         self._prev_place = self._curr_place
@@ -929,7 +936,7 @@ class BaseAgent(Logging):
             cleaned_obs = self.tokenize(master)
 
         instant_reward = self.get_instant_reward(
-            scores[0], cleaned_obs, dones[0], infos["has_won"][0])
+            scores[0], cleaned_obs, dones[0], infos[K_HAS_WON][0])
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
@@ -943,7 +950,7 @@ class BaseAgent(Logging):
         else:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
-                    self.mode(), cleaned_obs, infos["max_score"]))
+                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
