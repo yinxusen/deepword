@@ -1289,6 +1289,8 @@ class GenBaseAgent(BaseAgent):
         """
         super(GenBaseAgent, self).update_status_impl(
             master, cleaned_obs, instant_reward, infos)
+        if self._curr_place != self._prev_place:
+            self._obs = cleaned_obs
         if self._last_action_desc is not None:
             if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
                 self._theme_words[self.game_id] = self.get_theme_words(
@@ -1314,8 +1316,7 @@ class GenBaseAgent(BaseAgent):
                 if ((not self.is_negative(cleaned_obs)) and
                         ("already open" not in cleaned_obs)):
                     self._obs += " " + cleaned_obs
-            elif (self._last_action_desc.action == ACT_LOOK or
-                  self._prev_place != self._curr_place):
+            elif self._last_action_desc.action == ACT_LOOK:
                 self._obs = cleaned_obs
             else:
                 pass
