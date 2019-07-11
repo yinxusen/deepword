@@ -1221,11 +1221,16 @@ class GenBaseAgent(BaseAgent):
             if c in obs:
                 for t in theme_words:
                     if t in inventory_sent:
-                        if (t in connections) and ((v in connections[t]) or all(map(lambda x: x not in all_possible_verbs, connections[t]))):
-                            t_with_status = self.retrieve_name_from_inventory(inventory, t)
+                        if (t in connections) and (
+                                (v in connections[t]) or
+                                all(map(lambda x: x not in all_possible_verbs,
+                                        connections[t]))):
+                            t_with_status = self.retrieve_name_from_inventory(
+                                inventory, t)
                             if t_with_status is None:
                                 t_with_status = t
-                            all_actions += ["cook {} with {}".format(t_with_status, c)]
+                            all_actions += (
+                                ["cook {} with {}".format(t_with_status, c)])
                         else:
                             pass
         if "knife" in inventory_sent:
@@ -1236,8 +1241,12 @@ class GenBaseAgent(BaseAgent):
                     if t_with_status is None:
                         t_with_status = t
                     for k, v in zip(knife_usage, knife_verbs):
-                        if (t in connections) and ((v in connections[t]) or all(map(lambda x: x not in all_possible_verbs, connections[t]))):
-                            all_actions += ["{} {} with knife".format(k, t_with_status)]
+                        if (t in connections) and (
+                                (v in connections[t]) or
+                                all(map(lambda x: x not in all_possible_verbs,
+                                        connections[t]))):
+                            all_actions += (
+                                ["{} {} with knife".format(k, t_with_status)])
                         else:
                             pass
         if "knife" in obs:
