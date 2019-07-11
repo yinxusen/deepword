@@ -486,8 +486,11 @@ class BaseAgent(Logging):
         self._cnt_action = np.zeros(self.hp.n_actions)
         if self.game_id not in self._action_recorder:
             self._action_recorder[self.game_id] = None
+        if self.game_id not in self._winning_recorder:
             self._winning_recorder[self.game_id] = None
+        if self.game_id not in self._actions_to_remove:
             self._actions_to_remove[self.game_id] = set()
+        if self.game_id not in self._theme_words:
             self._theme_words[self.game_id] = None
         self._per_game_recorder = []
         self._see_cookbook = False
@@ -1184,7 +1187,7 @@ class GenBaseAgent(BaseAgent):
 
     def _start_episode_impl(self, obs, infos):
         super(GenBaseAgent, self)._start_episode_impl(obs, infos)
-        if self.game_id not in self._action_recorder:
+        if self.game_id not in self._connections:
             self._connections[self.game_id] = None
         self._require_drop_actions = False
         self._inventory = []
