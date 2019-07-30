@@ -6,6 +6,7 @@ import re
 import gym
 import textworld.gym
 from textworld import EnvInfos
+from deeptextworld.agents.base_agent import BaseAgent
 
 
 def contain_words(sentence, words):
@@ -65,7 +66,9 @@ def main(game_files):
         obs, infos = env.reset()
         dones = [False] * len(obs)
         master_wo_logo = remove_logo(obs[0]).replace("\n", " ")
-        print(master_wo_logo)
+        # print(master_wo_logo)
+        for ingredient in BaseAgent.get_theme_words(infos["extra.recipe"][0]):
+            print(ingredient)
         # # print("max score is {}".format(infos["max_score"][0]))
         # theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         # theme_words_search = re.search(theme_regex, infos["extra.recipe"][0].replace("\n", "<|>"))
@@ -84,5 +87,11 @@ def main(game_files):
 
 if __name__ == '__main__':
     game_dir = sys.argv[1]
-    game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    if len(sys.argv) > 2:
+        f_game_names = sys.argv[2]
+        with open(f_game_names) as f:
+            game_names = list(map(lambda l: l.strip(), f.readlines()))
+        game_files = list(map(lambda l: os.path.join(game_dir, "{}.ulx".format(l)), game_names))
+    else:
+        game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
     main(game_files)
