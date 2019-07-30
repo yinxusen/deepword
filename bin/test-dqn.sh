@@ -17,6 +17,7 @@ fi
 MODELHOME="$PDIR/../experiments-drrn/agent-dqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
+GAMEPATH=$1
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
@@ -29,7 +30,7 @@ fi
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-dqn \
-    --game-path /Users/xusenyin/git-store/textworld-competition-games/train-1 \
+    --game-path $GAMEPATH \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 --embedding-size 64 \

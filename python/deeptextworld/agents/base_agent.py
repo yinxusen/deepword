@@ -992,7 +992,6 @@ class BaseAgent(Logging):
 
         if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
-            self.debug(self._cnt_action)
         else:
             self.debug("cnt action ignore hard_set_action")
 

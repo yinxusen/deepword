@@ -2,7 +2,8 @@ import numpy as np
 from textworld import EnvInfos
 
 from deeptextworld import dqn_model
-from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
+    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
 from deeptextworld.utils import ctime
@@ -47,24 +48,24 @@ class DQNAgent(BaseAgent):
         :param action_mask:
         """
         action_mask = self.from_bytes([action_mask])[0]
-        reports = []
         if np.random.random() < self.eps:
-            action_idx, player_t = get_random_1Daction(
+            action_idx, action = get_random_1Daction(
                 self.action_collector.get_actions(), action_mask)
-            reports += [('random_action', action_idx),
-                        ('action', player_t)]
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action=action)
         else:
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
                 self.model.src_: [indexed_state_t],
                 self.model.src_len_: [lens_t]
             })[0]
-            action_idx, q_max, player_t = get_best_1Daction(
+            action_idx, q_max, action = get_best_1Daction(
                 q_actions_t, self.action_collector.get_actions(),
                 mask=action_mask)
-            reports += [('action', player_t), ('q_max', q_max),
-                        ('q_argmax', action_idx)]
-        return action_idx, player_t, reports
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
+        return action_desc
 
     def create_model_instance(self):
         model_creator = getattr(dqn_model, self.hp.model_creator)
@@ -90,14 +91,9 @@ class DQNAgent(BaseAgent):
         action_id = [m[0].aid for m in b_memory]
         reward = [m[0].reward for m in b_memory]
         is_terminal = [m[0].is_terminal for m in b_memory]
+        next_action_mask = [m[0].next_action_mask for m in b_memory]
 
-        next_idx, next_states = self.memo.get_next_states(b_idx)
-        action_mask_t1 = (
-            [self.zero_mask_bytes()
-             if s.is_terminal else s.action_mask
-             for s in next_states])
-
-        action_mask_t1 = self.from_bytes(action_mask_t1)
+        action_mask_t1 = self.from_bytes(next_action_mask)
 
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
