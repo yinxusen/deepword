@@ -177,7 +177,8 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
             logger.info("eval_results: {}".format(eval_results))
             logger.info("eval aggregated results: {}".format(agg_res))
-            logger.info("total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
+            logger.info(
+                "total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
                 total_scores, total_steps, n_won))
             logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or

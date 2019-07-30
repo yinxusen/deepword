@@ -3,8 +3,8 @@ from textworld import EnvInfos
 
 from deeptextworld import dqn_model
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, get_best_1D_q
-from deeptextworld.dqn_func import get_random_1Daction_fairly
+from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
+    get_best_1D_q
 from deeptextworld.utils import ctime
 
 
@@ -136,5 +136,6 @@ class DQNAgent(BaseAgent):
         self.memo.batch_update(b_idx, abs_loss)
 
         self.info('loss: {}'.format(loss_eval))
-        self.debug('t1: {}, t2: {}, t3: {}'.format(t1_end-t1, t2_end-t2, t3_end-t3))
+        self.debug('t1: {}, t2: {}, t3: {}'.format(
+            t1_end-t1, t2_end-t2, t3_end-t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)

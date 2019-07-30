@@ -104,7 +104,8 @@ class CNNEncoderDQN(BaseDQN):
 
 class CNNEncoderMultiLayerDQN(BaseDQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
-        super(CNNEncoderMultiLayerDQN, self).__init__(hp, src_embeddings, is_infer)
+        super(CNNEncoderMultiLayerDQN, self).__init__(
+            hp, src_embeddings, is_infer)
         self.filter_size = 3
         self.num_layers = hp.num_layers
         self.num_tokens = hp.num_tokens
@@ -198,7 +199,7 @@ def create_eval_model(model_creator, hp):
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
         q_actions = model.get_q_actions()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
+        _ = model.get_train_op(q_actions)
     return EvalDQNModel(
         graph=graph, model=model,
         q_actions=q_actions,
@@ -272,7 +273,8 @@ class LSTMEncoderDecoderDQN(BaseDQN):
 
 
 class CNNEncoderDecoderDQN(CNNEncoderDQN):
-    def __init__(self, hp, src_embeddings=None, tgt_embeddings=None, is_infer=False):
+    def __init__(
+            self, hp, src_embeddings=None, tgt_embeddings=None, is_infer=False):
         super(CNNEncoderDecoderDQN, self).__init__(hp, src_embeddings, is_infer)
 
         self.inputs = {
@@ -290,7 +292,6 @@ class CNNEncoderDecoderDQN(CNNEncoderDQN):
                 shape=[self.hp.tgt_vocab_size, self.hp.embedding_size])
         else:
             self.tgt_embeddings = tgt_embeddings
-
 
     def get_q_actions(self):
         inner_states = dqn.encoder_cnn_block(
@@ -313,7 +314,8 @@ class CNNEncoderDecoderDQN(CNNEncoderDQN):
 
 
 class CNNEDMultiLayerDQN(BaseDQN):
-    def __init__(self, hp, src_embeddings=None, tgt_embeddings=None, is_infer=False):
+    def __init__(
+            self, hp, src_embeddings=None, tgt_embeddings=None, is_infer=False):
         super(CNNEDMultiLayerDQN, self).__init__(hp, src_embeddings, is_infer)
 
         self.filter_size = 3
@@ -323,7 +325,6 @@ class CNNEDMultiLayerDQN(BaseDQN):
         self.pos_embeddings = tf.get_variable(
             name="pos_embeddings", dtype=tf.float32,
             shape=[self.num_tokens, self.hp.embedding_size])
-
 
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
@@ -340,7 +341,6 @@ class CNNEDMultiLayerDQN(BaseDQN):
                 shape=[self.hp.tgt_vocab_size, self.hp.embedding_size])
         else:
             self.tgt_embeddings = tgt_embeddings
-
 
     def get_q_actions(self):
         inner_states = dqn.encoder_cnn_multilayers(
@@ -400,7 +400,7 @@ def create_eval_gen_model(model_creator, hp):
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
         q_actions = model.get_q_actions()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
+        _ = model.get_train_op(q_actions)
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
