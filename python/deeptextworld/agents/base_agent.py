@@ -987,8 +987,14 @@ class BaseAgent(Logging):
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
-        self.tjs.append_master_txt(obs_idx)
-        self.stc.append_state_txt(
+        if self.in_game_t == 0 and self._last_action_desc is None:
+            act_idx = []
+        else:
+            act_idx = list(
+                self.action_collector.get_action_matrix()
+                [self._last_action_desc.action_idx])
+        self.tjs.append(act_idx + obs_idx)
+        self.stc.append(
             infos["description"][0] + "\n" + infos["inventory"][0])
 
         actions = self.get_admissible_actions(infos)
@@ -1020,9 +1026,6 @@ class BaseAgent(Logging):
             self._cnt_action[action_idx] += 0.1
         else:
             self.debug("cnt action ignore hard_set_action")
-
-        self.tjs.append_player_txt(
-            self.action_collector.get_action_matrix()[action_idx])
 
         self._last_actions_mask = actions_mask
         return action

@@ -56,16 +56,8 @@ class BaseTrajectory(Logging):
         self.curr_tj = []
         return tid
 
-    def _append(self, val):
+    def append(self, val):
         self.curr_tj.append(val)
-
-    def append_master_txt(self, val):
-        assert self.get_last_sid() % 2 == 1, "master index should be even"
-        self._append(val)
-
-    def append_player_txt(self, val):
-        assert self.get_last_sid() % 2 == 0, "master index should be odd"
-        self._append(val)
 
     def save_tjs(self, path):
         tids = list(self.trajectories.keys())
@@ -103,35 +95,17 @@ class StateTextCompanion(BaseTrajectory):
         self.curr_tj = []
         return tid
 
-    def append_state_txt(self, txt):
-        self._append(txt)
-        self._append("")
-
     def fetch_last_state(self):
         return self.fetch_raw_state_by_idx(self.curr_tid, self.get_last_sid())
 
     def fetch_raw_state_by_idx(self, tid, sid):
-        """
-        state id converts to state_text id should be divided by 2.
-        since for trajectory:
-        m1, a1, m2, a2, m3, a3, ...
-        0,  1,  2,  3,  4,  5,  ...
-        and m1, m2, m3 (0, 2, 4, respectively) are points of end of states.
-        converts to state text:
-        st1, st2, st3, ...
-        0,   1,   2,   ...
-        :param tid:
-        :param sid:
-        :return:
-        """
-        assert sid % 2 == 0, "wrong state id"
         if tid == self.curr_tid:  # make sure test cid first
             tj = self.curr_tj
         elif tid in self.trajectories:
             tj = self.trajectories[tid]
         else:
             return None
-        state = tj[sid//2]
+        state = tj[sid]
         return state, len(state)
 
     def fetch_batch_states(self, b_tid, b_sid):
