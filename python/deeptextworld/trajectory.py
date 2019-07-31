@@ -56,16 +56,16 @@ class BaseTrajectory(Logging):
         self.curr_tj = []
         return tid
 
-    def append(self, val):
+    def _append(self, val):
         self.curr_tj.append(val)
 
     def append_master_txt(self, val):
         assert self.get_last_sid() % 2 == 1, "master index should be even"
-        self.append(val)
+        self._append(val)
 
     def append_player_txt(self, val):
         assert self.get_last_sid() % 2 == 0, "master index should be odd"
-        self.append(val)
+        self._append(val)
 
     def save_tjs(self, path):
         tids = list(self.trajectories.keys())
@@ -91,6 +91,69 @@ class BaseTrajectory(Logging):
 
     def fetch_batch_states_pair(self, b_tid, b_sid):
         raise NotImplementedError()
+
+
+class StateTextCompanion(BaseTrajectory):
+
+    def add_new_tj(self, tid=None):
+        assert tid is not None, "trajectory id must not be None"
+        if self.curr_tj is not None and len(self.curr_tj) != 0:
+            self.trajectories[self.curr_tid] = self.curr_tj
+        self.curr_tid = tid
+        self.curr_tj = []
+        return tid
+
+    def append_state_txt(self, txt):
+        self._append(txt)
+        self._append("")
+
+    def fetch_last_state(self):
+        return self.fetch_raw_state_by_idx(self.curr_tid, self.get_last_sid())
+
+    def fetch_raw_state_by_idx(self, tid, sid):
+        """
+        state id converts to state_text id should be divided by 2.
+        since for trajectory:
+        m1, a1, m2, a2, m3, a3, ...
+        0,  1,  2,  3,  4,  5,  ...
+        and m1, m2, m3 (0, 2, 4, respectively) are points of end of states.
+        converts to state text:
+        st1, st2, st3, ...
+        0,   1,   2,   ...
+        :param tid:
+        :param sid:
+        :return:
+        """
+        assert sid % 2 == 0, "wrong state id"
+        if tid == self.curr_tid:  # make sure test cid first
+            tj = self.curr_tj
+        elif tid in self.trajectories:
+            tj = self.trajectories[tid]
+        else:
+            return None
+        state = tj[sid//2]
+        return state, len(state)
+
+    def fetch_batch_states(self, b_tid, b_sid):
+        """
+        Fetch a batch of states and padding to the same length
+        """
+        b_states = []
+        b_len = []
+        for tid, sid in zip(b_tid, b_sid):
+            stat, stat_len = self.fetch_raw_state_by_idx(tid, sid)
+            b_states.append(stat)
+            b_len.append(stat_len)
+        return b_states, b_len
+
+    def fetch_batch_states_pair(self, b_tid, b_sid):
+        """
+        :return: p_states: prior states; s_states: successive states
+        """
+        b_sid = np.asarray(b_sid)
+        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 2)
+        s_states, s_len = self.fetch_batch_states(b_tid, b_sid)
+        return p_states, s_states, p_len, s_len
 
 
 class VarSizeTrajectory(BaseTrajectory):

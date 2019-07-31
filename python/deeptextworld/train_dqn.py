@@ -5,14 +5,14 @@ from threading import Thread, Condition
 import gym
 import textworld.gym
 
-from deeptextworld.agents.dqn_agent import DQNAgent
+from deeptextworld.agents.dqn_agent import DQNAgent, TabularDQNAgent
 from deeptextworld.train_drrn import validate_requested_infos, run_agent, \
     run_agent_eval, agg_results
 from deeptextworld.utils import ctime
 
 
 def train(hp, cv, model_dir, game_file, nb_epochs=sys.maxsize, batch_size=1):
-    agent = DQNAgent(hp, model_dir)
+    agent = TabularDQNAgent(hp, model_dir)
     agent.train()
 
     requested_infos = agent.select_additional_infos()

@@ -13,6 +13,7 @@ from nltk import word_tokenize, sent_tokenize
 from textworld import EnvInfos
 
 from deeptextworld import trajectory
+from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.action import ActionCollector
 from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.dqn_func import get_random_1Daction
@@ -74,6 +75,7 @@ class BaseAgent(Logging):
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
+        self.stc_prefix = "state_text"
 
         self.inv_direction = {
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
@@ -83,6 +85,7 @@ class BaseAgent(Logging):
         self.info(output_hparams(self.hp))
 
         self.tjs = None
+        self.stc = None
         self.memo = None
         self.model = None
         self.target_model = None
@@ -285,6 +288,15 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
 
+    def init_state_text(self, state_text_path, with_loading=True):
+        stc = StateTextCompanion()
+        if with_loading:
+            try:
+                stc.load_tjs(state_text_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return stc
+
     def init_memo(self, hp, memo_path, with_loading=True):
         memory = TreeMemory(capacity=hp.replay_mem)
         if with_loading:
@@ -430,6 +442,9 @@ class BaseAgent(Logging):
         tjs_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.tjs_prefix, largest_valid_tag))
+        stc_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.stc_prefix, largest_valid_tag))
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
@@ -443,6 +458,7 @@ class BaseAgent(Logging):
             with_loading=True)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
+        self.stc = self.init_state_text(stc_path, with_loading=True)
         self.memo = self.init_memo(
             self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self.init_floor_plan(
@@ -479,6 +495,7 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
+        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
         self.game_id = hashlib.md5(master_starter.encode("utf-8")).hexdigest()
         self.action_collector.add_new_episode(eid=self.game_id)
@@ -564,6 +581,9 @@ class BaseAgent(Logging):
         tjs_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.tjs_prefix, self.total_t))
+        stc_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.stc_prefix, self.total_t))
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, self.total_t))
@@ -573,6 +593,7 @@ class BaseAgent(Logging):
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
+        self.stc.save_tjs(stc_path)
         self.action_collector.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
 
@@ -588,6 +609,9 @@ class BaseAgent(Logging):
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.tjs_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.stc_prefix, tag)))
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.action_prefix, tag)))
@@ -964,6 +988,8 @@ class BaseAgent(Logging):
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
         self.tjs.append_master_txt(obs_idx)
+        self.stc.append_state_txt(
+            infos["description"][0] + "\n" + infos["inventory"][0])
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)

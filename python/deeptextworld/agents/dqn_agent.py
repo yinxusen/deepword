@@ -15,31 +15,17 @@ class DQNAgent(BaseAgent):
     def __init__(self, hp, model_dir):
         super(DQNAgent, self).__init__(hp, model_dir)
 
-    def select_additional_infos(self) -> EnvInfos:
+    def select_additional_infos(self):
         """
         additional information needed when playing the game
         """
-        request_infos = EnvInfos()
-        if self.is_training:
-            request_infos.description = True
-            request_infos.inventory = True
-            request_infos.entities = False
-            request_infos.verbs = False
-            request_infos.max_score = True
-            request_infos.has_won = True
-            request_infos.extras = ["recipe"]
-            request_infos.admissible_commands = True
-        else:
-            request_infos.description = True
-            request_infos.inventory = True
-            request_infos.entities = False
-            request_infos.verbs = False
-            request_infos.max_score = True
-            request_infos.has_won = True
-            request_infos.has_lost = True
-            request_infos.extras = ["recipe"]
-            request_infos.admissible_commands = True
-        return request_infos
+        return EnvInfos(
+            description=True,
+            inventory=True,
+            max_score=True,
+            has_won=True,
+            admissible_commands=True,
+            extras=['recipe'])
 
     def get_an_eps_action(self, action_mask):
         """
@@ -135,3 +121,37 @@ class DQNAgent(BaseAgent):
         self.debug('t1: {}, t2: {}, t3: {}'.format(
             t1_end-t1, t2_end-t2, t3_end-t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
+
+
+class TabularDQNAgent(DQNAgent):
+    def __init__(self, hp, model_dir):
+        super(TabularDQNAgent, self).__init__(hp, model_dir)
+        self.q_mat = {}  # map hash of a state to a q-vec
+
+    def get_an_eps_action(self, action_mask):
+        """
+        get either an random action index with action string
+        or the best predicted action index with action string.
+        :param action_mask:
+        """
+        action_mask = self.from_bytes([action_mask])[0]
+        if np.random.random() < self.eps:
+            action_idx, action = get_random_1Daction(
+                self.action_collector.get_actions(), action_mask)
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action=action)
+        else:
+            indexed_state_t, lens_t = self.tjs.fetch_last_state()
+            state_text, len_state_text = self.stc.fetch_last_state()
+            self.debug(state_text)
+            q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
+                self.model.src_: [indexed_state_t],
+                self.model.src_len_: [lens_t]
+            })[0]
+            action_idx, q_max, action = get_best_1Daction(
+                q_actions_t, self.action_collector.get_actions(),
+                mask=action_mask)
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
+        return action_desc
