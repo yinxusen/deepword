@@ -5,7 +5,7 @@ from threading import Thread, Condition
 import gym
 import textworld.gym
 
-from deeptextworld.agents.dqn_agent import DQNAgent, TabularDQNAgent
+from deeptextworld.agents.dqn_agent import TabularDQNAgent
 from deeptextworld.train_drrn import validate_requested_infos, run_agent, \
     run_agent_eval, agg_results
 from deeptextworld.utils import ctime
@@ -32,7 +32,7 @@ def evaluation(hp, cv, model_dir, game_file, nb_episodes):
     logger = logging.getLogger("eval")
     logger.info('evaluation worker started ...')
 
-    agent = DQNAgent(hp, model_dir)
+    agent = TabularDQNAgent(hp, model_dir)
     agent.eval()
 
     prev_total_scores = 0
@@ -48,12 +48,15 @@ def evaluation(hp, cv, model_dir, game_file, nb_episodes):
             eval_results = run_agent_eval(
                 agent, [game_file], nb_episodes, hp.game_episode_terminal_t)
             eval_end_t = ctime()
-            agg_res, total_scores, total_steps = agg_results(eval_results)
+            agg_res, total_scores, total_steps, n_won = agg_results(
+                eval_results)
             logger.info("eval_results: {}".format(eval_results))
             logger.info("eval aggregated results: {}".format(agg_res))
-            logger.info("total scores: {}, total steps: {}".format(
-                total_scores, total_steps))
-            logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
+            logger.info(
+                "scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
+                    total_scores, total_steps, n_won))
+            logger.info(
+                "time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or
                     ((total_scores == prev_total_scores) and
                      (total_steps < prev_total_steps))):
@@ -80,7 +83,7 @@ def train_n_eval(hp, model_dir, game_file, batch_size=1):
 
 def run_eval(hp, model_dir, game_file, eval_randomness=None):
     logger = logging.getLogger("eval")
-    agent = DQNAgent(hp, model_dir)
+    agent = TabularDQNAgent(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:
         agent.eps = eval_randomness
@@ -90,9 +93,10 @@ def run_eval(hp, model_dir, game_file, eval_randomness=None):
     eval_results = run_agent_eval(
         agent, [game_file], hp.eval_episode, hp.game_episode_terminal_t)
     eval_end_t = ctime()
-    agg_res, total_scores, total_steps = agg_results(eval_results)
+    agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))
     logger.info("eval aggregated results: {}".format(agg_res))
-    logger.info("total scores: {}, total steps: {}".format(
-        total_scores, total_steps))
+    logger.info(
+        "total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
+            total_scores, total_steps, n_won))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))

@@ -32,8 +32,8 @@ pushd $PDIR
     -m $MODELHOME --mode train-dqn \
     --game-path $GAMEPATH \
     --vocab-file $VOCAB_FILE \
-    --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
+    --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \
-    --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
+    --save-gap-t 1000 --batch-size 32 --game-episode-terminal-t 100 \
     --model-creator CNNEncoderDQN
 popd

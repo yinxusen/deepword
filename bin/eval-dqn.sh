@@ -17,5 +17,5 @@ fi
 
 ./bin/run.sh python/deeptextworld/main.py \
     --game-path $DATAHOME -m $MODELHOME \
-    --mode eval-dqn --eval-episode 1 --eval-randomness 0.05 --eval-mode eval-train \
+    --mode eval-dqn --eval-episode 1 --eval-randomness 0 --eval-mode eval-train \
     --game-episode-terminal-t 100

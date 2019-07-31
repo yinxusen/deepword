@@ -94,7 +94,7 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
         for episode_no in range(nb_episodes):
             logger.info(
                 "episode_no/game_no/game_name: {}/{}/{}".format(
-                episode_no, game_no, game_name))
+                    episode_no, game_no, game_name))
 
             obs, infos = game_env.reset()
             scores = [0] * len(obs)
@@ -111,13 +111,12 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
             agent.act(obs, scores, dones, infos)
 
             if not agent.is_training:
-                if not game_name in eval_results:
+                if game_name not in eval_results:
                     eval_results[game_name] = []
                 eval_results[game_name].append(
                     (scores[0], infos["max_score"][0], steps[0],
                      infos["has_won"][0]))
     return eval_results
-
 
 
 def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
@@ -174,13 +173,15 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             eval_results = run_agent_eval(
                 agent, game_files, nb_episodes, hp.game_episode_terminal_t)
             eval_end_t = ctime()
-            agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
+            agg_res, total_scores, total_steps, n_won = agg_results(
+                eval_results)
             logger.info("eval_results: {}".format(eval_results))
             logger.info("eval aggregated results: {}".format(agg_res))
             logger.info(
-                "total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
-                total_scores, total_steps, n_won))
-            logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
+                "scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
+                    total_scores, total_steps, n_won))
+            logger.info(
+                "time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or
                     ((total_scores == prev_total_scores) and
                      (total_steps < prev_total_steps))):
@@ -299,7 +300,7 @@ def run_eval(
         elif eval_mode == "eval-eval":
             game_files = dev_games
         else:
-            print("unknown evaluation mode. choose from [all|eval-train|eval-eval]")
+            print("unknown mode. choose from [all|eval-train|eval-eval]")
             exit(-1)
     elif os.path.isfile(game_path):
         game_files = [game_path]
@@ -325,7 +326,7 @@ def run_eval(
     agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))
     logger.info("eval aggregated results: {}".format(agg_res))
-    logger.info("total scores: {:.2f}, total steps: {:.2f}, n_won: {:.2f}".format(
+    logger.info("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
         total_scores, total_steps, n_won))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
 

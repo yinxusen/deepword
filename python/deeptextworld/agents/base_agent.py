@@ -55,6 +55,7 @@ ACT_TYPE_RULE = "rule_based_action"
 ACT_TYPE_RND_WALK = "random_walk_action"
 ACT_TYPE_NN = "learned_action"
 ACT_TYPE_JITTER = "jitter_action"
+ACT_TYPE_TBL = "tabular_action"
 
 K_RECIPE = "extra.recipe"
 K_DESC = "description"
@@ -76,6 +77,7 @@ class BaseAgent(Logging):
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
         self.stc_prefix = "state_text"
+        self.q_mat_prefix = "q_mat"
 
         self.inv_direction = {
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
@@ -110,6 +112,8 @@ class BaseAgent(Logging):
         self.target_saver = None
         self.snapshot_saved = False
         self.epoch_start_t = 0
+
+        self.q_mat = {}  # map hash of a state to a q-vec
 
         self._last_actions_mask = None
         self._last_action_desc = None
@@ -584,6 +588,9 @@ class BaseAgent(Logging):
         stc_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.stc_prefix, self.total_t))
+        q_mat_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.q_mat_prefix, self.total_t))
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, self.total_t))
@@ -596,6 +603,8 @@ class BaseAgent(Logging):
         self.stc.save_tjs(stc_path)
         self.action_collector.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
+
+        np.savez(q_mat_path, q_mat=self.q_mat)
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
