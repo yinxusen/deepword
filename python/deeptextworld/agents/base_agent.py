@@ -455,6 +455,9 @@ class BaseAgent(Logging):
         fp_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.fp_prefix, largest_valid_tag))
+        q_mat_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.q_mat_prefix, largest_valid_tag))
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
@@ -467,6 +470,14 @@ class BaseAgent(Logging):
             self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=self.is_training)
+        try:
+            q_mat = np.load(q_mat_path)
+            q_mat_key = q_mat["q_mat_key"]
+            q_mat_val = q_mat["q_mat_val"]
+            self.q_mat = dict(zip(q_mat_key, q_mat_val))
+            self.debug("load q_mat from file")
+        except IOError as e:
+            pass
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model()
@@ -604,7 +615,10 @@ class BaseAgent(Logging):
         self.action_collector.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
 
-        np.savez(q_mat_path, q_mat=self.q_mat)
+        np.savez(
+            q_mat_path,
+            q_mat_key=list(self.q_mat.keys()),
+            q_mat_val=list(self.q_mat.values()))
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
@@ -771,7 +785,9 @@ class BaseAgent(Logging):
         action_desc = None
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN)
+        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN
+                                   or prev_action_desc.action_type ==
+                                   ACT_TYPE_TBL)
                 and (prev_action_desc.action in admissible_go_actions)):
             if ((self.is_training and
                  random.random() > 1 - self.hp.jitter_train_prob)
@@ -828,8 +844,10 @@ class BaseAgent(Logging):
         :param instant_reward:
         :return:
         """
-        action_desc = self.rule_based_policy(
-            actions, all_actions, instant_reward)
+        # action_desc = self.rule_based_policy(
+        #     actions, all_actions, instant_reward)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_RULE, action_idx=None, action=None)
         if action_desc.action_idx is None:
             action_desc = self.random_walk_for_collecting_fp(
                 actions, all_actions)
