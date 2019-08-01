@@ -969,8 +969,9 @@ class BaseAgent(Logging):
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
-                self.debug("tjs delete {}".format(original_data.tid))
+                self.debug("tjs and stc delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
+                self.stc.request_delete_key(original_data.tid)
 
     def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:
