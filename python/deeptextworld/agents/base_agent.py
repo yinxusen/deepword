@@ -641,6 +641,9 @@ class BaseAgent(Logging):
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.fp_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.q_mat_prefix, tag)))
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
         save_hparams(self.hp,
@@ -1022,8 +1025,16 @@ class BaseAgent(Logging):
                 self.action_collector.get_action_matrix()
                 [self._last_action_desc.action_idx])
         self.tjs.append(act_idx + obs_idx)
-        self.stc.append(
-            infos["description"][0] + "\n" + infos["inventory"][0])
+        # due to game design flaw, we need to make a new terminal
+        # observation + inventory
+        # because the game terminal observation + inventory is the same with
+        # its previous state
+        if not dones[0]:
+            state_text = infos["description"][0] + "\n" + infos["inventory"][0]
+        else:
+            state_text = ("terminal and win" if infos["has_won"]
+                          else "terminal and lose")
+        self.stc.append(state_text)
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
