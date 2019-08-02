@@ -1,27 +1,47 @@
 #!/bin/bash
 
-#SBATCH --gres=gpu:2
-#SBATCH --time=60:00:00
+#SBATCH --ntasks=4
+#SBATCH --time=200:00:00
 #SBATCH --partition=isi
+#SBATCH --mail-user=xusenyin@isi.edu
+#SBATCH --mail-type=ALL
 
 set -e -x
 
+echo "SLURM_JOBID="$SLURM_JOBID
+echo "SLURM_JOBNAME="$SLURM_JOB_NAME
+echo "SLURM_JOB_NODELIST"=$SLURM_JOB_NODELIST
+echo "SLURM_NNODES"=$SLURM_NNODES
+echo "SLURMTMPDIR="$SLURMTMPDIR
+echo "working directory = "$SLURM_SUBMIT_DIR
+
 
 if [[ `hostname` =~ "hpc" ]]; then
-    PDIR=""
+    PDIR="$SLURM_SUBMIT_DIR"
+    filename="$SLURM_JOB_NAME"
+    extension="${filename##*.}"
+    filename="${filename%.*}"
+    export PYENV_ROOT="$HOME/local/lib/pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    if command -v pyenv 1>/dev/null 2>&1; then
+      eval "$(pyenv init -)"
+    fi
+    eval "$(pyenv virtualenv-init -)"
+    pyenv activate deepdnd-drrn-cpu
 else
     FWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
     PDIR="$FWDIR/.."
+    filename=$(basename "$0")
+    extension="${filename##*.}"
+    filename="${filename%.*}"
 fi
+
+PDIR="."
 
 MODELHOME="$PDIR/../experiments-drrn/agent-dqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
-GAMEPATH=$1
-
-if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
-    source $HOME/local/etc/init_tensorflow.sh
-fi
+GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train/tw-cooking-recipe1-el6QIQQkuaXxS3K3.ulx"}
 
 if [[ ! -d $MODELHOME ]]; then
     mkdir $MODELHOME
