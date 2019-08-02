@@ -179,7 +179,8 @@ class TabularDQNAgent(DQNAgent):
 
         t2 = ctime()
         s_q_actions_target = np.asarray(
-            [self.q_mat.get(self.get_hash(s), np.zeros(self.hp.n_actions))
+            [self.target_q_mat.get(
+                self.get_hash(s), np.zeros(self.hp.n_actions))
              for s in s_states])
         s_q_actions_dqn = np.asarray(
             [self.q_mat.get(self.get_hash(s), np.zeros(self.hp.n_actions))

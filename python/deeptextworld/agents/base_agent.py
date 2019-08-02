@@ -114,6 +114,7 @@ class BaseAgent(Logging):
         self.epoch_start_t = 0
 
         self.q_mat = {}  # map hash of a state to a q-vec
+        self.target_q_mat = {}  # target q-mat for Double DQN
 
         self._last_actions_mask = None
         self._last_action_desc = None
@@ -476,8 +477,11 @@ class BaseAgent(Logging):
             q_mat_val = q_mat["q_mat_val"]
             self.q_mat = dict(zip(q_mat_key, q_mat_val))
             self.debug("load q_mat from file")
+            self.target_q_mat = q_mat
+            self.debug("init target_q_mat with q_mat")
         except IOError as e:
-            pass
+            self.debug("load q_mat error:\n{}".format(e))
+
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model()
@@ -619,6 +623,8 @@ class BaseAgent(Logging):
             q_mat_path,
             q_mat_key=list(self.q_mat.keys()),
             q_mat_val=list(self.q_mat.values()))
+        self.target_q_mat.update(self.q_mat)
+        self.debug("target q_mat is updated with q_mat")
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
