@@ -195,11 +195,16 @@ class TabularDQNAgent(DQNAgent):
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
         t3 = ctime()
+        abs_loss = np.zeros_like(reward)
         for i, s in enumerate(s_states):
             if self.get_hash(s) not in self.q_mat:
                 self.q_mat[self.get_hash(s)] = np.zeros(self.hp.n_actions)
+            abs_loss[i] = abs(
+                self.q_mat[self.get_hash(s)][action_id[i]] - expected_q[i])
             self.q_mat[self.get_hash(s)][action_id[i]] = expected_q[i]
         t3_end = ctime()
+
+        self.memo.batch_update(b_idx, abs_loss)
 
         self.debug('t1: {}, t2: {}, t3: {}'.format(
             t1_end-t1, t2_end-t2, t3_end-t3))
