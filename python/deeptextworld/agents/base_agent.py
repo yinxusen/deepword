@@ -970,6 +970,7 @@ class BaseAgent(Logging):
 
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
+        # the last sid here is for the next state of using the last action
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_desc.action_idx,
@@ -1009,7 +1010,7 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+        if self.in_game_t > 0:  # pass the 1st master
             self.debug(
                 "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
                 " reward: {}, is_terminal: {}".format(
@@ -1049,6 +1050,7 @@ class BaseAgent(Logging):
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
+        # make sure appending tjs first, otherwise the judgement could be wrong
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.feed_memory(
                 instant_reward, dones[0],

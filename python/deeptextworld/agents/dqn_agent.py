@@ -197,13 +197,13 @@ class TabularDQNAgent(DQNAgent):
 
         t3 = ctime()
         abs_loss = np.zeros_like(reward)
-        for i, s in enumerate(s_states):
-            if self.get_hash(s) not in self.q_mat:
-                self.q_mat[self.get_hash(s)] = np.zeros(self.hp.n_actions)
-            prev_q_val = self.q_mat[self.get_hash(s)][action_id[i]]
+        for i, ps in enumerate(p_states):
+            if self.get_hash(ps) not in self.q_mat:
+                self.q_mat[self.get_hash(ps)] = np.zeros(self.hp.n_actions)
+            prev_q_val = self.q_mat[self.get_hash(ps)][action_id[i]]
             delta_q_val = expected_q[i] - prev_q_val
             abs_loss[i] = abs(delta_q_val)
-            self.q_mat[self.get_hash(s)][action_id[i]] = (
+            self.q_mat[self.get_hash(ps)][action_id[i]] = (
                     prev_q_val + delta_q_val * b_weight[i])
         t3_end = ctime()
 

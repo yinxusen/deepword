@@ -125,7 +125,7 @@ class StateTextCompanion(BaseTrajectory):
         :return: p_states: prior states; s_states: successive states
         """
         b_sid = np.asarray(b_sid)
-        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 2)
+        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 1)
         s_states, s_len = self.fetch_batch_states(b_tid, b_sid)
         return p_states, s_states, p_len, s_len
 
@@ -181,7 +181,7 @@ class VarSizeTrajectory(BaseTrajectory):
         :return: p_states: prior states; s_states: successive states
         """
         b_sid = np.asarray(b_sid)
-        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 2)
+        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 1)
         s_states, s_len = self.fetch_batch_states(b_tid, b_sid)
         return p_states, s_states, p_len, s_len
 
@@ -315,6 +315,6 @@ class MultiChannelTrajectory(BaseTrajectory):
         :return: p_states: prior states; s_states: successive states
         """
         b_sid = np.asarray(b_sid)
-        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 2)
+        p_states, p_len = self.fetch_batch_states(b_tid, b_sid - 1)
         s_states, s_len = self.fetch_batch_states(b_tid, b_sid)
         return p_states, s_states, p_len, s_len
