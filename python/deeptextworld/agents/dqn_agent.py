@@ -152,10 +152,6 @@ class TabularDQNAgent(DQNAgent):
                 action_type=ACT_TYPE_TBL, action_idx=action_idx, action=action)
         return action_desc
 
-    @classmethod
-    def get_hash(cls, txt):
-        return hashlib.md5(txt.encode("utf-8")).hexdigest()
-
     def train_impl(self, sess, t, summary_writer, target_sess):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,

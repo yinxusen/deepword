@@ -241,6 +241,10 @@ class BaseAgent(Logging):
     def negative_response_reward(cls, master):
         return 0
 
+    @classmethod
+    def get_hash(cls, txt):
+        return hashlib.md5(txt.encode("utf-8")).hexdigest()
+
     def select_additional_infos(self):
         """
         additional information needed when playing the game
@@ -516,7 +520,7 @@ class BaseAgent(Logging):
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
-        self.game_id = hashlib.md5(master_starter.encode("utf-8")).hexdigest()
+        self.game_id = self.get_hash(master_starter)
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -946,8 +950,9 @@ class BaseAgent(Logging):
         self.eps = self.annealing_eps(
             self.hp.init_eps, self.hp.final_eps,
             self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-        self.train_impl(self.sess, self.total_t,
-                        self.train_summary_writer, self.target_sess)
+        self.train_impl(
+            self.sess, self.total_t, self.train_summary_writer,
+            self.target_sess)
 
         if self.time_to_save():
             epoch_end_t = ctime()

@@ -169,7 +169,7 @@ class VarSizeTrajectory(BaseTrajectory):
         """
         b_states = []
         b_len = []
-        for tid, sid in zip(b_tid, b_sid):
+        for tid, sid in zip(list(b_tid), list(b_sid)):
             stat, stat_len = self.fetch_raw_state_by_idx(tid, sid)
             b_states.append(stat)
             b_len.append(stat_len)
