@@ -78,6 +78,7 @@ class BaseAgent(Logging):
         self.fp_prefix = "floor_plan"
         self.stc_prefix = "state_text"
         self.q_mat_prefix = "q_mat"
+        self.hs2tj_prefix = "hs2tj"
 
         self.inv_direction = {
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
@@ -115,6 +116,7 @@ class BaseAgent(Logging):
 
         self.q_mat = {}  # map hash of a state to a q-vec
         self.target_q_mat = {}  # target q-mat for Double DQN
+        self.hash_states2tjs = {}  # map states to tjs
 
         self._last_actions_mask = None
         self._last_action_desc = None
@@ -463,6 +465,9 @@ class BaseAgent(Logging):
         q_mat_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.q_mat_prefix, largest_valid_tag))
+        hs2tj_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.hs2tj_prefix, largest_valid_tag))
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
@@ -485,6 +490,15 @@ class BaseAgent(Logging):
             self.debug("init target_q_mat with q_mat")
         except IOError as e:
             self.debug("load q_mat error:\n{}".format(e))
+
+        try:
+            hs2tj = np.load(hs2tj_path)
+            hs2tj_key = hs2tj["hash_states2tjs_key"]
+            hs2tj_val = hs2tj["hash_states2tjs_val"]
+            self.hash_states2tjs = dict(zip(hs2tj_key, hs2tj_val))
+            self.debug("load hash_states2tjs from file")
+        except IOError as e:
+            self.debug("load hash_states2tjs error:\n{}".format(e))
 
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
@@ -616,6 +630,9 @@ class BaseAgent(Logging):
         fp_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.fp_prefix, self.total_t))
+        hs2tj_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.hs2tj_prefix, self.total_t))
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
@@ -629,6 +646,11 @@ class BaseAgent(Logging):
             q_mat_val=list(self.q_mat.values()))
         self.target_q_mat.update(self.q_mat)
         self.debug("target q_mat is updated with q_mat")
+
+        np.savez(
+            hs2tj_path,
+            hash_states2tjs_key=list(self.hash_states2tjs.keys()),
+            hash_states2tjs_val=list(self.hash_states2tjs.values()))
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
@@ -987,6 +1009,19 @@ class BaseAgent(Logging):
                 self.debug("tjs and stc delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
                 self.stc.request_delete_key(original_data.tid)
+                updating = []
+                prev_len = len(self.hash_states2tjs)
+                for k, v in self.hash_states2tjs.items():
+                    trimmed = list(filter(
+                        lambda t_s: t_s[0] > original_data.tid, v))
+                    if len(trimmed) > 0:
+                        updating.append((k, trimmed))
+                    else:
+                        pass
+                self.hash_states2tjs = dict(updating)
+                self.debug(
+                    "hash_states2tjs deletes {} items".format(
+                        len(updating) - prev_len))
 
     def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:

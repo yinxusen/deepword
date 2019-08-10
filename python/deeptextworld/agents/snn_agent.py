@@ -15,7 +15,6 @@ class SNNAgent(BaseAgent):
     """
     def __init__(self, hp, model_dir):
         super(SNNAgent, self).__init__(hp, model_dir)
-        self.hash_states2tjs = {}  # map states to tjs
 
     def get_an_eps_action(self, action_mask):
         """
@@ -130,7 +129,7 @@ class SNNAgent(BaseAgent):
         state_id = [m[0].sid for m in b_memory]
         src, src_len, src2, src2_len, labels = self.get_train_pairs(
             trajectory_id, state_id)
-        if t % 10 == 0:
+        if t % self.hp.save_gap_t == 0:
             self.save_train_pairs(t, src, src_len, src2, src2_len, labels)
         _, summaries, loss_eval = sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss],
@@ -142,3 +141,17 @@ class SNNAgent(BaseAgent):
 
         # self.info('loss: {}'.format(loss_eval))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
+
+    def eval_snn(self):
+        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
+        trajectory_id = [m[0].tid for m in b_memory]
+        state_id = [m[0].sid for m in b_memory]
+        src, src_len, src2, src2_len, labels = self.get_train_pairs(
+            trajectory_id, state_id)
+        pred = self.sess.run(
+            self.model.pred,
+            feed_dict={self.model.src_: src,
+                       self.model.src2_: src2,
+                       self.model.src_len_: src_len,
+                       self.model.src2_len_: src2_len})
+        print("prediction: {}".format(pred))

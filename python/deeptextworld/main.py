@@ -91,7 +91,7 @@ if __name__ == '__main__':
     elif args.mode == "train-snn":
         from deeptextworld.train_snn import train_n_eval
         hp = load_hparams_for_training(config_file, args)
-        train_n_eval(hp, model_dir, game_file=game_path)
+        train_n_eval(hp, model_dir, game_dir=game_path, f_games=args.f_games)
     elif args.mode == "eval-snn":
         pass
     else:

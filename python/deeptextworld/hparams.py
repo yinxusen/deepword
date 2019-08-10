@@ -260,7 +260,7 @@ def default_hparams_BertEncoderDRRN():
 
 def default_hparams_CNNEncoderSNN():
     return tf.contrib.training.HParams(
-        agent_clazz='Agent',
+        agent_clazz='SNNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
         save_gap_t=1000,

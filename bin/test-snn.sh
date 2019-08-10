@@ -41,7 +41,7 @@ PDIR="."
 MODELHOME="$PDIR/../experiments-drrn/agent-snn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
-GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train/tw-cooking-recipe1-el6QIQQkuaXxS3K3.ulx"}
+GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
 
 if [[ ! -d $MODELHOME ]]; then
     mkdir $MODELHOME
