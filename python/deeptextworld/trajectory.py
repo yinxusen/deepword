@@ -202,8 +202,8 @@ class SingleChannelTrajectory(VarSizeTrajectory):
             state = sentence + [self.padding_val] * padding_size
         else:
             state = sentence[-padding_size:]
-            self.debug(
-                "trimming in the front {} tokens".format(-padding_size))
+            # self.debug(
+            #     "trimming in the front {} tokens".format(-padding_size))
         state_len = min(self.num_tokens, len(sentence))
         return state, state_len
 

@@ -78,7 +78,6 @@ class SNNAgent(BaseAgent):
         same_states = []
         diff_states = []
         all_states = list(self.hash_states2tjs.keys())
-        print(all_states)
         for txt in st:
             hs = self.get_hash(txt)
             sampled_idx = np.random.choice(
@@ -141,5 +140,5 @@ class SNNAgent(BaseAgent):
                        self.model.src2_len_: src2_len,
                        self.model.labels_: labels})
 
-        self.info('loss: {}'.format(loss_eval))
+        # self.info('loss: {}'.format(loss_eval))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)

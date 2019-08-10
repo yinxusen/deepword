@@ -572,8 +572,8 @@ class BaseAgent(Logging):
                     self._per_game_recorder[-1])
             else:
                 pass  # repeat dangerous actions
-        self.debug("actions to remove {} for game {}".format(
-            self._actions_to_remove[self.game_id], self.game_id))
+        # self.debug("actions to remove {} for game {}".format(
+        #     self._actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_actions_mask = None
         self.game_id = None
@@ -1015,17 +1015,17 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        if self.in_game_t > 0:  # pass the 1st master
-            self.debug(
-                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-                " reward: {}, is_terminal: {}".format(
-                    self.mode(), self.total_t,
-                    self.in_game_t, self.eps, self._last_action_desc,
-                    cleaned_obs, instant_reward, dones[0]))
-        else:
-            self.info(
-                "mode: {}, master: {}, max_score: {}".format(
-                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        # if self.in_game_t > 0:  # pass the 1st master
+        #     self.debug(
+        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+        #         " reward: {}, is_terminal: {}".format(
+        #             self.mode(), self.total_t,
+        #             self.in_game_t, self.eps, self._last_action_desc,
+        #             cleaned_obs, instant_reward, dones[0]))
+        # else:
+        #     self.info(
+        #         "mode: {}, master: {}, max_score: {}".format(
+        #             self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
@@ -1051,7 +1051,7 @@ class BaseAgent(Logging):
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
         actions = self.go_with_floor_plan(actions)
-        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
+        # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
@@ -1077,7 +1077,8 @@ class BaseAgent(Logging):
         if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
         else:
-            self.debug("cnt action ignore hard_set_action")
+            # self.debug("cnt action ignore hard_set_action")
+            pass
 
         self._last_actions_mask = actions_mask
         return action
