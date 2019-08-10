@@ -6,12 +6,11 @@ import sys
 from threading import Thread, Condition
 
 import gym
-import tensorflow as tf
 import textworld.gym
 from textworld import EnvInfos
 from tqdm import trange
 
-from deeptextworld.agents import snn_agent
+from deeptextworld.agents import dsqn_agent
 from deeptextworld.utils import ctime
 
 # List of additional information available during evaluation.
@@ -122,11 +121,8 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
                 eval_results[game_name].append(
                     (scores[0], infos["max_score"][0], steps[0],
                      infos["has_won"][0]))
-
     # run snn eval after normal agent test
-    eval_sess = tf.Session()
     agent.eval_snn()
-
     return eval_results
 
 
@@ -134,7 +130,7 @@ def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
     logger = logging.getLogger('train')
     logger.info("load {} game files".format(len(game_files)))
 
-    agent_clazz = getattr(snn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.train()
 
@@ -167,7 +163,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(snn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
     agent.eval(load_best=False)
@@ -323,7 +319,7 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(snn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:

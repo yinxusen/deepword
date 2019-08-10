@@ -1,7 +1,7 @@
 import numpy as np
 from bert.tokenization import FullTokenizer
 
-from deeptextworld import snn_model
+from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
@@ -10,11 +10,11 @@ from deeptextworld.hparams import copy_hparams
 from deeptextworld.utils import ctime, load_vocab, get_token2idx
 
 
-class SNNAgent(BaseAgent):
+class DSQNAgent(BaseAgent):
     """
     """
     def __init__(self, hp, model_dir):
-        super(SNNAgent, self).__init__(hp, model_dir)
+        super(DSQNAgent, self).__init__(hp, model_dir)
 
     def get_an_eps_action(self, action_mask):
         """
@@ -29,7 +29,6 @@ class SNNAgent(BaseAgent):
             self.hash_states2tjs[hs] = []
         self.hash_states2tjs[hs].append(
             (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
-        self.eps = 1.0
         if np.random.random() < self.eps:
             action_idx, action = get_random_1Daction(
                 self.action_collector.get_actions(), action_mask)
@@ -56,13 +55,13 @@ class SNNAgent(BaseAgent):
         return action_desc
 
     def create_model_instance(self):
-        model_creator = getattr(snn_model, self.hp.model_creator)
-        model = snn_model.create_train_model(model_creator, self.hp)
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_train_model(model_creator, self.hp)
         return model
 
     def create_eval_model_instance(self):
-        model_creator = getattr(snn_model, self.hp.model_creator)
-        model = snn_model.create_eval_model(model_creator, self.hp)
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_eval_model(model_creator, self.hp)
         return model
 
     def get_train_pairs(self, tids, sids):
@@ -124,22 +123,93 @@ class SNNAgent(BaseAgent):
             labels=labels)
 
     def train_impl(self, sess, t, summary_writer, target_sess):
+        gamma = self.reverse_annealing_gamma(
+            self.hp.init_gamma, self.hp.final_gamma,
+            t - self.hp.observation_t, self.hp.annealing_gamma_t)
+
+        t1 = ctime()
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
+        t1_end = ctime()
+
         trajectory_id = [m[0].tid for m in b_memory]
         state_id = [m[0].sid for m in b_memory]
+        action_id = [m[0].aid for m in b_memory]
+        game_id = [m[0].gid for m in b_memory]
+        reward = [m[0].reward for m in b_memory]
+        is_terminal = [m[0].is_terminal for m in b_memory]
+        action_mask = [m[0].action_mask for m in b_memory]
+        next_action_mask = [m[0].next_action_mask for m in b_memory]
+
+        action_mask_t = self.from_bytes(action_mask)
+        action_mask_t1 = self.from_bytes(next_action_mask)
+
+        p_states, s_states, p_len, s_len = \
+            self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
+
+        # make sure the p_states and s_states are in the same game.
+        # otherwise, it won't make sense to use the same action matrix.
+        action_matrix = (
+            [self.action_collector.get_action_matrix(gid) for gid in game_id])
+        action_len = (
+            [self.action_collector.get_action_len(gid) for gid in game_id])
+
+        t2 = ctime()
+        s_q_actions_target = target_sess.run(
+            self.target_model.q_actions,
+            feed_dict={self.target_model.src_: s_states,
+                       self.target_model.src_len_: s_len,
+                       self.target_model.actions_: action_matrix,
+                       self.target_model.actions_len_: action_len,
+                       self.target_model.actions_mask_: action_mask_t1})
+
+        s_q_actions_dqn = sess.run(
+            self.model.q_actions,
+            feed_dict={self.model.src_: s_states,
+                       self.model.src_len_: s_len,
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len,
+                       self.model.actions_mask_: action_mask_t1})
+        t2_end = ctime()
+
+        expected_q = np.zeros_like(reward)
+        for i in range(len(expected_q)):
+            expected_q[i] = reward[i]
+            if not is_terminal[i]:
+                s_argmax_q, _ = get_best_1D_q(
+                    s_q_actions_dqn[i, :], mask=action_mask_t1[i])
+                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
+
         src, src_len, src2, src2_len, labels = self.get_train_pairs(
             trajectory_id, state_id)
         if t % self.hp.save_gap_t == 0:
             self.save_train_pairs(t, src, src_len, src2, src2_len, labels)
-        _, summaries, loss_eval = sess.run(
-            [self.model.train_op, self.model.train_summary_op, self.model.loss],
-            feed_dict={self.model.src_: src,
-                       self.model.src_len_: src_len,
-                       self.model.src2_: src2,
-                       self.model.src2_len_: src2_len,
-                       self.model.labels_: labels})
 
-        # self.info('loss: {}'.format(loss_eval))
+        t3 = ctime()
+        _, summaries, weighted_loss, abs_loss = sess.run(
+            [self.model.merged_train_op, self.model.train_summary_op,
+             self.model.weighted_loss,
+             self.model.abs_loss],
+            feed_dict={self.model.src_: p_states,
+                       self.model.src_len_: p_len,
+                       self.model.b_weight_: b_weight,
+                       self.model.action_idx_: action_id,
+                       self.model.actions_mask_: action_mask_t,
+                       self.model.expected_q_: expected_q,
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len,
+                       self.model.snn_src_: src,
+                       self.model.snn_src_len_: src_len,
+                       self.model.snn_src2_: src2,
+                       self.model.snn_src2_len_: src2_len,
+                       self.model.labels_: labels
+                       })
+        t3_end = ctime()
+
+        self.memo.batch_update(b_idx, abs_loss)
+
+        self.info('loss: {}'.format(weighted_loss))
+        self.debug('t1: {}, t2: {}, t3: {}'.format(
+            t1_end - t1, t2_end - t2, t3_end - t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
     def eval_snn(self):
@@ -154,4 +224,4 @@ class SNNAgent(BaseAgent):
                        self.model.src2_: src2,
                        self.model.src_len_: src_len,
                        self.model.src2_len_: src2_len})
-        print("prediction: {}".format(pred))
+        self.debug("prediction: {}".format(pred))

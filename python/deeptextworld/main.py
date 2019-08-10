@@ -88,11 +88,11 @@ if __name__ == '__main__':
         run_eval(
             hp, model_dir, game_file=game_path,
             eval_randomness=args.eval_randomness)
-    elif args.mode == "train-snn":
-        from deeptextworld.train_snn import train_n_eval
+    elif args.mode == "train-dsqn":
+        from deeptextworld.train_dsqn import train_n_eval
         hp = load_hparams_for_training(config_file, args)
         train_n_eval(hp, model_dir, game_dir=game_path, f_games=args.f_games)
-    elif args.mode == "eval-snn":
+    elif args.mode == "eval-dsqn":
         pass
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))

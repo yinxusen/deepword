@@ -38,7 +38,7 @@ fi
 
 PDIR="."
 
-MODELHOME="$PDIR/../experiments-drrn/agent-snn-test"
+MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
@@ -49,11 +49,11 @@ fi
 
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
-    -m $MODELHOME --mode train-snn \
+    -m $MODELHOME --mode train-dsqn \
     --game-path $GAMEPATH \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 1000 --batch-size 32 --game-episode-terminal-t 100 \
-    --model-creator CNNEncoderSNN
+    --model-creator CNNEncoderDSQN
 popd
