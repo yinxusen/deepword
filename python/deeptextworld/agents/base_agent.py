@@ -687,10 +687,16 @@ class BaseAgent(Logging):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
+        q_mat_tags = self.get_path_tags(self.model_dir, self.q_mat_prefix)
+        hs2tj_tags = self.get_path_tags(self.model_dir, self.hs2tj_prefix)
+        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
+        valid_tags.intersection(q_mat_tags)
+        valid_tags.intersection(hs2tj_tags)
+        valid_tags.intersection(stc_tags)
 
         return list(valid_tags)
 
