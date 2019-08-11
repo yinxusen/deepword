@@ -285,7 +285,7 @@ class BaseAgent(Logging):
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
-                action_collector.extend(load_actions(hp.action_file))
+                # action_collector.extend(load_actions(hp.action_file))
             except IOError as e:
                 self.info("load actions error: \n{}".format(e))
         return action_collector
@@ -677,6 +677,9 @@ class BaseAgent(Logging):
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.q_mat_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.hs2tj_prefix, tag)))
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
         save_hparams(self.hp,
@@ -694,9 +697,9 @@ class BaseAgent(Logging):
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
-        valid_tags.intersection(q_mat_tags)
-        valid_tags.intersection(hs2tj_tags)
-        valid_tags.intersection(stc_tags)
+        valid_tags.intersection_update(q_mat_tags)
+        valid_tags.intersection_update(hs2tj_tags)
+        valid_tags.intersection_update(stc_tags)
 
         return list(valid_tags)
 
