@@ -5,6 +5,7 @@ import os
 import random
 import re
 from typing import List, Dict, Any, Optional
+from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
@@ -481,12 +482,12 @@ class BaseAgent(Logging):
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=self.is_training)
         try:
-            q_mat = np.load(q_mat_path)
-            q_mat_key = q_mat["q_mat_key"]
-            q_mat_val = q_mat["q_mat_val"]
+            npz_q_mat = np.load(q_mat_path)
+            q_mat_key = npz_q_mat["q_mat_key"]
+            q_mat_val = npz_q_mat["q_mat_val"]
             self.q_mat = dict(zip(q_mat_key, q_mat_val))
             self.debug("load q_mat from file")
-            self.target_q_mat = q_mat
+            self.target_q_mat = deepcopy(self.q_mat)
             self.debug("init target_q_mat with q_mat")
         except IOError as e:
             self.debug("load q_mat error:\n{}".format(e))
@@ -644,7 +645,7 @@ class BaseAgent(Logging):
             q_mat_path,
             q_mat_key=list(self.q_mat.keys()),
             q_mat_val=list(self.q_mat.values()))
-        self.target_q_mat.update(self.q_mat)
+        self.target_q_mat = deepcopy(self.q_mat)
         self.debug("target q_mat is updated with q_mat")
 
         np.savez(
