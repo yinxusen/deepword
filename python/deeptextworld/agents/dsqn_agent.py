@@ -220,8 +220,8 @@ class DSQNAgent(BaseAgent):
             trajectory_id, state_id)
         pred = self.sess.run(
             self.model.pred,
-            feed_dict={self.model.src_: src,
-                       self.model.src2_: src2,
-                       self.model.src_len_: src_len,
-                       self.model.src2_len_: src2_len})
+            feed_dict={self.model.snn_src_: src,
+                       self.model.snn_src2_: src2,
+                       self.model.snn_src_len_: src_len,
+                       self.model.snn_src2_len_: src2_len})
         self.debug("prediction: {}".format(pred))
