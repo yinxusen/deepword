@@ -14,6 +14,7 @@ class TrainDSQNModel(
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss', 'pred',
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
          'snn_loss', 'weighted_loss', 'merged_train_op', 'snn_train_op',
+         'diff_two_states',
          'initializer'))):
     pass
 
@@ -24,6 +25,7 @@ class EvalDSQNModel(
         ('graph', 'model', 'q_actions', 'pred',
          'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         'diff_two_states',
          'initializer'))):
     pass
 
@@ -136,13 +138,13 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         pred = tf.squeeze(tf.layers.dense(
             diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
             name="snn_dense"))
-        return pred
+        return pred, diff_two_states
 
     def get_snn_train_op(self, pred):
         labels = self.inputs["labels"]
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=labels, logits=pred)
-        loss = tf.reduce_mean(losses)
+        loss = tf.reduce_mean(self.inputs["b_weight"] * losses)
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
@@ -160,7 +162,7 @@ def create_train_model(model_creator, hp):
         initializer = tf.global_variables_initializer
         inputs = model.inputs
         q_actions = model.get_q_actions()
-        pred = model.get_pred()
+        pred, diff_two_states = model.get_pred()
         loss, train_op, abs_loss = model.get_train_op(q_actions)
         snn_loss, snn_train_op = model.get_snn_train_op(pred)
         weighted_loss, merged_train_op = model.get_merged_train_op(
@@ -192,6 +194,7 @@ def create_train_model(model_creator, hp):
         snn_loss=snn_loss,
         merged_train_op=merged_train_op,
         train_summary_op=train_summary_op,
+        diff_two_states=diff_two_states,
         initializer=initializer)
 
 
@@ -202,7 +205,7 @@ def create_eval_model(model_creator, hp):
         initializer = tf.global_variables_initializer
         inputs = model.inputs
         q_actions = model.get_q_actions()
-        pred = model.get_pred()
+        pred, diff_two_states = model.get_pred()
         loss, train_op, abs_loss = model.get_train_op(q_actions)
         snn_loss, snn_train_op = model.get_snn_train_op(pred)
         _ = model.get_merged_train_op(loss, snn_loss)
@@ -218,4 +221,5 @@ def create_eval_model(model_creator, hp):
         snn_src2_=inputs["snn_src2"],
         snn_src2_len_=inputs["snn_src2_len"],
         labels_=inputs["labels"],
+        diff_two_states=diff_two_states,
         initializer=initializer)

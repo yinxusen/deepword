@@ -475,12 +475,12 @@ class BaseAgent(Logging):
             self.hp, self.token2idx, action_path,
             with_loading=True)
         self.tjs = self.init_trajectory(
-            self.hp, tjs_path, with_loading=self.is_training)
+            self.hp, tjs_path, with_loading=True)
         self.stc = self.init_state_text(stc_path, with_loading=True)
         self.memo = self.init_memo(
-            self.hp, memo_path, with_loading=self.is_training)
+            self.hp, memo_path, with_loading=True)
         self.floor_plan = self.init_floor_plan(
-            fp_path, with_loading=self.is_training)
+            fp_path, with_loading=True)
         try:
             npz_q_mat = np.load(q_mat_path)
             q_mat_key = npz_q_mat["q_mat_key"]
@@ -889,10 +889,11 @@ class BaseAgent(Logging):
         :param instant_reward:
         :return:
         """
-        # action_desc = self.rule_based_policy(
-        #     actions, all_actions, instant_reward)
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE_RULE, action_idx=None, action=None)
+        action_desc = self.rule_based_policy(
+            actions, all_actions, instant_reward)
+        # this is for Tabular Q-learning
+        # action_desc = ActionDesc(
+        #     action_type=ACT_TYPE_RULE, action_idx=None, action=None)
         if action_desc.action_idx is None:
             action_desc = self.random_walk_for_collecting_fp(
                 actions, all_actions)
