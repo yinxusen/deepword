@@ -1,7 +1,8 @@
 #!/bin/bash
 
+#SBATCH --gres=gpu:k80:2
 #SBATCH --ntasks=4
-#SBATCH --time=200:00:00
+#SBATCH --time=100:00:00
 #SBATCH --partition=isi
 #SBATCH --mail-user=xusenyin@isi.edu
 #SBATCH --mail-type=ALL
@@ -27,7 +28,7 @@ if [[ `hostname` =~ "hpc" ]]; then
       eval "$(pyenv init -)"
     fi
     eval "$(pyenv virtualenv-init -)"
-    pyenv activate deepdnd-drrn-cpu
+    pyenv activate deepdnd-drrn
 else
     FWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
     PDIR="$FWDIR/.."
@@ -42,6 +43,10 @@ MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
+
+if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
+    source $HOME/local/etc/init_tensorflow.sh
+fi
 
 if [[ ! -d $MODELHOME ]]; then
     mkdir $MODELHOME
