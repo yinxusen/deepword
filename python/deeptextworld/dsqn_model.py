@@ -144,7 +144,8 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         labels = self.inputs["labels"]
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=labels, logits=pred)
-        loss = tf.reduce_mean(self.inputs["b_weight"] * losses)
+        loss = tf.reduce_mean(
+            tf.reduce_mean(self.inputs["b_weight"]) * losses)
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
