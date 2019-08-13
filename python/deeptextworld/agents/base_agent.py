@@ -1118,6 +1118,13 @@ class BaseAgent(Logging):
         action = self._last_action_desc.action
         action_idx = self._last_action_desc.action_idx
 
+        state_text, len_state_text = self.stc.fetch_last_state()
+        hs = self.get_hash(state_text)
+        if hs not in self.hash_states2tjs:
+            self.hash_states2tjs[hs] = []
+        self.hash_states2tjs[hs].append(
+            (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
+
         self._per_game_recorder.append(action)
 
         if self._last_action_desc.action_type == ACT_TYPE_NN:
