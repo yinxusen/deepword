@@ -4,8 +4,8 @@ import hashlib
 import os
 import random
 import re
-from typing import List, Dict, Any, Optional
 from copy import deepcopy
+from typing import List, Dict, Any, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -14,16 +14,15 @@ from nltk import word_tokenize, sent_tokenize
 from textworld import EnvInfos
 
 from deeptextworld import trajectory
-from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.action import ActionCollector
 from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
+from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, \
-    ctime
+from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
 
 
 class DRRNMemo(collections.namedtuple(
@@ -34,8 +33,7 @@ class DRRNMemo(collections.namedtuple(
 
 
 class ActionDesc(collections.namedtuple(
-    "ActionDesc",
-    ("action_type", "action_idx", "action"))):
+        "ActionDesc", ("action_type", "action_idx", "action"))):
     def __repr__(self):
         return "action_type: {}, action_idx: {}, action: {}".format(
             self.action_type, self.action_idx, self.action)
@@ -135,10 +133,10 @@ class BaseAgent(Logging):
         self._see_cookbook = False
         self._cnt_action = None
 
-        self._action_recorder = {}
-        self._winning_recorder = {}
-        self._per_game_recorder = None
-        self._actions_to_remove = {}
+        # self._action_recorder = {}
+        # self._winning_recorder = {}
+        # self._per_game_recorder = None
+        # self._actions_to_remove = {}
 
     @classmethod
     def report_status(cls, lst_of_status):
@@ -544,19 +542,18 @@ class BaseAgent(Logging):
         self._prev_place = None
         self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
-        if self.game_id not in self._action_recorder:
-            self._action_recorder[self.game_id] = []
-        if self.game_id not in self._winning_recorder:
-            self._winning_recorder[self.game_id] = False
-        if self.game_id not in self._actions_to_remove:
-            self._actions_to_remove[self.game_id] = set()
+        # if self.game_id not in self._action_recorder:
+        #     self._action_recorder[self.game_id] = []
+        # if self.game_id not in self._winning_recorder:
+        #     self._winning_recorder[self.game_id] = False
+        # if self.game_id not in self._actions_to_remove:
+        #     self._actions_to_remove[self.game_id] = set()
         if self.game_id not in self._theme_words:
             self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
-        if K_RECIPE in infos:
-            self._theme_words[self.game_id] = self.get_theme_words(
-                infos[K_RECIPE][0])
+        self._theme_words[self.game_id] = self.get_theme_words(
+            infos[K_RECIPE][0])
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -577,16 +574,16 @@ class BaseAgent(Logging):
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
             self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
         # TODO: make clear of what need to clean before & after an episode.
-        self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
-        self._action_recorder[self.game_id] = self._per_game_recorder
-        if ((not infos[K_HAS_WON][0]) and
-                (0 < len(self._per_game_recorder) < 100)):
-            if (self._per_game_recorder[-1] not in
-                    self._per_game_recorder[:-1]):
-                self._actions_to_remove[self.game_id].add(
-                    self._per_game_recorder[-1])
-            else:
-                pass  # repeat dangerous actions
+        # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
+        # self._action_recorder[self.game_id] = self._per_game_recorder
+        # if ((not infos[K_HAS_WON][0]) and
+        #         (0 < len(self._per_game_recorder) < 100)):
+        #     if (self._per_game_recorder[-1] not in
+        #             self._per_game_recorder[:-1]):
+        #         self._actions_to_remove[self.game_id].add(
+        #             self._per_game_recorder[-1])
+        #     else:
+        #         pass  # repeat dangerous actions
         # self.debug("actions to remove {} for game {}".format(
         #     self._actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
@@ -763,21 +760,21 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
-        if not self.is_training:
-            if ((self._winning_recorder[self.game_id] is not None) and
-                    (not self._winning_recorder[self.game_id])):
-                for a2remove in self._actions_to_remove[self.game_id]:
-                    try:
-                        actions.remove(a2remove)
-                        self.debug(
-                            "action {} is removed".format(
-                                a2remove))
-                    except ValueError as _:
-                        self.debug(
-                            "action {} is not found when remove".format(
-                                a2remove))
-            else:
-                pass
+        # if not self.is_training:
+        #     if ((self._winning_recorder[self.game_id] is not None) and
+        #             (not self._winning_recorder[self.game_id])):
+        #         for a2remove in self._actions_to_remove[self.game_id]:
+        #             try:
+        #                 actions.remove(a2remove)
+        #                 self.debug(
+        #                     "action {} is removed".format(
+        #                         a2remove))
+        #             except ValueError as _:
+        #                 self.debug(
+        #                     "action {} is not found when remove".format(
+        #                         a2remove))
+        #     else:
+        #         pass
         return actions
 
     def go_with_floor_plan(self, actions):
@@ -787,17 +784,17 @@ class BaseAgent(Logging):
 
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
-        if ((not self.is_training) and
-                (self._winning_recorder[self.game_id] is not None) and
-                self._winning_recorder[self.game_id]):
-            try:
-                action = self._action_recorder[self.game_id][self.in_game_t]
-            except IndexError as _:
-                self.debug("same game ID for different games error")
-                action = None
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_PREPARE_MEAL and
-              instant_reward > 0):
+        # if ((not self.is_training) and
+        #         (self._winning_recorder[self.game_id] is not None) and
+        #         self._winning_recorder[self.game_id]):
+        #     try:
+        #         action = self._action_recorder[self.game_id][self.in_game_t]
+        #     except IndexError as _:
+        #         self.debug("same game ID for different games error")
+        #         action = None
+        if (self._last_action_desc is not None and
+                self._last_action_desc.action == ACT_PREPARE_MEAL and
+                instant_reward > 0):
             action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
@@ -1472,15 +1469,15 @@ class GenBaseAgent(BaseAgent):
 
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
-        if ((not self.is_training) and
-                (self._winning_recorder[self.game_id] is not None) and
-                self._winning_recorder[self.game_id]):
-            try:
-                action = self._action_recorder[self.game_id][self.in_game_t]
-            except IndexError as _:
-                self.debug("same game ID for different games error")
-                action = None
-        elif ACT_INVENTORY in actions and not self._see_inventory:
+        # if ((not self.is_training) and
+        #         (self._winning_recorder[self.game_id] is not None) and
+        #         self._winning_recorder[self.game_id]):
+        #     try:
+        #         action = self._action_recorder[self.game_id][self.in_game_t]
+        #     except IndexError as _:
+        #         self.debug("same game ID for different games error")
+        #         action = None
+        if ACT_INVENTORY in actions and not self._see_inventory:
             action = ACT_INVENTORY
             self._see_inventory = True
         elif "meal" in self._inventory:
