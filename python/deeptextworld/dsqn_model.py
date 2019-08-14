@@ -140,6 +140,13 @@ class CNNEncoderDSQN(CNNEncoderDQN):
             name="snn_dense"))
         return pred, diff_two_states
 
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l1_loss_1Daction(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.hp.n_actions, self.inputs["b_weight"])
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op, abs_loss
+
     def get_snn_train_op(self, pred):
         labels = self.inputs["labels"]
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
