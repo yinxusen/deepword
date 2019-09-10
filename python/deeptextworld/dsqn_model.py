@@ -141,7 +141,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         return pred, diff_two_states
 
     def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l1_loss_1Daction(
+        loss, abs_loss = dqn.l2_loss_1Daction(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
@@ -157,10 +157,15 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         return loss, train_op
 
     def get_merged_train_op(self, loss, snn_loss):
-        weighted_loss = 0.6 * loss + 0.4 * snn_loss
+        # Multi-Task Learning Using Uncertainty to Weigh Losses
+        s1 = tf.get_variable("s1", shape=[], dtype=tf.float32)
+        s2 = tf.get_variable("s2", shape=[], dtype=tf.float32)
+        weighted_loss = (
+                0.5 * tf.exp(-s1) * loss + tf.exp(-s2) * snn_loss +
+                0.5 * s1 + 0.5 * s2)
         merged_train_op = self.optimizer.minimize(
             weighted_loss, global_step=self.global_step)
-        return weighted_loss, merged_train_op
+        return weighted_loss, merged_train_op, s1, s2
 
 
 def create_train_model(model_creator, hp):
@@ -173,14 +178,17 @@ def create_train_model(model_creator, hp):
         pred, diff_two_states = model.get_pred()
         loss, train_op, abs_loss = model.get_train_op(q_actions)
         snn_loss, snn_train_op = model.get_snn_train_op(pred)
-        weighted_loss, merged_train_op = model.get_merged_train_op(
+        weighted_loss, merged_train_op, s1, s2 = model.get_merged_train_op(
             loss, snn_loss)
         loss_summary = tf.summary.scalar("loss", loss)
         snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
         weighted_loss_summary = tf.summary.scalar(
             "weighted_loss", weighted_loss)
+        s1_summary = tf.summary.scalar("s1_summary", s1)
+        s2_summary = tf.summary.scalar("s2_summary", s2)
         train_summary_op = tf.summary.merge(
-            [loss_summary, snn_loss_summary, weighted_loss_summary])
+            [loss_summary, snn_loss_summary, weighted_loss_summary,
+             s1_summary, s2_summary])
     return TrainDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
         src_=inputs["src"],
