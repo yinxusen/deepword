@@ -95,8 +95,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = tf.layers.dense(
-                h_state, units=32, use_bias=True, name="dense_h")
+            new_h = dqn.decoder_dense_classification(h_state, 32)
             h_state_expanded = tf.expand_dims(new_h, axis=1)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
@@ -124,17 +123,13 @@ class CNNEncoderDSQN(CNNEncoderDQN):
                 self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = tf.layers.dense(
-                h_state, units=32, use_bias=True, name="dense_h")
             h_state2 = dqn.encoder_cnn(
                 self.inputs["snn_src2"],
                 self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h2 = tf.layers.dense(
-                h_state2, units=32, use_bias=True, name="dense_h")
 
-        diff_two_states = tf.abs(new_h - new_h2)
+        diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
             diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
             name="snn_dense"))
