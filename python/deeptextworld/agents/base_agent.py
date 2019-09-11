@@ -4,6 +4,7 @@ import hashlib
 import os
 import random
 import re
+from copy import deepcopy
 from typing import List, Dict, Any, Optional
 
 import numpy as np
@@ -19,9 +20,9 @@ from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
+from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_lower_vocab, load_actions, \
-    ctime
+from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
 
 
 class DRRNMemo(collections.namedtuple(
@@ -32,8 +33,7 @@ class DRRNMemo(collections.namedtuple(
 
 
 class ActionDesc(collections.namedtuple(
-    "ActionDesc",
-    ("action_type", "action_idx", "action"))):
+        "ActionDesc", ("action_type", "action_idx", "action"))):
     def __repr__(self):
         return "action_type: {}, action_idx: {}, action: {}".format(
             self.action_type, self.action_idx, self.action)
@@ -54,6 +54,7 @@ ACT_TYPE_RULE = "rule_based_action"
 ACT_TYPE_RND_WALK = "random_walk_action"
 ACT_TYPE_NN = "learned_action"
 ACT_TYPE_JITTER = "jitter_action"
+ACT_TYPE_TBL = "tabular_action"
 
 K_RECIPE = "extra.recipe"
 K_DESC = "description"
@@ -74,6 +75,9 @@ class BaseAgent(Logging):
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
+        self.stc_prefix = "state_text"
+        self.q_mat_prefix = "q_mat"
+        self.hs2tj_prefix = "hs2tj"
 
         self.inv_direction = {
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
@@ -83,6 +87,7 @@ class BaseAgent(Logging):
         self.info(output_hparams(self.hp))
 
         self.tjs = None
+        self.stc = None
         self.memo = None
         self.model = None
         self.target_model = None
@@ -108,6 +113,10 @@ class BaseAgent(Logging):
         self.snapshot_saved = False
         self.epoch_start_t = 0
 
+        self.q_mat = {}  # map hash of a state to a q-vec
+        self.target_q_mat = {}  # target q-mat for Double DQN
+        self.hash_states2tjs = {}  # map states to tjs
+
         self._last_actions_mask = None
         self._last_action_desc = None
 
@@ -124,10 +133,10 @@ class BaseAgent(Logging):
         self._see_cookbook = False
         self._cnt_action = None
 
-        self._action_recorder = {}
-        self._winning_recorder = {}
-        self._per_game_recorder = None
-        self._actions_to_remove = {}
+        # self._action_recorder = {}
+        # self._winning_recorder = {}
+        # self._per_game_recorder = None
+        # self._actions_to_remove = {}
 
     @classmethod
     def report_status(cls, lst_of_status):
@@ -233,6 +242,10 @@ class BaseAgent(Logging):
     def negative_response_reward(cls, master):
         return 0
 
+    @classmethod
+    def get_hash(cls, txt):
+        return hashlib.md5(txt.encode("utf-8")).hexdigest()
+
     def select_additional_infos(self):
         """
         additional information needed when playing the game
@@ -270,7 +283,7 @@ class BaseAgent(Logging):
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
-                action_collector.extend(load_actions(hp.action_file))
+                # action_collector.extend(load_actions(hp.action_file))
             except IOError as e:
                 self.info("load actions error: \n{}".format(e))
         return action_collector
@@ -284,6 +297,15 @@ class BaseAgent(Logging):
             except IOError as e:
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
+
+    def init_state_text(self, state_text_path, with_loading=True):
+        stc = StateTextCompanion()
+        if with_loading:
+            try:
+                stc.load_tjs(state_text_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return stc
 
     def init_memo(self, hp, memo_path, with_loading=True):
         memory = TreeMemory(capacity=hp.replay_mem)
@@ -430,23 +452,53 @@ class BaseAgent(Logging):
         tjs_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.tjs_prefix, largest_valid_tag))
+        stc_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.stc_prefix, largest_valid_tag))
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
         fp_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.fp_prefix, largest_valid_tag))
+        q_mat_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.q_mat_prefix, largest_valid_tag))
+        hs2tj_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.hs2tj_prefix, largest_valid_tag))
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
             self.hp, self.token2idx, action_path,
             with_loading=True)
         self.tjs = self.init_trajectory(
-            self.hp, tjs_path, with_loading=self.is_training)
+            self.hp, tjs_path, with_loading=True)
+        self.stc = self.init_state_text(stc_path, with_loading=True)
         self.memo = self.init_memo(
-            self.hp, memo_path, with_loading=self.is_training)
+            self.hp, memo_path, with_loading=True)
         self.floor_plan = self.init_floor_plan(
-            fp_path, with_loading=self.is_training)
+            fp_path, with_loading=True)
+        try:
+            npz_q_mat = np.load(q_mat_path)
+            q_mat_key = npz_q_mat["q_mat_key"]
+            q_mat_val = npz_q_mat["q_mat_val"]
+            self.q_mat = dict(zip(q_mat_key, q_mat_val))
+            self.debug("load q_mat from file")
+            self.target_q_mat = deepcopy(self.q_mat)
+            self.debug("init target_q_mat with q_mat")
+        except IOError as e:
+            self.debug("load q_mat error:\n{}".format(e))
+
+        try:
+            hs2tj = np.load(hs2tj_path)
+            hs2tj_key = hs2tj["hash_states2tjs_key"]
+            hs2tj_val = hs2tj["hash_states2tjs_val"]
+            self.hash_states2tjs = dict(zip(hs2tj_key, hs2tj_val))
+            self.debug("load hash_states2tjs from file")
+        except IOError as e:
+            self.debug("load hash_states2tjs error:\n{}".format(e))
+
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model()
@@ -479,8 +531,9 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
+        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
-        self.game_id = hashlib.md5(master_starter.encode("utf-8")).hexdigest()
+        self.game_id = self.get_hash(master_starter)
         self.action_collector.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -489,19 +542,18 @@ class BaseAgent(Logging):
         self._prev_place = None
         self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
-        if self.game_id not in self._action_recorder:
-            self._action_recorder[self.game_id] = []
-        if self.game_id not in self._winning_recorder:
-            self._winning_recorder[self.game_id] = False
-        if self.game_id not in self._actions_to_remove:
-            self._actions_to_remove[self.game_id] = set()
+        # if self.game_id not in self._action_recorder:
+        #     self._action_recorder[self.game_id] = []
+        # if self.game_id not in self._winning_recorder:
+        #     self._winning_recorder[self.game_id] = False
+        # if self.game_id not in self._actions_to_remove:
+        #     self._actions_to_remove[self.game_id] = set()
         if self.game_id not in self._theme_words:
             self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
-        if K_RECIPE in infos:
-            self._theme_words[self.game_id] = self.get_theme_words(
-                infos[K_RECIPE][0])
+        self._theme_words[self.game_id] = self.get_theme_words(
+            infos[K_RECIPE][0])
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -522,18 +574,18 @@ class BaseAgent(Logging):
         self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
             self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
         # TODO: make clear of what need to clean before & after an episode.
-        self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
-        self._action_recorder[self.game_id] = self._per_game_recorder
-        if ((not infos[K_HAS_WON][0]) and
-                (0 < len(self._per_game_recorder) < 100)):
-            if (self._per_game_recorder[-1] not in
-                    self._per_game_recorder[:-1]):
-                self._actions_to_remove[self.game_id].add(
-                    self._per_game_recorder[-1])
-            else:
-                pass  # repeat dangerous actions
-        self.debug("actions to remove {} for game {}".format(
-            self._actions_to_remove[self.game_id], self.game_id))
+        # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
+        # self._action_recorder[self.game_id] = self._per_game_recorder
+        # if ((not infos[K_HAS_WON][0]) and
+        #         (0 < len(self._per_game_recorder) < 100)):
+        #     if (self._per_game_recorder[-1] not in
+        #             self._per_game_recorder[:-1]):
+        #         self._actions_to_remove[self.game_id].add(
+        #             self._per_game_recorder[-1])
+        #     else:
+        #         pass  # repeat dangerous actions
+        # self.debug("actions to remove {} for game {}".format(
+        #     self._actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_actions_mask = None
         self.game_id = None
@@ -564,17 +616,39 @@ class BaseAgent(Logging):
         tjs_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.tjs_prefix, self.total_t))
+        stc_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.stc_prefix, self.total_t))
+        q_mat_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.q_mat_prefix, self.total_t))
         memo_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.memo_prefix, self.total_t))
         fp_path = os.path.join(
             self.model_dir,
             "{}-{}.npz".format(self.fp_prefix, self.total_t))
+        hs2tj_path = os.path.join(
+            self.model_dir,
+            "{}-{}.npz".format(self.hs2tj_prefix, self.total_t))
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
+        self.stc.save_tjs(stc_path)
         self.action_collector.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
+
+        np.savez(
+            q_mat_path,
+            q_mat_key=list(self.q_mat.keys()),
+            q_mat_val=list(self.q_mat.values()))
+        self.target_q_mat = deepcopy(self.q_mat)
+        self.debug("target q_mat is updated with q_mat")
+
+        np.savez(
+            hs2tj_path,
+            hash_states2tjs_key=list(self.hash_states2tjs.keys()),
+            hash_states2tjs_val=list(self.hash_states2tjs.values()))
 
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
@@ -590,10 +664,19 @@ class BaseAgent(Logging):
                     "{}-{}.npz".format(self.tjs_prefix, tag)))
                 os.remove(os.path.join(
                     self.model_dir,
+                    "{}-{}.npz".format(self.stc_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
                     "{}-{}.npz".format(self.action_prefix, tag)))
                 os.remove(os.path.join(
                     self.model_dir,
                     "{}-{}.npz".format(self.fp_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.q_mat_prefix, tag)))
+                os.remove(os.path.join(
+                    self.model_dir,
+                    "{}-{}.npz".format(self.hs2tj_prefix, tag)))
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
         save_hparams(self.hp,
@@ -604,10 +687,16 @@ class BaseAgent(Logging):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
+        q_mat_tags = self.get_path_tags(self.model_dir, self.q_mat_prefix)
+        hs2tj_tags = self.get_path_tags(self.model_dir, self.hs2tj_prefix)
+        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
+        valid_tags.intersection_update(q_mat_tags)
+        valid_tags.intersection_update(hs2tj_tags)
+        valid_tags.intersection_update(stc_tags)
 
         return list(valid_tags)
 
@@ -671,21 +760,21 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
-        if not self.is_training:
-            if ((self._winning_recorder[self.game_id] is not None) and
-                    (not self._winning_recorder[self.game_id])):
-                for a2remove in self._actions_to_remove[self.game_id]:
-                    try:
-                        actions.remove(a2remove)
-                        self.debug(
-                            "action {} is removed".format(
-                                a2remove))
-                    except ValueError as _:
-                        self.debug(
-                            "action {} is not found when remove".format(
-                                a2remove))
-            else:
-                pass
+        # if not self.is_training:
+        #     if ((self._winning_recorder[self.game_id] is not None) and
+        #             (not self._winning_recorder[self.game_id])):
+        #         for a2remove in self._actions_to_remove[self.game_id]:
+        #             try:
+        #                 actions.remove(a2remove)
+        #                 self.debug(
+        #                     "action {} is removed".format(
+        #                         a2remove))
+        #             except ValueError as _:
+        #                 self.debug(
+        #                     "action {} is not found when remove".format(
+        #                         a2remove))
+        #     else:
+        #         pass
         return actions
 
     def go_with_floor_plan(self, actions):
@@ -695,17 +784,17 @@ class BaseAgent(Logging):
 
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
-        if ((not self.is_training) and
-                (self._winning_recorder[self.game_id] is not None) and
-                self._winning_recorder[self.game_id]):
-            try:
-                action = self._action_recorder[self.game_id][self.in_game_t]
-            except IndexError as _:
-                self.debug("same game ID for different games error")
-                action = None
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_PREPARE_MEAL and
-              instant_reward > 0):
+        # if ((not self.is_training) and
+        #         (self._winning_recorder[self.game_id] is not None) and
+        #         self._winning_recorder[self.game_id]):
+        #     try:
+        #         action = self._action_recorder[self.game_id][self.in_game_t]
+        #     except IndexError as _:
+        #         self.debug("same game ID for different games error")
+        #         action = None
+        if (self._last_action_desc is not None and
+                self._last_action_desc.action == ACT_PREPARE_MEAL and
+                instant_reward > 0):
             action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
@@ -738,7 +827,9 @@ class BaseAgent(Logging):
         action_desc = None
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN)
+        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN
+                                   or prev_action_desc.action_type ==
+                                   ACT_TYPE_TBL)
                 and (prev_action_desc.action in admissible_go_actions)):
             if ((self.is_training and
                  random.random() > 1 - self.hp.jitter_train_prob)
@@ -797,6 +888,9 @@ class BaseAgent(Logging):
         """
         action_desc = self.rule_based_policy(
             actions, all_actions, instant_reward)
+        # this is for Tabular Q-learning
+        # action_desc = ActionDesc(
+        #     action_type=ACT_TYPE_RULE, action_idx=None, action=None)
         if action_desc.action_idx is None:
             action_desc = self.random_walk_for_collecting_fp(
                 actions, all_actions)
@@ -886,8 +980,9 @@ class BaseAgent(Logging):
         self.eps = self.annealing_eps(
             self.hp.init_eps, self.hp.final_eps,
             self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-        self.train_impl(self.sess, self.total_t,
-                        self.train_summary_writer, self.target_sess)
+        self.train_impl(
+            self.sess, self.total_t, self.train_summary_writer,
+            self.target_sess)
 
         if self.time_to_save():
             epoch_end_t = ctime()
@@ -910,6 +1005,7 @@ class BaseAgent(Logging):
 
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
+        # the last sid here is for the next state of using the last action
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_desc.action_idx,
@@ -918,8 +1014,22 @@ class BaseAgent(Logging):
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
-                self.debug("tjs delete {}".format(original_data.tid))
+                self.debug("tjs and stc delete {}".format(original_data.tid))
                 self.tjs.request_delete_key(original_data.tid)
+                self.stc.request_delete_key(original_data.tid)
+                updating = []
+                prev_len = len(self.hash_states2tjs)
+                for k, v in self.hash_states2tjs.items():
+                    trimmed = list(filter(
+                        lambda t_s: t_s[0] > original_data.tid, v))
+                    if len(trimmed) > 0:
+                        updating.append((k, trimmed))
+                    else:
+                        pass
+                self.hash_states2tjs = dict(updating)
+                self.debug(
+                    "hash_states2tjs deletes {} items".format(
+                        len(updating) - prev_len))
 
     def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:
@@ -948,30 +1058,47 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.debug(
-                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-                " reward: {}, is_terminal: {}".format(
-                    self.mode(), self.total_t,
-                    self.in_game_t, self.eps, self._last_action_desc,
-                    cleaned_obs, instant_reward, dones[0]))
-        else:
-            self.info(
-                "mode: {}, master: {}, max_score: {}".format(
-                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        # if self.in_game_t > 0:  # pass the 1st master
+        #     self.debug(
+        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+        #         " reward: {}, is_terminal: {}".format(
+        #             self.mode(), self.total_t,
+        #             self.in_game_t, self.eps, self._last_action_desc,
+        #             cleaned_obs, instant_reward, dones[0]))
+        # else:
+        #     self.info(
+        #         "mode: {}, master: {}, max_score: {}".format(
+        #             self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
-        self.tjs.append_master_txt(obs_idx)
+        if self.in_game_t == 0 and self._last_action_desc is None:
+            act_idx = []
+        else:
+            act_idx = list(
+                self.action_collector.get_action_matrix()
+                [self._last_action_desc.action_idx])
+        self.tjs.append(act_idx + obs_idx)
+        # due to game design flaw, we need to make a new terminal
+        # observation + inventory
+        # because the game terminal observation + inventory is the same with
+        # its previous state
+        if not dones[0]:
+            state_text = infos["description"][0] + "\n" + infos["inventory"][0]
+        else:
+            state_text = ("terminal and win" if infos["has_won"]
+                          else "terminal and lose")
+        self.stc.append(state_text)
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
         actions = self.go_with_floor_plan(actions)
-        self.info("admissible actions: {}".format(", ".join(sorted(actions))))
+        # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.action_collector.extend(actions)
         all_actions = self.action_collector.get_actions()
 
+        # make sure appending tjs first, otherwise the judgement could be wrong
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
             self.feed_memory(
                 instant_reward, dones[0],
@@ -988,16 +1115,20 @@ class BaseAgent(Logging):
         action = self._last_action_desc.action
         action_idx = self._last_action_desc.action_idx
 
+        state_text, len_state_text = self.stc.fetch_last_state()
+        hs = self.get_hash(state_text)
+        if hs not in self.hash_states2tjs:
+            self.hash_states2tjs[hs] = []
+        self.hash_states2tjs[hs].append(
+            (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
+
         self._per_game_recorder.append(action)
 
         if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
-            self.debug(self._cnt_action)
         else:
-            self.debug("cnt action ignore hard_set_action")
-
-        self.tjs.append_player_txt(
-            self.action_collector.get_action_matrix()[action_idx])
+            # self.debug("cnt action ignore hard_set_action")
+            pass
 
         self._last_actions_mask = actions_mask
         return action
@@ -1338,15 +1469,15 @@ class GenBaseAgent(BaseAgent):
 
     def rule_based_policy(self, actions, all_actions, instant_reward):
         # use hard set actions in the beginning and the end of one episode
-        if ((not self.is_training) and
-                (self._winning_recorder[self.game_id] is not None) and
-                self._winning_recorder[self.game_id]):
-            try:
-                action = self._action_recorder[self.game_id][self.in_game_t]
-            except IndexError as _:
-                self.debug("same game ID for different games error")
-                action = None
-        elif ACT_INVENTORY in actions and not self._see_inventory:
+        # if ((not self.is_training) and
+        #         (self._winning_recorder[self.game_id] is not None) and
+        #         self._winning_recorder[self.game_id]):
+        #     try:
+        #         action = self._action_recorder[self.game_id][self.in_game_t]
+        #     except IndexError as _:
+        #         self.debug("same game ID for different games error")
+        #         action = None
+        if ACT_INVENTORY in actions and not self._see_inventory:
             action = ACT_INVENTORY
             self._see_inventory = True
         elif "meal" in self._inventory:

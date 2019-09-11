@@ -56,7 +56,6 @@ class CNNEncoderDRRN(CNNEncoderDQN):
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions])
         }
 
-
     def get_q_actions(self):
         """
         compute the Q-vector from the relevance of hidden state and hidden actions

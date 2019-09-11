@@ -88,6 +88,17 @@ if __name__ == '__main__':
         run_eval(
             hp, model_dir, game_file=game_path,
             eval_randomness=args.eval_randomness)
+    elif args.mode == "train-dsqn":
+        from deeptextworld.train_dsqn import train_n_eval
+        hp = load_hparams_for_training(config_file, args)
+        train_n_eval(hp, model_dir, game_dir=game_path, f_games=args.f_games)
+    elif args.mode == "eval-dsqn":
+        from deeptextworld.train_dsqn import run_eval
+        pre_config_file = os.path.join(model_dir, 'hparams.json')
+        hp = load_hparams_for_evaluation(pre_config_file, args)
+        run_eval(
+            hp, model_dir, game_path=game_path, f_games=args.f_games,
+            eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))
 

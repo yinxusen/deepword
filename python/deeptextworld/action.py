@@ -50,10 +50,10 @@ class ActionCollector(Logging):
             eid = self._ctime()
 
         if eid == self.curr_eid:
-            self.info("continue current episode: {}".format(eid))
+            # self.info("continue current episode: {}".format(eid))
             return
 
-        self.info("add new episode in actions: {}".format(eid))
+        # self.info("add new episode in actions: {}".format(eid))
 
         if self.size() != 0 and self.curr_eid is not None:
             self.actions_base[self.curr_eid] = self.actions[:self.size()]

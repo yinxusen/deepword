@@ -8,8 +8,9 @@ from threading import Thread, Condition
 import gym
 import textworld.gym
 from textworld import EnvInfos
+from tqdm import trange
 
-from deeptextworld.agents import drrn_agent
+from deeptextworld.agents import dsqn_agent
 from deeptextworld.utils import ctime
 
 # List of additional information available during evaluation.
@@ -44,28 +45,32 @@ def run_agent(cv, agent, game_env, nb_games, nb_epochs):
     :return:
     """
     logger = logging.getLogger("train")
-    for epoch_no in range(nb_epochs):
-        for game_no in range(nb_games):
-            logger.info("playing game epoch_no/game_no: {}/{}".format(
-                epoch_no, game_no))
+    for epoch_no in trange(nb_epochs, desc='train-epoch'):
+        with trange(nb_games, desc="train-game") as tgames:
+            for game_no in tgames:
+                logger.info("playing game epoch_no/game_no: {}/{}".format(
+                    epoch_no, game_no))
 
-            obs, infos = game_env.reset()
-            scores = [0] * len(obs)
-            dones = [False] * len(obs)
-            steps = [0] * len(obs)
-            while not all(dones):
-                # Increase step counts.
-                steps = ([step + int(not done)
-                          for step, done in zip(steps, dones)])
-                commands = agent.act(obs, scores, dones, infos)
-                if agent.snapshot_saved:
-                    agent.snapshot_saved = False
-                    with cv:
-                        cv.notifyAll()
-                obs, scores, dones, infos = game_env.step(commands)
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                steps = [0] * len(obs)
+                while not all(dones):
+                    # Increase step counts.
+                    steps = ([step + int(not done)
+                              for step, done in zip(steps, dones)])
+                    commands = agent.act(obs, scores, dones, infos)
+                    if agent.snapshot_saved:
+                        agent.snapshot_saved = False
+                        with cv:
+                            cv.notifyAll()
+                    obs, scores, dones, infos = game_env.step(commands)
 
-            # Let the agent knows the game is done.
-            agent.act(obs, scores, dones, infos)
+                # Let the agent knows the game is done.
+                agent.act(obs, scores, dones, infos)
+                tgames.set_postfix(
+                    score=scores[0], has_won=infos["has_won"][0],
+                    steps=steps[0])
     return None
 
 
@@ -82,7 +87,8 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
     eval_results = dict()
     requested_infos = agent.select_additional_infos()
     validate_requested_infos(requested_infos)
-    for game_no, game_file in enumerate(game_files):
+    for game_no in trange(len(game_files), desc='eval-game'):
+        game_file = game_files[game_no]
         game_name = os.path.basename(game_file)
         env_id = textworld.gym.register_games(
             [game_file], requested_infos,
@@ -91,31 +97,32 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
         env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
 
-        for episode_no in range(nb_episodes):
-            logger.info(
-                "episode_no/game_no/game_name: {}/{}/{}".format(
-                    episode_no, game_no, game_name))
+        with trange(nb_episodes, desc='eval-episode') as tepisode:
+            for episode_no in tepisode:
+                tepisode.set_postfix(
+                    episode_no=episode_no, game_no=game_no, game_name=game_name)
 
-            obs, infos = game_env.reset()
-            scores = [0] * len(obs)
-            dones = [False] * len(obs)
-            steps = [0] * len(obs)
-            while not all(dones):
-                # Increase step counts.
-                steps = ([step + int(not done)
-                          for step, done in zip(steps, dones)])
-                commands = agent.act(obs, scores, dones, infos)
-                obs, scores, dones, infos = game_env.step(commands)
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                steps = [0] * len(obs)
+                while not all(dones):
+                    # Increase step counts.
+                    steps = ([step + int(not done)
+                              for step, done in zip(steps, dones)])
+                    commands = agent.act(obs, scores, dones, infos)
+                    obs, scores, dones, infos = game_env.step(commands)
 
-            # Let the agent knows the game is done.
-            agent.act(obs, scores, dones, infos)
+                # Let the agent knows the game is done.
+                agent.act(obs, scores, dones, infos)
 
-            if not agent.is_training:
                 if game_name not in eval_results:
                     eval_results[game_name] = []
                 eval_results[game_name].append(
                     (scores[0], infos["max_score"][0], steps[0],
                      infos["has_won"][0]))
+    # run snn eval after normal agent test
+    agent.eval_snn()
     return eval_results
 
 
@@ -123,7 +130,7 @@ def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
     logger = logging.getLogger('train')
     logger.info("load {} game files".format(len(game_files)))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.train()
 
@@ -156,7 +163,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
     agent.eval(load_best=False)
@@ -312,7 +319,7 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:

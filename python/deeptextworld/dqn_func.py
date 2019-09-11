@@ -21,6 +21,25 @@ def l2_loss_1Daction(q_actions, action_idx, expected_q, n_actions, b_weight):
     return loss, abs_loss
 
 
+def l1_loss_1Daction(q_actions, action_idx, expected_q, n_actions, b_weight):
+    """
+    l2 loss for 1D action space.
+    e.g. "go east" would be one whole action.
+    :param q_actions: Q-vector of a state for all actions
+    :param action_idx: placeholder, the action chose for the state,
+           in a format of (tf.int32, [None])
+    :param expected_q: placeholder, the expected reward gained from the step,
+           in a format of (tf.float32, [None])
+    :param n_actions: number of total actions
+    """
+    actions_mask = tf.one_hot(indices=action_idx, depth=n_actions)
+    predicted_q = tf.reduce_sum(tf.multiply(q_actions, actions_mask),
+                                axis=1)
+    abs_loss = tf.abs(expected_q - predicted_q)
+    loss = tf.reduce_mean(b_weight * abs_loss)
+    return loss, abs_loss
+
+
 def l2_loss_2Daction(
         q_actions, action_idx, expected_q,
         n_actions, action_len, max_action_len, b_weight):

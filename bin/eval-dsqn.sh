@@ -9,13 +9,14 @@ extension="${filename##*.}"
 filename="${filename%.*}"
 
 DATAHOME=$1
-MODELHOME=$2
+F_GAMES=$2
+MODELHOME=$3
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
 fi
 
 ./bin/run.sh python/deeptextworld/main.py \
-    --game-path $DATAHOME -m $MODELHOME \
-    --mode eval-dqn --eval-episode 1 --eval-randomness 0 --eval-mode eval-train \
+    --game-path $DATAHOME -m $MODELHOME --f-games $F_GAMES \
+    --mode eval-dsqn --eval-episode 1 --eval-randomness 0 --eval-mode all \
     --game-episode-terminal-t 100

@@ -5,6 +5,8 @@ import gym
 import textworld.gym
 from textworld import EnvInfos
 
+from deeptextworld.agents.dqn_agent import TabularDQNAgent
+
 
 def contain_words(sentence, words):
     return any(map(lambda w: w in sentence, words))
@@ -56,6 +58,7 @@ def main(game_file):
     else:
         theme_words = None
 
+    state_text = ""
     while not all(dones):
         # populate my own admissible actions
         admissible_commands = infos["admissible_commands"][0]
@@ -78,26 +81,37 @@ def main(game_file):
         actions += list(filter(lambda a: a.startswith("open"), others))
         print("----------------------")
         print(obs[0])
-        print("----------------------")
-        print("\n".join(admissible_commands))
-        print("\n")
-        print("{} actions reduced".format(len(admissible_commands) - len(actions)))
-        print("{}".format("\n".join(others)))
-        print("----------------------")
-        print(infos["extra.recipe"][0])
-        print("----------------------")
-        print("has won: {}".format(infos["has_won"][0]))
-        print("----------------------")
-        print(infos["verbs"][0])
-        print("----------------------")
-        print(infos["command_templates"][0])
-        print("----------------------")
-        print(infos["entities"][0])
+        state_text = infos["description"][0] + "\n" + infos["inventory"][0]
+        print("--------------state text--------------")
+        print(state_text)
+        print("--------------hash code--------------")
+        print(TabularDQNAgent.get_hash(state_text))
+        print("---------------")
+        # print("----------------------")
+        # print("\n".join(admissible_commands))
+        # print("\n")
+        # print("{} actions reduced".format(len(admissible_commands) - len(actions)))
+        # print("{}".format("\n".join(others)))
+        # print("----------------------")
+        # print(infos["extra.recipe"][0])
+        # print("----------------------")
+        # print("has won: {}".format(infos["has_won"][0]))
+        # print("----------------------")
+        # print(infos["verbs"][0])
+        # print("----------------------")
+        # print(infos["command_templates"][0])
+        # print("----------------------")
+        # print(infos["entities"][0])
         command = input("> ")
         obs, scores, dones, infos = env.step([command])
 
     print(obs[0])
-    print(infos["extra.recipe"][0])
+    # print(infos["extra.recipe"][0])
+    print("--------------state text--------------")
+    print(state_text)
+    print("--------------hash code--------------")
+    print(TabularDQNAgent.get_hash(state_text))
+    print("---------------")
     print("has won: {}".format(infos["has_won"][0]))
 
 

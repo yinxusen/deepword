@@ -30,6 +30,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_BertCNNEncoderDRRN()
     elif model_creator == 'BertEncoderDRRN':
         model_hparams = default_hparams_BertEncoderDRRN()
+    elif model_creator == "CNNEncoderDSQN":
+        model_hparams = default_hparams_CNNEncoderDSQN()
     else:
         raise ValueError('unknown model creator: {}'.format(model_creator))
     return model_hparams
@@ -121,7 +123,7 @@ def default_hparams_CNNEncoderDQN():
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
-        num_turns=21,
+        num_turns=11,
         num_tokens=1000,
         num_conv_filters=32
     )
@@ -253,6 +255,20 @@ def default_hparams_BertEncoderDRRN():
         mask_val="[MASK]",
         mask_val_id=0,
         bert_ckpt_dir=""
+    )
+
+
+def default_hparams_CNNEncoderDSQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='DSQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=11,
+        num_tokens=1000,
+        num_conv_filters=32
     )
 
 
