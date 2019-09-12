@@ -2,9 +2,9 @@ import collections
 import glob
 import hashlib
 import os
-import random
 import re
-from copy import deepcopy
+from os import remove as prm
+from os.path import join as pjoin
 from typing import List, Dict, Any, Optional
 
 import numpy as np
@@ -20,7 +20,6 @@ from deeptextworld.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
-from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
 
@@ -75,9 +74,6 @@ class BaseAgent(Logging):
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
-        self.stc_prefix = "state_text"
-        self.q_mat_prefix = "q_mat"
-        self.hs2tj_prefix = "hs2tj"
 
         self.inv_direction = {
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
@@ -87,7 +83,6 @@ class BaseAgent(Logging):
         self.info(output_hparams(self.hp))
 
         self.tjs = None
-        self.stc = None
         self.memo = None
         self.model = None
         self.target_model = None
@@ -113,10 +108,6 @@ class BaseAgent(Logging):
         self.snapshot_saved = False
         self.epoch_start_t = 0
 
-        self.q_mat = {}  # map hash of a state to a q-vec
-        self.target_q_mat = {}  # target q-mat for Double DQN
-        self.hash_states2tjs = {}  # map states to tjs
-
         self._last_actions_mask = None
         self._last_action_desc = None
 
@@ -132,6 +123,9 @@ class BaseAgent(Logging):
 
         self._see_cookbook = False
         self._cnt_action = None
+
+        self._largest_valid_tag = 0
+        self._stale_tags = None
 
         # self._action_recorder = {}
         # self._winning_recorder = {}
@@ -298,15 +292,6 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
 
-    def init_state_text(self, state_text_path, with_loading=True):
-        stc = StateTextCompanion()
-        if with_loading:
-            try:
-                stc.load_tjs(state_text_path)
-            except IOError as e:
-                self.info("load trajectory error: \n{}".format(e))
-        return stc
-
     def init_memo(self, hp, memo_path, with_loading=True):
         memory = TreeMemory(capacity=hp.replay_mem)
         if with_loading:
@@ -436,37 +421,25 @@ class BaseAgent(Logging):
         self._init_impl(load_best)
         self._initialized = True
 
-    def _init_impl(self, load_best=False):
-        if self.hp.apply_dependency_parser:
-            # TODO: stride_len is hard fix here for maximum n-gram filter size 5
-            self.dp = DependencyParserReorder(
-                padding_val=self.hp.padding_val, stride_len=4)
+    def _get_context_obj_path_w_tag(self, prefix, tag):
+        return pjoin(
+            self.model_dir, "{}-{}.npz".format(prefix, tag))
 
+    def _get_context_obj_path(self, prefix):
+        return self._get_context_obj_path_w_tag(prefix, self._largest_valid_tag)
+
+    def _get_context_obj_new_path(self, prefix):
+        return self._get_context_obj_path_w_tag(prefix, self.total_t)
+
+    def _load_context_objs(self):
         valid_tags = self.get_compatible_snapshot_tag()
-        largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
-        self.info("try to load from tag: {}".format(largest_valid_tag))
+        self._largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
+        self.info("try to load from tag: {}".format(self._largest_valid_tag))
 
-        action_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.action_prefix, largest_valid_tag))
-        tjs_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.tjs_prefix, largest_valid_tag))
-        stc_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.stc_prefix, largest_valid_tag))
-        memo_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.memo_prefix, largest_valid_tag))
-        fp_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.fp_prefix, largest_valid_tag))
-        q_mat_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.q_mat_prefix, largest_valid_tag))
-        hs2tj_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.hs2tj_prefix, largest_valid_tag))
+        action_path = self._get_context_obj_path(self.action_prefix)
+        tjs_path = self._get_context_obj_path(self.tjs_prefix)
+        memo_path = self._get_context_obj_path(self.memo_prefix)
+        fp_path = self._get_context_obj_path(self.fp_prefix)
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
@@ -474,31 +447,17 @@ class BaseAgent(Logging):
             with_loading=True)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=True)
-        self.stc = self.init_state_text(stc_path, with_loading=True)
         self.memo = self.init_memo(
             self.hp, memo_path, with_loading=True)
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=True)
-        try:
-            npz_q_mat = np.load(q_mat_path)
-            q_mat_key = npz_q_mat["q_mat_key"]
-            q_mat_val = npz_q_mat["q_mat_val"]
-            self.q_mat = dict(zip(q_mat_key, q_mat_val))
-            self.debug("load q_mat from file")
-            self.target_q_mat = deepcopy(self.q_mat)
-            self.debug("init target_q_mat with q_mat")
-        except IOError as e:
-            self.debug("load q_mat error:\n{}".format(e))
 
-        try:
-            hs2tj = np.load(hs2tj_path)
-            hs2tj_key = hs2tj["hash_states2tjs_key"]
-            hs2tj_val = hs2tj["hash_states2tjs_val"]
-            self.hash_states2tjs = dict(zip(hs2tj_key, hs2tj_val))
-            self.debug("load hash_states2tjs from file")
-        except IOError as e:
-            self.debug("load hash_states2tjs error:\n{}".format(e))
-
+    def _init_impl(self, load_best=False):
+        if self.hp.apply_dependency_parser:
+            # TODO: stride_len is hard fix here for maximum n-gram filter size 5
+            self.dp = DependencyParserReorder(
+                padding_val=self.hp.padding_val, stride_len=4)
+        self._load_context_objs()
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model()
@@ -531,7 +490,6 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
-        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
         self.game_id = self.get_hash(master_starter)
         self.action_collector.add_new_episode(eid=self.game_id)
@@ -602,6 +560,29 @@ class BaseAgent(Logging):
                 graph=self.model.graph))
         self.info("the best model saved")
 
+    def _delete_stale_context_objs(self):
+        valid_tags = self.get_compatible_snapshot_tag()
+        if len(valid_tags) > self.hp.max_snapshot_to_keep:
+            self._stale_tags = list(reversed(sorted(
+                valid_tags)))[self.hp.max_snapshot_to_keep:]
+            self.info("tags to be deleted: {}".format(self._stale_tags))
+            for tag in self._stale_tags:
+                prm(self._get_context_obj_path_w_tag(self.memo_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.action_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
+
+    def _save_context_objs(self):
+        action_path = self._get_context_obj_new_path(self.action_prefix)
+        tjs_path = self._get_context_obj_new_path(self.tjs_prefix)
+        memo_path = self._get_context_obj_new_path(self.memo_prefix)
+        fp_path = self._get_context_obj_new_path(self.fp_prefix)
+
+        self.memo.save_memo(memo_path)
+        self.tjs.save_tjs(tjs_path)
+        self.action_collector.save_actions(action_path)
+        self.floor_plan.save_fps(fp_path)
+
     def save_snapshot(self):
         self.info('save model')
         self.saver.save(
@@ -609,94 +590,24 @@ class BaseAgent(Logging):
             global_step=tf.train.get_or_create_global_step(
                 graph=self.model.graph))
         self.info('save snapshot of the agent')
-
-        action_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.action_prefix, self.total_t))
-        tjs_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.tjs_prefix, self.total_t))
-        stc_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.stc_prefix, self.total_t))
-        q_mat_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.q_mat_prefix, self.total_t))
-        memo_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.memo_prefix, self.total_t))
-        fp_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.fp_prefix, self.total_t))
-        hs2tj_path = os.path.join(
-            self.model_dir,
-            "{}-{}.npz".format(self.hs2tj_prefix, self.total_t))
-
-        self.memo.save_memo(memo_path)
-        self.tjs.save_tjs(tjs_path)
-        self.stc.save_tjs(stc_path)
-        self.action_collector.save_actions(action_path)
-        self.floor_plan.save_fps(fp_path)
-
-        np.savez(
-            q_mat_path,
-            q_mat_key=list(self.q_mat.keys()),
-            q_mat_val=list(self.q_mat.values()))
-        self.target_q_mat = deepcopy(self.q_mat)
-        self.debug("target q_mat is updated with q_mat")
-
-        np.savez(
-            hs2tj_path,
-            hash_states2tjs_key=list(self.hash_states2tjs.keys()),
-            hash_states2tjs_val=list(self.hash_states2tjs.values()))
-
-        valid_tags = self.get_compatible_snapshot_tag()
-        if len(valid_tags) > self.hp.max_snapshot_to_keep:
-            to_delete_tags = list(reversed(sorted(
-                valid_tags)))[self.hp.max_snapshot_to_keep:]
-            self.info("tags to be deleted: {}".format(to_delete_tags))
-            for tag in to_delete_tags:
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.memo_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.tjs_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.stc_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.action_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.fp_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.q_mat_prefix, tag)))
-                os.remove(os.path.join(
-                    self.model_dir,
-                    "{}-{}.npz".format(self.hs2tj_prefix, tag)))
+        self._save_context_objs()
+        self._delete_stale_context_objs()
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
-        save_hparams(self.hp,
-                     os.path.join(self.model_dir, 'hparams.json'),
-                     use_relative_path=True)
+        save_hparams(
+            self.hp, pjoin(self.model_dir, 'hparams.json'),
+            use_relative_path=True)
 
     def get_compatible_snapshot_tag(self):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
-        q_mat_tags = self.get_path_tags(self.model_dir, self.q_mat_prefix)
-        hs2tj_tags = self.get_path_tags(self.model_dir, self.hs2tj_prefix)
-        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
+        fp_tags = self.get_path_tags(self.model_dir, self.fp_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
-        valid_tags.intersection_update(q_mat_tags)
-        valid_tags.intersection_update(hs2tj_tags)
-        valid_tags.intersection_update(stc_tags)
+        valid_tags.intersection_update(fp_tags)
 
         return list(valid_tags)
 
@@ -822,27 +733,29 @@ class BaseAgent(Logging):
             action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
         return action_desc
 
+    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+        if not (self.hp.jitter_go and
+                action_desc.action in admissible_go_actions and
+                action_desc.action_type == ACT_TYPE_NN):
+            return False
+        else:
+            if self.is_training:
+                return np.random.random() > 1. - self.hp.jitter_train_prob
+            else:
+                return np.random.random() > 1. - self.hp.jitter_eval_prob
+
     def jitter_go_action(
             self, prev_action_desc, actions, all_actions):
         action_desc = None
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if (self.hp.jitter_go and (prev_action_desc.action_type == ACT_TYPE_NN
-                                   or prev_action_desc.action_type ==
-                                   ACT_TYPE_TBL)
-                and (prev_action_desc.action in admissible_go_actions)):
-            if ((self.is_training and
-                 random.random() > 1 - self.hp.jitter_train_prob)
-                    or ((not self.is_training) and
-                        random.random() > 1 - self.hp.jitter_eval_prob)):
-                jitter_go_action = random.choice(admissible_go_actions)
-                action_idx = all_actions.index(jitter_go_action)
-                action = jitter_go_action
-                action_desc = ActionDesc(
-                    action_type=ACT_TYPE_JITTER, action_idx=action_idx,
-                    action=action)
-            else:
-                pass
+        if self._jitter_go_condition(prev_action_desc, admissible_go_actions):
+            jitter_go_action = np.random.choice(admissible_go_actions)
+            action_idx = all_actions.index(jitter_go_action)
+            action = jitter_go_action
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_JITTER, action_idx=action_idx,
+                action=action)
         else:
             pass
         return action_desc if action_desc is not None else prev_action_desc
@@ -888,9 +801,6 @@ class BaseAgent(Logging):
         """
         action_desc = self.rule_based_policy(
             actions, all_actions, instant_reward)
-        # this is for Tabular Q-learning
-        # action_desc = ActionDesc(
-        #     action_type=ACT_TYPE_RULE, action_idx=None, action=None)
         if action_desc.action_idx is None:
             action_desc = self.random_walk_for_collecting_fp(
                 actions, all_actions)
@@ -898,6 +808,10 @@ class BaseAgent(Logging):
                 action_desc = self.get_an_eps_action(actions_mask)
                 action_desc = self.jitter_go_action(
                     action_desc, actions, all_actions)
+            else:
+                pass
+        else:
+            pass
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
@@ -1003,6 +917,10 @@ class BaseAgent(Logging):
             self.info("snapshot saved, ready for evaluation")
             self.epoch_start_t = ctime()
 
+    def _clean_stale_context(self, tid):
+        self.debug("tjs deletes {}".format(tid))
+        self.tjs.request_delete_key(tid)
+
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         # the last sid here is for the next state of using the last action
@@ -1014,22 +932,7 @@ class BaseAgent(Logging):
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
-                self.debug("tjs and stc delete {}".format(original_data.tid))
-                self.tjs.request_delete_key(original_data.tid)
-                self.stc.request_delete_key(original_data.tid)
-                updating = []
-                prev_len = len(self.hash_states2tjs)
-                for k, v in self.hash_states2tjs.items():
-                    trimmed = list(filter(
-                        lambda t_s: t_s[0] > original_data.tid, v))
-                    if len(trimmed) > 0:
-                        updating.append((k, trimmed))
-                    else:
-                        pass
-                self.hash_states2tjs = dict(updating)
-                self.debug(
-                    "hash_states2tjs deletes {} items".format(
-                        len(updating) - prev_len))
+                self._clean_stale_context(original_data.tid)
 
     def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:
@@ -1080,16 +983,6 @@ class BaseAgent(Logging):
                 self.action_collector.get_action_matrix()
                 [self._last_action_desc.action_idx])
         self.tjs.append(act_idx + obs_idx)
-        # due to game design flaw, we need to make a new terminal
-        # observation + inventory
-        # because the game terminal observation + inventory is the same with
-        # its previous state
-        if not dones[0]:
-            state_text = infos["description"][0] + "\n" + infos["inventory"][0]
-        else:
-            state_text = ("terminal and win" if infos["has_won"]
-                          else "terminal and lose")
-        self.stc.append(state_text)
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
@@ -1115,14 +1008,7 @@ class BaseAgent(Logging):
         action = self._last_action_desc.action
         action_idx = self._last_action_desc.action_idx
 
-        state_text, len_state_text = self.stc.fetch_last_state()
-        hs = self.get_hash(state_text)
-        if hs not in self.hash_states2tjs:
-            self.hash_states2tjs[hs] = []
-        self.hash_states2tjs[hs].append(
-            (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
-
-        self._per_game_recorder.append(action)
+        # self._per_game_recorder.append(action)
 
         if self._last_action_desc.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1

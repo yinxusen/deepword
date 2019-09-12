@@ -1,20 +1,129 @@
+from os import remove as prm
+
 import numpy as np
-from bert.tokenization import FullTokenizer
 
 from deeptextworld import dsqn_model
-from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
+from deeptextworld.agents.base_agent import ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
+from deeptextworld.agents.dqn_agent import TabularDQNAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
-from deeptextworld.hparams import copy_hparams
-from deeptextworld.utils import ctime, load_vocab, get_token2idx
+from deeptextworld.utils import ctime
 
 
-class DSQNAgent(BaseAgent):
+class DSQNAgent(TabularDQNAgent):
     """
     """
     def __init__(self, hp, model_dir):
         super(DSQNAgent, self).__init__(hp, model_dir)
+        self.hs2tj_prefix = "hs2tj"
+        self.hash_states2tjs = {}  # map states to tjs
+
+    def _load_context_objs(self):
+        # load others
+        super(DSQNAgent, self)._load_context_objs()
+        # load hs2tj
+        hs2tj_path = self._get_context_obj_path(self.hs2tj_prefix)
+        try:
+            hs2tj = np.load(hs2tj_path)
+            hs2tj_key = hs2tj["hash_states2tjs_key"]
+            hs2tj_val = hs2tj["hash_states2tjs_val"]
+            self.hash_states2tjs = dict(zip(hs2tj_key, hs2tj_val))
+            self.debug("load hash_states2tjs from file")
+        except IOError as e:
+            self.debug("load hash_states2tjs error:\n{}".format(e))
+
+    def _save_context_objs(self):
+        super(DSQNAgent, self)._save_context_objs()
+        hs2tj_path = self._get_context_obj_new_path(self.hs2tj_prefix)
+        np.savez(
+            hs2tj_path,
+            hash_states2tjs_key=list(self.hash_states2tjs.keys()),
+            hash_states2tjs_val=list(self.hash_states2tjs.values()))
+
+    def get_compatible_snapshot_tag(self):
+        # get parent valid tags
+        valid_tags = super(DSQNAgent, self).get_compatible_snapshot_tag()
+        valid_tags = set(valid_tags)
+        # mix valid tags w/ context objs
+        hs2tj_tags = self.get_path_tags(self.model_dir, self.hs2tj_prefix)
+        valid_tags.intersection_update(hs2tj_tags)
+        return list(valid_tags)
+
+    def _delete_stale_context_objs(self):
+        super(DSQNAgent, self)._delete_stale_context_objs()
+        if self._stale_tags is not None:
+            for tag in self._stale_tags:
+                prm(self._get_context_obj_path_w_tag(self.hs2tj_prefix, tag))
+
+    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+        if not (self.hp.jitter_go and
+                action_desc.action in admissible_go_actions and
+                action_desc.action_type == ACT_TYPE_NN):
+            return False
+        else:
+            if self.is_training:
+                return np.random.random() > 1. - self.hp.jitter_train_prob
+            else:
+                return np.random.random() > 1. - self.hp.jitter_eval_prob
+
+    def choose_action(
+            self, actions, all_actions, actions_mask, instant_reward):
+        """
+        Choose an action by
+          1) try rule-based policy;
+          2) try epsilon search learned policy;
+          3) jitter go
+        :param actions:
+        :param all_actions:
+        :param actions_mask:
+        :param instant_reward:
+        :return:
+        """
+        action_desc = self.rule_based_policy(
+            actions, all_actions, instant_reward)
+        if action_desc.action_idx is None:
+            action_desc = self.random_walk_for_collecting_fp(
+                actions, all_actions)
+            if action_desc.action_idx is None:
+                action_desc = self.get_an_eps_action(actions_mask)
+                action_desc = self.jitter_go_action(
+                    action_desc, actions, all_actions)
+            else:
+                pass
+        else:
+            pass
+        return action_desc
+
+    def _clean_stale_context(self, tid):
+        super(DSQNAgent, self)._clean_stale_context(tid)
+        updating = []
+        prev_len = len(self.hash_states2tjs)
+        for k, v in self.hash_states2tjs.items():
+            trimmed = list(filter(
+                lambda t_s: t_s[0] > tid, v))
+            if len(trimmed) > 0:
+                updating.append((k, trimmed))
+            else:
+                pass
+        self.hash_states2tjs = dict(updating)
+        self.debug(
+            "hash_states2tjs deletes {} items".format(
+                len(updating) - prev_len))
+
+    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
+        actions, all_actions, actions_mask, instant_reward = super(
+            DSQNAgent, self).collect_new_sample(
+            cleaned_obs, instant_reward, dones, infos)
+
+        state_text, len_state_text = self.stc.fetch_last_state()
+        hs = self.get_hash(state_text)
+        if hs not in self.hash_states2tjs:
+            self.hash_states2tjs[hs] = []
+        self.hash_states2tjs[hs].append(
+            (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
+
+        return actions, all_actions, actions_mask, instant_reward
 
     def get_an_eps_action(self, action_mask):
         """

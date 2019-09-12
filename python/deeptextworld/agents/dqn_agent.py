@@ -1,4 +1,6 @@
-import hashlib
+from copy import deepcopy
+from os import remove as prm
+
 import numpy as np
 from textworld import EnvInfos
 
@@ -7,6 +9,7 @@ from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN, ACT_TYPE_TBL
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
+from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.utils import ctime
 
 
@@ -127,6 +130,129 @@ class DQNAgent(BaseAgent):
 class TabularDQNAgent(DQNAgent):
     def __init__(self, hp, model_dir):
         super(TabularDQNAgent, self).__init__(hp, model_dir)
+        self.q_mat_prefix = "q_mat"
+        self.q_mat = {}  # map hash of a state to a q-vec
+        self.target_q_mat = {}  # target q-mat for Double DQN
+        self.stc_prefix = "state_text"
+        self.stc = None
+
+    def init_state_text(self, state_text_path, with_loading=True):
+        stc = StateTextCompanion()
+        if with_loading:
+            try:
+                stc.load_tjs(state_text_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return stc
+
+    def _load_context_objs(self):
+        # load others
+        super(TabularDQNAgent, self)._load_context_objs()
+        # load q_mat
+        q_mat_path = self._get_context_obj_path(self.q_mat_prefix)
+        try:
+            npz_q_mat = np.load(q_mat_path)
+            q_mat_key = npz_q_mat["q_mat_key"]
+            q_mat_val = npz_q_mat["q_mat_val"]
+            self.q_mat = dict(zip(q_mat_key, q_mat_val))
+            self.debug("load q_mat from file")
+            self.target_q_mat = deepcopy(self.q_mat)
+            self.debug("init target_q_mat with q_mat")
+        except IOError as e:
+            self.debug("load q_mat error:\n{}".format(e))
+        # load stc
+        stc_path = self._get_context_obj_path(self.stc_prefix)
+        self.stc = self.init_state_text(stc_path, with_loading=True)
+
+    def _save_context_objs(self):
+        super(TabularDQNAgent, self)._save_context_objs()
+        q_mat_path = self._get_context_obj_new_path(self.q_mat_prefix)
+        stc_path = self._get_context_obj_new_path(self.stc_prefix)
+        self.stc.save_tjs(stc_path)
+        np.savez(
+            q_mat_path,
+            q_mat_key=list(self.q_mat.keys()),
+            q_mat_val=list(self.q_mat.values()))
+        self.target_q_mat = deepcopy(self.q_mat)
+        self.debug("target q_mat is updated with q_mat")
+
+    def get_compatible_snapshot_tag(self):
+        # get parent valid tags
+        valid_tags = super(TabularDQNAgent, self).get_compatible_snapshot_tag()
+        valid_tags = set(valid_tags)
+        # mix valid tags w/ context objs
+        q_mat_tags = self.get_path_tags(self.model_dir, self.q_mat_prefix)
+        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
+        valid_tags.intersection_update(q_mat_tags)
+        valid_tags.intersection_update(stc_tags)
+        return list(valid_tags)
+
+    def _delete_stale_context_objs(self):
+        super(TabularDQNAgent, self)._delete_stale_context_objs()
+        if self._stale_tags is not None:
+            for tag in self._stale_tags:
+                prm(self._get_context_obj_path_w_tag(self.q_mat_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
+
+    def _start_episode_impl(self, obs, infos):
+        super(TabularDQNAgent, self)._start_episode_impl(obs, infos)
+        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
+
+    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+        if not (self.hp.jitter_go and
+                action_desc.action in admissible_go_actions and
+                action_desc.action_type == ACT_TYPE_TBL):
+            return False
+        else:
+            if self.is_training:
+                return np.random.random() > 1. - self.hp.jitter_train_prob
+            else:
+                return np.random.random() > 1. - self.hp.jitter_eval_prob
+
+    def choose_action(
+            self, actions, all_actions, actions_mask, instant_reward):
+        """
+        Choose an action by
+          1) try epsilon search learned policy;
+          2) jitter go
+        :param actions:
+        :param all_actions:
+        :param actions_mask:
+        :param instant_reward:
+        :return:
+        """
+        action_desc = self.random_walk_for_collecting_fp(
+            actions, all_actions)
+        if action_desc.action_idx is None:
+            action_desc = self.get_an_eps_action(actions_mask)
+            action_desc = self.jitter_go_action(
+                action_desc, actions, all_actions)
+        else:
+            pass
+        return action_desc
+
+    def _clean_stale_context(self, tid):
+        super(TabularDQNAgent, self)._clean_stale_context(tid)
+        self.debug("stc deletes {}".format(tid))
+        self.stc.request_delete_key(tid)
+
+    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
+        actions, all_actions, actions_mask, instant_reward = super(
+            TabularDQNAgent, self).collect_new_sample(
+            cleaned_obs, instant_reward, dones, infos)
+
+        # due to game design flaw, we need to make a new terminal
+        # observation + inventory
+        # because the game terminal observation + inventory is the same with
+        # its previous state
+        if not dones[0]:
+            state_text = infos["description"][0] + "\n" + infos["inventory"][0]
+        else:
+            state_text = ("terminal and win" if infos["has_won"]
+                          else "terminal and lose")
+        self.stc.append(state_text)
+
+        return actions, all_actions, actions_mask, instant_reward
 
     def get_an_eps_action(self, action_mask):
         """
