@@ -284,8 +284,8 @@ class DSQNAgent(TabularDQNAgent):
 
         src, src_len, src2, src2_len, labels = self.get_train_pairs(
             trajectory_id, state_id)
-        if t % self.hp.save_gap_t == 0:
-            self.save_train_pairs(t, src, src_len, src2, src2_len, labels)
+        # if t % self.hp.save_gap_t == 0:
+        #     self.save_train_pairs(t, src, src_len, src2, src2_len, labels)
 
         t3 = ctime()
         _, summaries, weighted_loss, abs_loss = sess.run(
@@ -314,19 +314,19 @@ class DSQNAgent(TabularDQNAgent):
         #     t1_end - t1, t2_end - t2, t3_end - t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
-    def eval_snn(self):
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
+    def eval_snn(self, eval_data_size):
+        b_idx, b_memory, b_weight = self.memo.sample_batch(eval_data_size)
         trajectory_id = [m[0].tid for m in b_memory]
         state_id = [m[0].sid for m in b_memory]
         src, src_len, src2, src2_len, labels = self.get_train_pairs(
             trajectory_id, state_id)
+        labels = labels.astype(np.int32)
         pred, diff_two_states = self.sess.run(
             [self.model.pred, self.model.diff_two_states],
             feed_dict={self.model.snn_src_: src,
                        self.model.snn_src2_: src2,
                        self.model.snn_src_len_: src_len,
                        self.model.snn_src2_len_: src2_len})
-
-        np.set_printoptions(precision=3, suppress=True, threshold=np.inf)
-        self.debug("prediction:\n{}".format(pred))
-        self.debug("diff_two_states:\n{}".format(diff_two_states))
+        pred_labels = (pred > 0.5).astype(np.int32)
+        accuracy = np.mean(np.equal(labels, pred_labels))
+        return accuracy

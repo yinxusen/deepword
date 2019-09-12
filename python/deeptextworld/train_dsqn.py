@@ -122,7 +122,8 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
                     (scores[0], infos["max_score"][0], steps[0],
                      infos["has_won"][0]))
     # run snn eval after normal agent test
-    agent.eval_snn()
+    accuracy = agent.eval_snn(eval_data_size=1000)
+    eval_results["snn_accuracy"] = accuracy
     return eval_results
 
 
@@ -187,6 +188,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             logger.info(
                 "scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
                     total_scores, total_steps, n_won))
+            logger.info("SNN accuracy: {}".format(eval_results["snn_accuracy"]))
             logger.info(
                 "time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or
@@ -335,6 +337,7 @@ def run_eval(
     logger.info("eval aggregated results: {}".format(agg_res))
     logger.info("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
         total_scores, total_steps, n_won))
+    logger.info("SNN accuracy: {}".format(eval_results["snn_accuracy"]))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
