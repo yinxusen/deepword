@@ -2,6 +2,9 @@ import argparse
 import os
 import sys
 
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.hparams import load_hparams_for_training
 from deeptextworld.utils import setup_logging
