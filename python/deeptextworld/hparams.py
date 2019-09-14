@@ -74,7 +74,6 @@ def default_hparams_agent():
         model_creator='',
         max_snapshot_to_keep=5,
         game_clazz='ZGameZorkEgg',
-        delay_target_network=1,
         jitter_go=False,
         jitter_eval_prob=1.,
         jitter_train_prob=0.5,

@@ -58,7 +58,7 @@ class DRRNAgent(BaseAgent):
         model = drrn_model.create_eval_model(model_creator, self.hp)
         return model
 
-    def train_impl(self, sess, t, summary_writer, target_sess):
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -91,12 +91,12 @@ class DRRNAgent(BaseAgent):
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(
-            self.target_model.q_actions,
-            feed_dict={self.target_model.src_: s_states,
-                       self.target_model.src_len_: s_len,
-                       self.target_model.actions_: action_matrix,
-                       self.target_model.actions_len_: action_len,
-                       self.target_model.actions_mask_: action_mask_t1})
+            target_model.q_actions,
+            feed_dict={target_model.src_: s_states,
+                       target_model.src_len_: s_len,
+                       target_model.actions_: action_matrix,
+                       target_model.actions_len_: action_len,
+                       target_model.actions_mask_: action_mask_t1})
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,

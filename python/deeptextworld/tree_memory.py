@@ -46,6 +46,9 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
             self.used_buffer_size += 1
         return prev_data
 
+    def uniform_sample_batch(self, n):
+        return np.random.choice(self.tree.data[:-self.used_buffer_size], size=n)
+
     """
     - First, to sample a minibatch of k size, the range [0, priority_total] is / into k ranges.
     - Then a value is uniformly sampled from each range

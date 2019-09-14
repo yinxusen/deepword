@@ -408,7 +408,7 @@ class BaseAgent(Logging):
     def create_eval_model_instance(self):
         raise NotImplementedError()
 
-    def train_impl(self, sess, t, summary_writer, target_sess):
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         raise NotImplementedError()
 
     def _init(self, load_best=False):
@@ -839,8 +839,8 @@ class BaseAgent(Logging):
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not has_won and "you lost" in master:
-            self.info("game terminate and fail, final reward change"
-                      " from {} to -1".format(instant_reward))
+            # self.info("game terminate and fail, final reward change"
+            #           " from {} to -1".format(instant_reward))
             instant_reward = -1
         return instant_reward
 
@@ -873,30 +873,25 @@ class BaseAgent(Logging):
         """
         if self.total_t == self.hp.observation_t:
             self.epoch_start_t = ctime()
-        # prepare target nn
-        if self.target_model is None:
-            if self.hp.delay_target_network != 0:
-                # save model for loading of target net
-                self.debug("save nn for target net")
-                self.saver.save(
-                    self.sess, self.chkp_prefix,
-                    global_step=tf.train.get_or_create_global_step(
-                        graph=self.model.graph))
-                self.debug("create and load target net")
-                self.target_sess, _, self.target_saver, self.target_model =\
-                    self.create_n_load_model(is_training=False)
-            else:
-                self.debug("target net is the same with nn")
-                self.target_model = self.model
-                self.target_sess = self.sess
-                self.target_saver = self.saver
-
         self.eps = self.annealing_eps(
             self.hp.init_eps, self.hp.final_eps,
             self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
+
+        restore_from = tf.train.latest_checkpoint(
+            os.path.join(self.model_dir, 'last_weights'))
+        if self.target_sess is None and restore_from is not None:
+            self.debug("create and load target net")
+            (self.target_sess, start_t, self.target_saver, self.target_model
+             ) = self.create_n_load_model(is_training=False)
+        else:
+            pass
+
+        # if there is not a well-trained model, it is unreasonable
+        # to use target model.
         self.train_impl(
             self.sess, self.total_t, self.train_summary_writer,
-            self.target_sess)
+            self.target_sess if self.target_sess else self.sess,
+            self.target_model if self.target_model else self.model)
 
         if self.time_to_save():
             epoch_end_t = ctime()
@@ -909,10 +904,15 @@ class BaseAgent(Logging):
                  delta_time * 1.0 / self.hp.save_gap_t)]
             self.info(self.report_status(reports_time))
             self.save_snapshot()
-            restore_from = tf.train.latest_checkpoint(
-                os.path.join(self.model_dir, 'last_weights'))
-            self.target_saver.restore(self.target_sess, restore_from)
-            self.info("target net load from: {}".format(restore_from))
+
+            if self.target_sess is None:
+                self.debug("create and load target net")
+                (self.target_sess, start_t, self.target_saver, self.target_model
+                 ) = self.create_n_load_model(is_training=False)
+            else:
+                self.target_saver.restore(self.target_sess, restore_from)
+                self.info("target net load from: {}".format(restore_from))
+
             self.snapshot_saved = True
             self.info("snapshot saved, ready for evaluation")
             self.epoch_start_t = ctime()

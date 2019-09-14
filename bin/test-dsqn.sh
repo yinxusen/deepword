@@ -43,6 +43,7 @@ MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
+F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
@@ -55,7 +56,7 @@ fi
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-dsqn \
-    --game-path $GAMEPATH \
+    --game-path $GAMEPATH --f-games $F_GAMES \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \

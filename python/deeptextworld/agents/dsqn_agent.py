@@ -1,6 +1,7 @@
 from os import remove as prm
 
 import numpy as np
+from numpy.random import choice as npc
 
 from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
@@ -26,9 +27,7 @@ class DSQNAgent(TabularDQNAgent):
         hs2tj_path = self._get_context_obj_path(self.hs2tj_prefix)
         try:
             hs2tj = np.load(hs2tj_path)
-            hs2tj_key = hs2tj["hash_states2tjs_key"]
-            hs2tj_val = hs2tj["hash_states2tjs_val"]
-            self.hash_states2tjs = dict(zip(hs2tj_key, hs2tj_val))
+            self.hash_states2tjs = hs2tj["hs2tj"][0]
             self.debug("load hash_states2tjs from file")
         except IOError as e:
             self.debug("load hash_states2tjs error:\n{}".format(e))
@@ -36,10 +35,7 @@ class DSQNAgent(TabularDQNAgent):
     def _save_context_objs(self):
         super(DSQNAgent, self)._save_context_objs()
         hs2tj_path = self._get_context_obj_new_path(self.hs2tj_prefix)
-        np.savez(
-            hs2tj_path,
-            hash_states2tjs_key=list(self.hash_states2tjs.keys()),
-            hash_states2tjs_val=list(self.hash_states2tjs.values()))
+        np.savez(hs2tj_path, hs2tj=[self.hash_states2tjs])
 
     def get_compatible_snapshot_tag(self):
         # get parent valid tags
@@ -97,31 +93,29 @@ class DSQNAgent(TabularDQNAgent):
 
     def _clean_stale_context(self, tid):
         super(DSQNAgent, self)._clean_stale_context(tid)
-        updating = []
-        prev_len = len(self.hash_states2tjs)
-        for k, v in self.hash_states2tjs.items():
-            trimmed = list(filter(
-                lambda t_s: t_s[0] > tid, v))
-            if len(trimmed) > 0:
-                updating.append((k, trimmed))
-            else:
-                pass
-        self.hash_states2tjs = dict(updating)
-        self.debug(
-            "hash_states2tjs deletes {} items".format(
-                len(updating) - prev_len))
+        cnt_trashed = 0
+        for k in self.hash_states2tjs:
+            trashed = self.hash_states2tjs[k].pop(tid, None)
+            if trashed is not None:
+                cnt_trashed += len(trashed)
+        self.debug("hs2tj deletes {} items".format(cnt_trashed))
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         actions, all_actions, actions_mask, instant_reward = super(
             DSQNAgent, self).collect_new_sample(
             cleaned_obs, instant_reward, dones, infos)
 
-        state_text, len_state_text = self.stc.fetch_last_state()
-        hs = self.get_hash(state_text)
-        if hs not in self.hash_states2tjs:
-            self.hash_states2tjs[hs] = []
-        self.hash_states2tjs[hs].append(
-            (self.tjs.get_current_tid(), self.tjs.get_last_sid()))
+        if not dones[0]:
+            hs, _ = self.stc.fetch_last_state()
+            if hs not in self.hash_states2tjs:
+                self.hash_states2tjs[hs] = {}
+            last_tid = self.tjs.get_current_tid()
+            last_sid = self.tjs.get_last_sid()
+            if last_tid not in self.hash_states2tjs[hs]:
+                self.hash_states2tjs[hs][last_tid] = []
+            self.hash_states2tjs[hs][last_tid].append(last_sid)
+        else:
+            pass  # final states are not considered
 
         return actions, all_actions, actions_mask, instant_reward
 
@@ -167,44 +161,45 @@ class DSQNAgent(TabularDQNAgent):
         model = dsqn_model.create_eval_model(model_creator, self.hp)
         return model
 
-    def get_train_pairs(self, tids, sids):
-        sids = np.asarray(sids)
-        # we don't need the terminal state
-        # also the terminal state is not used in the hash_states2tjs
-        tj, tj_len = \
-            self.tjs.fetch_batch_states(tids, sids - 1)
-        st, st_len = \
-            self.stc.fetch_batch_states(tids, sids - 1)
-        hs = list(map(lambda txt: self.get_hash(txt), st))
-        same_states = []
-        diff_states = []
-        all_states = list(self.hash_states2tjs.keys())
-        for txt in st:
-            hs = self.get_hash(txt)
-            sampled_idx = np.random.choice(
-                list(range(len(self.hash_states2tjs[hs]))))
-            same_states.append(self.hash_states2tjs[hs][sampled_idx])
-            diff_key = np.random.choice(
-                list(filter(lambda s: s != hs, all_states)))
-            sampled_idx = np.random.choice(
-                list(range(len(self.hash_states2tjs[diff_key]))))
-            diff_states.append(self.hash_states2tjs[diff_key][sampled_idx])
-        tj_same, tj_same_len = self.tjs.fetch_batch_states(
-            list(map(lambda x: x[0], same_states)),
-            list(map(lambda x: x[1], same_states))
-        )
-        tj_diff, tj_diff_len = self.tjs.fetch_batch_states(
-            list(map(lambda x: x[0], diff_states)),
-            list(map(lambda x: x[1], diff_states))
-        )
+    def get_snn_pairs(self, n):
+        hs_keys = npc(list(self.hash_states2tjs.keys()), size=n)
+        diff_keys = [
+            npc(list(filter(lambda x: x != k, self.hash_states2tjs.keys())),
+                size=None)
+            for k in hs_keys]
 
-        src = np.concatenate([tj, tj], axis=0)
-        src_len = np.concatenate([tj_len, tj_len], axis=0)
-        src2 = np.concatenate([tj_same, tj_diff], axis=0)
-        src2_len = np.concatenate([tj_same_len, tj_diff_len], axis=0)
+        target_tids = []
+        same_tids = []
+        for k in hs_keys:
+            try:
+                tid_pair = npc(
+                    list(self.hash_states2tjs[k].keys()), size=2, replace=False)
+            except ValueError:
+                tid_pair = list(self.hash_states2tjs[k].keys()) * 2
 
-        labels = np.concatenate(
-            [np.zeros_like(tj_len), np.ones_like(tj_len)], axis=0)
+            target_tids.append(tid_pair[0])
+            same_tids.append(tid_pair[1])
+
+        diff_tids = [npc(list(self.hash_states2tjs[k])) for k in diff_keys]
+
+        target_sids = [npc(list(self.hash_states2tjs[k][tid]))
+                       for k, tid in zip(hs_keys, target_tids)]
+        same_sids = [npc(list(self.hash_states2tjs[k][tid]))
+                     for k, tid in zip(hs_keys, same_tids)]
+        diff_sids = [npc(list(self.hash_states2tjs[k][tid]))
+                     for k, tid in zip(diff_keys, diff_tids)]
+
+        target_src, target_src_len = self.tjs.fetch_batch_states(
+            target_tids, target_sids)
+        same_src, same_src_len = self.tjs.fetch_batch_states(
+            same_tids, same_sids)
+        diff_src, diff_src_len = self.tjs.fetch_batch_states(
+            diff_tids, diff_sids)
+        src = np.concatenate([target_src, target_src], axis=0)
+        src_len = np.concatenate([target_src_len, target_src_len], axis=0)
+        src2 = np.concatenate([same_src, diff_src], axis=0)
+        src2_len = np.concatenate([same_src_len, diff_src_len], axis=0)
+        labels = np.concatenate([np.zeros(n), np.ones(n)], axis=0)
         return src, src_len, src2, src2_len, labels
 
     def save_train_pairs(self, t, src, src_len, src2, src2_len, labels):
@@ -225,7 +220,7 @@ class DSQNAgent(TabularDQNAgent):
             src=src_str, src2=src2_str, src_len=src_len, src2_len=src2_len,
             labels=labels)
 
-    def train_impl(self, sess, t, summary_writer, target_sess):
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -258,12 +253,12 @@ class DSQNAgent(TabularDQNAgent):
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(
-            self.target_model.q_actions,
-            feed_dict={self.target_model.src_: s_states,
-                       self.target_model.src_len_: s_len,
-                       self.target_model.actions_: action_matrix,
-                       self.target_model.actions_len_: action_len,
-                       self.target_model.actions_mask_: action_mask_t1})
+            target_model.q_actions,
+            feed_dict={target_model.src_: s_states,
+                       target_model.src_len_: s_len,
+                       target_model.actions_: action_matrix,
+                       target_model.actions_len_: action_len,
+                       target_model.actions_mask_: action_mask_t1})
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
@@ -282,10 +277,10 @@ class DSQNAgent(TabularDQNAgent):
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
-        src, src_len, src2, src2_len, labels = self.get_train_pairs(
-            trajectory_id, state_id)
-        # if t % self.hp.save_gap_t == 0:
-        #     self.save_train_pairs(t, src, src_len, src2, src2_len, labels)
+        t_snn = ctime()
+        src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+            self.hp.batch_size)
+        t_snn_end = ctime()
 
         t3 = ctime()
         _, summaries, weighted_loss, abs_loss = sess.run(
@@ -309,17 +304,13 @@ class DSQNAgent(TabularDQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        # self.info('loss: {}'.format(weighted_loss))
-        # self.debug('t1: {}, t2: {}, t3: {}'.format(
-        #     t1_end - t1, t2_end - t2, t3_end - t3))
+        self.debug('t1: {}, t2: {}, t3: {}, t_snn_mk_pairs: {}'.format(
+            t1_end - t1, t2_end - t2, t3_end - t3, t_snn_end - t_snn))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
     def eval_snn(self, eval_data_size):
-        b_idx, b_memory, b_weight = self.memo.sample_batch(eval_data_size)
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        src, src_len, src2, src2_len, labels = self.get_train_pairs(
-            trajectory_id, state_id)
+        src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+            eval_data_size)
         labels = labels.astype(np.int32)
         pred, diff_two_states = self.sess.run(
             [self.model.pred, self.model.diff_two_states],
@@ -330,3 +321,104 @@ class DSQNAgent(TabularDQNAgent):
         pred_labels = (pred > 0.5).astype(np.int32)
         accuracy = np.mean(np.equal(labels, pred_labels))
         return accuracy
+
+
+class DSQNAlterAgent(DSQNAgent):
+    """
+    Train DRRN and SNN alternatively.
+    """
+    def _train_snn(self, sess, n_iters):
+        for _ in range(n_iters):
+            src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+                self.hp.batch_size)
+            _, snn_loss = sess.run(
+                [self.model.snn_train_op, self.model.snn_loss],
+                feed_dict={self.model.snn_src_: src,
+                           self.model.snn_src_len_: src_len,
+                           self.model.snn_src2_: src2,
+                           self.model.snn_src2_len_: src2_len,
+                           self.model.labels_: labels
+                           })
+
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
+        if (t - self.hp.observation_t) % self.hp.save_gap_t == 0:
+            # train SNN
+            self._train_snn(sess, n_iters=self.hp.save_gap_t // 10)
+        else:
+            pass
+
+        gamma = self.reverse_annealing_gamma(
+            self.hp.init_gamma, self.hp.final_gamma,
+            t - self.hp.observation_t, self.hp.annealing_gamma_t)
+
+        t1 = ctime()
+        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
+        t1_end = ctime()
+
+        trajectory_id = [m[0].tid for m in b_memory]
+        state_id = [m[0].sid for m in b_memory]
+        action_id = [m[0].aid for m in b_memory]
+        game_id = [m[0].gid for m in b_memory]
+        reward = [m[0].reward for m in b_memory]
+        is_terminal = [m[0].is_terminal for m in b_memory]
+        action_mask = [m[0].action_mask for m in b_memory]
+        next_action_mask = [m[0].next_action_mask for m in b_memory]
+
+        action_mask_t = self.from_bytes(action_mask)
+        action_mask_t1 = self.from_bytes(next_action_mask)
+
+        p_states, s_states, p_len, s_len = \
+            self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
+
+        # make sure the p_states and s_states are in the same game.
+        # otherwise, it won't make sense to use the same action matrix.
+        action_matrix = (
+            [self.action_collector.get_action_matrix(gid) for gid in game_id])
+        action_len = (
+            [self.action_collector.get_action_len(gid) for gid in game_id])
+
+        t2 = ctime()
+        s_q_actions_target = target_sess.run(
+            target_model.q_actions,
+            feed_dict={target_model.src_: s_states,
+                       target_model.src_len_: s_len,
+                       target_model.actions_: action_matrix,
+                       target_model.actions_len_: action_len,
+                       target_model.actions_mask_: action_mask_t1})
+
+        s_q_actions_dqn = sess.run(
+            self.model.q_actions,
+            feed_dict={self.model.src_: s_states,
+                       self.model.src_len_: s_len,
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len,
+                       self.model.actions_mask_: action_mask_t1})
+        t2_end = ctime()
+
+        expected_q = np.zeros_like(reward)
+        for i in range(len(expected_q)):
+            expected_q[i] = reward[i]
+            if not is_terminal[i]:
+                s_argmax_q, _ = get_best_1D_q(
+                    s_q_actions_dqn[i, :], mask=action_mask_t1[i])
+                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
+
+        t3 = ctime()
+        _, summaries, weighted_loss, abs_loss = sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss,
+             self.model.abs_loss],
+            feed_dict={self.model.src_: p_states,
+                       self.model.src_len_: p_len,
+                       self.model.b_weight_: b_weight,
+                       self.model.action_idx_: action_id,
+                       self.model.actions_mask_: action_mask_t,
+                       self.model.expected_q_: expected_q,
+                       self.model.actions_: action_matrix,
+                       self.model.actions_len_: action_len})
+        t3_end = ctime()
+
+        self.memo.batch_update(b_idx, abs_loss)
+        # self.info('loss: {}'.format(weighted_loss))
+        # self.debug('t1: {}, t2: {}, t3: {}'.format(
+        #     t1_end - t1, t2_end - t2, t3_end - t3))
+        summary_writer.add_summary(summaries, t - self.hp.observation_t)

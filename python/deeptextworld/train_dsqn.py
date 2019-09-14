@@ -8,7 +8,6 @@ from threading import Thread, Condition
 import gym
 import textworld.gym
 from textworld import EnvInfos
-from tqdm import trange
 
 from deeptextworld.agents import dsqn_agent
 from deeptextworld.utils import ctime
@@ -45,32 +44,28 @@ def run_agent(cv, agent, game_env, nb_games, nb_epochs):
     :return:
     """
     logger = logging.getLogger("train")
-    for epoch_no in trange(nb_epochs, desc='train-epoch'):
-        with trange(nb_games, desc="train-game") as tgames:
-            for game_no in tgames:
-                logger.info("playing game epoch_no/game_no: {}/{}".format(
-                    epoch_no, game_no))
+    for epoch_no in range(nb_epochs):
+        for game_no in range(nb_games):
+            logger.info("playing game epoch_no/game_no: {}/{}".format(
+                epoch_no, game_no))
 
-                obs, infos = game_env.reset()
-                scores = [0] * len(obs)
-                dones = [False] * len(obs)
-                steps = [0] * len(obs)
-                while not all(dones):
-                    # Increase step counts.
-                    steps = ([step + int(not done)
-                              for step, done in zip(steps, dones)])
-                    commands = agent.act(obs, scores, dones, infos)
-                    if agent.snapshot_saved:
-                        agent.snapshot_saved = False
-                        with cv:
-                            cv.notifyAll()
-                    obs, scores, dones, infos = game_env.step(commands)
+            obs, infos = game_env.reset()
+            scores = [0] * len(obs)
+            dones = [False] * len(obs)
+            steps = [0] * len(obs)
+            while not all(dones):
+                # Increase step counts.
+                steps = ([step + int(not done)
+                          for step, done in zip(steps, dones)])
+                commands = agent.act(obs, scores, dones, infos)
+                if agent.snapshot_saved:
+                    agent.snapshot_saved = False
+                    with cv:
+                        cv.notifyAll()
+                obs, scores, dones, infos = game_env.step(commands)
 
-                # Let the agent knows the game is done.
-                agent.act(obs, scores, dones, infos)
-                tgames.set_postfix(
-                    score=scores[0], has_won=infos["has_won"][0],
-                    steps=steps[0])
+            # Let the agent knows the game is done.
+            agent.act(obs, scores, dones, infos)
     return None
 
 
@@ -87,7 +82,7 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
     eval_results = dict()
     requested_infos = agent.select_additional_infos()
     validate_requested_infos(requested_infos)
-    for game_no in trange(len(game_files), desc='eval-game'):
+    for game_no in range(len(game_files)):
         game_file = game_files[game_no]
         game_name = os.path.basename(game_file)
         env_id = textworld.gym.register_games(
@@ -97,30 +92,26 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
         env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
 
-        with trange(nb_episodes, desc='eval-episode') as tepisode:
-            for episode_no in tepisode:
-                tepisode.set_postfix(
-                    episode_no=episode_no, game_no=game_no, game_name=game_name)
+        for episode_no in range(nb_episodes):
+            obs, infos = game_env.reset()
+            scores = [0] * len(obs)
+            dones = [False] * len(obs)
+            steps = [0] * len(obs)
+            while not all(dones):
+                # Increase step counts.
+                steps = ([step + int(not done)
+                          for step, done in zip(steps, dones)])
+                commands = agent.act(obs, scores, dones, infos)
+                obs, scores, dones, infos = game_env.step(commands)
 
-                obs, infos = game_env.reset()
-                scores = [0] * len(obs)
-                dones = [False] * len(obs)
-                steps = [0] * len(obs)
-                while not all(dones):
-                    # Increase step counts.
-                    steps = ([step + int(not done)
-                              for step, done in zip(steps, dones)])
-                    commands = agent.act(obs, scores, dones, infos)
-                    obs, scores, dones, infos = game_env.step(commands)
+            # Let the agent knows the game is done.
+            agent.act(obs, scores, dones, infos)
 
-                # Let the agent knows the game is done.
-                agent.act(obs, scores, dones, infos)
-
-                if game_name not in eval_results:
-                    eval_results[game_name] = []
-                eval_results[game_name].append(
-                    (scores[0], infos["max_score"][0], steps[0],
-                     infos["has_won"][0]))
+            if game_name not in eval_results:
+                eval_results[game_name] = []
+            eval_results[game_name].append(
+                (scores[0], infos["max_score"][0], steps[0],
+                 infos["has_won"][0]))
     # run snn eval after normal agent test
     accuracy = agent.eval_snn(eval_data_size=1000)
     eval_results["snn_accuracy"] = accuracy

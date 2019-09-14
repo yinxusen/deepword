@@ -67,7 +67,7 @@ class DQNAgent(BaseAgent):
         model = dqn_model.create_eval_model(model_creator, self.hp)
         return model
 
-    def train_impl(self, sess, t, summary_writer, target_sess):
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -90,9 +90,9 @@ class DQNAgent(BaseAgent):
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(
-            self.target_model.q_actions,
-            feed_dict={self.target_model.src_: s_states,
-                       self.target_model.src_len_: s_len})
+            target_model.q_actions,
+            feed_dict={target_model.src_: s_states,
+                       target_model.src_len_: s_len})
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
@@ -250,7 +250,7 @@ class TabularDQNAgent(DQNAgent):
         else:
             state_text = ("terminal and win" if infos["has_won"]
                           else "terminal and lose")
-        self.stc.append(state_text)
+        self.stc.append(self.get_hash(state_text))
 
         return actions, all_actions, actions_mask, instant_reward
 
@@ -268,9 +268,8 @@ class TabularDQNAgent(DQNAgent):
                 action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
                 action=action)
         else:
-            state_text, len_state_text = self.stc.fetch_last_state()
-            q_actions_t = self.q_mat.get(
-                self.get_hash(state_text), np.zeros(self.hp.n_actions))
+            hs, _ = self.stc.fetch_last_state()
+            q_actions_t = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
             action_idx, q_max, action = get_best_1Daction(
                 q_actions_t, self.action_collector.get_actions(),
                 mask=action_mask)
@@ -278,7 +277,7 @@ class TabularDQNAgent(DQNAgent):
                 action_type=ACT_TYPE_TBL, action_idx=action_idx, action=action)
         return action_desc
 
-    def train_impl(self, sess, t, summary_writer, target_sess):
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -301,11 +300,10 @@ class TabularDQNAgent(DQNAgent):
 
         t2 = ctime()
         s_q_actions_target = np.asarray(
-            [self.target_q_mat.get(
-                self.get_hash(s), np.zeros(self.hp.n_actions))
+            [self.target_q_mat.get(s, np.zeros(self.hp.n_actions))
              for s in s_states])
         s_q_actions_dqn = np.asarray(
-            [self.q_mat.get(self.get_hash(s), np.zeros(self.hp.n_actions))
+            [self.q_mat.get(s, np.zeros(self.hp.n_actions))
              for s in s_states])
         t2_end = ctime()
 
@@ -320,12 +318,12 @@ class TabularDQNAgent(DQNAgent):
         t3 = ctime()
         abs_loss = np.zeros_like(reward)
         for i, ps in enumerate(p_states):
-            if self.get_hash(ps) not in self.q_mat:
-                self.q_mat[self.get_hash(ps)] = np.zeros(self.hp.n_actions)
-            prev_q_val = self.q_mat[self.get_hash(ps)][action_id[i]]
+            if ps not in self.q_mat:
+                self.q_mat[ps] = np.zeros(self.hp.n_actions)
+            prev_q_val = self.q_mat[ps][action_id[i]]
             delta_q_val = expected_q[i] - prev_q_val
             abs_loss[i] = abs(delta_q_val)
-            self.q_mat[self.get_hash(ps)][action_id[i]] = (
+            self.q_mat[ps][action_id[i]] = (
                     prev_q_val + delta_q_val * b_weight[i])
         t3_end = ctime()
 

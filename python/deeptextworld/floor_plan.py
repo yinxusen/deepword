@@ -22,10 +22,10 @@ class FloorPlanCollector(Logging):
 
     def add_new_episode(self, eid):
         if eid == self.curr_eid:
-            self.info("continue current episode: {}".format(eid))
+            # self.info("continue current episode: {}".format(eid))
             return
 
-        self.info("add new episode in floor plan: {}".format(eid))
+        # self.info("add new episode in floor plan: {}".format(eid))
 
         if self.curr_eid is not None:
             if self.curr_eid not in self.fp_base:
