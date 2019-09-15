@@ -10,6 +10,7 @@ class TrainDSQNModel(
     collections.namedtuple(
         'TrainDSQNModel',
         ('graph', 'model', 'q_actions', 'train_op', 'loss', 'train_summary_op',
+         'snn_train_summary_op', 'weighted_train_summary_op',
          'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss', 'pred',
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
@@ -146,9 +147,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         labels = self.inputs["labels"]
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=labels, logits=pred)
-        # TODO: whether use the b_weight or not
-        loss = tf.reduce_mean(
-            tf.reduce_mean(self.inputs["b_weight"]) * losses)
+        loss = tf.reduce_mean(losses)
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
@@ -180,9 +179,11 @@ def create_train_model(model_creator, hp):
         snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
         weighted_loss_summary = tf.summary.scalar(
             "weighted_loss", weighted_loss)
-        s1_summary = tf.summary.scalar("s1_summary", s1)
-        s2_summary = tf.summary.scalar("s2_summary", s2)
-        train_summary_op = tf.summary.merge(
+        s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
+        s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
+        train_summary_op = tf.summary.merge([loss_summary])
+        snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+        weighted_train_summary_op = tf.summary.merge(
             [loss_summary, snn_loss_summary, weighted_loss_summary,
              s1_summary, s2_summary])
     return TrainDSQNModel(
@@ -206,6 +207,8 @@ def create_train_model(model_creator, hp):
         snn_loss=snn_loss,
         merged_train_op=merged_train_op,
         train_summary_op=train_summary_op,
+        snn_train_summary_op=snn_train_summary_op,
+        weighted_train_summary_op=weighted_train_summary_op,
         diff_two_states=diff_two_states,
         initializer=initializer)
 

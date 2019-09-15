@@ -2,6 +2,7 @@ from os import remove as prm
 
 import numpy as np
 from numpy.random import choice as npc
+from tqdm import trange
 
 from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
@@ -94,11 +95,17 @@ class DSQNAgent(TabularDQNAgent):
     def _clean_stale_context(self, tid):
         super(DSQNAgent, self)._clean_stale_context(tid)
         cnt_trashed = 0
-        for k in self.hash_states2tjs:
+        empty_keys = []
+        for k in self.hash_states2tjs.keys():
             trashed = self.hash_states2tjs[k].pop(tid, None)
             if trashed is not None:
                 cnt_trashed += len(trashed)
+            if not self.hash_states2tjs[k]:  # delete the dict if empty
+                empty_keys.append(k)
         self.debug("hs2tj deletes {} items".format(cnt_trashed))
+        for k in empty_keys:
+            self.hash_states2tjs.pop(k, None)
+        self.debug("hs2tj deletes {} keys".format(len(empty_keys)))
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         actions, all_actions, actions_mask, instant_reward = super(
@@ -162,10 +169,11 @@ class DSQNAgent(TabularDQNAgent):
         return model
 
     def get_snn_pairs(self, n):
-        hs_keys = npc(list(self.hash_states2tjs.keys()), size=n)
+        non_empty_keys = list(filter(lambda x: self.hash_states2tjs[x],
+                                     self.hash_states2tjs.keys()))
+        hs_keys = npc(non_empty_keys, size=n)
         diff_keys = [
-            npc(list(filter(lambda x: x != k, self.hash_states2tjs.keys())),
-                size=None)
+            npc(list(filter(lambda x: x != k, non_empty_keys)), size=None)
             for k in hs_keys]
 
         target_tids = []
@@ -284,9 +292,8 @@ class DSQNAgent(TabularDQNAgent):
 
         t3 = ctime()
         _, summaries, weighted_loss, abs_loss = sess.run(
-            [self.model.merged_train_op, self.model.train_summary_op,
-             self.model.weighted_loss,
-             self.model.abs_loss],
+            [self.model.merged_train_op, self.model.weighted_train_summary_op,
+             self.model.weighted_loss, self.model.abs_loss],
             feed_dict={self.model.src_: p_states,
                        self.model.src_len_: p_len,
                        self.model.b_weight_: b_weight,
@@ -327,24 +334,34 @@ class DSQNAlterAgent(DSQNAgent):
     """
     Train DRRN and SNN alternatively.
     """
-    def _train_snn(self, sess, n_iters):
-        for _ in range(n_iters):
+    def _train_snn(self, sess, n_iters, summary_writer, t):
+        for i in trange(n_iters):
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 self.hp.batch_size)
-            _, snn_loss = sess.run(
-                [self.model.snn_train_op, self.model.snn_loss],
+            _, summaries, snn_loss = sess.run(
+                [self.model.snn_train_op, self.model.snn_train_summary_op,
+                 self.model.snn_loss],
                 feed_dict={self.model.snn_src_: src,
                            self.model.snn_src_len_: src_len,
                            self.model.snn_src2_: src2,
                            self.model.snn_src2_len_: src2_len,
                            self.model.labels_: labels
                            })
+            summary_writer.add_summary(summaries, t - self.hp.observation_t + i)
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        if (t - self.hp.observation_t) % self.hp.save_gap_t == 0:
+        if self.time_to_save():
+            self.debug("training SNN")
+            n_iters = self.hp.save_gap_t // 10
+            t_snn = ctime()
             # train SNN
-            self._train_snn(sess, n_iters=self.hp.save_gap_t // 10)
+            self._train_snn(sess, n_iters, summary_writer, t)
+            t_snn_end = ctime()
+            self.debug("training DQN")
         else:
+            t_snn = 0
+            t_snn_end = 0
+            n_iters = 0
             pass
 
         gamma = self.reverse_annealing_gamma(
@@ -404,7 +421,7 @@ class DSQNAlterAgent(DSQNAgent):
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
         t3 = ctime()
-        _, summaries, weighted_loss, abs_loss = sess.run(
+        _,  summaries, weighted_loss, abs_loss = sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
             feed_dict={self.model.src_: p_states,
@@ -419,6 +436,6 @@ class DSQNAlterAgent(DSQNAgent):
 
         self.memo.batch_update(b_idx, abs_loss)
         # self.info('loss: {}'.format(weighted_loss))
-        # self.debug('t1: {}, t2: {}, t3: {}'.format(
-        #     t1_end - t1, t2_end - t2, t3_end - t3))
+        self.debug('t1: {}, t2: {}, t3: {}, t_snn_training: {} / {} (iters)'.format(
+            t1_end - t1, t2_end - t2, t3_end - t3, t_snn_end - t_snn, n_iters))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)

@@ -61,5 +61,5 @@ pushd $PDIR
     --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 1000 --batch-size 32 --game-episode-terminal-t 100 \
-    --model-creator CNNEncoderDSQN
+    --model-creator CNNEncoderDSQN --agent-clazz DSQNAlterAgent
 popd
