@@ -85,6 +85,10 @@ class CNNEncoderDQN(BaseDQN):
             name="pos_embeddings", dtype=tf.float32,
             shape=[self.num_tokens, self.hp.embedding_size])
 
+        self.seg_embeddings = tf.stack(
+            [tf.zeros(self.hp.embedding_size), tf.ones(self.hp.embedding_size)],
+            name="seg_embeddings")
+
     def get_q_actions(self):
         inner_states = dqn.encoder_cnn(
             self.inputs["src"], self.src_embeddings, self.pos_embeddings,

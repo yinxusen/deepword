@@ -124,6 +124,28 @@ def encoder_cnn_prepare_input_two_facets(src, src_embeddings, pos_embeddings):
     return src_emb_expanded
 
 
+def encoder_cnn_prepare_input_three_facets(
+        src, src_seg, src_embeddings, pos_embeddings, seg_embeddings):
+    """
+    encode state with CNN, refer to
+    Convolutional Neural Networks for Sentence Classification
+    :param src: placeholder, (tf.int32, [batch_size, src_len])
+    :param src_seg: placeholder, (tf.int32, [batch_size, src_len])
+    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+    :param pos_embeddings: (tf.float32, [pos_emb_len, embedding_size])
+    :param filter_sizes: list of ints, e.g. [3, 4, 5]
+    :param num_filters: number of filters of each filter_size
+    :param embedding_size: embedding size
+    :return inner_state: (tf.float32, [batch_size, max_src_len, len(filter_sizes) * num_filters])
+    """
+    src_emb = tf.nn.embedding_lookup(src_embeddings, src)
+    pos_emb = tf.slice(pos_embeddings, [0, 0], [tf.shape(src_emb)[1], -1])
+    seg_emb = tf.nn.embedding_lookup(seg_embeddings, src_seg)
+    src_emb_expanded = tf.stack(
+        [src_emb, src_emb + pos_emb, src_emb + seg_emb], axis=-1)
+    return src_emb_expanded
+
+
 def encoder_cnn_base(
         input_tensor, filter_sizes, num_filters, num_channels, embedding_size,
         is_infer=False):
@@ -186,6 +208,42 @@ def encoder_cnn(
     with tf.variable_scope("cnn_encoder"):
         h_cnn = encoder_cnn_block(
             src, src_embeddings, pos_embeddings, filter_sizes, num_filters,
+            embedding_size, is_infer)
+        pooled = tf.reduce_max(h_cnn, axis=1)
+        num_filters_total = num_filters * len(filter_sizes)
+        inner_states = tf.reshape(pooled, [-1, num_filters_total])
+    return inner_states
+
+
+def encoder_cnn_block_3(
+        src, src_seg, src_embeddings, pos_embeddings, seg_embeddings,
+        filter_sizes, num_filters,
+        embedding_size, is_infer=False):
+    in_tn = encoder_cnn_prepare_input_three_facets(
+        src, src_seg, src_embeddings, pos_embeddings, seg_embeddings)
+    return encoder_cnn_base(
+        in_tn, filter_sizes, num_filters, num_channels=3,
+        embedding_size=embedding_size, is_infer=is_infer)
+
+
+def encoder_cnn_3(
+        src, src_seg, src_embeddings, pos_embeddings, seg_embeddings,
+        filter_sizes, num_filters,
+        embedding_size, is_infer=False):
+    """
+    encode state with CNN, refer to
+    Convolutional Neural Networks for Sentence Classification
+    :param src: placeholder, (tf.int32, [None, None])
+    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+    :param pos_emb: position embedding, (tf.float32, [src_len, embedding_size])
+    :param filter_sizes: list of ints, e.g. [3, 4, 5]
+    :param num_filters: number of filters of each filter_size
+    :param embedding_size: embedding size
+    """
+    with tf.variable_scope("cnn_encoder"):
+        h_cnn = encoder_cnn_block_3(
+            src, src_seg, src_embeddings, pos_embeddings, seg_embeddings,
+            filter_sizes, num_filters,
             embedding_size, is_infer)
         pooled = tf.reduce_max(h_cnn, axis=1)
         num_filters_total = num_filters * len(filter_sizes)

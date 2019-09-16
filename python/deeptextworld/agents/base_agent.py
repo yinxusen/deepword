@@ -71,6 +71,7 @@ class BaseAgent(Logging):
         self.model_dir = model_dir
 
         self.tjs_prefix = "trajectories"
+        self.tjs_seg_prefix = "segmentation"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
@@ -83,6 +84,7 @@ class BaseAgent(Logging):
         self.info(output_hparams(self.hp))
 
         self.tjs = None
+        self.tjs_seg = None
         self.memo = None
         self.model = None
         self.target_model = None
@@ -438,6 +440,7 @@ class BaseAgent(Logging):
 
         action_path = self._get_context_obj_path(self.action_prefix)
         tjs_path = self._get_context_obj_path(self.tjs_prefix)
+        tjs_seg_path = self._get_context_obj_path(self.tjs_seg_prefix)
         memo_path = self._get_context_obj_path(self.memo_prefix)
         fp_path = self._get_context_obj_path(self.fp_prefix)
 
@@ -447,6 +450,8 @@ class BaseAgent(Logging):
             with_loading=True)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=True)
+        self.tjs_seg = self.init_trajectory(
+            self.hp, tjs_seg_path, with_loading=True)
         self.memo = self.init_memo(
             self.hp, memo_path, with_loading=True)
         self.floor_plan = self.init_floor_plan(
@@ -490,6 +495,7 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
+        self.tjs_seg.add_new_tj()
         master_starter = self._get_master_starter(obs, infos)
         self.game_id = self.get_hash(master_starter)
         self.action_collector.add_new_episode(eid=self.game_id)
@@ -569,17 +575,20 @@ class BaseAgent(Logging):
             for tag in self._stale_tags:
                 prm(self._get_context_obj_path_w_tag(self.memo_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.tjs_seg_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.action_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
 
     def _save_context_objs(self):
         action_path = self._get_context_obj_new_path(self.action_prefix)
         tjs_path = self._get_context_obj_new_path(self.tjs_prefix)
+        tjs_seg_path = self._get_context_obj_new_path(self.tjs_seg_prefix)
         memo_path = self._get_context_obj_new_path(self.memo_prefix)
         fp_path = self._get_context_obj_new_path(self.fp_prefix)
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
+        self.tjs_seg.save_tjs(tjs_seg_path)
         self.action_collector.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
 
@@ -602,11 +611,13 @@ class BaseAgent(Logging):
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
+        tjs_seg_tags = self.get_path_tags(self.model_dir, self.tjs_seg_prefix)
         fp_tags = self.get_path_tags(self.model_dir, self.fp_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
+        valid_tags.intersection_update(tjs_seg_tags)
         valid_tags.intersection_update(fp_tags)
 
         return list(valid_tags)
@@ -920,6 +931,7 @@ class BaseAgent(Logging):
     def _clean_stale_context(self, tid):
         self.debug("tjs deletes {}".format(tid))
         self.tjs.request_delete_key(tid)
+        self.tjs_seg.request_delete_key(tid)
 
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
@@ -983,6 +995,7 @@ class BaseAgent(Logging):
                 self.action_collector.get_action_matrix()
                 [self._last_action_desc.action_idx])
         self.tjs.append(act_idx + obs_idx)
+        self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)

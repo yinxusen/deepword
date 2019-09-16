@@ -33,8 +33,10 @@ class DRRNAgent(BaseAgent):
             action_matrix = self.action_collector.get_action_matrix()
             action_len = self.action_collector.get_action_len()
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
+            seg_t, _ = self.tjs_seg.fetch_last_state()
             q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
                 self.model.src_: [indexed_state_t],
+                self.model.src_seg_: [seg_t],
                 self.model.src_len_: [lens_t],
                 self.model.actions_mask_: [action_mask],
                 self.model.actions_: [action_matrix],
@@ -82,6 +84,9 @@ class DRRNAgent(BaseAgent):
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
+        p_seg, s_seg, _, _ = \
+            self.tjs_seg.fetch_batch_states_pair(trajectory_id, state_id)
+
         # make sure the p_states and s_states are in the same game.
         # otherwise, it won't make sense to use the same action matrix.
         action_matrix = (
@@ -93,6 +98,7 @@ class DRRNAgent(BaseAgent):
         s_q_actions_target = target_sess.run(
             target_model.q_actions,
             feed_dict={target_model.src_: s_states,
+                       target_model.src_seg_: s_seg,
                        target_model.src_len_: s_len,
                        target_model.actions_: action_matrix,
                        target_model.actions_len_: action_len,
@@ -101,6 +107,7 @@ class DRRNAgent(BaseAgent):
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
             feed_dict={self.model.src_: s_states,
+                       self.model.src_seg_: s_seg,
                        self.model.src_len_: s_len,
                        self.model.actions_: action_matrix,
                        self.model.actions_len_: action_len,
@@ -120,6 +127,7 @@ class DRRNAgent(BaseAgent):
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
             feed_dict={self.model.src_: p_states,
+                       self.model.src_seg_: p_seg,
                        self.model.src_len_: p_len,
                        self.model.b_weight_: b_weight,
                        self.model.action_idx_: action_id,

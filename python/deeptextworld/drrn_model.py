@@ -11,7 +11,8 @@ class TrainDRRNModel(
     collections.namedtuple(
         'TrainModel',
         ('graph', 'model', 'q_actions','train_op', 'loss', 'train_summary_op',
-         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'src_', 'src_seg_', 'src_len_',
+         'actions_', 'actions_len_', 'actions_mask_',
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss',
          'initializer'))):
     pass
@@ -21,7 +22,8 @@ class EvalDRRNModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'q_actions',
-         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'src_', 'src_seg_', 'src_len_',
+         'actions_', 'actions_len_', 'actions_mask_',
          'initializer'))):
     pass
 
@@ -47,6 +49,7 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         self.n_tokens_per_action = self.hp.n_tokens_per_action
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
+            "src_seg": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
@@ -81,8 +84,9 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state = dqn.encoder_cnn(
-                self.inputs["src"], self.src_embeddings, self.pos_embeddings,
+            h_state = dqn.encoder_cnn_3(
+                self.inputs["src"], self.inputs["src_seg"],
+                self.src_embeddings, self.pos_embeddings, self.seg_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
             new_h = dqn.decoder_dense_classification(h_state, 32)
@@ -514,6 +518,7 @@ def create_train_model(model_creator, hp):
     return TrainDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
+        src_seg_=inputs["src_seg"],
         src_len_=inputs["src_len"],
         actions_=inputs["actions"],
         actions_len_=inputs["actions_len"],
@@ -538,6 +543,7 @@ def create_eval_model(model_creator, hp):
     return EvalDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
+        src_seg_=inputs["src_seg"],
         src_len_=inputs["src_len"],
         actions_=inputs["actions"],
         actions_len_=inputs["actions_len"],
