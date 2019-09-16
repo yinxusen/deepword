@@ -210,19 +210,23 @@ class Encoder(tf.keras.layers.Layer):
 
         self.embedding = tf.keras.layers.Embedding(input_vocab_size, d_model)
         self.pos_encoding = positional_encoding(input_vocab_size, self.d_model)
+        self.seg_embeddings = tf.stack(
+            [tf.zeros(self.d_model), tf.ones(self.d_model)],
+            name="seg_embeddings")
 
         self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate)
                            for _ in range(num_layers)]
 
         self.dropout = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, training, mask):
+    def call(self, x, x_seg, training, mask):
         seq_len = tf.shape(x)[1]
 
         # adding embedding and position encoding.
         x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
+        x += tf.nn.embedding_lookup(self.seg_embeddings, x_seg)
 
         x = self.dropout(x, training=training)
 

@@ -138,8 +138,8 @@ class AttnEncoderDRRN(CNNEncoderDRRN):
                 input_vocab_size=self.hp.vocab_size)
             padding_mask = txf.create_padding_mask(self.inputs["src"])
             inner_state = attn_encoder(
-                self.inputs["src"], training=(not self.is_infer),
-                mask=padding_mask)
+                self.inputs["src"], x_seg=self.inputs["src_seg"],
+                training=(not self.is_infer), mask=padding_mask)
             pooled = tf.reduce_max(inner_state, axis=1)
             h_state = tf.reshape(pooled, [-1, 128])
             new_h = dqn.decoder_dense_classification(h_state, 32)
