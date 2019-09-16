@@ -226,7 +226,8 @@ class Encoder(tf.keras.layers.Layer):
         x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
-        x += tf.nn.embedding_lookup(self.seg_embeddings, x_seg)
+        if x_seg is not None:
+            x += tf.nn.embedding_lookup(self.seg_embeddings, x_seg)
 
         x = self.dropout(x, training=training)
 
