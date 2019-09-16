@@ -495,7 +495,7 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(self, obs, infos):
         self.tjs.add_new_tj()
-        self.tjs_seg.add_new_tj()
+        self.tjs_seg.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
         self.game_id = self.get_hash(master_starter)
         self.action_collector.add_new_episode(eid=self.game_id)

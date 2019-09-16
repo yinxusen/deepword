@@ -34,5 +34,5 @@ pushd $PDIR
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
-    --model-creator AttnEncoderDRRN
+    --model-creator CNNEncoderDRRN
 popd
