@@ -318,18 +318,25 @@ class DSQNAgent(TabularDQNAgent):
                     t_snn_end - t_snn))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
-    def eval_snn(self, eval_data_size):
-        src, src_len, src2, src2_len, labels = self.get_snn_pairs(
-            eval_data_size)
-        labels = labels.astype(np.int32)
-        pred, diff_two_states = self.sess.run(
-            [self.model.pred, self.model.diff_two_states],
-            feed_dict={self.model.snn_src_: src,
-                       self.model.snn_src2_: src2,
-                       self.model.snn_src_len_: src_len,
-                       self.model.snn_src2_len_: src2_len})
-        pred_labels = (pred > 0.5).astype(np.int32)
-        accuracy = np.mean(np.equal(labels, pred_labels))
+    def eval_snn(self, eval_data_size, batch_size=32):
+        self.info("start eval with size {}".format(eval_data_size))
+        n_iter = (eval_data_size // batch_size) + 1
+        total_acc = 0
+        for i in trange(n_iter):
+            src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+                batch_size)
+            labels = labels.astype(np.int32)
+            pred, diff_two_states = self.sess.run(
+                [self.model.pred, self.model.diff_two_states],
+                feed_dict={self.model.snn_src_: src,
+                           self.model.snn_src2_: src2,
+                           self.model.snn_src_len_: src_len,
+                           self.model.snn_src2_len_: src2_len})
+            pred_labels = (pred > 0.5).astype(np.int32)
+            accuracy = np.mean(np.equal(labels, pred_labels))
+            total_acc += accuracy
+        avg_acc = total_acc * 1. / n_iter
+        self.info("accuracy: {}".format(avg_acc))
         return accuracy
 
 
