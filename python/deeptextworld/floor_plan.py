@@ -54,12 +54,14 @@ class FloorPlanCollector(Logging):
             if p1 not in self.curr_fp:
                 self.curr_fp[p1] = {}
             if d not in self.curr_fp[p1]:
-                self.info("find new path: {} + {} -> {}".format(p1, d, p2))
+                # self.info("find new path: {} + {} -> {}".format(p1, d, p2))
                 self.curr_fp[p1][d] = p2
             else:
                 if p2 != self.curr_fp[p1][d]:
-                    self.error("mismatch floor plan: {} + {} -> {}, change to {}".format(
-                        p1, d, self.curr_fp[p1][d], p2))
+                    self.error(
+                        "mismatch floor plan: {} + {} -> {},"
+                        " change to {}".format(
+                            p1, d, self.curr_fp[p1][d], p2))
                 else:
                     pass
 

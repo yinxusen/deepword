@@ -311,8 +311,11 @@ class DSQNAgent(TabularDQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        self.debug('t1: {}, t2: {}, t3: {}, t_snn_mk_pairs: {}'.format(
-            t1_end - t1, t2_end - t2, t3_end - t3, t_snn_end - t_snn))
+        if t % 1000 == 0:
+            self.debug(
+                't: {}, t1: {}, t2: {}, t3: {}, t_snn_mk_pairs: {}'.format(
+                    t, t1_end - t1, t2_end - t2, t3_end - t3,
+                    t_snn_end - t_snn))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
     def eval_snn(self, eval_data_size):
@@ -435,7 +438,10 @@ class DSQNAlterAgent(DSQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        # self.info('loss: {}'.format(weighted_loss))
-        self.debug('t1: {}, t2: {}, t3: {}, t_snn_training: {} / {} (iters)'.format(
-            t1_end - t1, t2_end - t2, t3_end - t3, t_snn_end - t_snn, n_iters))
+        if t % 1000 == 0:
+            self.debug(
+                't: {}, t1: {}, t2: {}, t3: {},'
+                ' t_snn_training: {} / {} (iters)'.format(
+                    t, t1_end - t1, t2_end - t2, t3_end - t3,
+                    t_snn_end - t_snn, n_iters))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)

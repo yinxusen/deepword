@@ -138,10 +138,9 @@ class DRRNAgent(BaseAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-
-        self.info('loss: {}'.format(loss_eval))
-        self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end-t1, t2_end-t2, t3_end-t3))
+        if t % 1000 == 0:
+            self.debug('t: {}, t1: {}, t2: {}, t3: {}'.format(
+                t, t1_end-t1, t2_end-t2, t3_end-t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
 
