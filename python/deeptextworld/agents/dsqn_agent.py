@@ -100,7 +100,7 @@ class DSQNAgent(TabularDQNAgent):
             trashed = self.hash_states2tjs[k].pop(tid, None)
             if trashed is not None:
                 cnt_trashed += len(trashed)
-            if not self.hash_states2tjs[k]:  # delete the dict if empty
+            if self.hash_states2tjs[k] == {}:  # delete the dict if empty
                 empty_keys.append(k)
         self.debug("hs2tj deletes {} items".format(cnt_trashed))
         for k in empty_keys:
@@ -169,8 +169,9 @@ class DSQNAgent(TabularDQNAgent):
         return model
 
     def get_snn_pairs(self, n):
-        non_empty_keys = list(filter(lambda x: self.hash_states2tjs[x],
-                                     self.hash_states2tjs.keys()))
+        non_empty_keys = list(
+            filter(lambda x: self.hash_states2tjs[x] != {},
+                   self.hash_states2tjs.keys()))
         hs_keys = npc(non_empty_keys, size=n)
         diff_keys = [
             npc(list(filter(lambda x: x != k, non_empty_keys)), size=None)
@@ -337,7 +338,7 @@ class DSQNAgent(TabularDQNAgent):
             total_acc += accuracy
         avg_acc = total_acc * 1. / n_iter
         self.info("accuracy: {}".format(avg_acc))
-        return accuracy
+        return avg_acc
 
 
 class DSQNAlterAgent(DSQNAgent):

@@ -208,18 +208,21 @@ class SingleChannelTrajectory(VarSizeTrajectory):
         return state, state_len
 
     def fetch_last_state(self):
-        state, _ = self.fetch_raw_state_by_idx(self.curr_tid,
-                                               self.get_last_sid())
+        state, _ = self.fetch_raw_state_by_idx(
+            self.curr_tid, self.get_last_sid())
         return self._pad_raw_state(state)
 
     def fetch_batch_states(self, b_tid, b_sid):
         b_states = []
         b_len = []
         for tid, sid in zip(b_tid, b_sid):
-            stat, _ = self.fetch_raw_state_by_idx(tid, sid)
-            padded_state, padded_len = self._pad_raw_state(stat)
-            b_states.append(padded_state)
-            b_len.append(padded_len)
+            try:
+                stat, _ = self.fetch_raw_state_by_idx(tid, sid)
+                padded_state, padded_len = self._pad_raw_state(stat)
+                b_states.append(padded_state)
+                b_len.append(padded_len)
+            except Exception as e:
+                self.debug("wrong tid/sid: {}/{}\n{}".format(tid, sid, e))
         return np.asarray(b_states), np.asarray(b_len)
 
 
