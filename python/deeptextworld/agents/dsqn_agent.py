@@ -198,6 +198,9 @@ class DSQNAgent(TabularDQNAgent):
         diff_sids = [npc(list(self.hash_states2tjs[k][tid]))
                      for k, tid in zip(diff_keys, diff_tids)]
 
+        # if one tid doesn't exist in the tjs, a all-padding list will
+        # be returned, with src_len as 0.
+        # TODO: fix it.
         target_src, target_src_len = self.tjs.fetch_batch_states(
             target_tids, target_sids)
         same_src, same_src_len = self.tjs.fetch_batch_states(

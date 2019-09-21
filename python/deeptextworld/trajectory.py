@@ -159,7 +159,7 @@ class VarSizeTrajectory(BaseTrajectory):
         elif tid in self.trajectories:
             tj = self.trajectories[tid]
         else:
-            return None
+            return [], 0
         state = flatten(tj[max(0, sid - self.num_turns):sid + 1])
         return state, len(state)
 
@@ -216,13 +216,10 @@ class SingleChannelTrajectory(VarSizeTrajectory):
         b_states = []
         b_len = []
         for tid, sid in zip(b_tid, b_sid):
-            try:
-                stat, _ = self.fetch_raw_state_by_idx(tid, sid)
-                padded_state, padded_len = self._pad_raw_state(stat)
-                b_states.append(padded_state)
-                b_len.append(padded_len)
-            except Exception as e:
-                self.debug("wrong tid/sid: {}/{}\n{}".format(tid, sid, e))
+            stat, _ = self.fetch_raw_state_by_idx(tid, sid)
+            padded_state, padded_len = self._pad_raw_state(stat)
+            b_states.append(padded_state)
+            b_len.append(padded_len)
         return np.asarray(b_states), np.asarray(b_len)
 
 
