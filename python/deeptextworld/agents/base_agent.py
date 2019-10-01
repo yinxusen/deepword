@@ -447,15 +447,15 @@ class BaseAgent(Logging):
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
             self.hp, self.token2idx, action_path,
-            with_loading=True)
+            with_loading=self.is_training)
         self.tjs = self.init_trajectory(
-            self.hp, tjs_path, with_loading=True)
+            self.hp, tjs_path, with_loading=self.is_training)
         self.tjs_seg = self.init_trajectory(
-            self.hp, tjs_seg_path, with_loading=True)
+            self.hp, tjs_seg_path, with_loading=self.is_training)
         self.memo = self.init_memo(
-            self.hp, memo_path, with_loading=True)
+            self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self.init_floor_plan(
-            fp_path, with_loading=True)
+            fp_path, with_loading=self.is_training)
 
     def _init_impl(self, load_best=False):
         if self.hp.apply_dependency_parser:
