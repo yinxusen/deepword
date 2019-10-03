@@ -75,7 +75,7 @@ def setup_eval_log(log_filename):
 
 
 def get_eval_log_filename(func_name, model_dir, game_path, f_games):
-    fn = "tmp-log+{}+{}+{}+{}+{}.log".format(
+    fn = "tmp-log+{}+{}+{}+{}+{}.txt".format(
         func_name,
         os.path.basename(model_dir),
         os.path.basename(game_path),

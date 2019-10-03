@@ -102,6 +102,7 @@ def run_agent_eval(
         logger.info("eval game: {}".format(game_name))
 
         for episode_no in range(nb_episodes):
+            action_list = []
             obs, infos = game_env.reset()
             scores = [0] * len(obs)
             dones = [False] * len(obs)
@@ -111,6 +112,7 @@ def run_agent_eval(
                 steps = ([step + int(not done)
                           for step, done in zip(steps, dones)])
                 commands = agent.act(obs, scores, dones, infos)
+                action_list.append(commands[0])
                 obs, scores, dones, infos = game_env.step(commands)
 
             # Let the agent knows the game is done.
@@ -120,7 +122,7 @@ def run_agent_eval(
                 eval_results[game_name] = []
             eval_results[game_name].append(
                 (scores[0], infos["max_score"][0], steps[0],
-                 infos["has_won"][0]))
+                 infos["has_won"][0], action_list))
     # run snn eval after normal agent test
     accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
     return eval_results, accuracy
@@ -352,7 +354,7 @@ def run_eval(
         pbar.write(desc)
         pbar.update()
 
-    pool = mp.Pool(processes=mp.cpu_count())
+    pool = mp.Pool(processes=mp.cpu_count()-1)
     eval_start_t = ctime()
 
     for g_file in game_files:
