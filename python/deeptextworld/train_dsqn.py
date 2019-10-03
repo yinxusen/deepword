@@ -4,10 +4,15 @@ import os
 import random
 import sys
 from threading import Thread, Condition
+import multiprocessing as mp
+import functools
+import operator
 
 import gym
 import textworld.gym
 from textworld import EnvInfos
+import numpy as np
+import tqdm
 
 from deeptextworld.agents import dsqn_agent
 from deeptextworld.utils import ctime
@@ -69,13 +74,16 @@ def run_agent(cv, agent, game_env, nb_games, nb_epochs):
     return None
 
 
-def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
+def run_agent_eval(
+        agent, game_files, nb_episodes, max_episode_steps,
+        snn_eval_data_size=100):
     """
     Run an eval agent on given games.
     :param agent:
     :param game_files:
     :param nb_episodes:
     :param max_episode_steps:
+    :param snn_eval_data_size:
     :return:
     """
     logger = logging.getLogger("eval")
@@ -114,7 +122,7 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
                 (scores[0], infos["max_score"][0], steps[0],
                  infos["has_won"][0]))
     # run snn eval after normal agent test
-    accuracy = agent.eval_snn(eval_data_size=100)
+    accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
     return eval_results, accuracy
 
 
@@ -270,6 +278,18 @@ def train_n_eval(hp, model_dir, game_dir, f_games=None, batch_size=1):
           nb_epochs=nb_epochs, batch_size=batch_size)
 
 
+def run_single_game(g_file, hp, agent_clazz, model_dir, eval_randomness=None):
+    g_name = os.path.basename(g_file)
+    agent = agent_clazz(hp, model_dir)
+    agent.eval(load_best=True)
+    if eval_randomness is not None:
+        agent.eps = eval_randomness
+    dqn_result, snn_result = run_agent_eval(
+        agent, [g_file], hp.eval_episode, hp.game_episode_terminal_t,
+        snn_eval_data_size=10)
+    return g_name, dqn_result, snn_result
+
+
 def run_eval(
         hp, model_dir, game_path, f_games=None, eval_randomness=None,
         eval_mode="all"):
@@ -313,16 +333,41 @@ def run_eval(
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
     agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
-    agent = agent_clazz(hp, model_dir)
-    agent.eval(load_best=True)
-    if eval_randomness is not None:
-        agent.eps = eval_randomness
-    logger.info("evaluation randomness: {}".format(agent.eps))
+    desc = "Evaluating {} games".format(len(game_files))
+    pbar = tqdm.tqdm(total=len(game_files), desc=desc)
+    dqn_results = []
+    snn_results = []
 
+    def _assemble_results(args):
+        g_name, d_res, s_res = args
+        dqn_results.append(d_res)
+        snn_results.append(s_res)
+        total_scores = sum(map(lambda x: x[0], d_res[g_name]))
+        total_max_scores = sum(map(lambda x: x[1], d_res[g_name]))
+        total_steps = sum(map(lambda x: x[2], d_res[g_name]))
+        nb_won = len(list(filter(lambda x: x[3] , d_res[g_name])))
+
+        desc = "{:3d} / {:3d} / {:2d} / {:.2f}:\t{}".format(
+            total_scores, total_max_scores, nb_won, s_res, g_name)
+        pbar.write(desc)
+        pbar.update()
+
+    pool = mp.Pool(processes=mp.cpu_count())
     eval_start_t = ctime()
-    eval_results, snn_acc = run_agent_eval(
-        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
+
+    for g_file in game_files:
+        pool.apply_async(
+            run_single_game,
+            (g_file, hp, agent_clazz, model_dir, eval_randomness),
+            callback=_assemble_results)
+    pool.close()
+    pool.join()
     eval_end_t = ctime()
+
+    eval_results = dict(functools.reduce(
+        operator.add, map(lambda x: list(x.items()), dqn_results), []))
+    snn_acc = np.mean(snn_results)
+
     agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))
     logger.info("eval aggregated results: {}".format(agg_res))

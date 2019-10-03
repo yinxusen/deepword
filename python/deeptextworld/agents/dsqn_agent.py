@@ -2,7 +2,6 @@ from os import remove as prm
 
 import numpy as np
 from numpy.random import choice as npc
-from tqdm import trange
 
 from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
@@ -334,7 +333,7 @@ class DSQNAgent(TabularDQNAgent):
         n_iter = (eval_data_size // batch_size) + 1
         total_acc = 0
         total_samples = 0
-        for i in trange(n_iter):
+        for i in range(n_iter):
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 batch_size)
             non_empty_src = list(filter(
@@ -369,7 +368,7 @@ class DSQNAlterAgent(DSQNAgent):
     Train DRRN and SNN alternatively.
     """
     def _train_snn(self, sess, n_iters, summary_writer, t):
-        for i in trange(n_iters):
+        for i in range(n_iters):
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 self.hp.batch_size)
             _, summaries, snn_loss = sess.run(
