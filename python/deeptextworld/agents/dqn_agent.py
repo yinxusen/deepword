@@ -149,6 +149,8 @@ class TabularDQNAgent(DQNAgent):
         # load others
         super(TabularDQNAgent, self)._load_context_objs()
         # load q_mat
+        # TODO: q_mat is actually the model for TabularDQN, but let's make it
+        # TODO: easier by loading like a context object.
         q_mat_path = self._get_context_obj_path(self.q_mat_prefix)
         try:
             npz_q_mat = np.load(q_mat_path)

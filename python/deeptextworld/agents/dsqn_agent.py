@@ -21,17 +21,24 @@ class DSQNAgent(TabularDQNAgent):
         self.hs2tj_prefix = "hs2tj"
         self.hash_states2tjs = {}  # map states to tjs
 
+    def init_hs2tj(self, hs2tj_path, with_loading=True):
+        hs2tj = {}
+        if with_loading:
+            try:
+                hs2tj = np.load(hs2tj_path)
+                self.hash_states2tjs = hs2tj["hs2tj"][0]
+                self.debug("load hash_states2tjs from file")
+            except IOError as e:
+                self.debug("load hash_states2tjs error:\n{}".format(e))
+        return hs2tj
+
     def _load_context_objs(self):
         # load others
         super(DSQNAgent, self)._load_context_objs()
         # load hs2tj
         hs2tj_path = self._get_context_obj_path(self.hs2tj_prefix)
-        try:
-            hs2tj = np.load(hs2tj_path)
-            self.hash_states2tjs = hs2tj["hs2tj"][0]
-            self.debug("load hash_states2tjs from file")
-        except IOError as e:
-            self.debug("load hash_states2tjs error:\n{}".format(e))
+        self.hash_states2tjs = self.init_hs2tj(
+            hs2tj_path, with_loading=self.is_training)
 
     def _save_context_objs(self):
         super(DSQNAgent, self)._save_context_objs()
@@ -326,9 +333,19 @@ class DSQNAgent(TabularDQNAgent):
         self.info("start eval with size {}".format(eval_data_size))
         n_iter = (eval_data_size // batch_size) + 1
         total_acc = 0
+        total_samples = 0
         for i in trange(n_iter):
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 batch_size)
+            non_empty_src = list(filter(
+                lambda x: x[1][0] != 0 and x[1][1] != 0,
+                enumerate(zip(src_len, src2_len))))
+            non_empty_src_idx = [x[0] for x in non_empty_src]
+            src = src[non_empty_src_idx, :]
+            src_len = src_len[non_empty_src_idx]
+            src2 = src2[non_empty_src_idx, :]
+            src2_len = src2_len[non_empty_src_idx]
+            labels = labels[non_empty_src_idx]
             labels = labels.astype(np.int32)
             pred, diff_two_states = self.sess.run(
                 [self.model.pred, self.model.diff_two_states],
@@ -337,10 +354,13 @@ class DSQNAgent(TabularDQNAgent):
                            self.model.snn_src_len_: src_len,
                            self.model.snn_src2_len_: src2_len})
             pred_labels = (pred > 0.5).astype(np.int32)
-            accuracy = np.mean(np.equal(labels, pred_labels))
-            total_acc += accuracy
-        avg_acc = total_acc * 1. / n_iter
-        self.info("accuracy: {}".format(avg_acc))
+            total_acc += np.sum(np.equal(labels, pred_labels))
+            total_samples += len(src)
+        if total_samples == 0:
+            avg_acc = -1
+        else:
+            avg_acc = total_acc * 1. / total_samples
+            self.debug("valid sample size {}".format(total_samples))
         return avg_acc
 
 

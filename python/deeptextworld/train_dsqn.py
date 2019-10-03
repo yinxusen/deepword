@@ -91,6 +91,7 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
             name="eval")
         env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
+        logger.info("eval game: {}".format(game_name))
 
         for episode_no in range(nb_episodes):
             obs, infos = game_env.reset()
