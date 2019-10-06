@@ -182,7 +182,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         """
         super(AttnEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
         self.attn_encoder = txf.Encoder(
-            num_layers=1, d_model=128, num_heads=8, dff=256,
+            num_layers=2, d_model=128, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
     def get_q_actions(self):
@@ -221,7 +221,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         padding_mask = txf.create_padding_mask(x)
         inner_state = self.attn_encoder(
             x, x_seg=None,
-            training=(not self.is_infer), mask=padding_mask)
+            training=(not self.is_infer), mask=padding_mask, with_layer=1)
         pooled = tf.reduce_max(inner_state, axis=1)
         h_state = tf.reshape(pooled, [-1, 128])
         return h_state
