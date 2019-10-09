@@ -265,6 +265,7 @@ def default_hparams_BertEncoderDRRN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=511,  # note that we need to insert [CLS] in the beginning
+        bert_num_hidden_layers=1,
         cls_val="[CLS]",
         cls_val_id=0,
         sep_val="[SEP]",
