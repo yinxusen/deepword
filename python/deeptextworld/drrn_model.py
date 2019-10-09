@@ -328,9 +328,22 @@ class BertEncoderDRRN(BaseDQN):
         tvars_bert_state = tf.trainable_variables(scope="bert-state-encoder")
         tvars_attn_action = tf.trainable_variables(scope="attn-action-encoder")
 
-        allowed_tvars_state = list(filter(
-            lambda v: "layer_11" in v.name or "pooler" in v.name,
-            tvars_bert_state))
+        if self.hp.ft_bert_layers == 0:
+            allowed_tvars_state = []
+        elif self.hp.ft_bert_layers == -1:
+            allowed_tvars_state = tvars_bert_state
+        else:
+            allowed_tvars_state = []
+            for t_layer in range(
+                    min(self.hp.ft_bert_layers,
+                        self.hp.bert_num_hidden_layers)):
+                allowed_tvars_state += list(filter(
+                    lambda v: "layer_{}".format(
+                        self.hp.bert_num_hidden_layers - t_layer - 1) in v.name,
+                    tvars_bert_state))
+            allowed_tvars_state += list(filter(
+                lambda v: "pooler" in v.name, tvars_bert_state))
+
         allowed_tvars_action = tvars_attn_action
 
         tvars_drrn = tf.trainable_variables(scope="drrn-encoder")

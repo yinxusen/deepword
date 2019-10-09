@@ -272,7 +272,8 @@ def default_hparams_BertEncoderDRRN():
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        bert_ckpt_dir=""
+        bert_ckpt_dir="",
+        ft_bert_layers=0
     )
 
 

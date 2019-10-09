@@ -48,5 +48,5 @@ pushd $PDIR
     --eval-episode 1 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
     --model-creator BertEncoderDRRN \
-    --bert-ckpt-dir $BERT_CKPT_DIR --bert-num-hidden-layers 1
+    --bert-ckpt-dir $BERT_CKPT_DIR --bert-num-hidden-layers 1 --ft-bert-layers 0
 popd
