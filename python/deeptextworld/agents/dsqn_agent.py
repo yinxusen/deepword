@@ -384,21 +384,21 @@ class DSQNAlterAgent(DSQNAgent):
                            })
             summary_writer.add_summary(summaries, t - self.hp.observation_t + i)
 
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
+    def train_snn(self, sess, summary_writer, t):
+        t_snn = 0
+        t_snn_end = 0
+        n_iters = 0
         if self.time_to_save():
-            self.debug("training SNN")
             n_iters = self.hp.save_gap_t // 10
+            self.debug("training SNN for {} epochs".format(n_iters))
             t_snn = ctime()
-            # train SNN
             self._train_snn(sess, n_iters, summary_writer, t)
             t_snn_end = ctime()
-            self.debug("training DQN")
-        else:
-            t_snn = 0
-            t_snn_end = 0
-            n_iters = 0
-            pass
+        return t_snn, t_snn_end, n_iters
 
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
+        t_snn, t_snn_end, n_iters = self.train_snn(sess, summary_writer, t)
+        self.debug("training DQN")
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -509,3 +509,18 @@ class BertDSQNAgent(DSQNAlterAgent):
 
     def tokenize(self, master):
         return ' '.join([t.lower() for t in self.tokenizer.tokenize(master)])
+
+    def train_snn(self, sess, summary_writer, t):
+        t_snn = 0
+        t_snn_end = 0
+        n_iters = 0
+        if self.time_to_save():
+            n_iters = self.hp.save_gap_t
+            self.debug("training SNN for {} epochs".format(n_iters))
+            t_snn = ctime()
+            # train SNN
+            self._train_snn(sess, n_iters, summary_writer, t)
+            t_snn_end = ctime()
+        else:
+            pass
+        return t_snn, t_snn_end, n_iters
