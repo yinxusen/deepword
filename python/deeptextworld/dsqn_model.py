@@ -57,7 +57,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
-            "actions": tf.placeholder(tf.int32, [None, self.n_actions, -1]),
+            "actions": tf.placeholder(tf.int32, [None, self.n_actions, None]),
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
             "snn_src": tf.placeholder(tf.int32, [None, None]),
