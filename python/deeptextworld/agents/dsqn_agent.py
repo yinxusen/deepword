@@ -1,6 +1,7 @@
 from os import remove as prm
 
 import numpy as np
+from bert.tokenization import FullTokenizer
 from numpy.random import choice as npc
 
 from deeptextworld import dsqn_model
@@ -9,7 +10,8 @@ from deeptextworld.agents.base_agent import ActionDesc, \
 from deeptextworld.agents.dqn_agent import TabularDQNAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
-from deeptextworld.utils import ctime
+from deeptextworld.hparams import copy_hparams
+from deeptextworld.utils import ctime, load_vocab, get_token2idx
 
 
 class DSQNAgent(TabularDQNAgent):
@@ -475,3 +477,33 @@ class DSQNAlterAgent(DSQNAgent):
                     t, t1_end - t1, t2_end - t2, t3_end - t3,
                     t_snn_end - t_snn, n_iters))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
+
+
+class BertDSQNAgent(DSQNAlterAgent):
+    """
+    """
+    def __init__(self, hp, model_dir):
+        super(BertDSQNAgent, self).__init__(hp, model_dir)
+        self.tokenizer = FullTokenizer(
+            vocab_file=hp.vocab_file, do_lower_case=True)
+
+    def init_tokens(self, hp):
+        """
+        :param hp:
+        :return:
+        """
+        new_hp = copy_hparams(hp)
+        # make sure that padding_val is indexed as 0.
+        tokens = list(load_vocab(hp.vocab_file))
+        token2idx = get_token2idx(tokens)
+        new_hp.set_hparam('vocab_size', len(tokens))
+        new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
+        new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
+        # bert specific tokens
+        new_hp.set_hparam('cls_val_id', token2idx[hp.cls_val])
+        new_hp.set_hparam('sep_val_id', token2idx[hp.sep_val])
+        new_hp.set_hparam('mask_val_id', token2idx[hp.mask_val])
+        return new_hp, tokens, token2idx
+
+    def tokenize(self, master):
+        return ' '.join([t.lower() for t in self.tokenizer.tokenize(master)])

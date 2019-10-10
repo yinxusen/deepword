@@ -402,6 +402,10 @@ class BaseAgent(Logging):
                     start_t = trained_steps + self.hp.observation_t
             else:
                 self.info('No checkpoint to load, training from scratch')
+        saver.save(
+            train_sess, self.chkp_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=model.graph))
         return train_sess, start_t, saver, model
 
     def create_model_instance(self):
