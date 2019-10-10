@@ -372,18 +372,20 @@ class BaseAgent(Logging):
             self, placement="/device:GPU:0",
             load_best=False, is_training=True):
         start_t = 0
-        with tf.device(placement):
-            if is_training:
+        if is_training:
+            with tf.device("/device:GPU:0"):
                 model = self.create_model_instance()
-                self.info("create train model")
-            else:
+            self.info("create train model")
+        else:
+            with tf.device("/device:GPU:1"):
                 model = self.create_eval_model_instance()
-                self.info("create eval model")
-        train_conf = tf.ConfigProto(log_device_placement=True,
-                                    allow_soft_placement=True)
-        train_sess = tf.Session(graph=model.graph, config=train_conf)
+            self.info("create eval model")
+
+        conf = tf.ConfigProto(
+            log_device_placement=True, allow_soft_placement=False)
+        sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
-            train_sess.run(tf.global_variables_initializer())
+            sess.run(tf.global_variables_initializer())
             saver = tf.train.Saver(max_to_keep=self.hp.max_snapshot_to_keep,
                                    save_relative_paths=True)
             if load_best:
@@ -395,14 +397,14 @@ class BaseAgent(Logging):
                 # Reload weights from directory if specified
                 self.info(
                     "Try to restore parameters from: {}".format(restore_from))
-                saver.restore(train_sess, restore_from)
+                saver.restore(sess, restore_from)
                 if not self.hp.start_t_ignore_model_t:
                     global_step = tf.train.get_or_create_global_step()
-                    trained_steps = train_sess.run(global_step)
+                    trained_steps = sess.run(global_step)
                     start_t = trained_steps + self.hp.observation_t
             else:
                 self.info('No checkpoint to load, training from scratch')
-        return train_sess, start_t, saver, model
+        return sess, start_t, saver, model
 
     def create_model_instance(self):
         raise NotImplementedError()
@@ -472,9 +474,25 @@ class BaseAgent(Logging):
             self.train_summary_writer = tf.summary.FileWriter(
                 train_summary_dir, self.sess.graph)
         else:
-            self.sess, _, self.saver, self.model = self.create_n_load_model(
-                placement="/device:GPU:1", load_best=load_best,
-                is_training=self.is_training)
+            if self.model is not None:
+                if load_best:
+                    restore_from = tf.train.latest_checkpoint(
+                        self.best_chkp_path)
+                else:
+                    restore_from = tf.train.latest_checkpoint(self.chkp_path)
+
+                if restore_from is not None:
+                    # Reload weights from directory if specified
+                    self.info(
+                        "Try to restore parameters from: {}".format(
+                            restore_from))
+                    self.saver.restore(self.sess, restore_from)
+                else:
+                    self.info('No checkpoint to load for evaluation')
+            else:
+                self.sess, _, self.saver, self.model = self.create_n_load_model(
+                    placement="/device:GPU:1", load_best=load_best,
+                    is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
 
