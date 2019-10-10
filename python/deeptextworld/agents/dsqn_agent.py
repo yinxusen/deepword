@@ -398,7 +398,6 @@ class DSQNAlterAgent(DSQNAgent):
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         t_snn, t_snn_end, n_iters = self.train_snn(sess, summary_writer, t)
-        self.debug("training DQN")
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
