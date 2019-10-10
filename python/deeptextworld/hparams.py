@@ -311,7 +311,7 @@ def default_hparams_BertAttnEncoderDSQN():
     return tf.contrib.training.HParams(
         agent_clazz='BertDSQNAgent',
         tjs_creator='SingleChannelTrajectory',
-        batch_size=64,
+        batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=5e-5,

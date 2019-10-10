@@ -379,7 +379,7 @@ class BaseAgent(Logging):
             else:
                 model = self.create_eval_model_instance()
                 self.info("create eval model")
-        train_conf = tf.ConfigProto(log_device_placement=False,
+        train_conf = tf.ConfigProto(log_device_placement=True,
                                     allow_soft_placement=True)
         train_sess = tf.Session(graph=model.graph, config=train_conf)
         with model.graph.as_default():
