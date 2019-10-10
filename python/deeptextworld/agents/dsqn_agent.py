@@ -23,15 +23,15 @@ class DSQNAgent(TabularDQNAgent):
         self.hash_states2tjs = {}  # map states to tjs
 
     def init_hs2tj(self, hs2tj_path, with_loading=True):
-        hs2tj = {}
+        hash_states2tjs = {}
         if with_loading:
             try:
                 hs2tj = np.load(hs2tj_path)
-                self.hash_states2tjs = hs2tj["hs2tj"][0]
+                hash_states2tjs = hs2tj["hs2tj"][0]
                 self.debug("load hash_states2tjs from file")
             except IOError as e:
                 self.debug("load hash_states2tjs error:\n{}".format(e))
-        return hs2tj
+        return hash_states2tjs
 
     def _load_context_objs(self):
         # load others
