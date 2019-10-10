@@ -51,16 +51,13 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         """
         super(CNNEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
         self.n_actions = self.hp.n_actions
-        self.n_tokens_per_action = self.hp.n_tokens_per_action
-
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
-            "actions": tf.placeholder(tf.int32, [None, self.n_actions,
-                                                 self.n_tokens_per_action]),
+            "actions": tf.placeholder(tf.int32, [None, self.n_actions, -1]),
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
             "snn_src": tf.placeholder(tf.int32, [None, None]),
@@ -104,7 +101,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 flat_actions = tf.reshape(
                     self.inputs["actions"],
-                    shape=(-1, self.n_tokens_per_action))
+                    shape=(batch_size * self.n_actions, -1))
                 flat_actions_len = tf.reshape(
                     self.inputs["actions_len"],
                     shape=(-1,))
@@ -202,7 +199,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 flat_actions = tf.reshape(
                     self.inputs["actions"],
-                    shape=(-1, self.n_tokens_per_action))
+                    shape=(batch_size * self.n_actions, -1))
                 flat_actions_len = tf.reshape(
                     self.inputs["actions_len"],
                     shape=(-1,))
