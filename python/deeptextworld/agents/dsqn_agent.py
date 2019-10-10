@@ -472,7 +472,7 @@ class DSQNAlterAgent(DSQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        if t % 1000 == 0:
+        if t % 1000 == 0 or n_iters != 0:
             self.debug(
                 't: {}, t1: {}, t2: {}, t3: {},'
                 ' t_snn_training: {} / {} (iters)'.format(
