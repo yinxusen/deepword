@@ -371,6 +371,10 @@ class DSQNAlterAgent(DSQNAgent):
     """
     Train DRRN and SNN alternatively.
     """
+    def __init__(self, hp, model_dir):
+        super(DSQNAlterAgent, self).__init__(hp, model_dir)
+        self.start_snn_training = True
+
     def _train_snn(self, sess, n_iters, summary_writer, t):
         for i in range(n_iters):
             self.debug("training SNN: {}/{} epochs".format(i, n_iters))
@@ -388,15 +392,39 @@ class DSQNAlterAgent(DSQNAgent):
             summary_writer.add_summary(summaries, t - self.hp.observation_t + i)
 
     def train_snn(self, sess, summary_writer, t):
+        """
+        Training sequences for DRRN and SNN:
+
+            SNN -- n_iters epochs
+            DRRN -- save_gap_t epochs
+            save model --- time to save
+            copy model as target
+            SNN -- n_iters epochs
+            DRRN
+            ...
+
+        In this way, the target model won't be contaminated
+        by the SNN training.
+        :param sess:
+        :param summary_writer:
+        :param t:
+        :return:
+        """
         t_snn = 0
         t_snn_end = 0
         n_iters = 0
-        if self.time_to_save():
+        if self.start_snn_training:
             n_iters = self.hp.snn_train_epochs
             t_snn = ctime()
             self._train_snn(sess, n_iters, summary_writer, t)
             t_snn_end = ctime()
+            # will set to True after save_snapshot
+            self.start_snn_training = False
         return t_snn, t_snn_end, n_iters
+
+    def save_snapshot(self):
+        super(DSQNAlterAgent, self).save_snapshot()
+        self.start_snn_training = True
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         t_snn, t_snn_end, n_iters = self.train_snn(sess, summary_writer, t)
