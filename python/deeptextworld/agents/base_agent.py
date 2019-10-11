@@ -382,7 +382,7 @@ class BaseAgent(Logging):
             self.info("create eval model")
 
         conf = tf.ConfigProto(
-            log_device_placement=True, allow_soft_placement=False)
+            log_device_placement=True, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
