@@ -373,6 +373,7 @@ class DSQNAlterAgent(DSQNAgent):
     """
     def _train_snn(self, sess, n_iters, summary_writer, t):
         for i in range(n_iters):
+            self.debug("training SNN: {}/{} epochs".format(i, n_iters))
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 self.hp.batch_size)
             _, summaries, snn_loss = sess.run(
@@ -391,8 +392,7 @@ class DSQNAlterAgent(DSQNAgent):
         t_snn_end = 0
         n_iters = 0
         if self.time_to_save():
-            n_iters = self.hp.save_gap_t // 10
-            self.debug("training SNN for {} epochs".format(n_iters))
+            n_iters = self.hp.snn_train_epochs
             t_snn = ctime()
             self._train_snn(sess, n_iters, summary_writer, t)
             t_snn_end = ctime()
@@ -510,18 +510,3 @@ class BertDSQNAgent(DSQNAlterAgent):
 
     def tokenize(self, master):
         return ' '.join([t.lower() for t in self.tokenizer.tokenize(master)])
-
-    def train_snn(self, sess, summary_writer, t):
-        t_snn = 0
-        t_snn_end = 0
-        n_iters = 0
-        if self.time_to_save():
-            n_iters = self.hp.save_gap_t
-            self.debug("training SNN for {} epochs".format(n_iters))
-            t_snn = ctime()
-            # train SNN
-            self._train_snn(sess, n_iters, summary_writer, t)
-            t_snn_end = ctime()
-        else:
-            pass
-        return t_snn, t_snn_end, n_iters

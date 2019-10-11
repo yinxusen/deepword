@@ -275,7 +275,6 @@ def default_hparams_BertEncoderDRRN():
         mask_val="[MASK]",
         mask_val_id=0,
         bert_ckpt_dir="",
-        ft_bert_layers=0
     )
 
 
@@ -289,7 +288,8 @@ def default_hparams_CNNEncoderDSQN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
+        num_conv_filters=32,
+        snn_train_epochs=1000
     )
 
 
@@ -303,7 +303,8 @@ def default_hparams_AttnEncoderDSQN():
         learning_rate=1e-5,
         num_turns=6,
         num_tokens=500,
-        num_conv_filters=32
+        num_conv_filters=32,
+        snn_train_epochs=1000
     )
 
 
@@ -318,15 +319,15 @@ def default_hparams_BertAttnEncoderDSQN():
         num_turns=6,
         num_tokens=511,
         num_conv_filters=32,
-        bert_num_hidden_layers = 1,
-        cls_val = "[CLS]",
-        cls_val_id = 0,
-        sep_val = "[SEP]",
-        sep_val_id = 0,
-        mask_val = "[MASK]",
-        mask_val_id = 0,
-        bert_ckpt_dir = "",
-        ft_bert_layers = 0
+        bert_num_hidden_layers=1,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        bert_ckpt_dir="",
+        snn_train_epochs=1000
     )
 
 

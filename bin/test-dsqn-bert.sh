@@ -39,7 +39,7 @@ fi
 
 PDIR="."
 
-MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
+MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-bert-test"
 
 BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
 VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
@@ -62,6 +62,7 @@ pushd $PDIR
     --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 1000 --batch-size 32 --game-episode-terminal-t 100 \
+    --snn-train-epochs 200 \
     --model-creator BertAttnEncoderDSQN \
-    --bert-ckpt-dir $BERT_CKPT_DIR --bert-num-hidden-layers 1 --ft-bert-layers 0
+    --bert-ckpt-dir $BERT_CKPT_DIR --bert-num-hidden-layers 1
 popd

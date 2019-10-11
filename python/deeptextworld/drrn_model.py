@@ -325,31 +325,8 @@ class BertEncoderDRRN(BaseDQN):
         loss, abs_loss = dqn.l2_loss_1Daction(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
-        tvars_bert_state = tf.trainable_variables(scope="bert-state-encoder")
-        tvars_attn_action = tf.trainable_variables(scope="attn-action-encoder")
-
-        if self.hp.ft_bert_layers == 0:
-            allowed_tvars_state = []
-        elif self.hp.ft_bert_layers == -1:
-            allowed_tvars_state = tvars_bert_state
-        else:
-            allowed_tvars_state = []
-            for t_layer in range(
-                    min(self.hp.ft_bert_layers,
-                        self.hp.bert_num_hidden_layers)):
-                allowed_tvars_state += list(filter(
-                    lambda v: "layer_{}".format(
-                        self.hp.bert_num_hidden_layers - t_layer - 1) in v.name,
-                    tvars_bert_state))
-            allowed_tvars_state += list(filter(
-                lambda v: "pooler" in v.name, tvars_bert_state))
-
-        allowed_tvars_action = tvars_attn_action
-
-        tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
-        tvars = tvars_drrn + allowed_tvars_state + allowed_tvars_action
         train_op = self.optimizer.minimize(
-            loss, global_step=self.global_step, var_list=tvars)
+            loss, global_step=self.global_step)
         return loss, train_op, abs_loss
 
 
@@ -476,16 +453,8 @@ class BertCNNEncoderDRRN(CNNEncoderDQN):
         loss, abs_loss = dqn.l2_loss_1Daction(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
             self.hp.n_actions, self.inputs["b_weight"])
-        tvars_bert = tf.trainable_variables(scope="bert-embedding")
-        # allow the last layer of bert to be fine-tuned.
-        train_layer = self.hp.bert_num_hidden_layers - 1
-        allowed_tvars_bert = list(filter(
-            lambda v: "layer_{}".format(train_layer) in v.name,
-            tvars_bert))
-        tvars_drrn = tf.trainable_variables(scope="drrn-encoder")
-        tvars = tvars_drrn + allowed_tvars_bert
         train_op = self.optimizer.minimize(
-            loss, global_step=self.global_step, var_list=tvars)
+            loss, global_step=self.global_step)
         return loss, train_op, abs_loss
 
 
