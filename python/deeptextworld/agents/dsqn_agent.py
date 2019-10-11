@@ -168,12 +168,14 @@ class DSQNAgent(TabularDQNAgent):
 
     def create_model_instance(self):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
-        model = dsqn_model.create_train_model(model_creator, self.hp)
+        model = dsqn_model.create_train_model(
+            model_creator, self.hp, device_placement="/device:GPU:0")
         return model
 
     def create_eval_model_instance(self):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
-        model = dsqn_model.create_eval_model(model_creator, self.hp)
+        model = dsqn_model.create_eval_model(
+            model_creator, self.hp, device_placement="/device:GPU:1")
         return model
 
     def get_snn_pairs(self, n):

@@ -373,11 +373,11 @@ class BaseAgent(Logging):
             load_best=False, is_training=True):
         start_t = 0
         if is_training:
-            with tf.device("/device:GPU:0"):
+            with tf.device(placement):
                 model = self.create_model_instance()
             self.info("create train model")
         else:
-            with tf.device("/device:GPU:1"):
+            with tf.device(placement):
                 model = self.create_eval_model_instance()
             self.info("create eval model")
 
@@ -911,7 +911,8 @@ class BaseAgent(Logging):
         if self.target_sess is None and restore_from is not None:
             self.debug("create and load target net")
             (self.target_sess, start_t, self.target_saver, self.target_model
-             ) = self.create_n_load_model(is_training=False)
+             ) = self.create_n_load_model(
+                is_training=False, placement="/device:GPU:2")
         else:
             pass
 
@@ -937,7 +938,8 @@ class BaseAgent(Logging):
             if self.target_sess is None:
                 self.debug("create and load target net")
                 (self.target_sess, start_t, self.target_saver, self.target_model
-                 ) = self.create_n_load_model(is_training=False)
+                 ) = self.create_n_load_model(
+                    is_training=False, placement="/device:GPU:2")
             else:
                 self.target_saver.restore(self.target_sess, restore_from)
                 self.info("target net load from: {}".format(restore_from))

@@ -388,29 +388,30 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         return loss, train_op
 
 
-def create_train_model(model_creator, hp):
+def create_train_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp)
-        initializer = tf.global_variables_initializer
-        inputs = model.inputs
-        q_actions = model.get_q_actions()
-        pred, diff_two_states = model.get_pred()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
-        snn_loss, snn_train_op = model.get_snn_train_op(pred)
-        weighted_loss, merged_train_op, s1, s2 = model.get_merged_train_op(
-            loss, snn_loss)
-        loss_summary = tf.summary.scalar("loss", loss)
-        snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
-        weighted_loss_summary = tf.summary.scalar(
-            "weighted_loss", weighted_loss)
-        s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
-        s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
-        train_summary_op = tf.summary.merge([loss_summary])
-        snn_train_summary_op = tf.summary.merge([snn_loss_summary])
-        weighted_train_summary_op = tf.summary.merge(
-            [loss_summary, snn_loss_summary, weighted_loss_summary,
-             s1_summary, s2_summary])
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            pred, diff_two_states = model.get_pred()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            snn_loss, snn_train_op = model.get_snn_train_op(pred)
+            weighted_loss, merged_train_op, s1, s2 = model.get_merged_train_op(
+                loss, snn_loss)
+            loss_summary = tf.summary.scalar("loss", loss)
+            snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
+            weighted_loss_summary = tf.summary.scalar(
+                "weighted_loss", weighted_loss)
+            s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
+            s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
+            train_summary_op = tf.summary.merge([loss_summary])
+            snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+            weighted_train_summary_op = tf.summary.merge(
+                [loss_summary, snn_loss_summary, weighted_loss_summary,
+                 s1_summary, s2_summary])
     return TrainDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
         src_=inputs["src"],
@@ -438,17 +439,18 @@ def create_train_model(model_creator, hp):
         initializer=initializer)
 
 
-def create_eval_model(model_creator, hp):
+def create_eval_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp, is_infer=True)
-        initializer = tf.global_variables_initializer
-        inputs = model.inputs
-        q_actions = model.get_q_actions()
-        pred, diff_two_states = model.get_pred()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
-        snn_loss, snn_train_op = model.get_snn_train_op(pred)
-        _ = model.get_merged_train_op(loss, snn_loss)
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            pred, diff_two_states = model.get_pred()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            snn_loss, snn_train_op = model.get_snn_train_op(pred)
+            _ = model.get_merged_train_op(loss, snn_loss)
     return EvalDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
         src_=inputs["src"],
