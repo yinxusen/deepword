@@ -103,7 +103,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 flat_actions = tf.reshape(
                     self.inputs["actions"],
-                    shape=(-1, self.n_tokens_per_action))
+                    shape=(batch_size * self.n_actions, -1))
                 flat_actions_len = tf.reshape(
                     self.inputs["actions_len"],
                     shape=(-1,))
@@ -191,7 +191,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         h_state_expanded = tf.expand_dims(h_state, axis=1)
         flat_actions = tf.reshape(
             self.inputs["actions"],
-            shape=(-1, self.n_tokens_per_action))
+            shape=(batch_size * self.n_actions, -1))
         flat_actions_len = tf.reshape(
             self.inputs["actions_len"],
             shape=(-1,))

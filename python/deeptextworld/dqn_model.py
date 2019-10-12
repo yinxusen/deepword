@@ -2,7 +2,7 @@ import collections
 import tensorflow as tf
 
 import deeptextworld.dqn_func as dqn
-
+from deeptextworld import transformer as txf
 
 class TrainDQNModel(
     collections.namedtuple(
@@ -256,7 +256,6 @@ class LSTMEncoderDecoderDQN(BaseDQN):
         else:
             self.tgt_embeddings = tgt_embeddings
 
-
     def get_q_actions(self):
         inner_states = dqn.encoder_lstm(
             self.inputs["src"], self.inputs["src_len"], self.src_embeddings,
@@ -265,6 +264,45 @@ class LSTMEncoderDecoderDQN(BaseDQN):
             inner_states, self.hp.tgt_vocab_size, self.tgt_embeddings,
             self.hp.lstm_num_units, self.hp.lstm_num_layers,
             self.hp.tgt_sos_id, self.hp.tgt_eos_id, self.hp.max_action_len)
+        return q_actions
+
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_2Daction(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.hp.tgt_vocab_size, self.inputs["action_len"],
+            self.hp.max_action_len, self.inputs["b_weight"])
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op, abs_loss
+
+
+class AttnEncoderDecoderDQN(BaseDQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        super(AttnEncoderDecoderDQN, self).__init__(
+            hp, src_embeddings, is_infer)
+
+        # redefine inputs, notice the shape of action_idx
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.float32, [None]),
+            "action_idx": tf.placeholder(tf.int32, [None, None]),
+            "expected_q": tf.placeholder(tf.float32, [None]),
+            "action_len": tf.placeholder(tf.int32, [None]),
+            "b_weight": tf.placeholder(tf.float32, [None])
+        }
+
+        self.transformer = txf.Transformer(
+            num_layers=2, d_model=128, num_heads=8, dff=128,
+            input_vocab_size=self.hp.num_tokens,
+            target_vocab_size=self.hp.num_tokens)
+
+    def get_q_actions(self):
+        input_mask = txf.create_padding_mask(self.inputs["src"])
+        output_mask = txf.create_padding_mask(self.inputs["action_idx"])
+        la_mask = txf.create_look_ahead_mask(self.hp.n_tokens_per_actions)
+        output, attn_weights = self.transformer.call(
+            inp=self.inputs["src"], tar=self.inputs["action_idx"],
+            training=(not self.is_infer), enc_padding_mask=input_mask,
+            look_ahead_mask=la_mask, dec_padding_mask=output_mask)
         return q_actions
 
     def get_train_op(self, q_actions):
