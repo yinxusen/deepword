@@ -1,6 +1,7 @@
 from os import remove as prm
 
 import numpy as np
+from bert.tokenization import FullTokenizer
 from numpy.random import choice as npc
 
 from deeptextworld import dsqn_model
@@ -9,7 +10,8 @@ from deeptextworld.agents.base_agent import ActionDesc, \
 from deeptextworld.agents.dqn_agent import TabularDQNAgent
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
-from deeptextworld.utils import ctime
+from deeptextworld.hparams import copy_hparams
+from deeptextworld.utils import ctime, load_vocab, get_token2idx
 
 
 class DSQNAgent(TabularDQNAgent):
@@ -21,15 +23,15 @@ class DSQNAgent(TabularDQNAgent):
         self.hash_states2tjs = {}  # map states to tjs
 
     def init_hs2tj(self, hs2tj_path, with_loading=True):
-        hs2tj = {}
+        hash_states2tjs = {}
         if with_loading:
             try:
                 hs2tj = np.load(hs2tj_path)
-                self.hash_states2tjs = hs2tj["hs2tj"][0]
+                hash_states2tjs = hs2tj["hs2tj"][0]
                 self.debug("load hash_states2tjs from file")
             except IOError as e:
                 self.debug("load hash_states2tjs error:\n{}".format(e))
-        return hs2tj
+        return hash_states2tjs
 
     def _load_context_objs(self):
         # load others
@@ -166,12 +168,14 @@ class DSQNAgent(TabularDQNAgent):
 
     def create_model_instance(self):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
-        model = dsqn_model.create_train_model(model_creator, self.hp)
+        model = dsqn_model.create_train_model(
+            model_creator, self.hp, device_placement="/device:GPU:0")
         return model
 
     def create_eval_model_instance(self):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
-        model = dsqn_model.create_eval_model(model_creator, self.hp)
+        model = dsqn_model.create_eval_model(
+            model_creator, self.hp, device_placement="/device:GPU:1")
         return model
 
     def get_snn_pairs(self, n):
@@ -367,8 +371,13 @@ class DSQNAlterAgent(DSQNAgent):
     """
     Train DRRN and SNN alternatively.
     """
+    def __init__(self, hp, model_dir):
+        super(DSQNAlterAgent, self).__init__(hp, model_dir)
+        self.start_snn_training = True
+
     def _train_snn(self, sess, n_iters, summary_writer, t):
         for i in range(n_iters):
+            self.debug("training SNN: {}/{} epochs".format(i, n_iters))
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 self.hp.batch_size)
             _, summaries, snn_loss = sess.run(
@@ -382,21 +391,43 @@ class DSQNAlterAgent(DSQNAgent):
                            })
             summary_writer.add_summary(summaries, t - self.hp.observation_t + i)
 
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        if self.time_to_save():
-            self.debug("training SNN")
-            n_iters = self.hp.save_gap_t // 10
+    def train_snn(self, sess, summary_writer, t):
+        """
+        Training sequences for DRRN and SNN:
+
+            SNN -- n_iters epochs
+            DRRN -- save_gap_t epochs
+            save model --- time to save
+            copy model as target
+            SNN -- n_iters epochs
+            DRRN
+            ...
+
+        In this way, the target model won't be contaminated
+        by the SNN training.
+        :param sess:
+        :param summary_writer:
+        :param t:
+        :return:
+        """
+        t_snn = 0
+        t_snn_end = 0
+        n_iters = 0
+        if self.start_snn_training:
+            n_iters = self.hp.snn_train_epochs
             t_snn = ctime()
-            # train SNN
             self._train_snn(sess, n_iters, summary_writer, t)
             t_snn_end = ctime()
-            self.debug("training DQN")
-        else:
-            t_snn = 0
-            t_snn_end = 0
-            n_iters = 0
-            pass
+            # will set to True after save_snapshot
+            self.start_snn_training = False
+        return t_snn, t_snn_end, n_iters
 
+    def save_snapshot(self):
+        super(DSQNAlterAgent, self).save_snapshot()
+        self.start_snn_training = True
+
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
+        t_snn, t_snn_end, n_iters = self.train_snn(sess, summary_writer, t)
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -470,10 +501,40 @@ class DSQNAlterAgent(DSQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        if t % 1000 == 0:
+        if t % 1000 == 0 or n_iters != 0:
             self.debug(
                 't: {}, t1: {}, t2: {}, t3: {},'
                 ' t_snn_training: {} / {} (iters)'.format(
                     t, t1_end - t1, t2_end - t2, t3_end - t3,
                     t_snn_end - t_snn, n_iters))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
+
+
+class BertDSQNAgent(DSQNAlterAgent):
+    """
+    """
+    def __init__(self, hp, model_dir):
+        super(BertDSQNAgent, self).__init__(hp, model_dir)
+        self.tokenizer = FullTokenizer(
+            vocab_file=hp.vocab_file, do_lower_case=True)
+
+    def init_tokens(self, hp):
+        """
+        :param hp:
+        :return:
+        """
+        new_hp = copy_hparams(hp)
+        # make sure that padding_val is indexed as 0.
+        tokens = list(load_vocab(hp.vocab_file))
+        token2idx = get_token2idx(tokens)
+        new_hp.set_hparam('vocab_size', len(tokens))
+        new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
+        new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
+        # bert specific tokens
+        new_hp.set_hparam('cls_val_id', token2idx[hp.cls_val])
+        new_hp.set_hparam('sep_val_id', token2idx[hp.sep_val])
+        new_hp.set_hparam('mask_val_id', token2idx[hp.mask_val])
+        return new_hp, tokens, token2idx
+
+    def tokenize(self, master):
+        return ' '.join([t.lower() for t in self.tokenizer.tokenize(master)])

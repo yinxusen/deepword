@@ -89,10 +89,12 @@ class DRRNAgent(BaseAgent):
 
         # make sure the p_states and s_states are in the same game.
         # otherwise, it won't make sense to use the same action matrix.
-        action_matrix = (
-            [self.action_collector.get_action_matrix(gid) for gid in game_id])
         action_len = (
             [self.action_collector.get_action_len(gid) for gid in game_id])
+        max_action_len = np.max(action_len)
+        action_matrix = (
+            [self.action_collector.get_action_matrix(gid)[:, :max_action_len]
+             for gid in game_id])
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(

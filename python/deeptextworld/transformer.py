@@ -219,10 +219,7 @@ class Encoder(tf.keras.layers.Layer):
 
         self.dropout = tf.keras.layers.Dropout(rate)
 
-    def call(self, x, x_seg, training, mask, with_layer=None):
-        if with_layer is None:
-            with_layer = self.num_layers
-
+    def call(self, x, x_seg, training, mask):
         seq_len = tf.shape(x)[1]
 
         # adding embedding and position encoding.
@@ -234,7 +231,7 @@ class Encoder(tf.keras.layers.Layer):
 
         x = self.dropout(x, training=training)
 
-        for i in range(with_layer):
+        for i in range(self.num_layers):
             x = self.enc_layers[i](x, training, mask)
 
         return x  # (batch_size, input_seq_len, d_model)

@@ -36,6 +36,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_CNNEncoderDSQN()
     elif model_creator == "AttnEncoderDSQN":
         model_hparams = default_hparams_AttnEncoderDSQN()
+    elif model_creator == "BertAttnEncoderDSQN":
+        model_hparams = default_hparams_BertAttnEncoderDSQN()
     else:
         raise ValueError('unknown model creator: {}'.format(model_creator))
     return model_hparams
@@ -265,13 +267,14 @@ def default_hparams_BertEncoderDRRN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=511,  # note that we need to insert [CLS] in the beginning
+        bert_num_hidden_layers=1,
         cls_val="[CLS]",
         cls_val_id=0,
         sep_val="[SEP]",
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        bert_ckpt_dir=""
+        bert_ckpt_dir="",
     )
 
 
@@ -285,7 +288,8 @@ def default_hparams_CNNEncoderDSQN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
+        num_conv_filters=32,
+        snn_train_epochs=1000
     )
 
 
@@ -299,7 +303,31 @@ def default_hparams_AttnEncoderDSQN():
         learning_rate=1e-5,
         num_turns=6,
         num_tokens=500,
-        num_conv_filters=32
+        num_conv_filters=32,
+        snn_train_epochs=1000
+    )
+
+
+def default_hparams_BertAttnEncoderDSQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='BertDSQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=511,
+        num_conv_filters=32,
+        bert_num_hidden_layers=1,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        bert_ckpt_dir="",
+        snn_train_epochs=1000
     )
 
 
