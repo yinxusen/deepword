@@ -41,7 +41,8 @@ PDIR="."
 MODELHOME="$PDIR/../experiments-drrn/gen-agent-dqn-test"
 
 VOCAB_FILE="$PDIR/resources/vocab.txt"
-GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train/tw-cooking-recipe1-el6QIQQkuaXxS3K3.ulx"}
+GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
+F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
 
 if [[ ! -d $MODELHOME ]]; then
     mkdir $MODELHOME
@@ -49,8 +50,8 @@ fi
 
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
-    -m $MODELHOME --mode train-dqn \
-    --game-path $GAMEPATH \
+    -m $MODELHOME --mode train-gen-dqn \
+    --game-path $GAMEPATH --f-games $F_GAMES \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 1000 --annealing-gamma-t 100 --observation-t 100 --replay-mem 1000 \
     --init-eps 0.5 \

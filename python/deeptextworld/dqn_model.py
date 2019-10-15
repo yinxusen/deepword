@@ -411,56 +411,48 @@ class CNNEDMultiLayerDQN(BaseDQN):
         return loss, train_op, abs_loss
 
 
-def create_train_gen_model(model_creator, hp):
+def create_train_gen_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp)
-        initializer = tf.global_variables_initializer
-        inputs = model.inputs
-        src_placeholder = inputs["src"]
-        src_len_placeholder = inputs["src_len"]
-        action_idx_placeholder = inputs["action_idx"]
-        action_idx_out_placeholder = inputs["action_idx_out"]
-        expected_q_placeholder = inputs["expected_q"]
-        action_len_placeholder = inputs["action_len"]
-        b_weight_placeholder = inputs["b_weight"]
-        q_actions = model.get_q_actions()
-        q_actions_infer = model.get_q_actions_infer()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
-        loss_summary = tf.summary.scalar("loss", loss)
-        train_summary_op = tf.summary.merge([loss_summary])
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            q_actions_infer = model.get_q_actions_infer()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
         q_actions_infer=q_actions_infer,
-        src_=src_placeholder,
-        src_len_=src_len_placeholder,
-        train_op=train_op, action_idx_=action_idx_placeholder,
-        action_idx_out_=action_idx_out_placeholder,
-        action_len_=action_len_placeholder,
-        b_weight_=b_weight_placeholder,
-        expected_q_=expected_q_placeholder, loss=loss,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        train_op=train_op, action_idx_=inputs["action_idx"],
+        action_idx_out_=inputs["action_idx_out"],
+        action_len_=inputs["action_len"],
+        b_weight_=inputs["b_weight"],
+        expected_q_=inputs["expected_q"], loss=loss,
         abs_loss=abs_loss,
         train_summary_op=train_summary_op,
         initializer=initializer)
 
 
-def create_eval_gen_model(model_creator, hp):
+def create_eval_gen_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp, is_infer=True)
-        initializer = tf.global_variables_initializer
-        inputs = model.inputs
-        src_placeholder = inputs["src"]
-        src_len_placeholder = inputs["src_len"]
-        action_idx_placeholder = inputs["action_idx"]
-        q_actions = model.get_q_actions()
-        q_actions_infer = model.get_q_actions_infer()
-        _ = model.get_train_op(q_actions)
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            q_actions_infer = model.get_q_actions_infer()
+            _ = model.get_train_op(q_actions)
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
         q_actions_infer=q_actions_infer,
-        src_=src_placeholder,
-        src_len_=src_len_placeholder,
-        action_idx_=action_idx_placeholder,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        action_idx_=inputs["action_idx"],
         initializer=initializer)

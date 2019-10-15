@@ -339,8 +339,6 @@ class TabularDQNAgent(DQNAgent):
 class GenDQNAgent(DQNAgent):
     def __init__(self, hp, model_dir):
         super(GenDQNAgent, self).__init__(hp, model_dir)
-        self.generated_actions = {}
-        self.gen_actions_prefix = "gen_actions"
 
     def select_additional_infos(self):
         """
@@ -410,35 +408,19 @@ class GenDQNAgent(DQNAgent):
                 q_actions_t, self.tokens, self.hp.eos_id)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
-
-            if action == "":
-                print(indexed_state_t)
-                print(lens_t)
-                print(q_actions_t)
-                print(q_max)
-                print(action)
-
-            if action not in self.generated_actions:
-                self.generated_actions[action] = 0
-            self.generated_actions[action] += 1
+            self.debug("generated action: {}".format(action))
         return action_desc
-
-    def _save_context_objs(self):
-        super(GenDQNAgent, self)._save_context_objs()
-        gen_actions_path = self._get_context_obj_new_path(
-            self.gen_actions_prefix)
-        np.savez(
-            gen_actions_path,
-            generated_actions=[self.generated_actions])
 
     def create_model_instance(self):
         model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_train_gen_model(model_creator, self.hp)
+        model = dqn_model.create_train_gen_model(
+            model_creator, self.hp, device_placement="/device:GPU:0")
         return model
 
     def create_eval_model_instance(self):
         model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_eval_gen_model(model_creator, self.hp)
+        model = dqn_model.create_eval_gen_model(
+            model_creator, self.hp, device_placement="/device:GPU:1")
         return model
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
@@ -479,7 +461,6 @@ class GenDQNAgent(DQNAgent):
             action_id_out.append(np.asarray(out_a))
             action_len_w_s.append(l + 1)
 
-        # TODO: train or infer when computes expected_q?
         t2 = ctime()
         s_q_actions_target = target_sess.run(
             target_model.q_actions,
@@ -519,7 +500,7 @@ class GenDQNAgent(DQNAgent):
 
         self.memo.batch_update(b_idx, abs_loss)
 
-        self.info('loss: {}'.format(loss_eval))
-        self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end-t1, t2_end-t2, t3_end-t3))
+        if t % 1000 == 0:
+            self.debug('t1: {}, t2: {}, t3: {}'.format(
+                t1_end-t1, t2_end-t2, t3_end-t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
