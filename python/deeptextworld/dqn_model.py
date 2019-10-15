@@ -4,12 +4,13 @@ import tensorflow as tf
 import deeptextworld.dqn_func as dqn
 from deeptextworld import transformer as txf
 
+
 class TrainDQNModel(
     collections.namedtuple(
         'TrainModel',
         ('graph', 'model', 'q_actions',
-         'src_', 'src_len_',
-         'train_op', 'loss', 'action_idx_', 'expected_q_', 'b_weight_',
+         'src_', 'src_len_', 'action_idx_',
+         'train_op', 'loss', 'expected_q_', 'b_weight_',
          'train_summary_op', 'abs_loss',
          'initializer'))):
     pass
@@ -215,9 +216,9 @@ def create_eval_model(model_creator, hp):
 class TrainDQNGenModel(
     collections.namedtuple(
         'TrainModel',
-        ('graph', 'model', 'q_actions',
-         'src_', 'src_len_',
-         'train_op', 'loss', 'action_idx_', 'expected_q_',
+        ('graph', 'model', 'q_actions', 'q_actions_infer',
+         'src_', 'src_len_', 'action_idx_', 'action_idx_out_',
+         'train_op', 'loss', 'expected_q_',
          'action_len_', 'b_weight_',
          'train_summary_op', 'abs_loss',
          'initializer'))):
@@ -228,7 +229,7 @@ class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model',
-         'q_actions', 'src_', 'src_len_',
+         'q_actions', 'q_actions_infer', 'src_', 'src_len_', 'action_idx_',
          'initializer'))):
     pass
 
@@ -285,6 +286,7 @@ class AttnEncoderDecoderDQN(BaseDQN):
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
             "action_idx": tf.placeholder(tf.int32, [None, None]),
+            "action_idx_out": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
             "action_len": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None])
@@ -292,23 +294,28 @@ class AttnEncoderDecoderDQN(BaseDQN):
 
         self.transformer = txf.Transformer(
             num_layers=2, d_model=128, num_heads=8, dff=128,
-            input_vocab_size=self.hp.num_tokens,
-            target_vocab_size=self.hp.num_tokens)
+            input_vocab_size=self.hp.vocab_size,
+            target_vocab_size=self.hp.vocab_size)
+
+    def get_q_actions_infer(self):
+        q_actions, attn_weights = self.transformer(
+            self.inputs["src"], tar=None, training=False,
+            max_tar_len=self.hp.n_tokens_per_action,
+            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id)
+        return q_actions
 
     def get_q_actions(self):
-        input_mask = txf.create_padding_mask(self.inputs["src"])
-        output_mask = txf.create_padding_mask(self.inputs["action_idx"])
-        la_mask = txf.create_look_ahead_mask(self.hp.n_tokens_per_actions)
-        output, attn_weights = self.transformer.call(
-            inp=self.inputs["src"], tar=self.inputs["action_idx"],
-            training=(not self.is_infer), enc_padding_mask=input_mask,
-            look_ahead_mask=la_mask, dec_padding_mask=output_mask)
+        q_actions, attn_weights = self.transformer(
+            self.inputs["src"], tar=self.inputs["action_idx"],
+            training=True,
+            max_tar_len=self.hp.n_tokens_per_action,
+            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id)
         return q_actions
 
     def get_train_op(self, q_actions):
         loss, abs_loss = dqn.l2_loss_2Daction(
-            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.hp.tgt_vocab_size, self.inputs["action_len"],
+            q_actions, self.inputs["action_idx_out"], self.inputs["expected_q"],
+            self.hp.vocab_size, self.inputs["action_len"],
             self.hp.max_action_len, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
@@ -413,18 +420,22 @@ def create_train_gen_model(model_creator, hp):
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
         action_idx_placeholder = inputs["action_idx"]
+        action_idx_out_placeholder = inputs["action_idx_out"]
         expected_q_placeholder = inputs["expected_q"]
         action_len_placeholder = inputs["action_len"]
         b_weight_placeholder = inputs["b_weight"]
         q_actions = model.get_q_actions()
+        q_actions_infer = model.get_q_actions_infer()
         loss, train_op, abs_loss = model.get_train_op(q_actions)
         loss_summary = tf.summary.scalar("loss", loss)
         train_summary_op = tf.summary.merge([loss_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
+        q_actions_infer=q_actions_infer,
         src_=src_placeholder,
         src_len_=src_len_placeholder,
         train_op=train_op, action_idx_=action_idx_placeholder,
+        action_idx_out_=action_idx_out_placeholder,
         action_len_=action_len_placeholder,
         b_weight_=b_weight_placeholder,
         expected_q_=expected_q_placeholder, loss=loss,
@@ -441,11 +452,15 @@ def create_eval_gen_model(model_creator, hp):
         inputs = model.inputs
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
+        action_idx_placeholder = inputs["action_idx"]
         q_actions = model.get_q_actions()
+        q_actions_infer = model.get_q_actions_infer()
         _ = model.get_train_op(q_actions)
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
+        q_actions_infer=q_actions_infer,
         src_=src_placeholder,
         src_len_=src_len_placeholder,
+        action_idx_=action_idx_placeholder,
         initializer=initializer)

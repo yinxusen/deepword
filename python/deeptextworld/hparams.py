@@ -38,6 +38,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_AttnEncoderDSQN()
     elif model_creator == "BertAttnEncoderDSQN":
         model_hparams = default_hparams_BertAttnEncoderDSQN()
+    elif model_creator == "AttnEncoderDecoderDQN":
+        model_hparams = default_hparams_AttnEncoderDecoderDQN()
     else:
         raise ValueError('unknown model creator: {}'.format(model_creator))
     return model_hparams
@@ -62,7 +64,6 @@ def default_hparams_agent():
         total_t=sys.maxsize,
         game_episode_terminal_t=5000,
         vocab_size=0,
-        tgt_vocab_size=0,
         n_actions=128,
         n_tokens_per_action=10,
         sos='<S>',
@@ -305,6 +306,20 @@ def default_hparams_AttnEncoderDSQN():
         num_tokens=500,
         num_conv_filters=32,
         snn_train_epochs=1000
+    )
+
+
+def default_hparams_AttnEncoderDecoderDQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='GenDQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=6,
+        num_tokens=500,
+        max_action_len=10
     )
 
 

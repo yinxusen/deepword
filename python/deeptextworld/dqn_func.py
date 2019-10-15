@@ -42,7 +42,7 @@ def l1_loss_1Daction(q_actions, action_idx, expected_q, n_actions, b_weight):
 
 def l2_loss_2Daction(
         q_actions, action_idx, expected_q,
-        n_actions, action_len, max_action_len, b_weight):
+        vocab_size, action_len, max_action_len, b_weight):
     """
     l2 loss for 2D action space.
     e.g. "go east" is an action composed by "go" and "east".
@@ -51,16 +51,17 @@ def l2_loss_2Daction(
            in a format of (tf.int32, [None, None])
     :param expected_q: placeholder, the expected reward gained from the step,
            in a format of (tf.float32, [None])
-    :param n_actions: number of action-components
+    :param vocab_size: number of action-components
     :param action_len: length of each action in a format of (tf.int32, [None])
     :param max_action_len: maximum length of action
     """
-    actions_idx_mask = tf.one_hot(indices=action_idx, depth=n_actions)
+    actions_idx_mask = tf.one_hot(indices=action_idx, depth=vocab_size)
     q_actions_mask = tf.sequence_mask(
         action_len, maxlen=max_action_len, dtype=tf.float32)
-    masked_q_actions = tf.multiply(q_actions, q_actions_mask[:, :, tf.newaxis])
-    q_query_by_idx = tf.multiply(masked_q_actions, actions_idx_mask)
-    sum_q_by_idx = tf.reduce_sum(q_query_by_idx, axis=[1, 2])
+    q_val_by_idx = tf.multiply(q_actions, actions_idx_mask)
+    q_val_by_valid_idx = tf.multiply(
+        q_val_by_idx, tf.expand_dims(q_actions_mask, axis=-1))
+    sum_q_by_idx = tf.reduce_sum(q_val_by_valid_idx, axis=[1, 2])
     predicted_q = tf.div(sum_q_by_idx, tf.cast(action_len, tf.float32))
     loss = tf.reduce_mean(b_weight * tf.square(expected_q - predicted_q))
     abs_loss = tf.abs(expected_q - predicted_q)
@@ -611,28 +612,31 @@ def get_best_2Daction(q_actions_t, tgt_tokens, eos_id):
     :param tgt_tokens: target token list
     :param eos_id: end-of-sentence
     """
-    action_idx, q_val = get_best_2D_q(q_actions_t, eos_id)
-    action = " ".join([tgt_tokens[a] for a in action_idx])
+    action_idx, q_val, valid_len = get_best_2D_q(q_actions_t, eos_id)
+    action = " ".join([tgt_tokens[a] for a in action_idx[:valid_len]])
     return action_idx, q_val, action
 
 
 def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
     """
+    </S> also counts for an action, which is the empty action
     :param q_actions_t: a q-matrix of a state computed from TF at step t
     :param eos_id: end-of-sentence
     """
     action_idx = np.argmax(q_actions_t, axis=1)
     valid_len = 0
     for a in action_idx:
+        valid_len += 1
         if a == eos_id:
             break
-        else:
-            valid_len += 1
-    if valid_len == 0:
-        valid_len = 1  # for generated action </S> </S> ....
-    action_idx = list(action_idx[:valid_len])
-    q_val = np.mean(q_actions_t[range(valid_len), action_idx])
-    return action_idx, q_val
+    padded_action_idx = np.zeros_like(action_idx)
+    padded_action_idx[:valid_len-1] = action_idx[:valid_len-1]
+    q_val = np.sum(
+        q_actions_t[range(valid_len-1), padded_action_idx[:valid_len-1]])
+    # force the last token as eos
+    q_val += q_actions_t[valid_len-1, eos_id]
+    q_val /= valid_len
+    return padded_action_idx, q_val, valid_len-1
 
 
 def get_random_2Daction_from_1Daction(actions, tgt_token2idx):

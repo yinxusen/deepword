@@ -26,7 +26,7 @@ from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
 
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+    ("tid", "sid", "gid", "aid", "a_len", "reward", "is_terminal",
      "action_mask", "next_action_mask"))):
     pass
 
@@ -382,7 +382,7 @@ class BaseAgent(Logging):
             self.info("create eval model")
 
         conf = tf.ConfigProto(
-            log_device_placement=True, allow_soft_placement=True)
+            log_device_placement=False, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
@@ -956,9 +956,15 @@ class BaseAgent(Logging):
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         # the last sid here is for the next state of using the last action
+        aid = self._last_action_desc.action_idx
+        a_len = len(self._last_action_desc.action.split(" "))
+        if len(aid) == 0:
+            print(instant_reward)
+            print(is_terminal)
+            print(self._last_action_desc.action)
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=self._last_action_desc.action_idx,
+            gid=self.game_id, aid=aid, a_len=a_len,
             reward=instant_reward, is_terminal=is_terminal,
             action_mask=action_mask, next_action_mask=next_action_mask
         ))
@@ -1048,8 +1054,10 @@ class BaseAgent(Logging):
         else:
             # self.debug("cnt action ignore hard_set_action")
             pass
-
         self._last_actions_mask = actions_mask
+        # revert back go actions for the game playing
+        if action.startswith("go"):
+            action = " ".join(action.split()[:2])
         return action
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
@@ -1091,9 +1099,7 @@ class BaseAgent(Logging):
 
         self.total_t += 1
         self.in_game_t += 1
-        # revert back go actions for the game playing
-        if player_t.startswith("go"):
-            player_t = " ".join(player_t.split()[:2])
+
         return [player_t] * len(obs)
 
 

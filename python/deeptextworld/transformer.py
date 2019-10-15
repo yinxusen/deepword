@@ -45,6 +45,16 @@ def create_look_ahead_mask(size):
     return mask  # (seq_len, seq_len)
 
 
+def create_decode_masks(tar):
+    # Used in the 1st attention block in the decoder.
+    # It is used to pad and mask future tokens in the input received by
+    # the decoder.
+    look_ahead_mask = create_look_ahead_mask(tf.shape(tar)[1])
+    dec_target_padding_mask = create_padding_mask(tar)
+    combined_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
+    return combined_mask
+
+
 def scaled_dot_product_attention(q, k, v, mask):
     """Calculate the attention weights.
     q, k, v must have matching leading dimensions.
@@ -287,18 +297,49 @@ class Transformer(tf.keras.Model):
             num_layers, d_model, num_heads, dff, target_vocab_size, rate)
 
         self.final_layer = tf.keras.layers.Dense(target_vocab_size)
+        self.tgt_vocab_size = target_vocab_size
 
-    def call(
-            self, inp, tar, training, enc_padding_mask, look_ahead_mask,
-            dec_padding_mask):
-        enc_output = self.encoder(
-            inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+    def call(self, inp, tar, training, max_tar_len, sos_id, eos_id):
+        enc_padding_mask = create_padding_mask(inp)
+        dec_padding_mask = enc_padding_mask
+        # (batch_size, inp_seq_len, d_model)
+        enc_output = self.encoder(inp, None, training, enc_padding_mask)
 
-        # dec_output.shape == (batch_size, tar_seq_len, d_model)
-        dec_output, attention_weights = self.decoder(
-            tar, enc_output, training, look_ahead_mask, dec_padding_mask)
+        if training:
+            look_ahead_mask = create_decode_masks(tar)
+            # dec_output.shape == (batch_size, tar_seq_len, d_model)
+            dec_output, attention_weights = self.decoder(
+                tar, enc_output, training, look_ahead_mask, dec_padding_mask)
+            # (batch_size, tar_seq_len, target_vocab_size)
+            final_output = self.final_layer(dec_output)
+        else:
+            batch_size = tf.shape(inp)[0]
+            inc_tar = tf.fill([batch_size, 1], sos_id)
+            attention_weights = None
+            last_predictions = []
+            for i in range(max_tar_len):
+                combined_mask = create_decode_masks(inc_tar)
+                dec_output, attn_weights = self.decoder(
+                    inc_tar, enc_output, training, combined_mask,
+                    dec_padding_mask)
+                predictions = self.final_layer(dec_output)[:, -1:, :]
+                last_predictions.append(predictions)
+                predicted_id = tf.cast(
+                    tf.argmax(predictions, axis=-1), tf.int32)
 
-        final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
+                # concatentate the predicted_id to the output which is given to the decoder
+                # as its input.
+                inc_tar = tf.concat([inc_tar, predicted_id], axis=-1)
+                attention_weights = attn_weights
+                # return the result if the predicted_id is equal to the end token
+                if predicted_id == eos_id:
+                    break
+
+            final_output = tf.concat(last_predictions, axis=1)
+            src_paddings = tf.constant(
+                [[0, 0], [0, max_tar_len-len(last_predictions)], [0, 0]])
+            final_output = tf.pad(
+                final_output, paddings=src_paddings, mode="CONSTANT")
 
         return final_output, attention_weights
 
