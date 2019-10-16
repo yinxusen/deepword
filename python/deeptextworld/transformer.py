@@ -302,12 +302,32 @@ class Decoder(tf.keras.layers.Layer):
 
         if with_pointer:
             vanilla_attention = attention_weights[-1]
-            vanilla_attention_expanded = tf.expand_dims(
-                vanilla_attention, axis=3)
-            inp_idx = tf.expand_dims(
-                tf.one_hot(indices=enc_x, depth=self.tgt_vocab_size), axis=1)
-            copy_output = tf.reduce_sum(
-                tf.multiply(vanilla_attention_expanded, inp_idx), axis=2)
+
+            batch_size = tf.shape(vanilla_attention)[0]
+            dec_t = tf.shape(vanilla_attention)[1]
+            attn_len = tf.shape(vanilla_attention)[2]
+
+            dec = tf.range(0, limit=dec_t)  # [dec]
+            dec = tf.expand_dims(dec, axis=-1)  # [dec, 1]
+            dec = tf.tile(dec, [1, attn_len])  # [dec, atten_len]
+            dec = tf.expand_dims(dec, axis=0)  # [1, dec, atten_len]
+            dec = tf.tile(dec, [batch_size, 1, 1])  # [batch_size, dec, atten_len]
+
+            enc_x = tf.expand_dims(enc_x, axis=1)  # [batch_size, 1, atten_len]
+            enc_x = tf.tile(enc_x, [1, dec_t, 1])  # [batch_size, dec, atten_len]
+            enc_x = tf.stack([dec, enc_x], axis=3)
+
+            copy_output = tf.map_fn(
+                fn=lambda y: tf.scatter_nd(
+                    y[0], y[1], [dec_t, self.tgt_vocab_size]),
+                elems=(enc_x, vanilla_attention), dtype=tf.float32)
+
+            # vanilla_attention_expanded = tf.expand_dims(
+            #     vanilla_attention, axis=3)
+            # inp_idx = tf.expand_dims(
+            #     tf.one_hot(indices=enc_x, depth=self.tgt_vocab_size), axis=1)
+            # copy_output = tf.reduce_sum(
+            #     tf.multiply(vanilla_attention_expanded, inp_idx), axis=2)
             context_vectors = tf.matmul(vanilla_attention, enc_output)
             combined_features = tf.concat(
                 [x, before_dec, context_vectors], axis=-1)
