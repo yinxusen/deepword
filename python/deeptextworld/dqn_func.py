@@ -635,8 +635,8 @@ def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
             break
     padded_action_idx = np.zeros_like(action_idx)
     padded_action_idx[:valid_len] = action_idx[:valid_len]
-    if valid_len == len(action_idx):
-        padded_action_idx[len(action_idx)] = eos_id
+    # make sure the last token is eos no matter what
+    padded_action_idx[valid_len-1] = eos_id
     q_val = np.mean(
         q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
     return padded_action_idx, q_val, valid_len
