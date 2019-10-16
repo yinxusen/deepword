@@ -298,14 +298,14 @@ class AttnEncoderDecoderDQN(BaseDQN):
             target_vocab_size=self.hp.vocab_size)
 
     def get_q_actions_infer(self):
-        q_actions, attn_weights = self.transformer(
+        q_actions = self.transformer(
             self.inputs["src"], tar=None, training=False,
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id, eos_id=self.hp.eos_id)
         return q_actions
 
     def get_q_actions(self):
-        q_actions, attn_weights = self.transformer(
+        q_actions = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
             training=True,
             max_tar_len=self.hp.n_tokens_per_action,
