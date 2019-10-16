@@ -112,7 +112,6 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
         abs_errors += self.PER_e  # convert to abs and avoid 0
         clipped_errors = np.minimum(abs_errors, self.absolute_error_upper)
         ps = np.power(clipped_errors, self.PER_a)
-
         for ti, p in zip(tree_idx, ps):
             self.tree.update(ti, p)
 

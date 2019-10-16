@@ -9,7 +9,7 @@ from deeptextworld.log import Logging
 class ActionCollector(Logging):
     def __init__(
             self, n_actions=200, n_tokens=10,
-            token2idx=None, unk_val_id=None, padding_val_id=None):
+            token2idx=None, unk_val_id=None, padding_val_id=None, eos_id=None):
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self.actions_base = {}
@@ -22,6 +22,7 @@ class ActionCollector(Logging):
         self.token2idx = token2idx
         self.unk_val_id = unk_val_id
         self.padding_val_id = padding_val_id
+        self.eos_id = eos_id
 
         # current episode actions
         self.action2idx = None
@@ -92,13 +93,15 @@ class ActionCollector(Logging):
             if a not in self.action2idx:
                 assert self.curr_aid < self.n_actions - 1, "n_actions too small"
                 self.action2idx[a] = self.curr_aid
-                action_idx = ([self.token2idx.get(i, self.unk_val_id)
-                               for i in self._preprocess_action(a)])
+                action_idx = (
+                    [self.token2idx.get(i, self.unk_val_id)
+                     for i in self._preprocess_action(a)] + [self.eos_id])
                 n_action_tokens = len(action_idx)
                 if n_action_tokens > self.n_tokens:
                     self.warning("trimming action {} size {} -> {}".format(
                         a, n_action_tokens, self.n_tokens))
                     n_action_tokens = self.n_tokens
+                    action_idx[n_action_tokens-1] = self.eos_id
                 self.action_len[self.curr_aid] = n_action_tokens
                 self.action_matrix[self.curr_aid][:n_action_tokens] =\
                     action_idx[:n_action_tokens]

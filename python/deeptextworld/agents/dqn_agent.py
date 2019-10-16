@@ -438,28 +438,14 @@ class GenDQNAgent(DQNAgent):
         action_len = [m[0].a_len for m in b_memory]
         reward = [m[0].reward for m in b_memory]
         is_terminal = [m[0].is_terminal for m in b_memory]
+        action_id_wo_eos = np.asarray(
+            action_id)[:, np.asarray(action_len)-1] = 0
+        action_id_in = np.concatenate(
+            [np.asarray([[self.hp.sos_id]] * len(action_len)),
+             action_id_wo_eos[:, :-1]], axis=1)
 
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
-
-        action_id_in = []
-        action_id_out = []
-        action_len_w_s = []
-
-        """
-        if len(action) == n_tokens_per_action:
-            remove last token for the action by reducing the length with 1.
-        add <S> add the head or add </S> at the end
-        add action_len with 1 for each action;
-        """
-        action_len = list(
-            map(lambda l: min(l, self.hp.n_tokens_per_action - 1), action_len))
-        for a, l in zip(action_id, action_len):
-            action_id_in.append(np.asarray([self.hp.sos_id] + list(a[:-1])))
-            out_a = list(a)
-            out_a[l] = self.hp.eos_id
-            action_id_out.append(np.asarray(out_a))
-            action_len_w_s.append(l + 1)
 
         t2 = ctime()
         s_q_actions_target = target_sess.run(
@@ -493,8 +479,8 @@ class GenDQNAgent(DQNAgent):
                        self.model.src_len_: p_len,
                        self.model.b_weight_: b_weight,
                        self.model.action_idx_: action_id_in,
-                       self.model.action_idx_out_: action_id_out,
-                       self.model.action_len_: action_len_w_s,
+                       self.model.action_idx_out_: action_id,
+                       self.model.action_len_: action_len,
                        self.model.expected_q_: expected_q})
         t3_end = ctime()
 

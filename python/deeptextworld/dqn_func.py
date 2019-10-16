@@ -608,18 +608,22 @@ def get_sampled_1Daction(q_actions_t, actions):
 
 def get_best_2Daction(q_actions_t, tgt_tokens, eos_id):
     """
+    create action string according to action token index.
+    if q_actions_t[0] == eos_id, then return empty action string.
     :param q_actions_t: a q-matrix of a state computed from TF at step t
     :param tgt_tokens: target token list
     :param eos_id: end-of-sentence
     """
     action_idx, q_val, valid_len = get_best_2D_q(q_actions_t, eos_id)
-    action = " ".join([tgt_tokens[a] for a in action_idx[:valid_len]])
+    action = " ".join([tgt_tokens[a] for a in action_idx[:valid_len-1]])
     return action_idx, q_val, action
 
 
 def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
     """
     </S> also counts for an action, which is the empty action
+    the last token should be </S>
+    if it's not </S> according to the argmax, then force set it to be </S>.
     :param q_actions_t: a q-matrix of a state computed from TF at step t
     :param eos_id: end-of-sentence
     """
@@ -630,13 +634,12 @@ def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
         if a == eos_id:
             break
     padded_action_idx = np.zeros_like(action_idx)
-    padded_action_idx[:valid_len-1] = action_idx[:valid_len-1]
-    q_val = np.sum(
-        q_actions_t[range(valid_len-1), padded_action_idx[:valid_len-1]])
-    # force the last token as eos
-    q_val += q_actions_t[valid_len-1, eos_id]
-    q_val /= valid_len
-    return padded_action_idx, q_val, valid_len-1
+    padded_action_idx[:valid_len] = action_idx[:valid_len]
+    if valid_len == len(action_idx):
+        padded_action_idx[len(action_idx)] = eos_id
+    q_val = np.mean(
+        q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
+    return padded_action_idx, q_val, valid_len
 
 
 def get_random_2Daction_from_1Daction(actions, tgt_token2idx):

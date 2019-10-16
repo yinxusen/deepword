@@ -275,7 +275,7 @@ class BaseAgent(Logging):
     def init_actions(self, hp, token2idx, action_path, with_loading=True):
         action_collector = ActionCollector(
             hp.n_actions, hp.n_tokens_per_action, token2idx,
-            hp.unk_val_id, hp.padding_val_id)
+            hp.unk_val_id, hp.padding_val_id, hp.eos_id)
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
@@ -957,11 +957,10 @@ class BaseAgent(Logging):
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         # the last sid here is for the next state of using the last action
         aid = self._last_action_desc.action_idx
-        a_len = len(self._last_action_desc.action.split(" "))
-        if len(aid) == 0:
-            print(instant_reward)
-            print(is_terminal)
-            print(self._last_action_desc.action)
+        if self._last_action_desc.action == "":
+            a_len = 1  # "" + "</S>"
+        else:
+            a_len = len(self._last_action_desc.action.split(" ")) + 1
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=aid, a_len=a_len,
