@@ -438,8 +438,8 @@ class GenDQNAgent(DQNAgent):
         action_len = [m[0].a_len for m in b_memory]
         reward = [m[0].reward for m in b_memory]
         is_terminal = [m[0].is_terminal for m in b_memory]
-        action_id_wo_eos = np.asarray(
-            action_id)[:, np.asarray(action_len)-1] = 0
+        action_id_wo_eos = np.asarray(action_id)
+        action_id_wo_eos[:, np.asarray(action_len)-1] = 0
         action_id_in = np.concatenate(
             [np.asarray([[self.hp.sos_id]] * len(action_len)),
              action_id_wo_eos[:, :-1]], axis=1)
