@@ -4,7 +4,8 @@ import sys
 import time
 
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.hparams import load_hparams_for_training
