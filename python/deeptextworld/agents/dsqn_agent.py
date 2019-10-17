@@ -520,6 +520,7 @@ class BertDSQNAgent(DSQNAlterAgent):
 
     def init_tokens(self, hp):
         """
+        Note that BERT must use bert vocabulary.
         :param hp:
         :return:
         """

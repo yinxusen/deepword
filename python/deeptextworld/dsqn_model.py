@@ -254,6 +254,9 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         self.pooler_layer = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        self.action_pooler_layer = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     def get_q_actions(self):
         batch_size = tf.shape(self.inputs["src_len"])[0]
@@ -263,9 +266,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         src_masks = tf.sequence_mask(
             src_len, maxlen=self.num_tokens, dtype=tf.int32)
 
-        actions = tf.reshape(
-            self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
-        actions_mask = txf.create_padding_mask(actions)
         # padding the [CLS] in the beginning
         paddings = tf.constant([[0, 0], [1, 0]])
         src_w_pad = tf.pad(
@@ -274,6 +274,12 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         src_masks_w_pad = tf.pad(
             src_masks, paddings=paddings, mode="CONSTANT",
             constant_values=1)
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
+        actions_w_pad = tf.pad(
+            actions, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        actions_mask = txf.create_padding_mask(actions_w_pad)
 
         with tf.variable_scope("bert-state-encoder"):
             bert_model = modeling.BertModel(
@@ -289,10 +295,12 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
                 num_layers=1, d_model=32, num_heads=8, dff=64,
                 input_vocab_size=self.hp.vocab_size)
             flat_inner_state = attn_encoder(
-                actions, None, (not self.is_infer), actions_mask)
-            pooled = tf.reduce_max(flat_inner_state, axis=1)
+                actions_w_pad, None, (not self.is_infer), actions_mask)
+            first_action_token_tensor = tf.squeeze(
+                flat_inner_state[:, 0:1, :], axis=1)
+            h_actions = self.action_pooler_layer(first_action_token_tensor)
             h_actions = tf.reshape(
-                pooled, shape=(batch_size, self.n_actions, -1))
+                h_actions, shape=(batch_size, self.n_actions, -1))
 
         with tf.variable_scope("drrn-encoder", reuse=False):
             h_state_expanded = tf.expand_dims(h_state, axis=1)
