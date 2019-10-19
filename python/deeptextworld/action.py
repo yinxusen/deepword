@@ -1,14 +1,15 @@
 import time
+
 import numpy as np
 from bitarray import bitarray
-from nltk import word_tokenize
+from bert.tokenization import FullTokenizer
 
 from deeptextworld.log import Logging
 
 
 class ActionCollector(Logging):
     def __init__(
-            self, n_actions=200, n_tokens=10,
+            self, vocab_file, n_actions=200, n_tokens=10,
             token2idx=None, unk_val_id=None, padding_val_id=None):
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
@@ -30,6 +31,9 @@ class ActionCollector(Logging):
         self.curr_eid = None
         self.action_matrix = None
         self.action_len = None
+
+        self.tokenizer = FullTokenizer(
+            vocab_file=vocab_file, do_lower_case=True)
 
     def init(self):
         self.action2idx = {}
@@ -74,9 +78,9 @@ class ActionCollector(Logging):
         else:
             pass
 
-    @classmethod
-    def _preprocess_action(cls, action):
-        return word_tokenize(action)
+    def _preprocess_action(self, action):
+        return self.tokenizer.convert_tokens_to_ids(
+            self.tokenizer.tokenize(action))
 
     def extend(self, actions):
         """
@@ -92,8 +96,7 @@ class ActionCollector(Logging):
             if a not in self.action2idx:
                 assert self.curr_aid < self.n_actions - 1, "n_actions too small"
                 self.action2idx[a] = self.curr_aid
-                action_idx = ([self.token2idx.get(i, self.unk_val_id)
-                               for i in self._preprocess_action(a)])
+                action_idx = self._preprocess_action(a)
                 n_action_tokens = len(action_idx)
                 if n_action_tokens > self.n_tokens:
                     self.warning("trimming action {} size {} -> {}".format(
@@ -146,7 +149,8 @@ class ActionCollector(Logging):
         actions_base_vals = list(self.actions_base.values())
         np.savez(path, metadata=metadata,
                  actions_base_keys=actions_base_keys,
-                 actions_base_vals=actions_base_vals)
+                 actions_base_vals=actions_base_vals,
+                 action_matrix=[self.action_matrix_base])
 
     def load_actions(self, path):
         saved = np.load(path)

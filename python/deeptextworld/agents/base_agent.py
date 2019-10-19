@@ -9,8 +9,8 @@ from typing import List, Dict, Any, Optional
 
 import numpy as np
 import tensorflow as tf
+from bert.tokenization import FullTokenizer
 from bitarray import bitarray
-from nltk import word_tokenize, sent_tokenize
 from textworld import EnvInfos
 
 from deeptextworld import trajectory
@@ -21,7 +21,7 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
+from deeptextworld.utils import get_token2idx, load_vocab, ctime
 
 
 class DRRNMemo(collections.namedtuple(
@@ -81,6 +81,8 @@ class BaseAgent(Logging):
             ACT_GE: ACT_GW, ACT_GW: ACT_GE}
 
         self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
+        self.tokenizer = FullTokenizer(
+            vocab_file=hp.vocab_file, do_lower_case=True)
         self.info(output_hparams(self.hp))
 
         self.tjs = None
@@ -257,23 +259,26 @@ class BaseAgent(Logging):
 
     def init_tokens(self, hp):
         """
+        Note that BERT must use bert vocabulary.
         :param hp:
         :return:
         """
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
-        additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
-        tokens = additional_tokens + list(load_lower_vocab(hp.vocab_file))
+        tokens = list(load_vocab(hp.vocab_file))
         token2idx = get_token2idx(tokens)
         new_hp.set_hparam('vocab_size', len(tokens))
-        new_hp.set_hparam('sos_id', token2idx[hp.sos])
-        new_hp.set_hparam('eos_id', token2idx[hp.eos])
         new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
         new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
+        # bert specific tokens
+        new_hp.set_hparam('cls_val_id', token2idx[hp.cls_val])
+        new_hp.set_hparam('sep_val_id', token2idx[hp.sep_val])
+        new_hp.set_hparam('mask_val_id', token2idx[hp.mask_val])
         return new_hp, tokens, token2idx
 
     def init_actions(self, hp, token2idx, action_path, with_loading=True):
         action_collector = ActionCollector(
+            hp.vocab_file,
             hp.n_actions, hp.n_tokens_per_action, token2idx,
             hp.unk_val_id, hp.padding_val_id)
         if with_loading:
@@ -312,31 +317,11 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
-    def _padding_lines(self, sents):
-        """
-        add padding sentence between lines
-        """
-        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
-        padded = padding_sent + padding_sent.join(sents) + padding_sent
-        return padded
-
     def tokenize(self, master):
-        """
-        Tokenize and lowercase master. A space-chained tokens will be returned.
-        # TODO: sentences that are tokenized cannot use tokenize again.
-        """
-        sents = sent_tokenize(master)
-        tokenized = map(
-            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]),
-            sents)
-        if self.hp.use_padding_over_lines:
-            return self._padding_lines(tokenized)
-        else:
-            return " ".join(tokenized)
+        return ' '.join(self.tokenizer.tokenize(master))
 
-    def index_string(self, sentence):
-        indexed = [self.token2idx.get(t, self.hp.unk_val_id) for t in sentence]
-        return indexed
+    def index_string(self, tokens):
+        return self.tokenizer.convert_tokens_to_ids(tokens)
 
     def zero_mask_bytes(self):
         """
@@ -369,16 +354,13 @@ class BaseAgent(Logging):
         self._init()
 
     def create_n_load_model(
-            self, placement="/device:GPU:0",
-            load_best=False, is_training=True):
+            self, load_best=False, is_training=True):
         start_t = 0
         if is_training:
-            with tf.device(placement):
-                model = self.create_model_instance()
+            model = self.create_model_instance()
             self.info("create train model")
         else:
-            with tf.device(placement):
-                model = self.create_eval_model_instance()
+            model = self.create_eval_model_instance()
             self.info("create eval model")
 
         conf = tf.ConfigProto(
@@ -386,8 +368,9 @@ class BaseAgent(Logging):
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(max_to_keep=self.hp.max_snapshot_to_keep,
-                                   save_relative_paths=True)
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
             if load_best:
                 restore_from = tf.train.latest_checkpoint(self.best_chkp_path)
             else:
@@ -491,8 +474,7 @@ class BaseAgent(Logging):
                     self.info('No checkpoint to load for evaluation')
             else:
                 self.sess, _, self.saver, self.model = self.create_n_load_model(
-                    placement="/device:GPU:1", load_best=load_best,
-                    is_training=self.is_training)
+                    load_best=load_best, is_training=self.is_training)
             self.eps = 0
             self.total_t = 0
 
@@ -661,7 +643,7 @@ class BaseAgent(Logging):
     def filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
-        :param admissible_actions:
+        :param admissible_actions: raw action given by the game.
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
@@ -911,8 +893,7 @@ class BaseAgent(Logging):
         if self.target_sess is None and restore_from is not None:
             self.debug("create and load target net")
             (self.target_sess, start_t, self.target_saver, self.target_model
-             ) = self.create_n_load_model(
-                is_training=False, placement="/device:GPU:2")
+             ) = self.create_n_load_model(is_training=False)
         else:
             pass
 
@@ -938,8 +919,7 @@ class BaseAgent(Logging):
             if self.target_sess is None:
                 self.debug("create and load target net")
                 (self.target_sess, start_t, self.target_saver, self.target_model
-                 ) = self.create_n_load_model(
-                    is_training=False, placement="/device:GPU:2")
+                 ) = self.create_n_load_model(is_training=False)
             else:
                 self.target_saver.restore(self.target_sess, restore_from)
                 self.info("target net load from: {}".format(restore_from))
@@ -1050,6 +1030,9 @@ class BaseAgent(Logging):
             pass
 
         self._last_actions_mask = actions_mask
+        # revert back go actions for the game playing
+        if action.startswith("go"):
+            action = " ".join(action.split()[:2])
         return action
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],
@@ -1076,24 +1059,17 @@ class BaseAgent(Logging):
             obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
          ) = self.collect_new_sample(cleaned_obs, instant_reward, dones, infos)
-
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
         if all(dones):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
-
         player_t = self.next_step_action(
             actions, all_actions, actions_mask, instant_reward)
-
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
-
         self.total_t += 1
         self.in_game_t += 1
-        # revert back go actions for the game playing
-        if player_t.startswith("go"):
-            player_t = " ".join(player_t.split()[:2])
         return [player_t] * len(obs)
 
 
