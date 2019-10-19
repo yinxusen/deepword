@@ -203,7 +203,6 @@ def create_eval_model(model_creator, hp):
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
         q_actions = model.get_q_actions()
-        _ = model.get_train_op(q_actions)
     return EvalDQNModel(
         graph=graph, model=model,
         q_actions=q_actions,
@@ -404,7 +403,6 @@ def create_eval_gen_model(model_creator, hp):
         src_placeholder = inputs["src"]
         src_len_placeholder = inputs["src_len"]
         q_actions = model.get_q_actions()
-        _ = model.get_train_op(q_actions)
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,

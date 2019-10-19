@@ -380,7 +380,18 @@ class BaseAgent(Logging):
                 # Reload weights from directory if specified
                 self.info(
                     "Try to restore parameters from: {}".format(restore_from))
-                saver.restore(sess, restore_from)
+                try:
+                    saver.restore(sess, restore_from)
+                except Exception as e:
+                    self.debug("Restoring failed: {}".format(e))
+                    all_saved_vars = list(
+                        map(lambda v: v[0],
+                            tf.train.list_variables(restore_from)))
+                    self.debug(
+                        "Try to restore with safe saver with vars: {}".format(
+                            "\n".join(all_saved_vars)))
+                    safe_saver = tf.train.Saver(var_list=all_saved_vars)
+                    safe_saver.restore(sess, restore_from)
                 if not self.hp.start_t_ignore_model_t:
                     global_step = tf.train.get_or_create_global_step()
                     trained_steps = sess.run(global_step)
@@ -480,7 +491,8 @@ class BaseAgent(Logging):
 
     def _get_master_starter(self, obs, infos):
         assert K_DESC in infos, "request description is required"
-        return infos[K_DESC][0]
+        assert K_INVENTORY in infos, "request inventory is required"
+        return "{}\n{}".format(infos[K_DESC][0], infos[K_INVENTORY][0])
 
     def _start_episode(self, obs, infos):
         """
