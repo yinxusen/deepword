@@ -263,11 +263,10 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         self.bert_config = modeling.BertConfig.from_json_file(
             self.bert_config_file)
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
-        self.enc_layer = txf.EncoderLayer(d_model=768, num_heads=8, dff=768)
-        self.pooler_layer = tf.layers.Dense(
+        self.wp = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-        self.action_pooler_layer = tf.layers.Dense(
+        self.wa = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
@@ -298,11 +297,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             bert_model = modeling.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
-            enc_out = self.enc_layer(
-                bert_model.get_sequence_output(), (not self.is_infer),
-                mask=None)
-            first_token_tensor = tf.squeeze(enc_out[:, 0:1, :], axis=1)
-            h_state = self.pooler_layer(first_token_tensor)
+            h_state = self.wp(bert_model.get_pooled_output())
         with tf.variable_scope("attn-action-encoder"):
             attn_encoder = txf.Encoder(
                 num_layers=1, d_model=32, num_heads=8, dff=64,
@@ -311,7 +306,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
                 actions_w_pad, None, (not self.is_infer), actions_mask)
             first_action_token_tensor = tf.squeeze(
                 flat_inner_state[:, 0:1, :], axis=1)
-            h_actions = self.action_pooler_layer(first_action_token_tensor)
+            h_actions = self.wa(first_action_token_tensor)
             h_actions = tf.reshape(
                 h_actions, shape=(batch_size, self.n_actions, -1))
 
