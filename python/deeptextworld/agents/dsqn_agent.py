@@ -669,28 +669,31 @@ class BertDSQNIndAgent(DSQNAlterAgent):
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
 
-    def _init(self, load_best=False):
-        super(BertDSQNIndAgent, self)._init(load_best)
+    def _init_impl(self, load_best=False):
+        super(BertDSQNIndAgent, self)._init_impl(load_best)
         (self.snn_sess, _, self.snn_saver, self.snn_model
          ) = self.create_n_load_snn_model(load_best, self.is_training)
-        train_snn_summary_dir = pjoin(
-            self.model_dir, "snn-summaries", "train")
-        self.train_snn_summary_writer = tf.summary.FileWriter(
-            train_snn_summary_dir, self.snn_sess.graph)
-        with self.snn_model.graph.as_default():
-            snn_all_trainable = tf.trainable_variables()
-        bert_vars = list(
-            filter(lambda v: "bert-state-encoder/bert" in v.name,
-                   snn_all_trainable))
-        self.debug("Bert vars: {}".format(bert_vars))
-        self.snn_bert_loader = tf.train.Saver(var_list=bert_vars)
-        with self.model.graph.as_default():
-            drrn_all_trainable = tf.trainable_variables()
-        bert_vars = list(
-            filter(lambda v: "bert-state-encoder/bert" in v.name,
-                   drrn_all_trainable))
-        self.debug("Bert vars: {}".format(bert_vars))
-        self.drrn_bert_loader = tf.train.Saver(var_list=bert_vars)
+        if self.is_training:
+            train_snn_summary_dir = pjoin(
+                self.model_dir, "snn-summaries", "train")
+            self.train_snn_summary_writer = tf.summary.FileWriter(
+                train_snn_summary_dir, self.snn_sess.graph)
+            with self.snn_model.graph.as_default():
+                snn_all_trainable = tf.trainable_variables()
+            bert_vars = list(
+                filter(lambda v: "bert-state-encoder/bert" in v.name,
+                       snn_all_trainable))
+            self.debug("Bert vars: {}".format(bert_vars))
+            self.snn_bert_loader = tf.train.Saver(var_list=bert_vars)
+            with self.model.graph.as_default():
+                drrn_all_trainable = tf.trainable_variables()
+            bert_vars = list(
+                filter(lambda v: "bert-state-encoder/bert" in v.name,
+                       drrn_all_trainable))
+            self.debug("Bert vars: {}".format(bert_vars))
+            self.drrn_bert_loader = tf.train.Saver(var_list=bert_vars)
+        else:
+            pass
 
     def train_one_batch(self):
         if self.total_t == self.hp.observation_t:
@@ -705,3 +708,37 @@ class BertDSQNIndAgent(DSQNAlterAgent):
             self.target_sess if self.target_sess else self.sess,
             self.target_model if self.target_model else self.model)
         self._save_agent_n_reload_target()
+
+    def eval_snn(self, eval_data_size, batch_size=32):
+        self.info("start eval with size {}".format(eval_data_size))
+        n_iter = (eval_data_size // batch_size) + 1
+        total_acc = 0
+        total_samples = 0
+        for i in range(n_iter):
+            src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+                batch_size)
+            non_empty_src = list(filter(
+                lambda x: x[1][0] != 0 and x[1][1] != 0,
+                enumerate(zip(src_len, src2_len))))
+            non_empty_src_idx = [x[0] for x in non_empty_src]
+            src = src[non_empty_src_idx, :]
+            src_len = src_len[non_empty_src_idx]
+            src2 = src2[non_empty_src_idx, :]
+            src2_len = src2_len[non_empty_src_idx]
+            labels = labels[non_empty_src_idx]
+            labels = labels.astype(np.int32)
+            pred, diff_two_states = self.snn_sess.run(
+                [self.snn_model.pred, self.snn_model.diff_two_states],
+                feed_dict={self.snn_model.snn_src_: src,
+                           self.snn_model.snn_src2_: src2,
+                           self.snn_model.snn_src_len_: src_len,
+                           self.snn_model.snn_src2_len_: src2_len})
+            pred_labels = (pred > 0.5).astype(np.int32)
+            total_acc += np.sum(np.equal(labels, pred_labels))
+            total_samples += len(src)
+        if total_samples == 0:
+            avg_acc = -1
+        else:
+            avg_acc = total_acc * 1. / total_samples
+            self.debug("valid sample size {}".format(total_samples))
+        return avg_acc
