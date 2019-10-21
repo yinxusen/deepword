@@ -269,6 +269,10 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         self.wa = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
 
     def get_q_actions(self):
         batch_size = tf.shape(self.inputs["src_len"])[0]
@@ -314,12 +318,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             h_state_expanded = tf.expand_dims(h_state, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-
-        # initialize bert from checkpoint file
-        tf.train.init_from_checkpoint(
-            self.bert_ckpt_file,
-            assignment_map={"bert/": "bert-state-encoder/bert/"})
-
         return q_actions
 
     def get_h_state(self, src, src_len):
@@ -332,7 +330,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         src_masks_w_pad = tf.pad(
             src_masks, paddings=paddings, mode="CONSTANT",
             constant_values=1)
-        with tf.variable_scope("bert-state-encoder", reuse=True):
+        with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
             bert_model = modeling.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
@@ -441,4 +439,129 @@ def create_eval_model(model_creator, hp, device_placement):
         snn_src2_len_=inputs["snn_src2_len"],
         labels_=inputs["labels"],
         diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+class Train_DSQN_DRRN_Model(
+    collections.namedtuple(
+        'Train_DSQN_DRRN_Model',
+        ('graph', 'model', 'q_actions', 'train_op', 'loss', 'train_summary_op',
+         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss',
+         'initializer'))):
+    pass
+
+
+class Eval_DSQN_DRRN_Model(
+    collections.namedtuple(
+        'Eval_DSQN_DRRN_Model',
+        ('graph', 'model', 'q_actions',
+         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'initializer'))):
+    pass
+
+class Train_DSQN_SNN_Model(
+    collections.namedtuple(
+        'Train_DSQN_SNN_Model',
+        ('graph', 'model', 'pred', 'diff_two_states',
+         'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         'snn_loss', 'snn_train_op', 'snn_train_summary_op',
+         'initializer'))):
+    pass
+
+
+class Eval_DSQN_SNN_Model(
+    collections.namedtuple(
+        'Eval_DSQN_SNN_Model',
+        ('graph', 'model', 'pred','diff_two_states',
+         'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         'initializer'))):
+    pass
+
+
+def create_train_snn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            pred, diff_two_states = model.get_pred()
+            snn_loss, snn_train_op = model.get_snn_train_op(pred)
+            snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
+            snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+    return Train_DSQN_SNN_Model(
+        graph=graph, model=model, pred=pred,
+        snn_src_=inputs["snn_src"],
+        snn_src_len_=inputs["snn_src_len"],
+        snn_src2_=inputs["snn_src2"],
+        snn_src2_len_=inputs["snn_src2_len"],
+        labels_=inputs["labels"],
+        snn_train_op=snn_train_op,
+        snn_loss=snn_loss,
+        snn_train_summary_op=snn_train_summary_op,
+        diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+def create_eval_snn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            pred, diff_two_states = model.get_pred()
+    return Eval_DSQN_SNN_Model(
+        graph=graph, model=model, pred=pred,
+        snn_src_=inputs["snn_src"],
+        snn_src_len_=inputs["snn_src_len"],
+        snn_src2_=inputs["snn_src2"],
+        snn_src2_len_=inputs["snn_src2_len"],
+        labels_=inputs["labels"],
+        diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+def create_train_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
+    return Train_DSQN_DRRN_Model(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
+        b_weight_=inputs["b_weight"],
+        abs_loss=abs_loss,
+        train_op=train_op, action_idx_=inputs["action_idx"],
+        expected_q_=inputs["expected_q"], loss=loss,
+        train_summary_op=train_summary_op,
+        initializer=initializer)
+
+
+def create_eval_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+    return Eval_DSQN_DRRN_Model(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
         initializer=initializer)

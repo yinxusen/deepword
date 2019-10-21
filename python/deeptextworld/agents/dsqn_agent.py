@@ -1,7 +1,9 @@
 from os import remove as prm
+from os.path import join as pjoin
 
 import numpy as np
 from numpy.random import choice as npc
+import tensorflow as tf
 
 from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
@@ -406,9 +408,6 @@ class DSQNAlterAgent(DSQNAgent):
         :param t:
         :return:
         """
-        t_snn = 0
-        t_snn_end = 0
-        n_iters = 0
         if self.start_snn_training:
             n_iters = self.hp.snn_train_epochs
             t_snn = ctime()
@@ -416,14 +415,30 @@ class DSQNAlterAgent(DSQNAgent):
             t_snn_end = ctime()
             # will set to True after save_snapshot
             self.start_snn_training = False
-        return t_snn, t_snn_end, n_iters
+            self.debug(
+                "t-snn: {} / {} iters".format(t_snn_end - t_snn, n_iters))
 
     def save_snapshot(self):
         super(DSQNAlterAgent, self).save_snapshot()
         self.start_snn_training = True
 
+    def train_one_batch(self):
+        if self.total_t == self.hp.observation_t:
+            self.epoch_start_t = ctime()
+        self.eps = self.annealing_eps(
+            self.hp.init_eps, self.hp.final_eps,
+            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
+
+        self.train_snn(self.sess, self.train_summary_writer, self.total_t)
+        # if there is not a well-trained model, it is unreasonable
+        # to use target model.
+        self.train_impl(
+            self.sess, self.total_t, self.train_summary_writer,
+            self.target_sess if self.target_sess else self.sess,
+            self.target_model if self.target_model else self.model)
+        self._save_agent_n_reload_target()
+
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        t_snn, t_snn_end, n_iters = self.train_snn(sess, summary_writer, t)
         gamma = self.reverse_annealing_gamma(
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
@@ -497,17 +512,196 @@ class DSQNAlterAgent(DSQNAgent):
         t3_end = ctime()
 
         self.memo.batch_update(b_idx, abs_loss)
-        if t % 1000 == 0 or n_iters != 0:
+        if t % 1000 == 0:
             self.debug(
-                't: {}, t1: {}, t2: {}, t3: {},'
-                ' t_snn_training: {} / {} (iters)'.format(
-                    t, t1_end - t1, t2_end - t2, t3_end - t3,
-                    t_snn_end - t_snn, n_iters))
+                't: {}, t1: {}, t2: {}, t3: {}'.format(
+                    t, t1_end - t1, t2_end - t2, t3_end - t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
 
 class BertDSQNAgent(DSQNAlterAgent):
-    """
-    """
+    pass
+
+
+class BertDSQNIndAgent(DSQNAlterAgent):
+    """Bert DSQN Independent Agent, means we split SNN and DRRN"""
     def __init__(self, hp, model_dir):
-        super(BertDSQNAgent, self).__init__(hp, model_dir)
+        super(BertDSQNIndAgent, self).__init__(hp, model_dir)
+        self.snn_model = None
+        self.snn_sess = None
+        self.snn_saver = None
+        self.snn_ckpt_path = pjoin(self.model_dir, 'snn_last_weights')
+        self.snn_ckpt_prefix = pjoin(self.snn_ckpt_path, 'after-epoch')
+        self.snn_best_ckpt_path = pjoin(self.model_dir, 'snn_best_weights')
+        self.snn_best_ckpt_prefix = pjoin(
+            self.snn_best_ckpt_path, 'after-epoch')
+        self.train_snn_summary_writer = None
+        self.snn_bert_loader = None
+        self.drrn_bert_loader = None
+
+    def create_model_instance(self):
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_train_drrn_model(
+            model_creator, self.hp, device_placement="/device:GPU:0")
+        return model
+
+    def create_eval_model_instance(self):
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_eval_drrn_model(
+            model_creator, self.hp, device_placement="/device:GPU:1")
+        return model
+
+    def create_snn_model_instance(self):
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_train_snn_model(
+            model_creator, self.hp, device_placement="/device:GPU:0")
+        return model
+
+    def create_snn_eval_model_instance(self):
+        model_creator = getattr(dsqn_model, self.hp.model_creator)
+        model = dsqn_model.create_eval_snn_model(
+            model_creator, self.hp, device_placement="/device:GPU:1")
+        return model
+
+    def train_snn(self, sess, summary_writer, t):
+        """
+        Training sequences for DRRN and SNN:
+
+            SNN -- n_iters epochs
+            DRRN -- save_gap_t epochs
+            save model --- time to save
+            copy model as target
+            SNN -- n_iters epochs
+            DRRN
+            ...
+
+        In this way, the target model won't be contaminated
+        by the SNN training.
+        :param sess:
+        :param summary_writer:
+        :param t:
+        :return:
+        """
+        if self.start_snn_training:
+            try:
+                self.snn_bert_loader.restore(
+                    self.snn_sess, tf.train.latest_checkpoint(self.ckpt_path))
+                self.debug("bert from DRRN to SNN")
+            except ValueError as e:
+                self.debug(e)
+            n_iters = self.hp.snn_train_epochs
+            t_snn = ctime()
+            self._train_snn(sess, n_iters, summary_writer, t)
+            t_snn_end = ctime()
+            # will set to True after save_snapshot
+            self.start_snn_training = False
+            self.debug(
+                "t-snn: {} / {} iters".format(t_snn_end - t_snn, n_iters))
+            self.snn_saver.save(
+                self.snn_sess, self.snn_ckpt_prefix,
+                global_step=tf.train.get_or_create_global_step(
+                    graph=self.snn_model.graph))
+            self.drrn_bert_loader.restore(
+                self.sess, tf.train.latest_checkpoint(self.snn_ckpt_path))
+            self.debug("bert from SNN to DRRN")
+
+    def _train_snn(self, sess, n_iters, summary_writer, t):
+        for i in range(n_iters):
+            self.debug("training SNN: {}/{} epochs".format(i, n_iters))
+            src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+                self.hp.batch_size)
+            _, summaries, snn_loss = sess.run(
+                [self.snn_model.snn_train_op,
+                 self.snn_model.snn_train_summary_op,
+                 self.snn_model.snn_loss],
+                feed_dict={self.snn_model.snn_src_: src,
+                           self.snn_model.snn_src_len_: src_len,
+                           self.snn_model.snn_src2_: src2,
+                           self.snn_model.snn_src2_len_: src2_len,
+                           self.snn_model.labels_: labels
+                           })
+            summary_writer.add_summary(summaries, t - self.hp.observation_t + i)
+
+    def create_n_load_snn_model(self, load_best=False, is_training=True):
+        start_t = 0
+        if is_training:
+            model = self.create_snn_model_instance()
+            self.info("create snn train model")
+        else:
+            model = self.create_snn_eval_model_instance()
+            self.info("create snn eval model")
+
+        conf = tf.ConfigProto(
+            log_device_placement=True, allow_soft_placement=True)
+        sess = tf.Session(graph=model.graph, config=conf)
+        with model.graph.as_default():
+            sess.run(tf.global_variables_initializer())
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
+            if load_best:
+                restore_from = tf.train.latest_checkpoint(
+                    self.snn_best_ckpt_path)
+            else:
+                restore_from = tf.train.latest_checkpoint(self.snn_ckpt_path)
+
+            if restore_from is not None:
+                # Reload weights from directory if specified
+                self.info(
+                    "Try to restore parameters from: {}".format(restore_from))
+                try:
+                    saver.restore(sess, restore_from)
+                except Exception as e:
+                    self.debug("Restoring failed: {}".format(e))
+                    all_saved_vars = list(
+                        map(lambda v: v[0],
+                            tf.train.list_variables(restore_from)))
+                    self.debug(
+                        "Try to restore with safe saver with vars: {}".format(
+                            "\n".join(all_saved_vars)))
+                    safe_saver = tf.train.Saver(var_list=all_saved_vars)
+                    safe_saver.restore(sess, restore_from)
+                if not self.hp.start_t_ignore_model_t:
+                    global_step = tf.train.get_or_create_global_step()
+                    trained_steps = sess.run(global_step)
+                    start_t = trained_steps + self.hp.observation_t
+            else:
+                self.info('No checkpoint to load, training from scratch')
+        return sess, start_t, saver, model
+
+    def _init(self, load_best=False):
+        super(BertDSQNIndAgent, self)._init(load_best)
+        (self.snn_sess, _, self.snn_saver, self.snn_model
+         ) = self.create_n_load_snn_model(load_best, self.is_training)
+        train_snn_summary_dir = pjoin(
+            self.model_dir, "snn-summaries", "train")
+        self.train_snn_summary_writer = tf.summary.FileWriter(
+            train_snn_summary_dir, self.snn_sess.graph)
+        with self.snn_model.graph.as_default():
+            snn_all_trainable = tf.trainable_variables()
+        bert_vars = list(
+            filter(lambda v: "bert-state-encoder/bert" in v.name,
+                   snn_all_trainable))
+        self.debug("Bert vars: {}".format(bert_vars))
+        self.snn_bert_loader = tf.train.Saver(var_list=bert_vars)
+        with self.model.graph.as_default():
+            drrn_all_trainable = tf.trainable_variables()
+        bert_vars = list(
+            filter(lambda v: "bert-state-encoder/bert" in v.name,
+                   drrn_all_trainable))
+        self.debug("Bert vars: {}".format(bert_vars))
+        self.drrn_bert_loader = tf.train.Saver(var_list=bert_vars)
+
+    def train_one_batch(self):
+        if self.total_t == self.hp.observation_t:
+            self.epoch_start_t = ctime()
+        self.eps = self.annealing_eps(
+            self.hp.init_eps, self.hp.final_eps,
+            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
+        self.train_snn(
+            self.snn_sess, self.train_snn_summary_writer, self.total_t)
+        self.train_impl(
+            self.sess, self.total_t, self.train_summary_writer,
+            self.target_sess if self.target_sess else self.sess,
+            self.target_model if self.target_model else self.model)
+        self._save_agent_n_reload_target()

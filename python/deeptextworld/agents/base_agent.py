@@ -103,10 +103,10 @@ class BaseAgent(Logging):
         self.target_sess = None
         self.is_training = True
         self.train_summary_writer = None
-        self.chkp_path = os.path.join(self.model_dir, 'last_weights')
-        self.best_chkp_path = os.path.join(self.model_dir, 'best_weights')
-        self.chkp_prefix = os.path.join(self.chkp_path, 'after-epoch')
-        self.best_chkp_prefix = os.path.join(self.best_chkp_path, 'after-epoch')
+        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
+        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
+        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
+        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
         self.saver = None
         self.target_saver = None
         self.snapshot_saved = False
@@ -353,8 +353,7 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init()
 
-    def create_n_load_model(
-            self, load_best=False, is_training=True):
+    def create_n_load_model(self, load_best=False, is_training=True):
         start_t = 0
         if is_training:
             model = self.create_model_instance()
@@ -372,9 +371,9 @@ class BaseAgent(Logging):
                 max_to_keep=self.hp.max_snapshot_to_keep,
                 save_relative_paths=True)
             if load_best:
-                restore_from = tf.train.latest_checkpoint(self.best_chkp_path)
+                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
             else:
-                restore_from = tf.train.latest_checkpoint(self.chkp_path)
+                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
             if restore_from is not None:
                 # Reload weights from directory if specified
@@ -467,13 +466,23 @@ class BaseAgent(Logging):
                 self.model_dir, "summaries", "train")
             self.train_summary_writer = tf.summary.FileWriter(
                 train_summary_dir, self.sess.graph)
+            restore_from = tf.train.latest_checkpoint(
+                os.path.join(self.model_dir, 'last_weights'))
+            if self.target_sess is None and restore_from is not None:
+                self.debug("create and load target net")
+                (self.target_sess, start_t, self.target_saver,
+                 self.target_model
+                 ) = self.create_n_load_model(is_training=False)
+            else:
+                # notice that target net and sess could be None
+                pass
         else:
             if self.model is not None:
                 if load_best:
                     restore_from = tf.train.latest_checkpoint(
-                        self.best_chkp_path)
+                        self.best_ckpt_path)
                 else:
-                    restore_from = tf.train.latest_checkpoint(self.chkp_path)
+                    restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
                 if restore_from is not None:
                     # Reload weights from directory if specified
@@ -573,7 +582,7 @@ class BaseAgent(Logging):
     def save_best_model(self):
         self.info("save the best model so far")
         self.saver.save(
-            self.sess, self.best_chkp_prefix,
+            self.sess, self.best_ckpt_prefix,
             global_step=tf.train.get_or_create_global_step(
                 graph=self.model.graph))
         self.info("the best model saved")
@@ -607,7 +616,7 @@ class BaseAgent(Logging):
     def save_snapshot(self):
         self.info('save model')
         self.saver.save(
-            self.sess, self.chkp_prefix,
+            self.sess, self.ckpt_prefix,
             global_step=tf.train.get_or_create_global_step(
                 graph=self.model.graph))
         self.info('save snapshot of the agent')
@@ -900,22 +909,15 @@ class BaseAgent(Logging):
             self.hp.init_eps, self.hp.final_eps,
             self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
 
-        restore_from = tf.train.latest_checkpoint(
-            os.path.join(self.model_dir, 'last_weights'))
-        if self.target_sess is None and restore_from is not None:
-            self.debug("create and load target net")
-            (self.target_sess, start_t, self.target_saver, self.target_model
-             ) = self.create_n_load_model(is_training=False)
-        else:
-            pass
-
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
         self.train_impl(
             self.sess, self.total_t, self.train_summary_writer,
             self.target_sess if self.target_sess else self.sess,
             self.target_model if self.target_model else self.model)
+        self._save_agent_n_reload_target()
 
+    def _save_agent_n_reload_target(self):
         if self.time_to_save():
             epoch_end_t = ctime()
             delta_time = epoch_end_t - self.epoch_start_t
@@ -933,6 +935,8 @@ class BaseAgent(Logging):
                 (self.target_sess, start_t, self.target_saver, self.target_model
                  ) = self.create_n_load_model(is_training=False)
             else:
+                restore_from = tf.train.latest_checkpoint(
+                    os.path.join(self.model_dir, 'last_weights'))
                 self.target_saver.restore(self.target_sess, restore_from)
                 self.info("target net load from: {}".format(restore_from))
 
