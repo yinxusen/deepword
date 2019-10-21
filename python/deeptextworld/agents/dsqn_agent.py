@@ -609,7 +609,7 @@ class BertDSQNIndAgent(DSQNAlterAgent):
         for i in range(n_iters):
             self.debug("training SNN: {}/{} epochs".format(i, n_iters))
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
-                self.hp.batch_size)
+                self.hp.batch_size // 2)
             _, summaries, snn_loss = sess.run(
                 [self.snn_model.snn_train_op,
                  self.snn_model.snn_train_summary_op,
@@ -709,7 +709,7 @@ class BertDSQNIndAgent(DSQNAlterAgent):
             self.target_model if self.target_model else self.model)
         self._save_agent_n_reload_target()
 
-    def eval_snn(self, eval_data_size, batch_size=32):
+    def eval_snn(self, eval_data_size, batch_size=16):
         self.info("start eval with size {}".format(eval_data_size))
         n_iter = (eval_data_size // batch_size) + 1
         total_acc = 0
