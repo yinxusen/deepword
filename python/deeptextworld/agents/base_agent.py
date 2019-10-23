@@ -27,7 +27,7 @@ from deeptextworld.utils import get_token2idx, load_vocab, ctime
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
     ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask"))):
+     "action_mask", "next_action_mask", "q_actions"))):
     pass
 
 
@@ -80,9 +80,8 @@ class BaseAgent(Logging):
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
             ACT_GE: ACT_GW, ACT_GW: ACT_GE}
 
-        self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
-        self.tokenizer = FullTokenizer(
-            vocab_file=hp.vocab_file, do_lower_case=True)
+        self.hp, self.tokenizer = self.init_tokens(hp)
+
         self.info(output_hparams(self.hp))
 
         self.tjs = None
@@ -257,29 +256,30 @@ class BaseAgent(Logging):
             admissible_commands=True,
             extras=['recipe'])
 
-    def init_tokens(self, hp):
+    @classmethod
+    def init_tokens(cls, hp):
         """
         Note that BERT must use bert vocabulary.
         :param hp:
         :return:
         """
+        tokenizer = FullTokenizer(
+            vocab_file=hp.vocab_file, do_lower_case=True)
         new_hp = copy_hparams(hp)
         # make sure that padding_val is indexed as 0.
-        tokens = list(load_vocab(hp.vocab_file))
-        token2idx = get_token2idx(tokens)
-        new_hp.set_hparam('vocab_size', len(tokens))
-        new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
-        new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
+        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+        new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+        new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
         # bert specific tokens
-        new_hp.set_hparam('cls_val_id', token2idx[hp.cls_val])
-        new_hp.set_hparam('sep_val_id', token2idx[hp.sep_val])
-        new_hp.set_hparam('mask_val_id', token2idx[hp.mask_val])
-        return new_hp, tokens, token2idx
+        new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
+        new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
+        new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
+        return new_hp, tokenizer
 
-    def init_actions(self, hp, token2idx, action_path, with_loading=True):
+    def init_actions(self, hp, tokenizer, action_path, with_loading=True):
         action_collector = ActionCollector(
-            hp.vocab_file,
-            hp.n_actions, hp.n_tokens_per_action, token2idx,
+            tokenizer,
+            hp.n_actions, hp.n_tokens_per_action,
             hp.unk_val_id, hp.padding_val_id)
         if with_loading:
             try:
@@ -441,7 +441,7 @@ class BaseAgent(Logging):
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
-            self.hp, self.token2idx, action_path,
+            self.hp, self.tokenizer, action_path,
             with_loading=self.is_training)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
@@ -956,7 +956,8 @@ class BaseAgent(Logging):
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_desc.action_idx,
             reward=instant_reward, is_terminal=is_terminal,
-            action_mask=action_mask, next_action_mask=next_action_mask
+            action_mask=action_mask, next_action_mask=next_action_mask,
+            q_actions=None
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:

@@ -226,13 +226,13 @@ class DSQNAgent(TabularDQNAgent):
         src_str = []
         for s in src:
             src_str.append(" ".join(
-                map(lambda i: self.tokens[i],
+                map(lambda i: self.tokenizer.inv_vocab[i],
                     filter(lambda x: x != self.hp.padding_val_id, s))
             ))
         src2_str = []
         for s in src2:
             src2_str.append(" ".join(
-                map(lambda i: self.tokens[i],
+                map(lambda i: self.tokenizer.inv_vocab[i],
                     filter(lambda x: x != self.hp.padding_val_id, s))
             ))
         np.savez(

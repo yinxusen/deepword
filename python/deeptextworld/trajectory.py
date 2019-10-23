@@ -85,6 +85,38 @@ class BaseTrajectory(Logging):
         raise NotImplementedError()
 
 
+class RawTextTrajectory(BaseTrajectory):
+    def __init__(self, hp):
+        super(RawTextTrajectory, self).__init__()
+        self.num_turns = hp.num_turns
+
+    def fetch_last_state(self):
+        raise NotImplementedError()
+
+    def fetch_raw_state_by_idx(self, tid, sid):
+        if tid == self.curr_tid:  # make sure test cid first
+            tj = self.curr_tj
+        elif tid in self.trajectories:
+            tj = self.trajectories[tid]
+        else:
+            return None
+        state = tj[max(0, sid - self.num_turns):sid + 1]
+        return state
+
+    def fetch_batch_states(self, b_tid, b_sid):
+        """
+        Fetch a batch of states and padding to the same length
+        """
+        b_states = []
+        for tid, sid in zip(b_tid, b_sid):
+            stat = self.fetch_raw_state_by_idx(tid, sid)
+            b_states.append(stat)
+        return b_states
+
+    def fetch_batch_states_pair(self, b_tid, b_sid):
+        raise NotImplementedError()
+
+
 class StateTextCompanion(BaseTrajectory):
 
     def add_new_tj(self, tid=None):

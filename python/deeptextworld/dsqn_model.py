@@ -255,6 +255,23 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         :param is_infer:
         """
         super(BertAttnEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.float32, [None]),
+            "action_idx": tf.placeholder(tf.int32, [None]),
+            "b_weight": tf.placeholder(tf.float32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None]),
+            "expected_qs": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "actions": tf.placeholder(tf.int32, [None, self.n_actions, None]),
+            "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "snn_src": tf.placeholder(tf.int32, [None, None]),
+            "snn_src_len": tf.placeholder(tf.float32, [None]),
+            "snn_src2": tf.placeholder(tf.int32, [None, None]),
+            "snn_src2_len": tf.placeholder(tf.float32, [None]),
+            "labels": tf.placeholder(tf.float32, [None])
+        }
+
         self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
             self.bert_init_ckpt_dir)
@@ -356,6 +373,14 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step)
         return loss, train_op, abs_loss
+
+    def get_student_train_op(self, q_actions):
+        losses = tf.nn.softmax_cross_entropy_with_logits(
+            labels=self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            logits=q_actions * self.inputs["actions_mask"])
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
 
     def get_snn_train_op(self, pred):
         labels = self.inputs["labels"]
@@ -477,6 +502,43 @@ class Eval_DSQN_SNN_Model(
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
          'initializer'))):
     pass
+
+
+class TrainStudentDRRNModel(
+    collections.namedtuple(
+        "TrainStudentDRRNModel",
+        ("graph", "model",
+         "src_", "src_len_",
+         "actions_", "actions_len_", "actions_mask_",
+         "expected_qs",
+         'train_op', 'loss', 'train_summary_op',
+         'initializer'))):
+    pass
+
+
+def create_train_student_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op = model.get_student_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
+    return TrainStudentDRRNModel(
+        graph=graph, model=model,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
+        expected_qs=inputs["expected_qs"],
+        train_op=train_op,
+        loss=loss,
+        train_summary_op=train_summary_op,
+        initializer=initializer)
 
 
 def create_train_snn_model(model_creator, hp, device_placement):

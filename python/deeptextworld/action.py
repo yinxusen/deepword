@@ -9,8 +9,8 @@ from deeptextworld.log import Logging
 
 class ActionCollector(Logging):
     def __init__(
-            self, vocab_file, n_actions=200, n_tokens=10,
-            token2idx=None, unk_val_id=None, padding_val_id=None):
+            self, tokenizer, n_actions=200, n_tokens=10,
+            unk_val_id=None, padding_val_id=None):
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self.actions_base = {}
@@ -20,7 +20,6 @@ class ActionCollector(Logging):
         # metadata of the action collector
         self.n_actions = n_actions
         self.n_tokens = n_tokens
-        self.token2idx = token2idx
         self.unk_val_id = unk_val_id
         self.padding_val_id = padding_val_id
 
@@ -32,8 +31,7 @@ class ActionCollector(Logging):
         self.action_matrix = None
         self.action_len = None
 
-        self.tokenizer = FullTokenizer(
-            vocab_file=vocab_file, do_lower_case=True)
+        self.tokenizer = tokenizer
 
     def init(self):
         self.action2idx = {}
