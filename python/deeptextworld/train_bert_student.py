@@ -42,7 +42,9 @@ def train_bert_student(
             save_relative_paths=True)
 
     if load_student_from is not None:
-        saver.restore(sess, tf.train.latest_checkpoint(load_student_from))
+        ckpt_path = tf.train.latest_checkpoint(load_student_from)
+        saver.restore(sess, ckpt_path)
+        print("load student from ckpt: {}".format(ckpt_path))
 
     queue = Queue(maxsize=100)
 
@@ -225,17 +227,17 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
 
 
 if __name__ == "__main__":
-    HOME = "/Users/xusenyin/"
-    MODEL_HOME = HOME + "Downloads/submissions-to-codelab/submission_deepdnd-32/agent-drrn-textworld/"
+    HOME = "/home/rcf-40/xusenyin/"
+    MODEL_HOME = HOME + "git-store/experiments-drrn-bak5/agent-drrn-TDRRN-fine-tune-drop-no-theme-w-cookbook-teacher/"
     VOCAB_FILE = HOME + "local/opt/bert-models/bert-model/vocab.txt"
     bert_ckpt_dir = HOME + "local/opt/bert-models/bert-model"
     config_file = MODEL_HOME + "hparams.json"
-    tjs_path = MODEL_HOME + "raw-trajectories-99.npz"
-    action_path = MODEL_HOME + "actions-99.npz"
-    memo_path = MODEL_HOME + "memo-99.npz"
+    tjs_path = MODEL_HOME + "raw-trajectories-0.npz"
+    action_path = MODEL_HOME + "actions-0.npz"
+    memo_path = MODEL_HOME + "memo-0.npz"
     ckpt_prefix = MODEL_HOME + "bert-student/after-epoch"
     summary_writer_path = MODEL_HOME + "bert-student-summary/"
-    load_student_from = None
+    load_student_from = MODEL_HOME + "bert-student/"
     cmd_args = CMD(
         model_creator="BertAttnEncoderDSQN",
         vocab_file=VOCAB_FILE,
