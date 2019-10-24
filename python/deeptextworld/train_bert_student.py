@@ -14,7 +14,7 @@ from deeptextworld.dsqn_model import BertAttnEncoderDSQN
 from deeptextworld.dsqn_model import create_train_student_drrn_model
 from deeptextworld.hparams import load_hparams_for_training
 from deeptextworld.trajectory import RawTextTrajectory
-from deeptextworld.utils import flatten
+from deeptextworld.utils import flatten, eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -44,7 +44,9 @@ def train_bert_student(
     if load_student_from is not None:
         ckpt_path = tf.train.latest_checkpoint(load_student_from)
         saver.restore(sess, ckpt_path)
-        print("load student from ckpt: {}".format(ckpt_path))
+        eprint("load student from ckpt: {}".format(ckpt_path))
+    else:
+        eprint("not model to load")
 
     queue = Queue(maxsize=100)
 
@@ -61,10 +63,10 @@ def train_bert_student(
               hp.num_tokens))
     t.start()
     while queue.empty():
-        print("waiting data ...")
+        eprint("waiting data ...")
         time.sleep(10)
 
-    print("start training")
+    eprint("start training")
     data_in_queue = True
     for et in trange(num_epochs, ascii=True, desc="epoch"):
         for it in trange(epoch_size, ascii=True, desc="step"):
@@ -83,17 +85,17 @@ def train_bert_student(
                 summary_writer.add_summary(summaries, et * epoch_size + it)
             except Exception as e:
                 data_in_queue = False
-                print("no more data: {}".format(e))
+                eprint("no more data: {}".format(e))
                 break
         saver.save(
             sess, ckpt_prefix,
             global_step=tf.train.get_or_create_global_step(
                 graph=model.graph))
-        print("finish and save {} epoch".format(et))
+        eprint("finish and save {} epoch".format(et))
         if not data_in_queue:
             break
 
-    print("wait to join")
+    eprint("wait to join")
     t.join(timeout=10)
 
 
@@ -120,7 +122,7 @@ def train_bert_student_no_queue(
     epoch_size = 10000
     num_epochs = total_size // epoch_size
 
-    print("start training")
+    eprint("start training")
     total_t = 0
     while True:
         random.shuffle(memory)
