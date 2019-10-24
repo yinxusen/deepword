@@ -27,7 +27,7 @@ class CMD:
 
 def train_bert_student(
         hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path):
+        ckpt_prefix, summary_writer_path, load_student_from):
     model = create_train_student_drrn_model(
         model_creator=BertAttnEncoderDSQN, hp=hp,
         device_placement="/device:GPU:0")
@@ -40,6 +40,10 @@ def train_bert_student(
         saver = tf.train.Saver(
             max_to_keep=hp.max_snapshot_to_keep,
             save_relative_paths=True)
+
+    if load_student_from is not None:
+        saver.restore(sess, tf.train.latest_checkpoint(load_student_from))
+
     queue = Queue(maxsize=100)
 
     memory, tjs, action_collector = load_snapshot(
@@ -91,9 +95,60 @@ def train_bert_student(
     t.join(timeout=10)
 
 
+def train_bert_student_no_queue(
+        hp, tokenizer, memo_path, tjs_path, action_path,
+        ckpt_prefix, summary_writer_path):
+    model = create_train_student_drrn_model(
+        model_creator=BertAttnEncoderDSQN, hp=hp,
+        device_placement="/device:GPU:0")
+    conf = tf.ConfigProto(
+        log_device_placement=False, allow_soft_placement=True)
+    sess = tf.Session(graph=model.graph, config=conf)
+    summary_writer = tf.summary.FileWriter(summary_writer_path, sess.graph)
+    with model.graph.as_default():
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(
+            max_to_keep=hp.max_snapshot_to_keep,
+            save_relative_paths=True)
+
+    memory, tjs, action_collector = load_snapshot(
+        hp, memo_path, tjs_path, action_path, tokenizer)
+    total_size = len(memory)
+    batch_size = 32
+    epoch_size = 10000
+    num_epochs = total_size // epoch_size
+
+    print("start training")
+    total_t = 0
+    while True:
+        random.shuffle(memory)
+        for i in trange(len(memory) // batch_size):
+            batch_memory = (
+                memory[i*batch_size: min((i+1)*batch_size, len(memory))])
+            data = prepare_data(
+                batch_memory, tjs, action_collector, tokenizer, hp.num_tokens)
+            (p_states, p_len, action_matrix, action_mask_t, action_len,
+             expected_qs) = data
+            _, summaries, weighted_loss = sess.run(
+                [model.train_op, model.train_summary_op, model.loss],
+                feed_dict={model.src_: p_states,
+                           model.src_len_: p_len,
+                           model.actions_mask_: action_mask_t,
+                           model.actions_: action_matrix,
+                           model.actions_len_: action_len,
+                           model.expected_qs: expected_qs})
+            summary_writer.add_summary(summaries, total_t)
+            total_t += 1
+            if total_t % epoch_size == 0:
+                saver.save(
+                    sess, ckpt_prefix,
+                    global_step=tf.train.get_or_create_global_step(
+                        graph=model.graph))
+
+
 def add_batch(
-        memory, tjs, action_collector, queue, batch_size,
-        tokenizer, num_tokens):
+        memory, tjs, action_collector, queue, batch_size, tokenizer,
+        num_tokens):
     while True:
         random.shuffle(memory)
         i = 0
@@ -180,6 +235,7 @@ if __name__ == "__main__":
     memo_path = MODEL_HOME + "memo-99.npz"
     ckpt_prefix = MODEL_HOME + "bert-student/after-epoch"
     summary_writer_path = MODEL_HOME + "bert-student-summary/"
+    load_student_from = None
     cmd_args = CMD(
         model_creator="BertAttnEncoderDSQN",
         vocab_file=VOCAB_FILE,
@@ -203,4 +259,4 @@ if __name__ == "__main__":
     hp, tokenizer = BaseAgent.init_tokens(hp)
     train_bert_student(
         hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path)
+        ckpt_prefix, summary_writer_path, load_student_from)
