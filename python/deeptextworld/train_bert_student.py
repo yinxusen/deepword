@@ -41,12 +41,12 @@ def train_bert_student(
             max_to_keep=hp.max_snapshot_to_keep,
             save_relative_paths=True)
 
-    if load_student_from is not None:
+    try:
         ckpt_path = tf.train.latest_checkpoint(load_student_from)
         saver.restore(sess, ckpt_path)
         eprint("load student from ckpt: {}".format(ckpt_path))
-    else:
-        eprint("not model to load")
+    except Exception as e:
+        eprint("load model failed: {}".format(e))
 
     queue = Queue(maxsize=100)
 
