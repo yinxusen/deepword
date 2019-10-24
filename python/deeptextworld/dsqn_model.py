@@ -375,9 +375,9 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         return loss, train_op, abs_loss
 
     def get_student_train_op(self, q_actions):
-        losses = tf.nn.softmax_cross_entropy_with_logits(
-            labels=self.inputs["expected_qs"] * self.inputs["actions_mask"],
-            logits=q_actions * self.inputs["actions_mask"])
+        losses = tf.squared_difference(
+            self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            q_actions * self.inputs["actions_mask"])
         loss = tf.reduce_mean(losses)
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
