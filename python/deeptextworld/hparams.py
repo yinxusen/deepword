@@ -429,8 +429,7 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
     """
     allowed_to_change = ['model_dir', 'eval_episode', 'game_episode_terminal_t']
     deps_to_change = [
-        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file',
-        'bert_ckpt_dir']
+        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
     hp = default_hparams_agent()
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
@@ -457,8 +456,7 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
 def save_hparams(hp, file_path, use_relative_path=False):
     logger = logging.getLogger('hparams')
     deps_to_change = [
-        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file',
-        'bert_ckpt_dir']
+        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
     with open(file_path, 'w') as f:
         if not use_relative_path:
             f.write(hp.to_json())
