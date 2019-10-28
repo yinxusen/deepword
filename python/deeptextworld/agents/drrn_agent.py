@@ -48,12 +48,12 @@ class DRRNAgent(BaseAgent):
                 action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
         return action_desc
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         model_creator = getattr(drrn_model, self.hp.model_creator)
         model = drrn_model.create_train_model(model_creator, self.hp)
         return model
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         model_creator = getattr(drrn_model, self.hp.model_creator)
         model = drrn_model.create_eval_model(model_creator, self.hp)
         return model

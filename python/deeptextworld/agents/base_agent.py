@@ -11,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 from bert.tokenization import FullTokenizer
 from bitarray import bitarray
+from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
 from deeptextworld import trajectory
@@ -21,7 +22,7 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_vocab, ctime
+from deeptextworld.utils import ctime
 
 
 class DRRNMemo(collections.namedtuple(
@@ -110,6 +111,7 @@ class BaseAgent(Logging):
         self.target_saver = None
         self.snapshot_saved = False
         self.epoch_start_t = 0
+        self.d4train, self.d4eval, self.d4target = self.init_devices()
 
         self._last_actions_mask = None
         self._last_action_desc = None
@@ -276,6 +278,24 @@ class BaseAgent(Logging):
         new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
         return new_hp, tokenizer
 
+    @classmethod
+    def init_delevices(cls):
+        devices = [d.name for d in device_lib.list_local_devices()
+                   if d.device_type == "GPU"]
+        if len(devices) == 0:
+            d4train, d4eval, d4target = (
+                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
+        elif len(devices) == 1:
+            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
+        elif len(devices) == 2:
+            d4train = devices[0]
+            d4eval, d4target = devices[1], devices[1]
+        else:
+            d4train = devices[0]
+            d4eval = devices[1]
+            d4target = devices[2]
+        return d4train, d4eval, d4target
+
     def init_actions(self, hp, tokenizer, action_path, with_loading=True):
         action_collector = ActionCollector(
             tokenizer,
@@ -353,13 +373,16 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init()
 
-    def create_n_load_model(self, load_best=False, is_training=True):
+    def create_n_load_model(
+            self, load_best=False, is_training=True, device=None):
         start_t = 0
         if is_training:
-            model = self.create_model_instance()
+            device = device if device else "/device:GPU:0"
+            model = self.create_model_instance(device=device)
             self.info("create train model")
         else:
-            model = self.create_eval_model_instance()
+            device = device if device else "/device:GPU:1"
+            model = self.create_eval_model_instance(device=device)
             self.info("create eval model")
 
         conf = tf.ConfigProto(
@@ -399,10 +422,10 @@ class BaseAgent(Logging):
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         raise NotImplementedError()
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         raise NotImplementedError()
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
@@ -460,7 +483,7 @@ class BaseAgent(Logging):
         self._load_context_objs()
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
-                self.create_n_load_model()
+                self.create_n_load_model(device=self.d4train)
             self.eps = self.hp.init_eps
             train_summary_dir = os.path.join(
                 self.model_dir, "summaries", "train")
@@ -472,7 +495,8 @@ class BaseAgent(Logging):
                 self.debug("create and load target net")
                 (self.target_sess, start_t, self.target_saver,
                  self.target_model
-                 ) = self.create_n_load_model(is_training=False)
+                 ) = self.create_n_load_model(
+                    is_training=False, device=self.d4target)
             else:
                 # notice that target net and sess could be None
                 pass
@@ -494,7 +518,8 @@ class BaseAgent(Logging):
                     self.info('No checkpoint to load for evaluation')
             else:
                 self.sess, _, self.saver, self.model = self.create_n_load_model(
-                    load_best=load_best, is_training=self.is_training)
+                    load_best=load_best, is_training=self.is_training,
+                    device=self.d4eval)
             self.eps = 0
             self.total_t = 0
 
@@ -933,7 +958,8 @@ class BaseAgent(Logging):
             if self.target_sess is None:
                 self.debug("create and load target net")
                 (self.target_sess, start_t, self.target_saver, self.target_model
-                 ) = self.create_n_load_model(is_training=False)
+                 ) = self.create_n_load_model(
+                    is_training=False, device=self.d4target)
             else:
                 restore_from = tf.train.latest_checkpoint(
                     os.path.join(self.model_dir, 'last_weights'))

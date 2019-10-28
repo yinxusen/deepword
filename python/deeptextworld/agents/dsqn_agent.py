@@ -164,16 +164,16 @@ class DSQNAgent(TabularDQNAgent):
                 action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
         return action_desc
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_train_model(
-            model_creator, self.hp, device_placement="/device:GPU:0")
+            model_creator, self.hp, device_placement=device)
         return model
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_eval_model(
-            model_creator, self.hp, device_placement="/device:GPU:1")
+            model_creator, self.hp, device_placement=device)
         return model
 
     def get_snn_pairs(self, n):
@@ -539,28 +539,28 @@ class BertDSQNIndAgent(DSQNAlterAgent):
         self.snn_bert_loader = None
         self.drrn_bert_loader = None
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_train_drrn_model(
-            model_creator, self.hp, device_placement="/device:GPU:0")
+            model_creator, self.hp, device_placement=device)
         return model
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_eval_drrn_model(
-            model_creator, self.hp, device_placement="/device:GPU:1")
+            model_creator, self.hp, device_placement=device)
         return model
 
-    def create_snn_model_instance(self):
+    def create_snn_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_train_snn_model(
-            model_creator, self.hp, device_placement="/device:GPU:0")
+            model_creator, self.hp, device_placement=device)
         return model
 
-    def create_snn_eval_model_instance(self):
+    def create_snn_eval_model_instance(self, device):
         model_creator = getattr(dsqn_model, self.hp.model_creator)
         model = dsqn_model.create_eval_snn_model(
-            model_creator, self.hp, device_placement="/device:GPU:1")
+            model_creator, self.hp, device_placement=device)
         return model
 
     def train_snn(self, sess, summary_writer, t):
@@ -625,10 +625,10 @@ class BertDSQNIndAgent(DSQNAlterAgent):
     def create_n_load_snn_model(self, load_best=False, is_training=True):
         start_t = 0
         if is_training:
-            model = self.create_snn_model_instance()
+            model = self.create_snn_model_instance(device="/device:GPU:0")
             self.info("create snn train model")
         else:
-            model = self.create_snn_eval_model_instance()
+            model = self.create_snn_eval_model_instance(device="/device:GPU:1")
             self.info("create snn eval model")
 
         conf = tf.ConfigProto(
