@@ -354,7 +354,7 @@ class DSQNAgent(TabularDQNAgent):
                            self.model.snn_src2_: src2,
                            self.model.snn_src_len_: src_len,
                            self.model.snn_src2_len_: src2_len})
-            pred_labels = (pred > 0.5).astype(np.int32)
+            pred_labels = (pred > 0).astype(np.int32)
             total_acc += np.sum(np.equal(labels, pred_labels))
             total_samples += len(src)
         if total_samples == 0:
@@ -733,7 +733,7 @@ class BertDSQNIndAgent(DSQNAlterAgent):
                            self.snn_model.snn_src2_: src2,
                            self.snn_model.snn_src_len_: src_len,
                            self.snn_model.snn_src2_len_: src2_len})
-            pred_labels = (pred > 0.5).astype(np.int32)
+            pred_labels = (pred > 0).astype(np.int32)
             total_acc += np.sum(np.equal(labels, pred_labels))
             total_samples += len(src)
         if total_samples == 0:

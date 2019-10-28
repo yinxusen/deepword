@@ -131,7 +131,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
 
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
@@ -233,7 +233,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
 
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
@@ -362,7 +362,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
 
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
