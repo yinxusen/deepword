@@ -989,8 +989,7 @@ class BaseAgent(Logging):
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_desc.action_idx,
             reward=instant_reward, is_terminal=is_terminal,
-            action_mask=action_mask, next_action_mask=next_action_mask,
-            q_actions=None
+            action_mask=action_mask, next_action_mask=next_action_mask
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
