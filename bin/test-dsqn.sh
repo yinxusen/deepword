@@ -41,7 +41,8 @@ PDIR="."
 
 MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
 
-VOCAB_FILE="$PDIR/resources/vocab.txt"
+BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
+VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
 F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
 

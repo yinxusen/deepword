@@ -279,7 +279,7 @@ class BaseAgent(Logging):
         return new_hp, tokenizer
 
     @classmethod
-    def init_delevices(cls):
+    def init_devices(cls):
         devices = [d.name for d in device_lib.list_local_devices()
                    if d.device_type == "GPU"]
         if len(devices) == 0:

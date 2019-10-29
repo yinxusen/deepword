@@ -85,7 +85,13 @@ def default_hparams_agent():
         start_t_ignore_model_t=False,
         apply_dependency_parser=False,
         use_padding_over_lines=False,
-        drop_w_theme_words=False
+        drop_w_theme_words=False,
+        cls_val = "[CLS]",
+        cls_val_id = 0,
+        sep_val = "[SEP]",
+        sep_val_id = 0,
+        mask_val = "[MASK]",
+        mask_val_id = 0
     )
 
 
