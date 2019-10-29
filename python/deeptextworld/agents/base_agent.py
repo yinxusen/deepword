@@ -28,6 +28,13 @@ from deeptextworld.utils import ctime
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
     ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+     "action_mask", "next_action_mask"))):
+    pass
+
+
+class DRRNMemoTeacher(collections.namedtuple(
+    "DRRNMemo",
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
      "action_mask", "next_action_mask", "q_actions"))):
     pass
 
