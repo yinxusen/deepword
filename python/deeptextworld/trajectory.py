@@ -88,7 +88,8 @@ class BaseTrajectory(Logging):
 class RawTextTrajectory(BaseTrajectory):
     def __init__(self, hp):
         super(RawTextTrajectory, self).__init__()
-        self.num_turns = hp.num_turns
+        # multiply by 2 and plus one here to make it consistent with new Action-Master sentences.
+        self.num_turns = hp.num_turns * 2 + 1
 
     def fetch_last_state(self):
         raise NotImplementedError()

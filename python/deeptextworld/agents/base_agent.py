@@ -1040,9 +1040,10 @@ class BaseAgent(Logging):
         if self.in_game_t == 0 and self._last_action_desc is None:
             act_idx = []
         else:
-            act_idx = list(
-                self.action_collector.get_action_matrix()
-                [self._last_action_desc.action_idx])
+            aid = self._last_action_desc.action_idx
+            a_vec = self.action_collector.get_action_matrix()[aid]
+            a_len = self.action_collector.get_action_len()[aid]
+            act_idx = list(a_vec[:a_len])
         self.tjs.append(act_idx + obs_idx)
         self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 

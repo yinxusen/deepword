@@ -184,10 +184,8 @@ def prepare_master(master_str, tokenizer):
 
 def prepare_action(action_str, tokenizer):
     tokens = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(action_str))
-    if len(tokens) > 10:
-        return tokens[:10]
-    else:
-        return tokens + [0] * len(tokens)
+    tokens = tokens[:max(10, len(tokens))]
+    return tokens
 
 
 def prepare_trajectory(trajectory_lst, tokenizer, num_tokens):
