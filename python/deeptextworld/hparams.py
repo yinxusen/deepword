@@ -359,7 +359,10 @@ def update_hparams_from_hparams(hp, hp2):
     """hp should not have same keys with hp2"""
     dict_hp2 = hp2.values()
     for k in dict_hp2:
-        hp.add_hparam(k, dict_hp2.get(k))
+        if k not in hp:
+            hp.add_hparam(k, dict_hp2.get(k))
+        else:
+            hp.set_hparam(k, dict_hp2.get(k))
     return hp
 
 
