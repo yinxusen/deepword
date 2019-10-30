@@ -9,10 +9,10 @@ import tensorflow as tf
 from tqdm import trange
 
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents.base_agent import BaseAgent, DRRNMemo
+from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
 from deeptextworld.dsqn_model import BertAttnEncoderDSQN
 from deeptextworld.dsqn_model import create_train_student_drrn_model
-from deeptextworld.hparams import load_hparams_for_training
+from deeptextworld.hparams import load_hparams_for_training, output_hparams
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
 
@@ -44,23 +44,28 @@ def train_bert_student(
     try:
         ckpt_path = tf.train.latest_checkpoint(load_student_from)
         saver.restore(sess, ckpt_path)
+        global_step = tf.train.get_or_create_global_step()
+        trained_steps = sess.run(global_step)
         eprint("load student from ckpt: {}".format(ckpt_path))
     except Exception as e:
         eprint("load model failed: {}".format(e))
+        trained_steps = 0
 
     queue = Queue(maxsize=100)
 
     memory, tjs, action_collector = load_snapshot(
         hp, memo_path, tjs_path, action_path, tokenizer)
     total_size = len(memory)
+    eprint("loaded memory size: {}".format(total_size))
     batch_size = 32
     epoch_size = 10000
-    num_epochs = total_size // epoch_size
+    num_epochs = max((total_size // batch_size) // epoch_size, 1)
 
     t = Thread(
         target=add_batch,
         args=(memory, tjs, action_collector, queue, batch_size, tokenizer,
               hp.num_tokens))
+    t.setDaemon(True)
     t.start()
     while queue.empty():
         eprint("waiting data ...")
@@ -82,7 +87,8 @@ def train_bert_student(
                                model.actions_: action_matrix,
                                model.actions_len_: action_len,
                                model.expected_qs: expected_qs})
-                summary_writer.add_summary(summaries, et * epoch_size + it)
+                summary_writer.add_summary(
+                    summaries, trained_steps + et * epoch_size + it)
             except Exception as e:
                 data_in_queue = False
                 eprint("no more data: {}".format(e))
@@ -94,60 +100,6 @@ def train_bert_student(
         eprint("finish and save {} epoch".format(et))
         if not data_in_queue:
             break
-
-    eprint("wait to join")
-    t.join(timeout=10)
-
-
-def train_bert_student_no_queue(
-        hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path):
-    model = create_train_student_drrn_model(
-        model_creator=BertAttnEncoderDSQN, hp=hp,
-        device_placement="/device:GPU:0")
-    conf = tf.ConfigProto(
-        log_device_placement=False, allow_soft_placement=True)
-    sess = tf.Session(graph=model.graph, config=conf)
-    summary_writer = tf.summary.FileWriter(summary_writer_path, sess.graph)
-    with model.graph.as_default():
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(
-            max_to_keep=hp.max_snapshot_to_keep,
-            save_relative_paths=True)
-
-    memory, tjs, action_collector = load_snapshot(
-        hp, memo_path, tjs_path, action_path, tokenizer)
-    total_size = len(memory)
-    batch_size = 32
-    epoch_size = 10000
-    num_epochs = total_size // epoch_size
-
-    eprint("start training")
-    total_t = 0
-    while True:
-        random.shuffle(memory)
-        for i in trange(len(memory) // batch_size):
-            batch_memory = (
-                memory[i*batch_size: min((i+1)*batch_size, len(memory))])
-            data = prepare_data(
-                batch_memory, tjs, action_collector, tokenizer, hp.num_tokens)
-            (p_states, p_len, action_matrix, action_mask_t, action_len,
-             expected_qs) = data
-            _, summaries, weighted_loss = sess.run(
-                [model.train_op, model.train_summary_op, model.loss],
-                feed_dict={model.src_: p_states,
-                           model.src_len_: p_len,
-                           model.actions_mask_: action_mask_t,
-                           model.actions_: action_matrix,
-                           model.actions_len_: action_len,
-                           model.expected_qs: expected_qs})
-            summary_writer.add_summary(summaries, total_t)
-            total_t += 1
-            if total_t % epoch_size == 0:
-                saver.save(
-                    sess, ckpt_prefix,
-                    global_step=tf.train.get_or_create_global_step(
-                        graph=model.graph))
 
 
 def add_batch(
@@ -166,7 +118,7 @@ def add_batch(
 
 def load_snapshot(hp, memo_path, raw_tjs_path, action_path, tokenizer):
     memory = np.load(memo_path)['data']
-    memory = list(filter(lambda x: isinstance(x, DRRNMemo), memory))
+    memory = list(filter(lambda x: isinstance(x, DRRNMemoTeacher), memory))
 
     tjs = RawTextTrajectory(hp)
     tjs.load_tjs(raw_tjs_path)
@@ -259,6 +211,7 @@ if __name__ == "__main__":
     )
     hp = load_hparams_for_training(config_file, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
+    eprint(output_hparams(hp))
     train_bert_student(
         hp, tokenizer, memo_path, tjs_path, action_path,
         ckpt_prefix, summary_writer_path, load_student_from)
