@@ -955,10 +955,9 @@ class BaseAgent(Logging):
             instant_reward = -1
         else:
             instant_reward = self.clip_reward(
-                score - self._cumulative_score - self.negative_response_reward(
-                    master))
+                score - 0.1 - self._cumulative_score -
+                self.negative_response_reward(master))
             if self.hp.use_step_wise_reward:
-                instant_reward = self.clip_reward(instant_reward - 0.1)
                 if (master == self._prev_master
                         and self._last_action_desc is not None
                         and self._last_action_desc.action ==

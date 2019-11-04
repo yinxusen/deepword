@@ -39,16 +39,20 @@ fi
 
 BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
 VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
-GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
-F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
-# MODELHOME=${3:-"$PDIR/../experiments-drrn/agent-drrn-TDSQN-alter-bert-layer1-no-snn"}
-MODELHOME=${3:-"$PDIR/../experiments-drrn/agent-drrn-TDSQN-alter-bert-layer1"}
+# GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
+# F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
+# # MODELHOME=${3:-"$PDIR/../experiments-drrn/agent-drrn-TDSQN-alter-bert-layer1-no-snn"}
+# MODELHOME=${3:-"$PDIR/../experiments-drrn/agent-drrn-TDSQN-alter-bert-layer1"}
+
+GAMEPATH=$1
+F_GAMES=$2
+MODELHOME=$3
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
 fi
 
 ./bin/run.sh python/deeptextworld/main.py \
-    --game-path $GAMEPATH -m $MODELHOME \
-    --mode eval-dsqn --eval-episode 10 --eval-randomness 0 --eval-mode eval-eval \
+    --game-path $GAMEPATH -m $MODELHOME --f-games $F_GAMES \
+    --mode eval-dsqn --eval-episode 10 --eval-randomness 0 --eval-mode all \
     --game-episode-terminal-t 100
