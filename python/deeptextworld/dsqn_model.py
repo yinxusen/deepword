@@ -238,6 +238,114 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         return pred, diff_two_states
 
 
+class Attn2EncoderDSQN(CNNEncoderDSQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(Attn2EncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
+        # trajectory encoder
+        self.te = txf.Encoder(
+            num_layers=1, d_model=128, num_heads=8, dff=256,
+            input_vocab_size=self.hp.vocab_size)
+        # action encoder
+        self.ae = txf.Encoder(
+            num_layers=1, d_model=32, num_heads=8, dff=64,
+            input_vocab_size=self.hp.vocab_size)
+        # trajectory pooler
+        self.wt = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        # action pooler
+        self.wa = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+    def get_q_actions(self):
+        batch_size = tf.shape(self.inputs["src_len"])[0]
+        src = self.inputs["src"]
+        raw_src_len = self.inputs["src_len"]
+        # padding the [CLS] in the beginning
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
+        actions_w_pad = tf.pad(
+            actions, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        actions_mask = txf.create_padding_mask(actions_w_pad)
+
+        with tf.variable_scope("drrn-attn-encoder", reuse=False):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+            encoder_cell = tf.nn.rnn_cell.GRUCell(num_units=32)
+            _, var_states = tf.nn.dynamic_rnn(
+                encoder_cell, inner_state[:, 1:, :],
+                sequence_length=raw_src_len,
+                initial_state=None, dtype=tf.float32)
+            h_state_var = var_states
+
+        with tf.variable_scope("drrn-action-encoder", reuse=False):
+            flat_inner_state = self.ae(
+                actions_w_pad, None, (not self.is_infer), actions_mask)
+            first_action_token_tensor = tf.squeeze(
+                flat_inner_state[:, 0:1, :], axis=1)
+            h_actions = self.wa(first_action_token_tensor)
+            h_actions = tf.reshape(
+                h_actions, shape=(batch_size, self.n_actions, -1))
+
+        with tf.variable_scope("drrn-scorer", reuse=False):
+            h_state_expanded = tf.expand_dims(h_state + h_state_var, axis=1)
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
+
+        return q_actions
+
+    def get_h_state(self, src, src_len):
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        with tf.variable_scope("drrn-attn-encoder", reuse=tf.AUTO_REUSE):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+        return h_state
+
+    def get_pred(self):
+        h_state = self.get_h_state(
+            self.inputs["snn_src"], self.inputs["snn_src_len"])
+        h_state2 = self.get_h_state(
+            self.inputs["snn_src2"], self.inputs["snn_src2_len"])
+        diff_two_states = tf.abs(h_state - h_state2)
+        pred = tf.squeeze(tf.layers.dense(
+            diff_two_states, activation=None, units=1, use_bias=True,
+            name="snn_dense"))
+        return pred, diff_two_states
+
+
 class BertAttnEncoderDSQN(AttnEncoderDSQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """

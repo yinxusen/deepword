@@ -16,7 +16,8 @@ fi
 
 MODELHOME="$PDIR/../experiments-drrn/agent-drrn-test"
 
-VOCAB_FILE="$PDIR/resources/vocab.txt"
+BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
+VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh

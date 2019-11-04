@@ -425,10 +425,6 @@ class DSQNAlterAgent(DSQNAgent):
     def train_one_batch(self):
         if self.total_t == self.hp.observation_t:
             self.epoch_start_t = ctime()
-        self.eps = self.annealing_eps(
-            self.hp.init_eps, self.hp.final_eps,
-            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-
         self.train_snn(self.sess, self.train_summary_writer, self.total_t)
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
@@ -698,9 +694,6 @@ class BertDSQNIndAgent(DSQNAlterAgent):
     def train_one_batch(self):
         if self.total_t == self.hp.observation_t:
             self.epoch_start_t = ctime()
-        self.eps = self.annealing_eps(
-            self.hp.init_eps, self.hp.final_eps,
-            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
         self.train_snn(
             self.snn_sess, self.train_snn_summary_writer, self.total_t)
         self.train_impl(

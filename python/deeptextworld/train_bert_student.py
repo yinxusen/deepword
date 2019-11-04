@@ -40,11 +40,11 @@ def train_bert_student(
         saver = tf.train.Saver(
             max_to_keep=hp.max_snapshot_to_keep,
             save_relative_paths=True)
+        global_step = tf.train.get_or_create_global_step()
 
     try:
         ckpt_path = tf.train.latest_checkpoint(load_student_from)
         saver.restore(sess, ckpt_path)
-        global_step = tf.train.get_or_create_global_step()
         trained_steps = sess.run(global_step)
         eprint("load student from ckpt: {}".format(ckpt_path))
     except Exception as e:
