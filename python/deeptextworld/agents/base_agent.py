@@ -452,7 +452,7 @@ class BaseAgent(Logging):
             self.info("create eval model")
 
         conf = tf.ConfigProto(
-            log_device_placement=True, allow_soft_placement=True)
+            log_device_placement=False, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
@@ -1089,17 +1089,19 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        # if self.in_game_t > 0:  # pass the 1st master
-        #     self.debug(
-        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-        #         " reward: {}, raw_score: {}, is_terminal: {}".format(
-        #             self.mode(), self.total_t,
-        #             self.in_game_t, self.eps, self._last_action_desc,
-        #             cleaned_obs, instant_reward, scores[0], dones[0]))
-        # else:
-        #     self.info(
-        #         "mode: {}, master: {}, max_score: {}".format(
-        #             self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        if 0 < self.in_game_t < 10:  # pass the 1st master
+            self.debug(
+                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+                " reward: {}, raw_score: {}, is_terminal: {}".format(
+                    self.mode(), self.total_t,
+                    self.in_game_t, self.eps, self._last_action_desc,
+                    "", instant_reward, scores[0], dones[0]))
+        elif self.in_game_t == 0:
+            self.info(
+                "mode: {}, master: {}, max_score: {}".format(
+                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        else:
+            pass
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
