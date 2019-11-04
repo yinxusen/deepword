@@ -36,6 +36,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_CNNEncoderDSQN()
     elif model_creator == "AttnEncoderDSQN":
         model_hparams = default_hparams_AttnEncoderDSQN()
+    elif model_creator == "Attn2EncoderDSQN":
+        model_hparams = default_hparams_Attn2EncoderDSQN()
     elif model_creator == "BertAttnEncoderDSQN":
         model_hparams = default_hparams_BertAttnEncoderDSQN()
     else:
@@ -86,12 +88,13 @@ def default_hparams_agent():
         apply_dependency_parser=False,
         use_padding_over_lines=False,
         drop_w_theme_words=False,
-        cls_val = "[CLS]",
-        cls_val_id = 0,
-        sep_val = "[SEP]",
-        sep_val_id = 0,
-        mask_val = "[MASK]",
-        mask_val_id = 0
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        use_step_wise_reward=False
     )
 
 
@@ -314,6 +317,21 @@ def default_hparams_AttnEncoderDSQN():
     )
 
 
+def default_hparams_Attn2EncoderDSQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='DSQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=6,
+        num_tokens=500,
+        num_conv_filters=32,
+        snn_train_epochs=1000
+    )
+
+
 def default_hparams_BertAttnEncoderDSQN():
     return tf.contrib.training.HParams(
         agent_clazz='BertDSQNAgent',
@@ -359,7 +377,10 @@ def update_hparams_from_hparams(hp, hp2):
     """hp should not have same keys with hp2"""
     dict_hp2 = hp2.values()
     for k in dict_hp2:
-        hp.add_hparam(k, dict_hp2.get(k))
+        if k not in hp:
+            hp.add_hparam(k, dict_hp2.get(k))
+        else:
+            hp.set_hparam(k, dict_hp2.get(k))
     return hp
 
 

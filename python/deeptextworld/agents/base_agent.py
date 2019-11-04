@@ -22,11 +22,18 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import ctime
+from deeptextworld.utils import ctime, eprint
 
 
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+     "action_mask", "next_action_mask"))):
+    pass
+
+
+class DRRNMemoTeacher(collections.namedtuple(
+    "DRRNMemoTeacher",
     ("tid", "sid", "gid", "aid", "reward", "is_terminal",
      "action_mask", "next_action_mask", "q_actions"))):
     pass
@@ -64,6 +71,59 @@ K_HAS_WON = "has_won"
 K_ADMISSIBLE_ACTIONS = "admissible_commands"
 
 
+class ScheduledEPS(Logging):
+    def eps(self, t):
+        raise NotImplementedError()
+
+
+class LinearDecayedEPS(ScheduledEPS):
+    def __init__(self, decay_step, init_eps=1, final_eps=0):
+        super(LinearDecayedEPS, self).__init__()
+        self.init_eps = init_eps
+        self.final_eps = final_eps
+        self.decay_step = decay_step
+        self.decay_speed = (
+            1. * (self.init_eps - self.final_eps) / self.decay_step)
+
+    def eps(self, t):
+        if t < 0:
+            return self.init_eps
+        eps_t = max(self.init_eps - self.decay_speed * t, self.final_eps)
+        self.debug("eps: {}".format(eps_t))
+        return eps_t
+
+
+class ScannerDecayEPS(ScheduledEPS):
+    def __init__(
+            self, decay_step, decay_range,
+            next_init_eps_rate=0.8, init_eps=1, final_eps=0):
+        super(ScannerDecayEPS, self).__init__()
+        self.init_eps = init_eps
+        self.final_eps = final_eps
+        self.decay_range = decay_range
+        self.n_ranges = decay_step // decay_range
+        self.range_init = list(map(
+            lambda i: max(init_eps * (next_init_eps_rate ** i), 0.3),
+            range(self.n_ranges)))
+        self.decay_speed = list(map(
+            lambda es: 1. * (es - self.final_eps) / self.decay_range,
+            self.range_init))
+
+    def eps(self, t):
+        if t < 0:
+            return self.init_eps
+        range_idx = t // self.decay_range
+        range_t = t % self.decay_range
+        if range_idx >= self.n_ranges:
+            return self.final_eps
+        eps_t = (self.range_init[range_idx]
+                 - range_t * self.decay_speed[range_idx])
+        self.debug("{} - {} - {} - {} - {}".format(
+            range_idx, range_t, self.range_init[range_idx],
+            self.decay_speed[range_idx], eps_t))
+        return eps_t
+
+
 class BaseAgent(Logging):
     """
     """
@@ -98,6 +158,12 @@ class BaseAgent(Logging):
         self._episode_has_started = False
         self.total_t = 0
         self.in_game_t = 0
+        # eps decaying test for all-tiers
+        # self.eps_getter = ScannerDecayEPS(
+        #     decay_step=1000, decay_range=100)
+        self.eps_getter = LinearDecayedEPS(
+            decay_step=self.hp.annealing_eps_t,
+            init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps = 0
         self.sess = None
         self.target_sess = None
@@ -386,7 +452,7 @@ class BaseAgent(Logging):
             self.info("create eval model")
 
         conf = tf.ConfigProto(
-            log_device_placement=True, allow_soft_placement=True)
+            log_device_placement=False, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
@@ -414,10 +480,17 @@ class BaseAgent(Logging):
                             "\n".join(all_saved_vars)))
                     safe_saver = tf.train.Saver(var_list=all_saved_vars)
                     safe_saver.restore(sess, restore_from)
-                if not self.hp.start_t_ignore_model_t:
+                if is_training:
                     global_step = tf.train.get_or_create_global_step()
                     trained_steps = sess.run(global_step)
-                    start_t = trained_steps + self.hp.observation_t
+                    if self.hp.start_t_ignore_model_t:
+                        start_t = min(
+                            self.hp.observation_t,
+                            len(self.memo) if self.memo is not None else 0)
+                    else:
+                        start_t = trained_steps + self.hp.observation_t
+                else:
+                    pass
             else:
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
@@ -581,8 +654,10 @@ class BaseAgent(Logging):
         # if len(self.memo) > 2 * self.hp.replay_mem:
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
-        self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
-            self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
+        self.info(
+            "mode: {}, #step: {}, score: {}, has_won: {}, last_eps: {}".format(
+                self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON],
+                self.eps))
         # TODO: make clear of what need to clean before & after an episode.
         # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
         # self._action_recorder[self.game_id] = self._per_game_recorder
@@ -872,33 +947,36 @@ class BaseAgent(Logging):
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(
-            score - self._cumulative_score - 0.1 -
-            self.negative_response_reward(master))
-        self._cumulative_score = score
-        if (master == self._prev_master and
-            self._last_action_desc is not None and
-            self._last_action_desc.action == self._prev_last_action and
-                instant_reward < 0):
-            instant_reward = max(
-                -1.0, instant_reward + self._cumulative_penalty)
-            # self.debug("repeated bad try, decrease reward by {},"
-            #            " reward changed to {}".format(
-            #     self.prev_cumulative_penalty, instant_reward))
-            self._cumulative_penalty = self._cumulative_penalty - 0.1
-        else:
-            self._prev_last_action = (
-                self._last_action_desc.action
-                if self._last_action_desc is not None else None)
-            self._prev_master = master
-            self._cumulative_penalty = -0.1
-
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not has_won and "you lost" in master:
             # self.info("game terminate and fail, final reward change"
             #           " from {} to -1".format(instant_reward))
             instant_reward = -1
+        else:
+            instant_reward = self.clip_reward(
+                score - self._cumulative_score - self.negative_response_reward(
+                    master))
+            if self.hp.use_step_wise_reward:
+                instant_reward = self.clip_reward(instant_reward - 0.1)
+                if (master == self._prev_master
+                        and self._last_action_desc is not None
+                        and self._last_action_desc.action ==
+                        self._prev_last_action and
+                        instant_reward < 0):
+                    instant_reward = self.clip_reward(
+                        instant_reward + self._cumulative_penalty)
+                    # self.debug("repeated bad try, decrease reward by {},"
+                    #            " reward changed to {}".format(
+                    #     self.prev_cumulative_penalty, instant_reward))
+                    self._cumulative_penalty = self._cumulative_penalty - 0.1
+                else:
+                    self._prev_last_action = (
+                        self._last_action_desc.action
+                        if self._last_action_desc is not None else None)
+                    self._prev_master = master
+                    self._cumulative_penalty = -0.1
+        self._cumulative_score = score
         return instant_reward
 
     def collect_floor_plan(self, master, prev_place):
@@ -930,10 +1008,6 @@ class BaseAgent(Logging):
         """
         if self.total_t == self.hp.observation_t:
             self.epoch_start_t = ctime()
-        self.eps = self.annealing_eps(
-            self.hp.init_eps, self.hp.final_eps,
-            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
         self.train_impl(
@@ -982,8 +1056,7 @@ class BaseAgent(Logging):
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
             gid=self.game_id, aid=self._last_action_desc.action_idx,
             reward=instant_reward, is_terminal=is_terminal,
-            action_mask=action_mask, next_action_mask=next_action_mask,
-            q_actions=None
+            action_mask=action_mask, next_action_mask=next_action_mask
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
@@ -1016,17 +1089,19 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        # if self.in_game_t > 0:  # pass the 1st master
-        #     self.debug(
-        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-        #         " reward: {}, is_terminal: {}".format(
-        #             self.mode(), self.total_t,
-        #             self.in_game_t, self.eps, self._last_action_desc,
-        #             cleaned_obs, instant_reward, dones[0]))
-        # else:
-        #     self.info(
-        #         "mode: {}, master: {}, max_score: {}".format(
-        #             self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        if 0 < self.in_game_t < 10:  # pass the 1st master
+            self.debug(
+                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+                " reward: {}, raw_score: {}, is_terminal: {}".format(
+                    self.mode(), self.total_t,
+                    self.in_game_t, self.eps, self._last_action_desc,
+                    "", instant_reward, scores[0], dones[0]))
+        elif self.in_game_t == 0:
+            self.info(
+                "mode: {}, master: {}, max_score: {}".format(
+                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        else:
+            pass
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
@@ -1034,9 +1109,10 @@ class BaseAgent(Logging):
         if self.in_game_t == 0 and self._last_action_desc is None:
             act_idx = []
         else:
-            act_idx = list(
-                self.action_collector.get_action_matrix()
-                [self._last_action_desc.action_idx])
+            aid = self._last_action_desc.action_idx
+            a_vec = self.action_collector.get_action_matrix()[aid]
+            a_len = self.action_collector.get_action_len()[aid]
+            act_idx = list(a_vec[:a_len])
         self.tjs.append(act_idx + obs_idx)
         self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 
@@ -1059,6 +1135,10 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions, all_actions, actions_mask, instant_reward):
+        if self.is_training:
+            self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
+        else:
+            pass
         self._last_action_desc = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
         action = self._last_action_desc.action
