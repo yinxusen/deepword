@@ -405,22 +405,22 @@ class GenDQNAgent(DQNAgent):
                 self.model.src_len_: [lens_t]
             })[0]
             action_idx, q_max, action = get_best_2Daction(
-                q_actions_t, self.tokens, self.hp.eos_id)
+                q_actions_t, self.tokenizer.inv_vocab, self.hp.eos_id)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
             self.debug("generated action: {}".format(action))
         return action_desc
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         model_creator = getattr(dqn_model, self.hp.model_creator)
         model = dqn_model.create_train_gen_model(
-            model_creator, self.hp, device_placement="/device:GPU:0")
+            model_creator, self.hp, device_placement=device)
         return model
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         model_creator = getattr(dqn_model, self.hp.model_creator)
         model = dqn_model.create_eval_gen_model(
-            model_creator, self.hp, device_placement="/device:GPU:1")
+            model_creator, self.hp, device_placement=device)
         return model
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):

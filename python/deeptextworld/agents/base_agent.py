@@ -392,6 +392,8 @@ class BaseAgent(Logging):
             new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
             new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
             new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            new_hp.set_hparam('sos_id', tokenizer.vocab[hp.sos])
+            new_hp.set_hparam('eos_id', tokenizer.vocab[hp.eos])
             # bert specific tokens
             new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
             new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
@@ -404,6 +406,8 @@ class BaseAgent(Logging):
             new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
             new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
             new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            new_hp.set_hparam('sos_id', tokenizer.vocab[hp.sos])
+            new_hp.set_hparam('eos_id', tokenizer.vocab[hp.eos])
         else:
             raise ValueError(
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))
@@ -431,7 +435,7 @@ class BaseAgent(Logging):
         action_collector = ActionCollector(
             tokenizer,
             hp.n_actions, hp.n_tokens_per_action,
-            hp.unk_val_id, hp.padding_val_id, hp.eos_id)
+            hp.unk_val_id, hp.padding_val_id, hp.eos_id, hp.pad_eos)
         if with_loading:
             try:
                 action_collector.load_actions(action_path)

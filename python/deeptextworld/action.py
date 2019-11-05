@@ -77,7 +77,7 @@ class ActionCollector(Logging):
         else:
             pass
 
-    def action2idx(self, action):
+    def idx_tokens(self, action):
         action_idx = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(action))
         action_idx = action_idx[:min(self.n_tokens, len(action_idx))]
@@ -86,8 +86,8 @@ class ActionCollector(Logging):
             if n_action_tokens == self.n_tokens:
                 action_idx[-1] = self.eos_id
             else:
-                action_idx[n_action_tokens] = self.eos_id
-                n_action_tokens = n_action_tokens + 1
+                action_idx.append(self.eos_id)
+                n_action_tokens = len(action_idx)
         else:
             pass
         return action_idx, n_action_tokens
@@ -106,7 +106,7 @@ class ActionCollector(Logging):
             if a not in self.action2idx:
                 assert self.curr_aid < self.n_actions - 1, "n_actions too small"
                 self.action2idx[a] = self.curr_aid
-                action_idx, n_action_tokens = self.action2idx(a)
+                action_idx, n_action_tokens = self.idx_tokens(a)
                 self.action_len[self.curr_aid] = n_action_tokens
                 self.action_matrix[self.curr_aid][:n_action_tokens] =\
                     action_idx[:n_action_tokens]

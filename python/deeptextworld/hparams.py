@@ -76,8 +76,6 @@ def default_hparams_agent():
         padding_val_id=0,
         unk_val='[UNK]',
         unk_val_id=0,
-        tgt_sos_id=0,
-        tgt_eos_id=1,
         model_creator='',
         max_snapshot_to_keep=5,
         game_clazz='ZGameZorkEgg',
