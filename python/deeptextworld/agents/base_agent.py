@@ -11,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 from bert.tokenization import FullTokenizer
 from bitarray import bitarray
+from nltk import word_tokenize
 from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
@@ -22,7 +23,8 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import ctime, eprint
+from deeptextworld.utils import ctime, load_vocab, load_lower_vocab, \
+    get_token2idx
 
 
 class DRRNMemo(collections.namedtuple(
@@ -44,6 +46,57 @@ class ActionDesc(collections.namedtuple(
     def __repr__(self):
         return "action_type: {}, action_idx: {}, action: {}".format(
             self.action_type, self.action_idx, self.action)
+
+
+class NLTKTokenizer(object):
+    """
+    Vocab is token2idx, inv_vocab is idx2token
+    """
+    def __init__(self, vocab_file, do_lower_case):
+        self._special_chars = ["[UNK]", "[PAD]", "<S>", "</S>"]
+        self._inv_vocab = load_vocab(vocab_file)
+        if do_lower_case:
+            self._inv_vocab = [
+                w.lower() if w not in self._special_chars else w
+                for w in self._inv_vocab]
+        self._do_lower_case = do_lower_case
+        self._vocab = get_token2idx(self._inv_vocab)
+        self._unk_val_id = self._vocab["[UNK]"]
+        self._s2c = {"[UNK]": "U", "[PAD]": "O", "<S>": "S", "</S>": "E"}
+        self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def inv_vocab(self):
+        return self._inv_vocab
+
+    def convert_tokens_to_ids(self, tokens):
+        indexed = [self._vocab.get(t, self._unk_val_id) for t in tokens]
+        return indexed
+
+    def convert_ids_to_tokens(self, ids):
+        tokens = [self._inv_vocab[i] for i in ids]
+        return tokens
+
+    def tokenize(self, text):
+        if any([sc in text for sc in self._special_chars]):
+            new_txt = text
+            for sc in self._special_chars:
+                new_txt = new_txt.replace(sc, self._s2c[sc])
+            tokens = word_tokenize(new_txt)
+            tokens = [self._c2s[t] if t in self._c2s else t for t in tokens]
+        else:
+            tokens = word_tokenize(text)
+
+        if self._do_lower_case:
+            return [
+                t.lower() if t not in self._special_chars else t
+                for t in tokens]
+        else:
+            return tokens
 
 
 ACT_EXAMINE_COOKBOOK = "examine cookbook"
