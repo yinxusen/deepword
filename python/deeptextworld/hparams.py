@@ -96,7 +96,8 @@ def default_hparams_agent():
         mask_val="[MASK]",
         mask_val_id=0,
         use_step_wise_reward=False,
-        tokenizer_type="BERT"
+        tokenizer_type="BERT",
+        pad_eos=False
     )
 
 
@@ -330,7 +331,8 @@ def default_hparams_AttnEncoderDecoderDQN():
         num_turns=6,
         num_tokens=500,
         max_action_len=10,
-        tokenizer_type="NLTK"
+        tokenizer_type="NLTK",
+        pad_eos=True
     )
 
 
