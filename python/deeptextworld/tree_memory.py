@@ -27,6 +27,9 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
         self.tree = SumTree(capacity)
         self.used_buffer_size = 0
 
+    def __len__(self):
+        return self.used_buffer_size
+
     """
     Store a new experience in our tree
     Each new experience have a score of max_prority (it will be then improved when we use this exp to train our DDQN)

@@ -57,6 +57,7 @@ parser.add_argument('--apply-dependency-parser', action='store_true')
 parser.add_argument('--use-padding-over-lines', action='store_true')
 parser.add_argument('--n-actions', type=int)
 parser.add_argument('--drop-w-theme-words', action='store_true')
+parser.add_argument('--use-step-wise-reward', action='store_true')
 parser.add_argument('--snn-train-epochs', type=int)
 
 

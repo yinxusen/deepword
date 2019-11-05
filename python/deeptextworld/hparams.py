@@ -36,6 +36,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_CNNEncoderDSQN()
     elif model_creator == "AttnEncoderDSQN":
         model_hparams = default_hparams_AttnEncoderDSQN()
+    elif model_creator == "Attn2EncoderDSQN":
+        model_hparams = default_hparams_Attn2EncoderDSQN()
     elif model_creator == "BertAttnEncoderDSQN":
         model_hparams = default_hparams_BertAttnEncoderDSQN()
     elif model_creator == "AttnEncoderDecoderDQN":
@@ -86,7 +88,15 @@ def default_hparams_agent():
         start_t_ignore_model_t=False,
         apply_dependency_parser=False,
         use_padding_over_lines=False,
-        drop_w_theme_words=False
+        drop_w_theme_words=False,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        use_step_wise_reward=False,
+        tokenizer_type="BERT"
     )
 
 
@@ -319,7 +329,23 @@ def default_hparams_AttnEncoderDecoderDQN():
         learning_rate=1e-5,
         num_turns=6,
         num_tokens=500,
-        max_action_len=10
+        max_action_len=10,
+        tokenizer_type="NLTK"
+    )
+
+
+def default_hparams_Attn2EncoderDSQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='DSQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=6,
+        num_tokens=500,
+        num_conv_filters=32,
+        snn_train_epochs=1000
     )
 
 
@@ -368,7 +394,10 @@ def update_hparams_from_hparams(hp, hp2):
     """hp should not have same keys with hp2"""
     dict_hp2 = hp2.values()
     for k in dict_hp2:
-        hp.add_hparam(k, dict_hp2.get(k))
+        if k not in hp:
+            hp.add_hparam(k, dict_hp2.get(k))
+        else:
+            hp.set_hparam(k, dict_hp2.get(k))
     return hp
 
 
@@ -444,8 +473,7 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
     """
     allowed_to_change = ['model_dir', 'eval_episode', 'game_episode_terminal_t']
     deps_to_change = [
-        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file',
-        'bert_ckpt_dir']
+        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
     hp = default_hparams_agent()
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
@@ -472,8 +500,7 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
 def save_hparams(hp, file_path, use_relative_path=False):
     logger = logging.getLogger('hparams')
     deps_to_change = [
-        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file',
-        'bert_ckpt_dir']
+        'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
     with open(file_path, 'w') as f:
         if not use_relative_path:
             f.write(hp.to_json())

@@ -491,8 +491,6 @@ def create_eval_model(model_creator, hp):
         initializer = tf.global_variables_initializer
         inputs = model.inputs
         q_actions = model.get_q_actions()
-        # still need to put them here, otherwise the loaded model could not be trained
-        _ = model.get_train_op(q_actions)
     return EvalDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],

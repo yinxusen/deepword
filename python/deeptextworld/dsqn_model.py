@@ -131,7 +131,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
 
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
@@ -220,7 +220,115 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
             self.inputs["snn_src2"], self.inputs["snn_src2_len"])
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
+            name="snn_dense"))
+        return pred, diff_two_states
+
+
+class Attn2EncoderDSQN(CNNEncoderDSQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(Attn2EncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
+        # trajectory encoder
+        self.te = txf.Encoder(
+            num_layers=1, d_model=128, num_heads=8, dff=256,
+            input_vocab_size=self.hp.vocab_size)
+        # action encoder
+        self.ae = txf.Encoder(
+            num_layers=1, d_model=32, num_heads=8, dff=64,
+            input_vocab_size=self.hp.vocab_size)
+        # trajectory pooler
+        self.wt = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        # action pooler
+        self.wa = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+    def get_q_actions(self):
+        batch_size = tf.shape(self.inputs["src_len"])[0]
+        src = self.inputs["src"]
+        raw_src_len = self.inputs["src_len"]
+        # padding the [CLS] in the beginning
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
+        actions_w_pad = tf.pad(
+            actions, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        actions_mask = txf.create_padding_mask(actions_w_pad)
+
+        with tf.variable_scope("drrn-attn-encoder", reuse=False):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+            encoder_cell = tf.nn.rnn_cell.GRUCell(num_units=32)
+            _, var_states = tf.nn.dynamic_rnn(
+                encoder_cell, inner_state[:, 1:, :],
+                sequence_length=raw_src_len,
+                initial_state=None, dtype=tf.float32)
+            h_state_var = var_states
+
+        with tf.variable_scope("drrn-action-encoder", reuse=False):
+            flat_inner_state = self.ae(
+                actions_w_pad, None, (not self.is_infer), actions_mask)
+            first_action_token_tensor = tf.squeeze(
+                flat_inner_state[:, 0:1, :], axis=1)
+            h_actions = self.wa(first_action_token_tensor)
+            h_actions = tf.reshape(
+                h_actions, shape=(batch_size, self.n_actions, -1))
+
+        with tf.variable_scope("drrn-scorer", reuse=False):
+            h_state_expanded = tf.expand_dims(h_state + h_state_var, axis=1)
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
+
+        return q_actions
+
+    def get_h_state(self, src, src_len):
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        with tf.variable_scope("drrn-attn-encoder", reuse=tf.AUTO_REUSE):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+        return h_state
+
+    def get_pred(self):
+        h_state = self.get_h_state(
+            self.inputs["snn_src"], self.inputs["snn_src_len"])
+        h_state2 = self.get_h_state(
+            self.inputs["snn_src2"], self.inputs["snn_src2_len"])
+        diff_two_states = tf.abs(h_state - h_state2)
+        pred = tf.squeeze(tf.layers.dense(
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
@@ -242,6 +350,23 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         :param is_infer:
         """
         super(BertAttnEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.float32, [None]),
+            "action_idx": tf.placeholder(tf.int32, [None]),
+            "b_weight": tf.placeholder(tf.float32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None]),
+            "expected_qs": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "actions": tf.placeholder(tf.int32, [None, self.n_actions, None]),
+            "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
+            "snn_src": tf.placeholder(tf.int32, [None, None]),
+            "snn_src_len": tf.placeholder(tf.float32, [None]),
+            "snn_src2": tf.placeholder(tf.int32, [None, None]),
+            "snn_src2_len": tf.placeholder(tf.float32, [None]),
+            "labels": tf.placeholder(tf.float32, [None])
+        }
+
         self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
             self.bert_init_ckpt_dir)
@@ -250,13 +375,16 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         self.bert_config = modeling.BertConfig.from_json_file(
             self.bert_config_file)
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
-        self.enc_layer = txf.EncoderLayer(d_model=768, num_heads=8, dff=768)
-        self.pooler_layer = tf.layers.Dense(
+        self.wp = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-        self.action_pooler_layer = tf.layers.Dense(
+        self.wa = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
 
     def get_q_actions(self):
         batch_size = tf.shape(self.inputs["src_len"])[0]
@@ -285,11 +413,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             bert_model = modeling.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
-            enc_out = self.enc_layer(
-                bert_model.get_sequence_output(), (not self.is_infer),
-                mask=None)
-            first_token_tensor = tf.squeeze(enc_out[:, 0:1, :], axis=1)
-            h_state = self.pooler_layer(first_token_tensor)
+            h_state = self.wp(bert_model.get_pooled_output())
         with tf.variable_scope("attn-action-encoder"):
             attn_encoder = txf.Encoder(
                 num_layers=1, d_model=32, num_heads=8, dff=64,
@@ -298,7 +422,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
                 actions_w_pad, None, (not self.is_infer), actions_mask)
             first_action_token_tensor = tf.squeeze(
                 flat_inner_state[:, 0:1, :], axis=1)
-            h_actions = self.action_pooler_layer(first_action_token_tensor)
+            h_actions = self.wa(first_action_token_tensor)
             h_actions = tf.reshape(
                 h_actions, shape=(batch_size, self.n_actions, -1))
 
@@ -306,12 +430,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             h_state_expanded = tf.expand_dims(h_state, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-
-        # initialize bert from checkpoint file
-        tf.train.init_from_checkpoint(
-            self.bert_ckpt_file,
-            assignment_map={"bert/": "bert-state-encoder/bert/"})
-
         return q_actions
 
     def get_h_state(self, src, src_len):
@@ -324,7 +442,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         src_masks_w_pad = tf.pad(
             src_masks, paddings=paddings, mode="CONSTANT",
             constant_values=1)
-        with tf.variable_scope("bert-state-encoder", reuse=True):
+        with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
             bert_model = modeling.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
@@ -339,7 +457,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
 
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=tf.nn.sigmoid, units=1, use_bias=True,
+            diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
 
@@ -350,6 +468,14 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step)
         return loss, train_op, abs_loss
+
+    def get_student_train_op(self, q_actions):
+        losses = tf.squared_difference(
+            self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            q_actions * self.inputs["actions_mask"])
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
 
     def get_snn_train_op(self, pred):
         labels = self.inputs["labels"]
@@ -373,17 +499,17 @@ def create_train_model(model_creator, hp, device_placement):
             snn_loss, snn_train_op = model.get_snn_train_op(pred)
             weighted_loss, merged_train_op, s1, s2 = model.get_merged_train_op(
                 loss, snn_loss)
-        loss_summary = tf.summary.scalar("loss", loss)
-        snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
-        weighted_loss_summary = tf.summary.scalar(
-            "weighted_loss", weighted_loss)
-        s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
-        s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
-        train_summary_op = tf.summary.merge([loss_summary])
-        snn_train_summary_op = tf.summary.merge([snn_loss_summary])
-        weighted_train_summary_op = tf.summary.merge(
-            [loss_summary, snn_loss_summary, weighted_loss_summary,
-             s1_summary, s2_summary])
+            loss_summary = tf.summary.scalar("loss", loss)
+            snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
+            weighted_loss_summary = tf.summary.scalar(
+                "weighted_loss", weighted_loss)
+            s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
+            s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
+            train_summary_op = tf.summary.merge([loss_summary])
+            snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+            weighted_train_summary_op = tf.summary.merge(
+                [loss_summary, snn_loss_summary, weighted_loss_summary,
+                 s1_summary, s2_summary])
     return TrainDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
         src_=inputs["src"],
@@ -420,9 +546,6 @@ def create_eval_model(model_creator, hp, device_placement):
             inputs = model.inputs
             q_actions = model.get_q_actions()
             pred, diff_two_states = model.get_pred()
-            loss, train_op, abs_loss = model.get_train_op(q_actions)
-            snn_loss, snn_train_op = model.get_snn_train_op(pred)
-            _ = model.get_merged_train_op(loss, snn_loss)
     return EvalDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
         src_=inputs["src"],
@@ -436,4 +559,166 @@ def create_eval_model(model_creator, hp, device_placement):
         snn_src2_len_=inputs["snn_src2_len"],
         labels_=inputs["labels"],
         diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+class Train_DSQN_DRRN_Model(
+    collections.namedtuple(
+        'Train_DSQN_DRRN_Model',
+        ('graph', 'model', 'q_actions', 'train_op', 'loss', 'train_summary_op',
+         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss',
+         'initializer'))):
+    pass
+
+
+class Eval_DSQN_DRRN_Model(
+    collections.namedtuple(
+        'Eval_DSQN_DRRN_Model',
+        ('graph', 'model', 'q_actions',
+         'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
+         'initializer'))):
+    pass
+
+class Train_DSQN_SNN_Model(
+    collections.namedtuple(
+        'Train_DSQN_SNN_Model',
+        ('graph', 'model', 'pred', 'diff_two_states',
+         'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         'snn_loss', 'snn_train_op', 'snn_train_summary_op',
+         'initializer'))):
+    pass
+
+
+class Eval_DSQN_SNN_Model(
+    collections.namedtuple(
+        'Eval_DSQN_SNN_Model',
+        ('graph', 'model', 'pred','diff_two_states',
+         'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         'initializer'))):
+    pass
+
+
+class TrainStudentDRRNModel(
+    collections.namedtuple(
+        "TrainStudentDRRNModel",
+        ("graph", "model",
+         "src_", "src_len_",
+         "actions_", "actions_len_", "actions_mask_",
+         "expected_qs",
+         'train_op', 'loss', 'train_summary_op',
+         'initializer'))):
+    pass
+
+
+def create_train_student_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op = model.get_student_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
+    return TrainStudentDRRNModel(
+        graph=graph, model=model,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
+        expected_qs=inputs["expected_qs"],
+        train_op=train_op,
+        loss=loss,
+        train_summary_op=train_summary_op,
+        initializer=initializer)
+
+
+def create_train_snn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            pred, diff_two_states = model.get_pred()
+            snn_loss, snn_train_op = model.get_snn_train_op(pred)
+            snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
+            snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+    return Train_DSQN_SNN_Model(
+        graph=graph, model=model, pred=pred,
+        snn_src_=inputs["snn_src"],
+        snn_src_len_=inputs["snn_src_len"],
+        snn_src2_=inputs["snn_src2"],
+        snn_src2_len_=inputs["snn_src2_len"],
+        labels_=inputs["labels"],
+        snn_train_op=snn_train_op,
+        snn_loss=snn_loss,
+        snn_train_summary_op=snn_train_summary_op,
+        diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+def create_eval_snn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            pred, diff_two_states = model.get_pred()
+    return Eval_DSQN_SNN_Model(
+        graph=graph, model=model, pred=pred,
+        snn_src_=inputs["snn_src"],
+        snn_src_len_=inputs["snn_src_len"],
+        snn_src2_=inputs["snn_src2"],
+        snn_src2_len_=inputs["snn_src2_len"],
+        labels_=inputs["labels"],
+        diff_two_states=diff_two_states,
+        initializer=initializer)
+
+
+def create_train_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
+    return Train_DSQN_DRRN_Model(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
+        b_weight_=inputs["b_weight"],
+        abs_loss=abs_loss,
+        train_op=train_op, action_idx_=inputs["action_idx"],
+        expected_q_=inputs["expected_q"], loss=loss,
+        train_summary_op=train_summary_op,
+        initializer=initializer)
+
+
+def create_eval_drrn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+    return Eval_DSQN_DRRN_Model(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
         initializer=initializer)

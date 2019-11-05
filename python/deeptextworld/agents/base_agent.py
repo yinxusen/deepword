@@ -9,8 +9,10 @@ from typing import List, Dict, Any, Optional
 
 import numpy as np
 import tensorflow as tf
+from bert.tokenization import FullTokenizer
 from bitarray import bitarray
-from nltk import word_tokenize, sent_tokenize
+from nltk import word_tokenize
+from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
 from deeptextworld import trajectory
@@ -21,7 +23,8 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import get_token2idx, load_lower_vocab, ctime
+from deeptextworld.utils import ctime, load_vocab, load_lower_vocab, \
+    get_token2idx
 
 
 class DRRNMemo(collections.namedtuple(
@@ -31,11 +34,69 @@ class DRRNMemo(collections.namedtuple(
     pass
 
 
+class DRRNMemoTeacher(collections.namedtuple(
+    "DRRNMemoTeacher",
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+     "action_mask", "next_action_mask", "q_actions"))):
+    pass
+
+
 class ActionDesc(collections.namedtuple(
         "ActionDesc", ("action_type", "action_idx", "action"))):
     def __repr__(self):
         return "action_type: {}, action_idx: {}, action: {}".format(
             self.action_type, self.action_idx, self.action)
+
+
+class NLTKTokenizer(object):
+    """
+    Vocab is token2idx, inv_vocab is idx2token
+    """
+    def __init__(self, vocab_file, do_lower_case):
+        self._special_chars = ["[UNK]", "[PAD]", "<S>", "</S>"]
+        self._inv_vocab = load_vocab(vocab_file)
+        if do_lower_case:
+            self._inv_vocab = [
+                w.lower() if w not in self._special_chars else w
+                for w in self._inv_vocab]
+        self._do_lower_case = do_lower_case
+        self._vocab = get_token2idx(self._inv_vocab)
+        self._unk_val_id = self._vocab["[UNK]"]
+        self._s2c = {"[UNK]": "U", "[PAD]": "O", "<S>": "S", "</S>": "E"}
+        self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def inv_vocab(self):
+        return self._inv_vocab
+
+    def convert_tokens_to_ids(self, tokens):
+        indexed = [self._vocab.get(t, self._unk_val_id) for t in tokens]
+        return indexed
+
+    def convert_ids_to_tokens(self, ids):
+        tokens = [self._inv_vocab[i] for i in ids]
+        return tokens
+
+    def tokenize(self, text):
+        if any([sc in text for sc in self._special_chars]):
+            new_txt = text
+            for sc in self._special_chars:
+                new_txt = new_txt.replace(sc, self._s2c[sc])
+            tokens = word_tokenize(new_txt)
+            tokens = [self._c2s[t] if t in self._c2s else t for t in tokens]
+        else:
+            tokens = word_tokenize(text)
+
+        if self._do_lower_case:
+            return [
+                t.lower() if t not in self._special_chars else t
+                for t in tokens]
+        else:
+            return tokens
 
 
 ACT_EXAMINE_COOKBOOK = "examine cookbook"
@@ -63,6 +124,59 @@ K_HAS_WON = "has_won"
 K_ADMISSIBLE_ACTIONS = "admissible_commands"
 
 
+class ScheduledEPS(Logging):
+    def eps(self, t):
+        raise NotImplementedError()
+
+
+class LinearDecayedEPS(ScheduledEPS):
+    def __init__(self, decay_step, init_eps=1, final_eps=0):
+        super(LinearDecayedEPS, self).__init__()
+        self.init_eps = init_eps
+        self.final_eps = final_eps
+        self.decay_step = decay_step
+        self.decay_speed = (
+            1. * (self.init_eps - self.final_eps) / self.decay_step)
+
+    def eps(self, t):
+        if t < 0:
+            return self.init_eps
+        eps_t = max(self.init_eps - self.decay_speed * t, self.final_eps)
+        self.debug("eps: {}".format(eps_t))
+        return eps_t
+
+
+class ScannerDecayEPS(ScheduledEPS):
+    def __init__(
+            self, decay_step, decay_range,
+            next_init_eps_rate=0.8, init_eps=1, final_eps=0):
+        super(ScannerDecayEPS, self).__init__()
+        self.init_eps = init_eps
+        self.final_eps = final_eps
+        self.decay_range = decay_range
+        self.n_ranges = decay_step // decay_range
+        self.range_init = list(map(
+            lambda i: max(init_eps * (next_init_eps_rate ** i), 0.3),
+            range(self.n_ranges)))
+        self.decay_speed = list(map(
+            lambda es: 1. * (es - self.final_eps) / self.decay_range,
+            self.range_init))
+
+    def eps(self, t):
+        if t < 0:
+            return self.init_eps
+        range_idx = t // self.decay_range
+        range_t = t % self.decay_range
+        if range_idx >= self.n_ranges:
+            return self.final_eps
+        eps_t = (self.range_init[range_idx]
+                 - range_t * self.decay_speed[range_idx])
+        self.debug("{} - {} - {} - {} - {}".format(
+            range_idx, range_t, self.range_init[range_idx],
+            self.decay_speed[range_idx], eps_t))
+        return eps_t
+
+
 class BaseAgent(Logging):
     """
     """
@@ -80,7 +194,8 @@ class BaseAgent(Logging):
             ACT_GS: ACT_GN, ACT_GN: ACT_GS,
             ACT_GE: ACT_GW, ACT_GW: ACT_GE}
 
-        self.hp, self.tokens, self.token2idx = self.init_tokens(hp)
+        self.hp, self.tokenizer = self.init_tokens(hp)
+
         self.info(output_hparams(self.hp))
 
         self.tjs = None
@@ -96,19 +211,26 @@ class BaseAgent(Logging):
         self._episode_has_started = False
         self.total_t = 0
         self.in_game_t = 0
+        # eps decaying test for all-tiers
+        # self.eps_getter = ScannerDecayEPS(
+        #     decay_step=1000, decay_range=100)
+        self.eps_getter = LinearDecayedEPS(
+            decay_step=self.hp.annealing_eps_t,
+            init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps = 0
         self.sess = None
         self.target_sess = None
         self.is_training = True
         self.train_summary_writer = None
-        self.chkp_path = os.path.join(self.model_dir, 'last_weights')
-        self.best_chkp_path = os.path.join(self.model_dir, 'best_weights')
-        self.chkp_prefix = os.path.join(self.chkp_path, 'after-epoch')
-        self.best_chkp_prefix = os.path.join(self.best_chkp_path, 'after-epoch')
+        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
+        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
+        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
+        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
         self.saver = None
         self.target_saver = None
         self.snapshot_saved = False
         self.epoch_start_t = 0
+        self.d4train, self.d4eval, self.d4target = self.init_devices()
 
         self._last_actions_mask = None
         self._last_action_desc = None
@@ -255,26 +377,60 @@ class BaseAgent(Logging):
             admissible_commands=True,
             extras=['recipe'])
 
-    def init_tokens(self, hp):
+    @classmethod
+    def init_tokens(cls, hp):
         """
+        Note that BERT must use bert vocabulary.
         :param hp:
         :return:
         """
-        new_hp = copy_hparams(hp)
-        # make sure that padding_val is indexed as 0.
-        additional_tokens = [hp.padding_val, hp.unk_val, hp.sos, hp.eos]
-        tokens = additional_tokens + list(load_lower_vocab(hp.vocab_file))
-        token2idx = get_token2idx(tokens)
-        new_hp.set_hparam('vocab_size', len(tokens))
-        new_hp.set_hparam('sos_id', token2idx[hp.sos])
-        new_hp.set_hparam('eos_id', token2idx[hp.eos])
-        new_hp.set_hparam('padding_val_id', token2idx[hp.padding_val])
-        new_hp.set_hparam('unk_val_id', token2idx[hp.unk_val])
-        return new_hp, tokens, token2idx
+        if hp.tokenizer_type == "BERT":
+            tokenizer = FullTokenizer(
+                vocab_file=hp.vocab_file, do_lower_case=True)
+            new_hp = copy_hparams(hp)
+            # make sure that padding_val is indexed as 0.
+            new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+            new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+            new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            # bert specific tokens
+            new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
+            new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
+            new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
+        elif hp.tokenizer_type == "NLTK":
+            tokenizer = NLTKTokenizer(
+                vocab_file=hp.vocab_file, do_lower_case=True)
+            new_hp = copy_hparams(hp)
+            # make sure that padding_val is indexed as 0.
+            new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+            new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+            new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+        else:
+            raise ValueError(
+                "Unknown tokenizer type: {}".format(hp.tokenizer_type))
+        return new_hp, tokenizer
 
-    def init_actions(self, hp, token2idx, action_path, with_loading=True):
+    @classmethod
+    def init_devices(cls):
+        devices = [d.name for d in device_lib.list_local_devices()
+                   if d.device_type == "GPU"]
+        if len(devices) == 0:
+            d4train, d4eval, d4target = (
+                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
+        elif len(devices) == 1:
+            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
+        elif len(devices) == 2:
+            d4train = devices[0]
+            d4eval, d4target = devices[1], devices[1]
+        else:
+            d4train = devices[0]
+            d4eval = devices[1]
+            d4target = devices[2]
+        return d4train, d4eval, d4target
+
+    def init_actions(self, hp, tokenizer, action_path, with_loading=True):
         action_collector = ActionCollector(
-            hp.n_actions, hp.n_tokens_per_action, token2idx,
+            tokenizer,
+            hp.n_actions, hp.n_tokens_per_action,
             hp.unk_val_id, hp.padding_val_id, hp.eos_id)
         if with_loading:
             try:
@@ -312,31 +468,11 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
-    def _padding_lines(self, sents):
-        """
-        add padding sentence between lines
-        """
-        padding_sent = " {} ".format(" ".join([self.hp.padding_val] * 4))
-        padded = padding_sent + padding_sent.join(sents) + padding_sent
-        return padded
-
     def tokenize(self, master):
-        """
-        Tokenize and lowercase master. A space-chained tokens will be returned.
-        # TODO: sentences that are tokenized cannot use tokenize again.
-        """
-        sents = sent_tokenize(master)
-        tokenized = map(
-            lambda s: ' '.join([t.lower() for t in word_tokenize(s)]),
-            sents)
-        if self.hp.use_padding_over_lines:
-            return self._padding_lines(tokenized)
-        else:
-            return " ".join(tokenized)
+        return ' '.join(self.tokenizer.tokenize(master))
 
-    def index_string(self, sentence):
-        indexed = [self.token2idx.get(t, self.hp.unk_val_id) for t in sentence]
-        return indexed
+    def index_string(self, tokens):
+        return self.tokenizer.convert_tokens_to_ids(tokens)
 
     def zero_mask_bytes(self):
         """
@@ -369,47 +505,65 @@ class BaseAgent(Logging):
         self._init()
 
     def create_n_load_model(
-            self, placement="/device:GPU:0",
-            load_best=False, is_training=True):
+            self, load_best=False, is_training=True, device=None):
         start_t = 0
         if is_training:
-            with tf.device(placement):
-                model = self.create_model_instance()
+            device = device if device else "/device:GPU:0"
+            model = self.create_model_instance(device=device)
             self.info("create train model")
         else:
-            with tf.device(placement):
-                model = self.create_eval_model_instance()
+            device = device if device else "/device:GPU:1"
+            model = self.create_eval_model_instance(device=device)
             self.info("create eval model")
 
         conf = tf.ConfigProto(
-            log_device_placement=True, allow_soft_placement=True)
+            log_device_placement=False, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
         with model.graph.as_default():
             sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(max_to_keep=self.hp.max_snapshot_to_keep,
-                                   save_relative_paths=True)
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
             if load_best:
-                restore_from = tf.train.latest_checkpoint(self.best_chkp_path)
+                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
             else:
-                restore_from = tf.train.latest_checkpoint(self.chkp_path)
+                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
             if restore_from is not None:
                 # Reload weights from directory if specified
                 self.info(
                     "Try to restore parameters from: {}".format(restore_from))
-                saver.restore(sess, restore_from)
-                if not self.hp.start_t_ignore_model_t:
+                try:
+                    saver.restore(sess, restore_from)
+                except Exception as e:
+                    self.debug("Restoring failed: {}".format(e))
+                    all_saved_vars = list(
+                        map(lambda v: v[0],
+                            tf.train.list_variables(restore_from)))
+                    self.debug(
+                        "Try to restore with safe saver with vars: {}".format(
+                            "\n".join(all_saved_vars)))
+                    safe_saver = tf.train.Saver(var_list=all_saved_vars)
+                    safe_saver.restore(sess, restore_from)
+                if is_training:
                     global_step = tf.train.get_or_create_global_step()
                     trained_steps = sess.run(global_step)
-                    start_t = trained_steps + self.hp.observation_t
+                    if self.hp.start_t_ignore_model_t:
+                        start_t = min(
+                            self.hp.observation_t,
+                            len(self.memo) if self.memo is not None else 0)
+                    else:
+                        start_t = trained_steps + self.hp.observation_t
+                else:
+                    pass
             else:
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
 
-    def create_model_instance(self):
+    def create_model_instance(self, device):
         raise NotImplementedError()
 
-    def create_eval_model_instance(self):
+    def create_eval_model_instance(self, device):
         raise NotImplementedError()
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
@@ -448,7 +602,7 @@ class BaseAgent(Logging):
 
         # always loading actions to avoid different action index for DQN
         self.action_collector = self.init_actions(
-            self.hp, self.token2idx, action_path,
+            self.hp, self.tokenizer, action_path,
             with_loading=self.is_training)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
@@ -467,19 +621,30 @@ class BaseAgent(Logging):
         self._load_context_objs()
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
-                self.create_n_load_model()
+                self.create_n_load_model(device=self.d4train)
             self.eps = self.hp.init_eps
             train_summary_dir = os.path.join(
                 self.model_dir, "summaries", "train")
             self.train_summary_writer = tf.summary.FileWriter(
                 train_summary_dir, self.sess.graph)
+            restore_from = tf.train.latest_checkpoint(
+                os.path.join(self.model_dir, 'last_weights'))
+            if self.target_sess is None and restore_from is not None:
+                self.debug("create and load target net")
+                (self.target_sess, start_t, self.target_saver,
+                 self.target_model
+                 ) = self.create_n_load_model(
+                    is_training=False, device=self.d4target)
+            else:
+                # notice that target net and sess could be None
+                pass
         else:
             if self.model is not None:
                 if load_best:
                     restore_from = tf.train.latest_checkpoint(
-                        self.best_chkp_path)
+                        self.best_ckpt_path)
                 else:
-                    restore_from = tf.train.latest_checkpoint(self.chkp_path)
+                    restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
                 if restore_from is not None:
                     # Reload weights from directory if specified
@@ -491,14 +656,15 @@ class BaseAgent(Logging):
                     self.info('No checkpoint to load for evaluation')
             else:
                 self.sess, _, self.saver, self.model = self.create_n_load_model(
-                    placement="/device:GPU:1", load_best=load_best,
-                    is_training=self.is_training)
+                    load_best=load_best, is_training=self.is_training,
+                    device=self.d4eval)
             self.eps = 0
             self.total_t = 0
 
     def _get_master_starter(self, obs, infos):
         assert K_DESC in infos, "request description is required"
-        return infos[K_DESC][0]
+        assert K_INVENTORY in infos, "request inventory is required"
+        return "{}\n{}".format(infos[K_DESC][0], infos[K_INVENTORY][0])
 
     def _start_episode(self, obs, infos):
         """
@@ -553,8 +719,10 @@ class BaseAgent(Logging):
         # if len(self.memo) > 2 * self.hp.replay_mem:
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
-        self.info("mode: {}, #step: {}, score: {}, has_won: {}".format(
-            self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON]))
+        self.info(
+            "mode: {}, #step: {}, score: {}, has_won: {}, last_eps: {}".format(
+                self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON],
+                self.eps))
         # TODO: make clear of what need to clean before & after an episode.
         # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
         # self._action_recorder[self.game_id] = self._per_game_recorder
@@ -579,7 +747,7 @@ class BaseAgent(Logging):
     def save_best_model(self):
         self.info("save the best model so far")
         self.saver.save(
-            self.sess, self.best_chkp_prefix,
+            self.sess, self.best_ckpt_prefix,
             global_step=tf.train.get_or_create_global_step(
                 graph=self.model.graph))
         self.info("the best model saved")
@@ -613,7 +781,7 @@ class BaseAgent(Logging):
     def save_snapshot(self):
         self.info('save model')
         self.saver.save(
-            self.sess, self.chkp_prefix,
+            self.sess, self.ckpt_prefix,
             global_step=tf.train.get_or_create_global_step(
                 graph=self.model.graph))
         self.info('save snapshot of the agent')
@@ -661,7 +829,7 @@ class BaseAgent(Logging):
     def filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
-        :param admissible_actions:
+        :param admissible_actions: raw action given by the game.
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
@@ -844,33 +1012,35 @@ class BaseAgent(Logging):
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):
-        instant_reward = self.clip_reward(
-            score - self._cumulative_score - 0.1 -
-            self.negative_response_reward(master))
-        self._cumulative_score = score
-        if (master == self._prev_master and
-            self._last_action_desc is not None and
-            self._last_action_desc.action == self._prev_last_action and
-                instant_reward < 0):
-            instant_reward = max(
-                -1.0, instant_reward + self._cumulative_penalty)
-            # self.debug("repeated bad try, decrease reward by {},"
-            #            " reward changed to {}".format(
-            #     self.prev_cumulative_penalty, instant_reward))
-            self._cumulative_penalty = self._cumulative_penalty - 0.1
-        else:
-            self._prev_last_action = (
-                self._last_action_desc.action
-                if self._last_action_desc is not None else None)
-            self._prev_master = master
-            self._cumulative_penalty = -0.1
-
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not has_won and "you lost" in master:
             # self.info("game terminate and fail, final reward change"
             #           " from {} to -1".format(instant_reward))
             instant_reward = -1
+        else:
+            instant_reward = self.clip_reward(
+                score - 0.1 - self._cumulative_score -
+                self.negative_response_reward(master))
+            if self.hp.use_step_wise_reward:
+                if (master == self._prev_master
+                        and self._last_action_desc is not None
+                        and self._last_action_desc.action ==
+                        self._prev_last_action and
+                        instant_reward < 0):
+                    instant_reward = self.clip_reward(
+                        instant_reward + self._cumulative_penalty)
+                    # self.debug("repeated bad try, decrease reward by {},"
+                    #            " reward changed to {}".format(
+                    #     self.prev_cumulative_penalty, instant_reward))
+                    self._cumulative_penalty = self._cumulative_penalty - 0.1
+                else:
+                    self._prev_last_action = (
+                        self._last_action_desc.action
+                        if self._last_action_desc is not None else None)
+                    self._prev_master = master
+                    self._cumulative_penalty = -0.1
+        self._cumulative_score = score
         return instant_reward
 
     def collect_floor_plan(self, master, prev_place):
@@ -902,27 +1072,15 @@ class BaseAgent(Logging):
         """
         if self.total_t == self.hp.observation_t:
             self.epoch_start_t = ctime()
-        self.eps = self.annealing_eps(
-            self.hp.init_eps, self.hp.final_eps,
-            self.total_t - self.hp.observation_t, self.hp.annealing_eps_t)
-
-        restore_from = tf.train.latest_checkpoint(
-            os.path.join(self.model_dir, 'last_weights'))
-        if self.target_sess is None and restore_from is not None:
-            self.debug("create and load target net")
-            (self.target_sess, start_t, self.target_saver, self.target_model
-             ) = self.create_n_load_model(
-                is_training=False, placement="/device:GPU:2")
-        else:
-            pass
-
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
         self.train_impl(
             self.sess, self.total_t, self.train_summary_writer,
             self.target_sess if self.target_sess else self.sess,
             self.target_model if self.target_model else self.model)
+        self._save_agent_n_reload_target()
 
+    def _save_agent_n_reload_target(self):
         if self.time_to_save():
             epoch_end_t = ctime()
             delta_time = epoch_end_t - self.epoch_start_t
@@ -939,8 +1097,10 @@ class BaseAgent(Logging):
                 self.debug("create and load target net")
                 (self.target_sess, start_t, self.target_saver, self.target_model
                  ) = self.create_n_load_model(
-                    is_training=False, placement="/device:GPU:2")
+                    is_training=False, device=self.d4target)
             else:
+                restore_from = tf.train.latest_checkpoint(
+                    os.path.join(self.model_dir, 'last_weights'))
                 self.target_saver.restore(self.target_sess, restore_from)
                 self.info("target net load from: {}".format(restore_from))
 
@@ -994,17 +1154,19 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        # if self.in_game_t > 0:  # pass the 1st master
-        #     self.debug(
-        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-        #         " reward: {}, is_terminal: {}".format(
-        #             self.mode(), self.total_t,
-        #             self.in_game_t, self.eps, self._last_action_desc,
-        #             cleaned_obs, instant_reward, dones[0]))
-        # else:
-        #     self.info(
-        #         "mode: {}, master: {}, max_score: {}".format(
-        #             self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        if 0 < self.in_game_t < 10:  # pass the 1st master
+            self.debug(
+                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+                " reward: {}, raw_score: {}, is_terminal: {}".format(
+                    self.mode(), self.total_t,
+                    self.in_game_t, self.eps, self._last_action_desc,
+                    "", instant_reward, scores[0], dones[0]))
+        elif self.in_game_t == 0:
+            self.info(
+                "mode: {}, master: {}, max_score: {}".format(
+                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+        else:
+            pass
         return cleaned_obs, instant_reward
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
@@ -1012,9 +1174,10 @@ class BaseAgent(Logging):
         if self.in_game_t == 0 and self._last_action_desc is None:
             act_idx = []
         else:
-            act_idx = list(
-                self.action_collector.get_action_matrix()
-                [self._last_action_desc.action_idx])
+            aid = self._last_action_desc.action_idx
+            a_vec = self.action_collector.get_action_matrix()[aid]
+            a_len = self.action_collector.get_action_len()[aid]
+            act_idx = list(a_vec[:a_len])
         self.tjs.append(act_idx + obs_idx)
         self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 
@@ -1037,6 +1200,10 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions, all_actions, actions_mask, instant_reward):
+        if self.is_training:
+            self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
+        else:
+            pass
         self._last_action_desc = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
         action = self._last_action_desc.action
@@ -1079,22 +1246,17 @@ class BaseAgent(Logging):
             obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
          ) = self.collect_new_sample(cleaned_obs, instant_reward, dones, infos)
-
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
         if all(dones):
             self._end_episode(obs, scores, infos)
             return  # Nothing to return.
-
         player_t = self.next_step_action(
             actions, all_actions, actions_mask, instant_reward)
-
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
-
         self.total_t += 1
         self.in_game_t += 1
-
         return [player_t] * len(obs)
 
 

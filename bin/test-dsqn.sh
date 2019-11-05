@@ -41,7 +41,8 @@ PDIR="."
 
 MODELHOME="$PDIR/../experiments-drrn/agent-dsqn-test"
 
-VOCAB_FILE="$PDIR/resources/vocab.txt"
+BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
+VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
 F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
 
@@ -58,8 +59,8 @@ pushd $PDIR
     -m $MODELHOME --mode train-dsqn \
     --game-path $GAMEPATH --f-games $F_GAMES \
     --vocab-file $VOCAB_FILE \
-    --annealing-eps-t 30000 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
+    --annealing-eps-t 300 --annealing-gamma-t 1000 --observation-t 500 --replay-mem 1000 \
     --eval-episode 1 --embedding-size 64 \
-    --save-gap-t 1000 --batch-size 32 --game-episode-terminal-t 100 --snn-train-epochs 100 \
-    --model-creator AttnEncoderDSQN --agent-clazz DSQNAlterAgent
+    --save-gap-t 100 --batch-size 32 --game-episode-terminal-t 100 --snn-train-epochs 100 \
+    --model-creator Attn2EncoderDSQN --agent-clazz DSQNAgent --use-step-wise-reward
 popd

@@ -1,18 +1,18 @@
+import functools
 import glob
 import logging
+import multiprocessing as mp
+import operator
 import os
 import random
 import sys
 from threading import Thread, Condition
-import multiprocessing as mp
-import functools
-import operator
 
 import gym
-import textworld.gym
-from textworld import EnvInfos
 import numpy as np
+import textworld.gym
 import tqdm
+from textworld import EnvInfos
 
 from deeptextworld.agents import dsqn_agent
 from deeptextworld.utils import ctime
@@ -293,6 +293,67 @@ def run_single_game(g_file, hp, agent_clazz, model_dir, eval_randomness=None):
 
 
 def run_eval(
+        hp, model_dir, game_path, f_games=None, eval_randomness=None,
+        eval_mode="all"):
+    """
+    Evaluation an agent.
+    :param hp:
+    :param model_dir:
+    :param game_path:
+    :param f_games:
+    :param eval_randomness:
+    :param eval_mode:
+    :return:
+    """
+    logger = logging.getLogger("eval")
+    if os.path.isdir(game_path):
+        game_files = load_game_files(game_path, f_games)
+        games = split_train_dev(game_files)
+        if games is None:
+            exit(-1)
+        train_games, dev_games = games
+
+        game_files = None
+        if eval_mode == "all":
+            # remove possible repeated games
+            game_files = list(set(train_games + dev_games))
+        elif eval_mode == "eval-train":
+            game_files = train_games
+        elif eval_mode == "eval-eval":
+            game_files = dev_games
+        else:
+            print("unknown mode. choose from [all|eval-train|eval-eval]")
+            exit(-1)
+    elif os.path.isfile(game_path):
+        game_files = [game_path]
+    else:
+        print("game path doesn't exist")
+        return
+
+    logger.info("load {} game files".format(len(game_files)))
+    game_names = [os.path.basename(fn) for fn in game_files]
+    logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
+
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
+    agent.eval(load_best=True)
+    if eval_randomness is not None:
+        agent.eps = eval_randomness
+    logger.info("evaluation randomness: {}".format(agent.eps))
+
+    eval_start_t = ctime()
+    eval_results = run_agent_eval(
+        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
+    eval_end_t = ctime()
+    agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
+    logger.info("eval_results: {}".format(eval_results[0]))
+    logger.info("eval aggregated results: {}".format(agg_res))
+    logger.info("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
+        total_scores, total_steps, n_won))
+    logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
+
+
+def run_parallel_eval(
         hp, model_dir, game_path, f_games=None, eval_randomness=None,
         eval_mode="all"):
     """
