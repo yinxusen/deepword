@@ -327,7 +327,7 @@ def default_hparams_AttnEncoderDecoderDQN():
         embedding_size=64,
         learning_rate=1e-5,
         num_turns=6,
-        num_tokens=500,
+        num_tokens=1000,
         max_action_len=10,
         tokenizer_type="NLTK",
         pad_eos=True

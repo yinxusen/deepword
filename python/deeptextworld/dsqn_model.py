@@ -593,6 +593,7 @@ class Eval_DSQN_DRRN_Model(
          'initializer'))):
     pass
 
+
 class Train_DSQN_SNN_Model(
     collections.namedtuple(
         'Train_DSQN_SNN_Model',
