@@ -2,8 +2,8 @@ from os import remove as prm
 from os.path import join as pjoin
 
 import numpy as np
-from numpy.random import choice as npc
 import tensorflow as tf
+from numpy.random import choice as npc
 
 from deeptextworld import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \

@@ -23,8 +23,7 @@ from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import ctime, load_vocab, load_lower_vocab, \
-    get_token2idx
+from deeptextworld.utils import ctime, load_vocab, get_token2idx
 
 
 class DRRNMemo(collections.namedtuple(
