@@ -67,9 +67,11 @@ def train_gen_student(
               hp.num_tokens))
     t.setDaemon(True)
     t.start()
-    while queue.empty():
+    wait_cnt = 0
+    while wait_cnt < 10 and queue.empty():
         eprint("waiting data ...")
         time.sleep(10)
+        wait_cnt += 1
 
     eprint("start training")
     data_in_queue = True
@@ -159,13 +161,10 @@ def get_action_idx_pair(action_matrix, action_len, sos_id, eos_id):
         [np.asarray([[sos_id]] * len(action_len)),
          action_matrix[:, :-1]], axis=1)
     action_id_out = action_matrix[:, :]
-    max_col_size = action_matrix.shape[1]
-    idx1 = np.where(action_len < max_col_size)[0]
-    idx2 = np.where(action_len >= max_col_size)[0]
-    action_id_out[idx1, action_len] = eos_id
-    action_id_out[idx2, -1] = eos_id
-    new_action_len = action_len[:]
-    new_action_len[idx1] += 1
+    n_rows, max_col_size = action_matrix.shape
+    new_action_len = np.min(
+        [action_len + 1, np.zeros_like(action_len) + max_col_size], axis=0)
+    action_id_out[list(range(n_rows)), new_action_len-1] = eos_id
     return action_id_in, action_id_out, new_action_len
 
 
@@ -175,7 +174,8 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
     game_id = [m.gid for m in b_memory]
     action_mask = [m.action_mask for m in b_memory]
     expected_qs = [m.q_actions for m in b_memory]
-    action_mask_t = BaseAgent.from_bytes(action_mask)
+    action_mask_t = list(BaseAgent.from_bytes(action_mask))
+    mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
 
     states = tjs.fetch_batch_states(trajectory_id, state_id)
     states_n_len = [
@@ -184,19 +184,19 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
     p_len = list(map(lambda x: x[1], states_n_len))
 
     action_len = np.concatenate(
-        [action_collector.get_action_len(gid)[action_mask_t]
-         for gid in game_id], axis=0)
+        [action_collector.get_action_len(gid)[mid]
+         for gid, mid in zip(game_id, mask_idx)], axis=0)
     max_action_len = np.max(action_len)
     actions = np.concatenate(
-        [action_collector.get_action_matrix(gid)[action_mask_t, :max_action_len]
-         for gid in game_id], axis=0)
+        [action_collector.get_action_matrix(gid)[mid, :max_action_len]
+         for gid, mid in zip(game_id, mask_idx)], axis=0)
     actions_in, actions_out, action_len = get_action_idx_pair(
         actions, action_len, tokenizer.vocab["<S>"], tokenizer.vocab["</S>"])
     repeats = np.sum(action_mask_t, axis=1)
     repeated_p_states = np.repeat(p_states, repeats, axis=0)
     repeated_p_len = np.repeat(p_len, repeats, axis=0)
     expected_qs = np.concatenate(
-        [qs[action_mask_t] for qs in expected_qs], axis=0)
+        [qs[mid] for qs, mid in zip(expected_qs, mask_idx)], axis=0)
     b_weights = np.ones_like(action_len, dtype="float32")
     return (
         repeated_p_states, repeated_p_len,
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     HOME = "/home/rcf-40/xusenyin/"
     MODEL_HOME = HOME + "git-store/experiments-drrn-bak5/agent-drrn-TDRRN-fine-tune-drop-no-theme-w-cookbook-teacher/"
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    VOCAB_FILE = dir_path + "../../resources/vocab.txt"
+    VOCAB_FILE = dir_path + "/../../resources/vocab.txt"
     config_file = MODEL_HOME + "hparams.json"
     tjs_path = MODEL_HOME + "raw-trajectories-0.npz"
     action_path = MODEL_HOME + "actions-0.npz"
