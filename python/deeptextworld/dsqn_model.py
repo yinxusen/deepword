@@ -180,28 +180,39 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         """
         super(AttnEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
         self.attn_encoder = txf.Encoder(
-            num_layers=2, d_model=128, num_heads=8, dff=256,
-            input_vocab_size=self.hp.vocab_size)
-        self.action_encoder = txf.Encoder(
-            num_layers=1, d_model=32, num_heads=8, dff=64,
+            num_layers=1, d_model=128, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
     def get_q_actions(self):
         batch_size = tf.shape(self.inputs["src_len"])[0]
-        h_state = self.get_h_state(self.inputs["src"], self.inputs["src_len"])
-        h_state_expanded = tf.expand_dims(h_state, axis=1)
-        flat_actions = tf.reshape(
-            self.inputs["actions"],
-            shape=(batch_size * self.n_actions, -1))
-        flat_actions_len = tf.reshape(
-            self.inputs["actions_len"],
-            shape=(-1,))
-        flat_h_actions = self.get_h_state(flat_actions, flat_actions_len)
-        h_actions = tf.reshape(
-            flat_h_actions,
-            shape=(batch_size, self.n_actions, -1))
-        q_actions = tf.reduce_sum(
-            tf.multiply(h_state_expanded, h_actions), axis=-1)
+
+        with tf.variable_scope("drrn-attn-encoder", reuse=False):
+            padding_mask = txf.create_padding_mask(self.inputs["src"])
+            inner_state = self.attn_encoder(
+                self.inputs["src"], x_seg=None,
+                training=(not self.is_infer), mask=padding_mask)
+            pooled = tf.reduce_max(inner_state, axis=1)
+            h_state = tf.reshape(pooled, [-1, 128])
+            new_h = dqn.decoder_dense_classification(h_state, 32)
+            h_state_expanded = tf.expand_dims(new_h, axis=1)
+
+            with tf.variable_scope("drrn-action-encoder", reuse=False):
+                flat_actions = tf.reshape(
+                    self.inputs["actions"],
+                    shape=(batch_size * self.n_actions, -1))
+                flat_actions_len = tf.reshape(
+                    self.inputs["actions_len"],
+                    shape=(-1,))
+                flat_h_actions = dqn.encoder_lstm(
+                    flat_actions, flat_actions_len,
+                    self.src_embeddings,
+                    num_units=32,
+                    num_layers=1)[-1].h
+                h_actions = tf.reshape(
+                    flat_h_actions,
+                    shape=(batch_size, self.n_actions, -1))
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
 
     def get_h_state(self, src, src_len):
@@ -214,10 +225,12 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         return h_state
 
     def get_pred(self):
-        h_state = self.get_h_state(
-            self.inputs["snn_src"], self.inputs["snn_src_len"])
-        h_state2 = self.get_h_state(
-            self.inputs["snn_src2"], self.inputs["snn_src2_len"])
+        with tf.variable_scope("drrn-attn-encoder", reuse=True):
+            h_state = self.get_h_state(
+                self.inputs["snn_src"], self.inputs["snn_src_len"])
+            h_state2 = self.get_h_state(
+                self.inputs["snn_src2"], self.inputs["snn_src2_len"])
+
         diff_two_states = tf.abs(h_state - h_state2)
         pred = tf.squeeze(tf.layers.dense(
             diff_two_states, activation=None, units=1, use_bias=True,
