@@ -29,7 +29,7 @@ from deeptextworld.utils import ctime, load_vocab, load_lower_vocab, \
 
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+    ("tid", "sid", "gid", "aid", "a_len", "reward", "is_terminal",
      "action_mask", "next_action_mask"))):
     pass
 
@@ -384,17 +384,33 @@ class BaseAgent(Logging):
         :param hp:
         :return:
         """
-        tokenizer = FullTokenizer(
-            vocab_file=hp.vocab_file, do_lower_case=True)
-        new_hp = copy_hparams(hp)
-        # make sure that padding_val is indexed as 0.
-        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
-        new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
-        new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
-        # bert specific tokens
-        new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
-        new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
-        new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
+        if hp.tokenizer_type == "BERT":
+            tokenizer = FullTokenizer(
+                vocab_file=hp.vocab_file, do_lower_case=True)
+            new_hp = copy_hparams(hp)
+            # make sure that padding_val is indexed as 0.
+            new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+            new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+            new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            new_hp.set_hparam('sos_id', tokenizer.vocab[hp.sos])
+            new_hp.set_hparam('eos_id', tokenizer.vocab[hp.eos])
+            # bert specific tokens
+            new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
+            new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
+            new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
+        elif hp.tokenizer_type == "NLTK":
+            tokenizer = NLTKTokenizer(
+                vocab_file=hp.vocab_file, do_lower_case=True)
+            new_hp = copy_hparams(hp)
+            # make sure that padding_val is indexed as 0.
+            new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+            new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+            new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            new_hp.set_hparam('sos_id', tokenizer.vocab[hp.sos])
+            new_hp.set_hparam('eos_id', tokenizer.vocab[hp.eos])
+        else:
+            raise ValueError(
+                "Unknown tokenizer type: {}".format(hp.tokenizer_type))
         return new_hp, tokenizer
 
     @classmethod
@@ -419,7 +435,7 @@ class BaseAgent(Logging):
         action_collector = ActionCollector(
             tokenizer,
             hp.n_actions, hp.n_tokens_per_action,
-            hp.unk_val_id, hp.padding_val_id)
+            hp.unk_val_id, hp.padding_val_id, hp.eos_id, hp.pad_eos)
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
@@ -1104,9 +1120,17 @@ class BaseAgent(Logging):
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         # the last sid here is for the next state of using the last action
+        aid = self._last_action_desc.action_idx
+        # don't use len(aid) for a_len, because all aids are padded up to 10.
+        if self._last_action_desc.action == "":
+            a_len = 0
+        else:
+            a_len = len(self._last_action_desc.action.split(" "))
+        if self.hp.pad_eos:
+            a_len += 1  # + "</S>"
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=self._last_action_desc.action_idx,
+            gid=self.game_id, aid=aid, a_len=a_len,
             reward=instant_reward, is_terminal=is_terminal,
             action_mask=action_mask, next_action_mask=next_action_mask
         ))
@@ -1203,7 +1227,6 @@ class BaseAgent(Logging):
         else:
             # self.debug("cnt action ignore hard_set_action")
             pass
-
         self._last_actions_mask = actions_mask
         # revert back go actions for the game playing
         if action.startswith("go"):

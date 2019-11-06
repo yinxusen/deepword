@@ -140,5 +140,10 @@ if __name__ == '__main__':
         run_eval(
             hp, model_dir, game_path=game_path, f_games=args.f_games,
             eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
+    elif args.mode == "train-gen-dqn":
+        setup_train_log(model_dir)
+        from deeptextworld.train_gen_dqn import train_n_eval
+        hp = load_hparams_for_training(config_file, args)
+        train_n_eval(hp, model_dir, game_dir=game_path, f_games=args.f_games)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))

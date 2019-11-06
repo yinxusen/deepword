@@ -2,7 +2,6 @@ import time
 
 import numpy as np
 from bitarray import bitarray
-from bert.tokenization import FullTokenizer
 
 from deeptextworld.log import Logging
 
@@ -10,7 +9,7 @@ from deeptextworld.log import Logging
 class ActionCollector(Logging):
     def __init__(
             self, tokenizer, n_actions=200, n_tokens=10,
-            unk_val_id=None, padding_val_id=None):
+            unk_val_id=None, padding_val_id=None, eos_id=None, pad_eos=False):
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self.actions_base = {}
@@ -22,6 +21,7 @@ class ActionCollector(Logging):
         self.n_tokens = n_tokens
         self.unk_val_id = unk_val_id
         self.padding_val_id = padding_val_id
+        self.eos_id = eos_id
 
         # current episode actions
         self.action2idx = None
@@ -32,6 +32,7 @@ class ActionCollector(Logging):
         self.action_len = None
 
         self.tokenizer = tokenizer
+        self.pad_eos = pad_eos
 
     def init(self):
         self.action2idx = {}
@@ -76,9 +77,20 @@ class ActionCollector(Logging):
         else:
             pass
 
-    def _preprocess_action(self, action):
-        return self.tokenizer.convert_tokens_to_ids(
+    def idx_tokens(self, action):
+        action_idx = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(action))
+        action_idx = action_idx[:min(self.n_tokens, len(action_idx))]
+        n_action_tokens = len(action_idx)
+        if self.pad_eos:
+            if n_action_tokens == self.n_tokens:
+                action_idx[-1] = self.eos_id
+            else:
+                action_idx.append(self.eos_id)
+                n_action_tokens = len(action_idx)
+        else:
+            pass
+        return action_idx, n_action_tokens
 
     def extend(self, actions):
         """
@@ -94,17 +106,11 @@ class ActionCollector(Logging):
             if a not in self.action2idx:
                 assert self.curr_aid < self.n_actions - 1, "n_actions too small"
                 self.action2idx[a] = self.curr_aid
-                action_idx = self._preprocess_action(a)
-                n_action_tokens = len(action_idx)
-                if n_action_tokens > self.n_tokens:
-                    self.warning("trimming action {} size {} -> {}".format(
-                        a, n_action_tokens, self.n_tokens))
-                    n_action_tokens = self.n_tokens
+                action_idx, n_action_tokens = self.idx_tokens(a)
                 self.action_len[self.curr_aid] = n_action_tokens
                 self.action_matrix[self.curr_aid][:n_action_tokens] =\
                     action_idx[:n_action_tokens]
                 self.actions[self.curr_aid] = a
-                # self.debug("learn new admissible command: {}".format(a))
                 self.curr_aid += 1
             bit_mask_vec[self.action2idx[a]] = True
         return bit_mask_vec.tobytes()

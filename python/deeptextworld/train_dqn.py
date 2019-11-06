@@ -5,14 +5,15 @@ from threading import Thread, Condition
 import gym
 import textworld.gym
 
-from deeptextworld.agents.dqn_agent import TabularDQNAgent
+from deeptextworld.agents import dqn_agent
 from deeptextworld.train_drrn import validate_requested_infos, run_agent, \
     run_agent_eval, agg_results
 from deeptextworld.utils import ctime
 
 
 def train(hp, cv, model_dir, game_file, nb_epochs=sys.maxsize, batch_size=1):
-    agent = TabularDQNAgent(hp, model_dir)
+    agent_clazz = getattr(dqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     agent.train()
 
     requested_infos = agent.select_additional_infos()
@@ -32,7 +33,8 @@ def evaluation(hp, cv, model_dir, game_file, nb_episodes):
     logger = logging.getLogger("eval")
     logger.info('evaluation worker started ...')
 
-    agent = TabularDQNAgent(hp, model_dir)
+    agent_clazz = getattr(dqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     agent.eval()
 
     prev_total_scores = 0
@@ -83,7 +85,8 @@ def train_n_eval(hp, model_dir, game_file, batch_size=1):
 
 def run_eval(hp, model_dir, game_file, eval_randomness=None):
     logger = logging.getLogger("eval")
-    agent = TabularDQNAgent(hp, model_dir)
+    agent_clazz = getattr(dqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:
         agent.eps = eval_randomness
