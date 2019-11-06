@@ -76,11 +76,14 @@ def train_gen_student(
     eprint("start training")
     data_in_queue = True
     for et in trange(num_epochs, ascii=True, desc="epoch"):
-        for it in trange(epoch_size, ascii=True, desc="step"):
+        pbar_step = trange(epoch_size, ascii=True, desc="step")
+        for it in pbar_step:
             try:
                 data = queue.get(timeout=10)
                 (p_states, p_len, actions_in, actions_out, action_len,
                  expected_qs, b_weights) = data
+                pbar_step.set_postfix_str(
+                    "batch size: {}".format(p_states.shape[0]))
                 _, summaries, weighted_loss = sess.run(
                     [model.train_op, model.train_summary_op, model.loss],
                     feed_dict={model.src_: p_states,
