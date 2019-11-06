@@ -444,6 +444,14 @@ class GenDQNAgent(DQNAgent):
             [np.asarray([[self.hp.sos_id]] * len(action_len)),
              action_id_wo_eos[:, :-1]], axis=1)
 
+        self.debug("action in/out example:\n{} -- {}\n{} -- {}".format(
+            action_id_in[0, :],
+            self.tokenizer.convert_ids_to_tokens(
+                action_id_in[0, :action_len[0]]),
+            action_id[0, :],
+            self.tokenizer.convert_ids_to_tokens(
+                action_id[0, :action_len[0]])))
+
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
