@@ -57,7 +57,7 @@ def train_gen_student(
         hp, memo_path, tjs_path, action_path, tokenizer)
     total_size = len(memory)
     eprint("loaded memory size: {}".format(total_size))
-    batch_size = 32
+    batch_size = hp.batch_size
     epoch_size = 10000
     num_epochs = max((total_size // batch_size) // epoch_size, 1)
 
@@ -82,17 +82,20 @@ def train_gen_student(
                 data = queue.get(timeout=10)
                 (p_states, p_len, actions_in, actions_out, action_len,
                  expected_qs, b_weights) = data
+                n_rows = p_states.shape[0]
+                rrid = np.random.randint(
+                    low=0, high=n_rows, size=batch_size)
                 pbar_step.set_postfix_str(
-                    "batch size: {}".format(p_states.shape[0]))
+                    "original batch size: {}".format(p_states.shape[0]))
                 _, summaries, weighted_loss = sess.run(
                     [model.train_op, model.train_summary_op, model.loss],
-                    feed_dict={model.src_: p_states,
-                               model.src_len_: p_len,
-                               model.action_idx_: actions_in,
-                               model.action_idx_out_: actions_out,
-                               model.action_len_: action_len,
-                               model.expected_q_: expected_qs,
-                               model.b_weight_: b_weights})
+                    feed_dict={model.src_: p_states[rrid, :],
+                               model.src_len_: p_len[rrid],
+                               model.action_idx_: actions_in[rrid, :],
+                               model.action_idx_out_: actions_out[rrid, :],
+                               model.action_len_: action_len[rrid],
+                               model.expected_q_: expected_qs[rrid],
+                               model.b_weight_: b_weights[rrid]})
                 summary_writer.add_summary(
                     summaries, trained_steps + et * epoch_size + it)
             except Exception as e:
@@ -193,9 +196,8 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
     action_len = np.concatenate(
         [action_collector.get_action_len(gid)[mid]
          for gid, mid in zip(game_id, mask_idx)], axis=0)
-    max_action_len = np.max(action_len)
     actions = np.concatenate(
-        [action_collector.get_action_matrix(gid)[mid, :max_action_len]
+        [action_collector.get_action_matrix(gid)[mid, :]
          for gid, mid in zip(game_id, mask_idx)], axis=0)
     actions_in, actions_out, action_len = get_action_idx_pair(
         actions, action_len, tokenizer.vocab["<S>"], tokenizer.vocab["</S>"])
@@ -213,6 +215,7 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
 if __name__ == "__main__":
     HOME = "/home/rcf-40/xusenyin/"
     MODEL_HOME = HOME + "git-store/experiments-drrn-bak5/agent-drrn-TDRRN-fine-tune-drop-no-theme-w-cookbook-teacher/"
+    # MODEL_HOME = "/Users/xusenyin/aaai-drrn-model/"
     dir_path = os.path.dirname(os.path.realpath(__file__))
     VOCAB_FILE = dir_path + "/../../resources/vocab.txt"
     config_file = MODEL_HOME + "hparams.json"
@@ -225,7 +228,7 @@ if __name__ == "__main__":
     cmd_args = CMD(
         model_creator="AttnEncoderDecoderDQN",
         vocab_file=VOCAB_FILE,
-        num_tokens=1000,
+        num_tokens=512,
         num_turns=6,
         batch_size=16,
         save_gap_t=1000,
