@@ -37,21 +37,18 @@ def load_uniq_lines(fname):
     return uniq(lines)
 
 
-def load_lower_vocab(vocab_file):
-        return list(map(lambda t: t.lower(), load_uniq_lines(vocab_file)))
-
-
 def load_vocab(vocab_file):
-        return load_uniq_lines(vocab_file)
+    return load_uniq_lines(vocab_file)
 
 
 def load_actions(action_file):
-        return load_uniq_lines(action_file)
+    return load_uniq_lines(action_file)
 
 
 def get_token2idx(tokens):
     uniq_tokens = uniq(tokens)
-    return dict(map(lambda idx_token: (idx_token[1], idx_token[0]), enumerate(uniq_tokens)))
+    return dict(map(
+        lambda idx_token: (idx_token[1], idx_token[0]), enumerate(uniq_tokens)))
 
 
 def col(memory, idx):
