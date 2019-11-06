@@ -172,11 +172,15 @@ def get_action_idx_pair(action_matrix, action_len, sos_id, eos_id):
 
 
 def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
-    trajectory_id = [m.tid for m in b_memory]
-    state_id = [m.sid for m in b_memory]
-    game_id = [m.gid for m in b_memory]
-    action_mask = [m.action_mask for m in b_memory]
-    expected_qs = [m.q_actions for m in b_memory]
+    """
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+     "action_mask", "next_action_mask", "q_actions")
+    """
+    trajectory_id = [m[0] for m in b_memory]
+    state_id = [m[1] for m in b_memory]
+    game_id = [m[2] for m in b_memory]
+    action_mask = [m[6] for m in b_memory]
+    expected_qs = [m[8] for m in b_memory]
     action_mask_t = list(BaseAgent.from_bytes(action_mask))
     mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
 
