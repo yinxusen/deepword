@@ -220,7 +220,7 @@ if __name__ == "__main__":
         vocab_file=VOCAB_FILE,
         num_tokens=1000,
         num_turns=6,
-        batch_size=32,
+        batch_size=16,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=5e-5,
