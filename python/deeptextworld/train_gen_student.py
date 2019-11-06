@@ -9,7 +9,7 @@ import tensorflow as tf
 from tqdm import trange
 
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
+from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_model import AttnEncoderDecoderDQN
 from deeptextworld.dqn_model import create_train_gen_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams
@@ -124,7 +124,7 @@ def add_batch(
 
 def load_snapshot(hp, memo_path, raw_tjs_path, action_path, tokenizer):
     memory = np.load(memo_path)['data']
-    memory = list(filter(lambda x: isinstance(x, DRRNMemoTeacher), memory))
+    memory = list(filter(lambda x: isinstance(x, tuple), memory))
 
     tjs = RawTextTrajectory(hp)
     tjs.load_tjs(raw_tjs_path)
