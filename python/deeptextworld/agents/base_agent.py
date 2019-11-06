@@ -1121,9 +1121,16 @@ class BaseAgent(Logging):
             self, instant_reward, is_terminal, action_mask, next_action_mask):
         # the last sid here is for the next state of using the last action
         aid = self._last_action_desc.action_idx
+        # don't use len(aid) for a_len, because all aids are padded up to 10.
+        if self._last_action_desc.action == "":
+            a_len = 0
+        else:
+            a_len = len(self._last_action_desc.action.split(" "))
+        if self.hp.pad_eos:
+            a_len += 1  # + "</S>"
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=aid, a_len=len(aid),
+            gid=self.game_id, aid=aid, a_len=a_len,
             reward=instant_reward, is_terminal=is_terminal,
             action_mask=action_mask, next_action_mask=next_action_mask
         ))
