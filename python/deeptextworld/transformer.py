@@ -371,8 +371,10 @@ class Transformer(tf.keras.Model):
                     dec_padding_mask, with_pointer=True)
                 predictions = final_prob[:, -1:, :]
                 last_predictions.append(predictions)
-                predicted_id = tf.cast(
-                    tf.argmax(predictions, axis=-1), tf.int32)
+                predicted_id = tf.multinomial(
+                    predictions[:, 0, :] / 1.5, 1, output_dtype=tf.int32)
+                # predicted_id = tf.cast(
+                #     tf.argmax(predictions, axis=-1), tf.int32)
                 # concatentate the predicted_id to the output which is given to the decoder
                 # as its input.
                 inc_tar = tf.concat([inc_tar, predicted_id], axis=-1)

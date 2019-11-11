@@ -624,6 +624,7 @@ def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
     </S> also counts for an action, which is the empty action
     the last token should be </S>
     if it's not </S> according to the argmax, then force set it to be </S>.
+    Q val for a whole action is the average of all Q val of valid tokens.
     :param q_actions_t: a q-matrix of a state computed from TF at step t
     :param eos_id: end-of-sentence
     """
@@ -638,6 +639,53 @@ def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
     # make sure the last token is eos no matter what
     padded_action_idx[valid_len-1] = eos_id
     q_val = np.mean(
+        q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
+    return padded_action_idx, q_val, valid_len
+
+
+def get_best_2D_q_v2(q_actions_t, eos_id) -> (list, float):
+    """
+    </S> also counts for an action, which is the empty action
+    the last token should be </S>
+    if it's not </S> according to the argmax, then force set it to be </S>.
+    Q val for a whole action is the Q val of the last token.
+    :param q_actions_t: a q-matrix of a state computed from TF at step t
+    :param eos_id: end-of-sentence
+    """
+    action_idx = np.argmax(q_actions_t, axis=1)
+    valid_len = 0
+    for a in action_idx:
+        valid_len += 1
+        if a == eos_id:
+            break
+    padded_action_idx = np.zeros_like(action_idx)
+    padded_action_idx[:valid_len] = action_idx[:valid_len]
+    # make sure the last token is eos no matter what
+    padded_action_idx[valid_len-1] = eos_id
+    q_val = q_actions_t[range(valid_len), padded_action_idx[valid_len-1]]
+    return padded_action_idx, q_val, valid_len
+
+
+def get_best_2D_q_v3(q_actions_t, eos_id) -> (list, float):
+    """
+    </S> also counts for an action, which is the empty action
+    the last token should be </S>
+    if it's not </S> according to the argmax, then force set it to be </S>.
+    Q val for a whole action is the maximum Q val of all valid tokens.
+    :param q_actions_t: a q-matrix of a state computed from TF at step t
+    :param eos_id: end-of-sentence
+    """
+    action_idx = np.argmax(q_actions_t, axis=1)
+    valid_len = 0
+    for a in action_idx:
+        valid_len += 1
+        if a == eos_id:
+            break
+    padded_action_idx = np.zeros_like(action_idx)
+    padded_action_idx[:valid_len] = action_idx[:valid_len]
+    # make sure the last token is eos no matter what
+    padded_action_idx[valid_len-1] = eos_id
+    q_val = np.max(
         q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
     return padded_action_idx, q_val, valid_len
 

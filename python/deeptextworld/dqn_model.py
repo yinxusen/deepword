@@ -220,6 +220,7 @@ class TrainDQNGenModel(
          'train_op', 'loss', 'expected_q_',
          'action_len_', 'b_weight_',
          'train_summary_op', 'abs_loss',
+         'loss_seq2seq', 'train_seq2seq_summary_op', 'train_seq2seq_op',
          'initializer'))):
     pass
 
@@ -318,6 +319,15 @@ class AttnEncoderDecoderDQN(BaseDQN):
             self.hp.max_action_len, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
+
+    def get_seq2seq_train_op(self, q_actions):
+        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=self.inputs["action_idx_out"], logits=q_actions)
+        action_len_mask = tf.sequence_mask(
+            self.inputs["action_len"], self.hp.n_tokens_per_action)
+        loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
 
 
 class CNNEncoderDecoderDQN(CNNEncoderDQN):
@@ -422,6 +432,10 @@ def create_train_gen_model(model_creator, hp, device_placement):
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
             train_summary_op = tf.summary.merge([loss_summary])
+            loss_seq2seq, train_seq2seq_op = model.get_seq2seq_train_op(
+                q_actions)
+            loss_summary_2 = tf.summary.scalar("loss_seq2seq", loss_seq2seq)
+            train_seq2seq_summary_op = tf.summary.merge([loss_summary_2])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
         q_actions_infer=q_actions_infer,
@@ -434,6 +448,9 @@ def create_train_gen_model(model_creator, hp, device_placement):
         expected_q_=inputs["expected_q"], loss=loss,
         abs_loss=abs_loss,
         train_summary_op=train_summary_op,
+        loss_seq2seq=loss_seq2seq,
+        train_seq2seq_op=train_seq2seq_op,
+        train_seq2seq_summary_op=train_seq2seq_summary_op,
         initializer=initializer)
 
 

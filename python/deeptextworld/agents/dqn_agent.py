@@ -357,7 +357,20 @@ class GenDQNAgent(DQNAgent):
         if self.in_game_t == 0 and self._last_action_desc is None:
             act_idx = []
         else:
-            act_idx = self._last_action_desc.action_idx
+            if self._last_action_desc.action_type not in (
+                    ACT_TYPE_NN, ACT_TYPE_RND_CHOOSE):
+                aid = self._last_action_desc.action_idx
+                a_vec = self.action_collector.get_action_matrix()[aid]
+                a_len = self.action_collector.get_action_len()[aid]
+                act_idx = list(a_vec[:a_len])
+            else:
+                if self._last_action_desc.action == "":
+                    a_len = 0
+                else:
+                    a_len = len(self._last_action_desc.action.split(" "))
+                if self.hp.pad_eos:
+                    a_len += 1  # + "</S>"
+                act_idx = self._last_action_desc.action_idx[:a_len]
         self.tjs.append(list(act_idx) + obs_idx)
         self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 
@@ -380,7 +393,9 @@ class GenDQNAgent(DQNAgent):
     def next_step_action(
             self, actions, all_actions, actions_mask, instant_reward):
         # DO NOT use the complex choose_action function for generation DQN
-        self._last_action_desc = self.get_an_eps_action(actions_mask)
+        # self._last_action_desc = self.get_an_eps_action(actions_mask)
+        self._last_action_desc = self.choose_action(
+            actions, all_actions, actions_mask, instant_reward)
         action = self._last_action_desc.action
         self._last_actions_mask = actions_mask
         return action

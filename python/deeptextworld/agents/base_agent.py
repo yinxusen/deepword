@@ -1164,13 +1164,13 @@ class BaseAgent(Logging):
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
-        if 0 < self.in_game_t < 10:  # pass the 1st master
+        if 0 < self.in_game_t:  # pass the 1st master
             self.debug(
                 "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
                 " reward: {}, raw_score: {}, is_terminal: {}".format(
                     self.mode(), self.total_t,
                     self.in_game_t, self.eps, self._last_action_desc,
-                    "", instant_reward, scores[0], dones[0]))
+                    cleaned_obs, instant_reward, scores[0], dones[0]))
         elif self.in_game_t == 0:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
