@@ -28,7 +28,7 @@ from deeptextworld.utils import ctime, load_vocab, get_token2idx
 
 class DRRNMemo(collections.namedtuple(
     "DRRNMemo",
-    ("tid", "sid", "gid", "aid", "a_len", "reward", "is_terminal",
+    ("tid", "sid", "gid", "aid", "token_id", "a_len", "reward", "is_terminal",
      "action_mask", "next_action_mask"))):
     pass
 
@@ -41,10 +41,12 @@ class DRRNMemoTeacher(collections.namedtuple(
 
 
 class ActionDesc(collections.namedtuple(
-        "ActionDesc", ("action_type", "action_idx", "action"))):
+        "ActionDesc",
+        ("action_type", "action_idx", "token_idx", "action_len", "action"))):
     def __repr__(self):
-        return "action_type: {}, action_idx: {}, action: {}".format(
-            self.action_type, self.action_idx, self.action)
+        return "{}/{}/{}/{}/{}".format(
+            self.action_type, self.action_idx, self.token_idx, self.action_len,
+            self.action)
 
 
 class NLTKTokenizer(object):
@@ -111,7 +113,8 @@ ACT_GW = "go west"
 ACT_TYPE_RND_CHOOSE = "random_choose_action"
 ACT_TYPE_RULE = "rule_based_action"
 ACT_TYPE_RND_WALK = "random_walk_action"
-ACT_TYPE_NN = "learned_action"
+ACT_TYPE_NN = "drrn_action"
+ACT_TYPE_GEN = "gen_action"
 ACT_TYPE_JITTER = "jitter_action"
 ACT_TYPE_TBL = "tabular_action"
 
@@ -202,7 +205,7 @@ class BaseAgent(Logging):
         self.memo = None
         self.model = None
         self.target_model = None
-        self.action_collector = None
+        self.actor = None  # action collector
         self.floor_plan = None
         self.dp = None
 
@@ -232,7 +235,7 @@ class BaseAgent(Logging):
         self.d4train, self.d4eval, self.d4target = self.init_devices()
 
         self._last_actions_mask = None
-        self._last_action_desc = None
+        self._last_action = None
 
         self._cumulative_score = 0
         self._cumulative_penalty = -0.1
@@ -391,8 +394,6 @@ class BaseAgent(Logging):
             new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
             new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
             new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
-            new_hp.set_hparam('sos_id', tokenizer.vocab[hp.sos])
-            new_hp.set_hparam('eos_id', tokenizer.vocab[hp.eos])
             # bert specific tokens
             new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
             new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
@@ -604,7 +605,7 @@ class BaseAgent(Logging):
         fp_path = self._get_context_obj_path(self.fp_prefix)
 
         # always loading actions to avoid different action index for DQN
-        self.action_collector = self.init_actions(
+        self.actor = self.init_actions(
             self.hp, self.tokenizer, action_path,
             with_loading=self.is_training)
         self.tjs = self.init_trajectory(
@@ -685,7 +686,7 @@ class BaseAgent(Logging):
         self.tjs_seg.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
         self.game_id = self.get_hash(master_starter)
-        self.action_collector.add_new_episode(eid=self.game_id)
+        self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self._cumulative_score = 0
@@ -742,7 +743,7 @@ class BaseAgent(Logging):
         self._episode_has_started = False
         self._last_actions_mask = None
         self.game_id = None
-        self._last_action_desc = None
+        self._last_action = None
         self._cumulative_penalty = -0.1
         self._prev_last_action = None
         self._prev_master = None
@@ -778,7 +779,7 @@ class BaseAgent(Logging):
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
         self.tjs_seg.save_tjs(tjs_seg_path)
-        self.action_collector.save_actions(action_path)
+        self.actor.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
 
     def save_snapshot(self):
@@ -903,19 +904,19 @@ class BaseAgent(Logging):
         #     except IndexError as _:
         #         self.debug("same game ID for different games error")
         #         action = None
-        if (self._last_action_desc is not None and
-                self._last_action_desc.action == ACT_PREPARE_MEAL and
+        if (self._last_action is not None and
+                self._last_action.action == ACT_PREPARE_MEAL and
                 instant_reward > 0):
             action = ACT_EAT_MEAL
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self._see_cookbook = True
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+        elif (self._last_action is not None and
+              self._last_action.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action.startswith("take") and
+        elif (self._last_action is not None and
+              self._last_action.action.startswith("take") and
               instant_reward <= 0):
             action = ACT_INVENTORY
         else:
@@ -924,13 +925,16 @@ class BaseAgent(Logging):
         if action is not None:
             if action not in all_actions:
                 self.debug("eat meal not in action list, adding it in ...")
-                self.action_collector.extend([action])
-                all_actions = self.action_collector.get_actions()
+                self.actor.extend([action])
+                all_actions = self.actor.actions
             action_idx = all_actions.index(action)
         else:
             action_idx = None
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
+            action_type=ACT_TYPE_RULE, action_idx=action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
+            action=action)
         return action_desc
 
     def _jitter_go_condition(self, action_desc, admissible_go_actions):
@@ -955,6 +959,8 @@ class BaseAgent(Logging):
             action = jitter_go_action
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_JITTER, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
                 action=action)
         else:
             pass
@@ -983,6 +989,8 @@ class BaseAgent(Logging):
             pass
         action_desc = ActionDesc(
             action_type=ACT_TYPE_RND_WALK, action_idx=action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
             action=action)
         return action_desc
 
@@ -1027,8 +1035,8 @@ class BaseAgent(Logging):
                 self.negative_response_reward(master))
             if self.hp.use_step_wise_reward:
                 if (master == self._prev_master
-                        and self._last_action_desc is not None
-                        and self._last_action_desc.action ==
+                        and self._last_action is not None
+                        and self._last_action.action ==
                         self._prev_last_action and
                         instant_reward < 0):
                     instant_reward = self.clip_reward(
@@ -1039,8 +1047,8 @@ class BaseAgent(Logging):
                     self._cumulative_penalty = self._cumulative_penalty - 0.1
                 else:
                     self._prev_last_action = (
-                        self._last_action_desc.action
-                        if self._last_action_desc is not None else None)
+                        self._last_action.action
+                        if self._last_action is not None else None)
                     self._prev_master = master
                     self._cumulative_penalty = -0.1
         self._cumulative_score = score
@@ -1060,11 +1068,11 @@ class BaseAgent(Logging):
         curr_place = room_name if room_name is not None else prev_place
 
         if (curr_place != prev_place and
-                self._last_action_desc is not None and
-                self._last_action_desc.action in self.inv_direction):
+                self._last_action is not None and
+                self._last_action.action in self.inv_direction):
             self.floor_plan.extend(
-                [(prev_place, self._last_action_desc.action, curr_place),
-                 (curr_place, self.inv_direction[self._last_action_desc.action],
+                [(prev_place, self._last_action.action, curr_place),
+                 (curr_place, self.inv_direction[self._last_action.action],
                   prev_place)])
         return curr_place
 
@@ -1118,18 +1126,11 @@ class BaseAgent(Logging):
 
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
-        # the last sid here is for the next state of using the last action
-        aid = self._last_action_desc.action_idx
-        # don't use len(aid) for a_len, because all aids are padded up to 10.
-        if self._last_action_desc.action == "":
-            a_len = 0
-        else:
-            a_len = len(self._last_action_desc.action.split(" "))
-        if self.hp.pad_eos:
-            a_len += 1  # + "</S>"
         original_data = self.memo.append(DRRNMemo(
             tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=aid, a_len=a_len,
+            gid=self.game_id, aid=self._last_action.action_idx,
+            token_id=self._last_action.token_idx,
+            a_len=self._last_action.action_len,
             reward=instant_reward, is_terminal=is_terminal,
             action_mask=action_mask, next_action_mask=next_action_mask
         ))
@@ -1169,7 +1170,7 @@ class BaseAgent(Logging):
                 "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
                 " reward: {}, raw_score: {}, is_terminal: {}".format(
                     self.mode(), self.total_t,
-                    self.in_game_t, self.eps, self._last_action_desc,
+                    self.in_game_t, self.eps, self._last_action,
                     cleaned_obs, instant_reward, scores[0], dones[0]))
         elif self.in_game_t == 0:
             self.info(
@@ -1181,13 +1182,11 @@ class BaseAgent(Logging):
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         obs_idx = self.index_string(cleaned_obs.split())
-        if self.in_game_t == 0 and self._last_action_desc is None:
+        if self.in_game_t == 0 and self._last_action is None:
             act_idx = []
         else:
-            aid = self._last_action_desc.action_idx
-            a_vec = self.action_collector.get_action_matrix()[aid]
-            a_len = self.action_collector.get_action_len()[aid]
-            act_idx = list(a_vec[:a_len])
+            act_idx = list(
+                self._last_action.token_idx[:self._last_action.action_len])
         self.tjs.append(act_idx + obs_idx)
         self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
 
@@ -1195,8 +1194,8 @@ class BaseAgent(Logging):
         actions = self.filter_admissible_actions(actions)
         actions = self.go_with_floor_plan(actions)
         # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
-        actions_mask = self.action_collector.extend(actions)
-        all_actions = self.action_collector.get_actions()
+        actions_mask = self.actor.extend(actions)
+        all_actions = self.actor.actions
 
         # make sure appending tjs first, otherwise the judgement could be wrong
         if self.tjs.get_last_sid() > 0:  # pass the 1st master
@@ -1214,14 +1213,14 @@ class BaseAgent(Logging):
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
         else:
             pass
-        self._last_action_desc = self.choose_action(
+        self._last_action = self.choose_action(
             actions, all_actions, actions_mask, instant_reward)
-        action = self._last_action_desc.action
-        action_idx = self._last_action_desc.action_idx
+        action = self._last_action.action
+        action_idx = self._last_action.action_idx
 
         # self._per_game_recorder.append(action)
 
-        if self._last_action_desc.action_type == ACT_TYPE_NN:
+        if self._last_action.action_type == ACT_TYPE_NN:
             self._cnt_action[action_idx] += 0.1
         else:
             # self.debug("cnt action ignore hard_set_action")
@@ -1523,32 +1522,32 @@ class GenBaseAgent(BaseAgent):
             master, cleaned_obs, instant_reward, infos)
         if self._curr_place != self._prev_place:
             self._obs = cleaned_obs
-        if self._last_action_desc is not None:
-            if self._last_action_desc.action == ACT_EXAMINE_COOKBOOK:
+        if self._last_action is not None:
+            if self._last_action.action == ACT_EXAMINE_COOKBOOK:
                 self._theme_words[self.game_id] = self.get_theme_words(
                     master)
                 self._connections[self.game_id] = self.get_connections(
                     master, self._theme_words[self.game_id])
-            elif self._last_action_desc.action == ACT_INVENTORY:
+            elif self._last_action.action == ACT_INVENTORY:
                 self._inventory = self.get_inventory(master)
-            elif self._last_action_desc.action.startswith("drop"):
+            elif self._last_action.action.startswith("drop"):
                 if not self.is_negative(cleaned_obs):
                     self._inventory = self.update_inventory(
-                        self._last_action_desc.action, self._inventory)
+                        self._last_action.action, self._inventory)
                     self._require_drop_actions = False
-            elif self._last_action_desc.action.startswith("take"):
+            elif self._last_action.action.startswith("take"):
                 if ((not self.is_negative(cleaned_obs)) and
                         ("too many things" not in cleaned_obs)):
                     self._inventory = self.update_inventory(
-                        self._last_action_desc.action, self._inventory)
+                        self._last_action.action, self._inventory)
                     self._require_drop_actions = False
                 if "too many things" in cleaned_obs:
                     self._require_drop_actions = True
-            elif self._last_action_desc.action.startswith("open"):
+            elif self._last_action.action.startswith("open"):
                 if ((not self.is_negative(cleaned_obs)) and
                         ("already open" not in cleaned_obs)):
                     self._obs += " " + cleaned_obs
-            elif self._last_action_desc.action == ACT_LOOK:
+            elif self._last_action.action == ACT_LOOK:
                 self._obs = cleaned_obs
             else:
                 pass
@@ -1577,12 +1576,12 @@ class GenBaseAgent(BaseAgent):
         elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
             action = ACT_EXAMINE_COOKBOOK
             self._see_cookbook = True
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action == ACT_EXAMINE_COOKBOOK and
+        elif (self._last_action is not None and
+              self._last_action.action == ACT_EXAMINE_COOKBOOK and
               instant_reward <= 0):
             action = ACT_INVENTORY
-        elif (self._last_action_desc is not None and
-              self._last_action_desc.action.startswith("take") and
+        elif (self._last_action is not None and
+              self._last_action.action.startswith("take") and
               instant_reward <= 0):
             action = ACT_INVENTORY
         else:
@@ -1591,11 +1590,14 @@ class GenBaseAgent(BaseAgent):
         if action is not None:
             if action not in all_actions:
                 self.debug("eat meal not in action list, adding it in ...")
-                self.action_collector.extend([action])
-                all_actions = self.action_collector.get_actions()
+                self.actor.extend([action])
+                all_actions = self.actor.actions
             action_idx = all_actions.index(action)
         else:
             action_idx = None
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_RULE, action_idx=action_idx, action=action)
+            action_type=ACT_TYPE_RULE, action_idx=action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
+            action=action)
         return action_desc

@@ -218,7 +218,7 @@ class TrainDQNGenModel(
         ('graph', 'model', 'q_actions', 'q_actions_infer',
          'src_', 'src_len_', 'action_idx_', 'action_idx_out_',
          'train_op', 'loss', 'expected_q_',
-         'action_len_', 'b_weight_',
+         'action_len_', 'b_weight_', 'temperature',
          'train_summary_op', 'abs_loss',
          'loss_seq2seq', 'train_seq2seq_summary_op', 'train_seq2seq_op',
          'initializer'))):
@@ -228,7 +228,7 @@ class TrainDQNGenModel(
 class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
-        ('graph', 'model',
+        ('graph', 'model', 'temperature',
          'q_actions', 'q_actions_infer', 'src_', 'src_len_', 'action_idx_',
          'initializer'))):
     pass
@@ -289,7 +289,8 @@ class AttnEncoderDecoderDQN(BaseDQN):
             "action_idx_out": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
             "action_len": tf.placeholder(tf.int32, [None]),
-            "b_weight": tf.placeholder(tf.float32, [None])
+            "b_weight": tf.placeholder(tf.float32, [None]),
+            "temperature": tf.placeholder(tf.float32, [])
         }
 
         self.transformer = txf.Transformer(
@@ -301,7 +302,8 @@ class AttnEncoderDecoderDQN(BaseDQN):
         q_actions = self.transformer(
             self.inputs["src"], tar=None, training=False,
             max_tar_len=self.hp.n_tokens_per_action,
-            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id)
+            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id,
+            temperature=self.inputs["temperature"])
         return q_actions
 
     def get_q_actions(self):
@@ -309,7 +311,7 @@ class AttnEncoderDecoderDQN(BaseDQN):
             self.inputs["src"], tar=self.inputs["action_idx"],
             training=True,
             max_tar_len=self.hp.n_tokens_per_action,
-            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id)
+            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id, temperature=None)
         return q_actions
 
     def get_train_op(self, q_actions):
@@ -445,6 +447,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
         action_idx_out_=inputs["action_idx_out"],
         action_len_=inputs["action_len"],
         b_weight_=inputs["b_weight"],
+        temperature=inputs["temperature"],
         expected_q_=inputs["expected_q"], loss=loss,
         abs_loss=abs_loss,
         train_summary_op=train_summary_op,
@@ -470,4 +473,5 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         src_=inputs["src"],
         src_len_=inputs["src_len"],
         action_idx_=inputs["action_idx"],
+        temperature=inputs["temperature"],
         initializer=initializer)

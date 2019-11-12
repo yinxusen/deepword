@@ -54,8 +54,8 @@ pushd $PDIR
     --game-path $GAMEPATH --f-games $F_GAMES \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 1000 --annealing-gamma-t 100 --observation-t 100 --replay-mem 1000 \
-    --init-eps 0.5 \
+    --init-eps 0.1 --final-eps 0.05 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 30 \
-    --model-creator AttnEncoderDecoderDQN
+    --model-creator AttnEncoderDecoderDQN --start-t-ignore-model-t
 popd

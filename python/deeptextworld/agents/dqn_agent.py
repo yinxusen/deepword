@@ -6,7 +6,7 @@ from textworld import EnvInfos
 
 from deeptextworld import dqn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
-    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN, ACT_TYPE_TBL
+    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN, ACT_TYPE_GEN, ACT_TYPE_TBL
 from deeptextworld.dqn_func import get_best_2Daction, get_best_2D_q
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
@@ -41,7 +41,7 @@ class DQNAgent(BaseAgent):
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
             action_idx, action = get_random_1Daction(
-                self.action_collector.get_actions(), action_mask)
+                self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
                 action=action)
@@ -52,7 +52,7 @@ class DQNAgent(BaseAgent):
                 self.model.src_len_: [lens_t]
             })[0]
             action_idx, q_max, action = get_best_1Daction(
-                q_actions_t, self.action_collector.get_actions(),
+                q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
@@ -266,18 +266,23 @@ class TabularDQNAgent(DQNAgent):
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
             action_idx, action = get_random_1Daction(
-                self.action_collector.get_actions(), action_mask)
+                self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
                 action=action)
         else:
             hs, _ = self.stc.fetch_last_state()
             q_actions_t = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
             action_idx, q_max, action = get_best_1Daction(
-                q_actions_t, self.action_collector.get_actions(),
+                q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_TBL, action_idx=action_idx, action=action)
+                action_type=ACT_TYPE_TBL, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action)
         return action_desc
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
@@ -352,53 +357,11 @@ class GenDQNAgent(DQNAgent):
             admissible_commands=True,
             extras=['recipe'])
 
-    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
-        obs_idx = self.index_string(cleaned_obs.split())
-        if self.in_game_t == 0 and self._last_action_desc is None:
-            act_idx = []
-        else:
-            if self._last_action_desc.action_type not in (
-                    ACT_TYPE_NN, ACT_TYPE_RND_CHOOSE):
-                aid = self._last_action_desc.action_idx
-                a_vec = self.action_collector.get_action_matrix()[aid]
-                a_len = self.action_collector.get_action_len()[aid]
-                act_idx = list(a_vec[:a_len])
-            else:
-                if self._last_action_desc.action == "":
-                    a_len = 0
-                else:
-                    a_len = len(self._last_action_desc.action.split(" "))
-                if self.hp.pad_eos:
-                    a_len += 1  # + "</S>"
-                act_idx = self._last_action_desc.action_idx[:a_len]
-        self.tjs.append(list(act_idx) + obs_idx)
-        self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
-
-        actions = self.get_admissible_actions(infos)
-        actions = self.filter_admissible_actions(actions)
-        actions = self.go_with_floor_plan(actions)
-        actions_mask = self.action_collector.extend(actions)
-        all_actions = self.action_collector.get_actions()
-
-        # make sure appending tjs first, otherwise the judgement could be wrong
-        if self.tjs.get_last_sid() > 0:  # pass the 1st master
-            self.feed_memory(
-                instant_reward, dones[0],
-                self._last_actions_mask, actions_mask)
-        else:
-            pass
-
-        return actions, all_actions, actions_mask, instant_reward
-
-    def next_step_action(
-            self, actions, all_actions, actions_mask, instant_reward):
-        # DO NOT use the complex choose_action function for generation DQN
-        # self._last_action_desc = self.get_an_eps_action(actions_mask)
-        self._last_action_desc = self.choose_action(
-            actions, all_actions, actions_mask, instant_reward)
-        action = self._last_action_desc.action
-        self._last_actions_mask = actions_mask
-        return action
+    @classmethod
+    def negative_response_reward(cls, master):
+        if master == "that 's not a verb i recognise .":
+            return 1
+        return 0
 
     def get_an_eps_action(self, action_mask):
         """
@@ -406,25 +369,28 @@ class GenDQNAgent(DQNAgent):
         or the best predicted action index with action string.
         :param action_mask:
         """
-        action_mask = self.from_bytes([action_mask])[0]
-        if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
-                self.action_collector.get_actions(), action_mask)
-            atid = self.action_collector.get_action_matrix()[action_idx]
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=atid, action=action)
-        else:
-            indexed_state_t, lens_t = self.tjs.fetch_last_state()
-            q_actions_t = self.sess.run(self.model.q_actions_infer, feed_dict={
-                self.model.src_: [indexed_state_t],
-                self.model.src_len_: [lens_t]
-            })[0]
-            action_idx, q_max, action = get_best_2Daction(
-                q_actions_t, self.tokenizer.inv_vocab, self.hp.eos_id)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
-            self.debug("generated action: {}".format(action))
+        indexed_state_t, lens_t = self.tjs.fetch_last_state()
+        q_actions_t = self.sess.run(self.model.q_actions_infer, feed_dict={
+            self.model.src_: [indexed_state_t],
+            self.model.src_len_: [lens_t],
+            self.model.temperature: self.eps * 10
+        })[0]
+        action_idx, valid_len, q_max, action = get_best_2Daction(
+            q_actions_t, self.tokenizer.inv_vocab, self.hp.eos_id)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE_GEN, action_idx=None,
+            token_idx=action_idx, action_len=valid_len, action=action)
+        self.debug("generated action: {}".format(action))
         return action_desc
+
+    def get_instant_reward(self, score, master, is_terminal, has_won):
+        """
+        increase instance reward 10 times to fit cross entropy loss trained
+        model
+        """
+        ir = super(GenDQNAgent, self).get_instant_reward(
+            score, master, is_terminal, has_won)
+        return ir * 10
 
     def create_model_instance(self, device):
         model_creator = getattr(dqn_model, self.hp.model_creator)
@@ -449,23 +415,25 @@ class GenDQNAgent(DQNAgent):
 
         trajectory_id = [m[0].tid for m in b_memory]
         state_id = [m[0].sid for m in b_memory]
-        action_id = [m[0].aid for m in b_memory]
+        at_id = [m[0].token_id for m in b_memory]
         action_len = [m[0].a_len for m in b_memory]
         reward = [m[0].reward for m in b_memory]
         is_terminal = [m[0].is_terminal for m in b_memory]
-        action_id_wo_eos = np.asarray(action_id)
-        action_id_wo_eos[:, np.asarray(action_len)-1] = 0
-        action_id_in = np.concatenate(
+        at_id_wo_eos = np.asarray(at_id)
+        at_id_wo_eos[
+            range(len(at_id)), np.asarray(action_len)-1] = 0
+        at_id_in = np.concatenate(
             [np.asarray([[self.hp.sos_id]] * len(action_len)),
-             action_id_wo_eos[:, :-1]], axis=1)
+             at_id_wo_eos[:, :-1]], axis=1)
 
+        at_id = np.asarray(at_id)
         self.debug("action in/out example:\n{} -- {}\n{} -- {}".format(
-            action_id_in[0, :],
+            at_id_in[0, :],
             self.tokenizer.convert_ids_to_tokens(
-                action_id_in[0, :action_len[0]]),
-            action_id[0, :],
+                at_id_in[0, :action_len[0]]),
+            at_id[0, :],
             self.tokenizer.convert_ids_to_tokens(
-                action_id[0, :action_len[0]])))
+                at_id[0, :action_len[0]])))
 
         p_states, s_states, p_len, s_len =\
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
@@ -475,13 +443,13 @@ class GenDQNAgent(DQNAgent):
             target_model.q_actions,
             feed_dict={target_model.src_: s_states,
                        target_model.src_len_: s_len,
-                       target_model.action_idx_: action_id_in})
+                       target_model.action_idx_: at_id_in})
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
             feed_dict={self.model.src_: s_states,
                        self.model.src_len_: s_len,
-                       self.model.action_idx_: action_id_in})
+                       self.model.action_idx_: at_id_in})
         t2_end = ctime()
 
         expected_q = np.zeros_like(reward)
@@ -501,8 +469,8 @@ class GenDQNAgent(DQNAgent):
             feed_dict={self.model.src_: p_states,
                        self.model.src_len_: p_len,
                        self.model.b_weight_: b_weight,
-                       self.model.action_idx_: action_id_in,
-                       self.model.action_idx_out_: action_id,
+                       self.model.action_idx_: at_id_in,
+                       self.model.action_idx_out_: at_id,
                        self.model.action_len_: action_len,
                        self.model.expected_q_: expected_q})
         t3_end = ctime()

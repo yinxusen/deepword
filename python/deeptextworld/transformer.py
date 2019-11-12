@@ -349,7 +349,8 @@ class Transformer(tf.keras.Model):
             num_layers, d_model, num_heads, dff, target_vocab_size, rate)
         self.tgt_vocab_size = target_vocab_size
 
-    def call(self, inp, tar, training, max_tar_len, sos_id, eos_id):
+    def call(
+            self, inp, tar, training, max_tar_len, sos_id, eos_id, temperature):
         enc_padding_mask = create_padding_mask(inp)
         dec_padding_mask = enc_padding_mask
         # (batch_size, inp_seq_len, d_model)
@@ -372,7 +373,8 @@ class Transformer(tf.keras.Model):
                 predictions = final_prob[:, -1:, :]
                 last_predictions.append(predictions)
                 predicted_id = tf.multinomial(
-                    predictions[:, 0, :] / 1.5, 1, output_dtype=tf.int32)
+                    predictions[:, 0, :] / temperature,
+                    1, output_dtype=tf.int32)
                 # predicted_id = tf.cast(
                 #     tf.argmax(predictions, axis=-1), tf.int32)
                 # concatentate the predicted_id to the output which is given to the decoder

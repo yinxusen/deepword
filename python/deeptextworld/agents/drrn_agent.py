@@ -23,13 +23,15 @@ class DRRNAgent(BaseAgent):
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
             action_idx, action = get_random_1Daction(
-                self.action_collector.get_actions(), action_mask)
+                self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
                 action=action)
         else:
-            action_matrix = self.action_collector.get_action_matrix()
-            action_len = self.action_collector.get_action_len()
+            action_matrix = self.actor.action_matrix
+            action_len = self.actor.action_len
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             seg_t, _ = self.tjs_seg.fetch_last_state()
             q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
@@ -40,12 +42,15 @@ class DRRNAgent(BaseAgent):
                 self.model.actions_: [action_matrix],
                 self.model.actions_len_: [action_len]
             })[0]
-            actions = self.action_collector.get_actions()
+            actions = self.actor.actions
             action_idx, q_max, action = get_best_1Daction(
                 q_actions_t - self._cnt_action, actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
+                action_type=ACT_TYPE_NN, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action)
         return action_desc
 
     def create_model_instance(self, device):
@@ -88,10 +93,10 @@ class DRRNAgent(BaseAgent):
         # make sure the p_states and s_states are in the same game.
         # otherwise, it won't make sense to use the same action matrix.
         action_len = (
-            [self.action_collector.get_action_len(gid) for gid in game_id])
+            [self.actor.get_action_len(gid) for gid in game_id])
         max_action_len = np.max(action_len)
         action_matrix = (
-            [self.action_collector.get_action_matrix(gid)[:, :max_action_len]
+            [self.actor.get_action_matrix(gid)[:, :max_action_len]
              for gid in game_id])
 
         t2 = ctime()

@@ -24,25 +24,25 @@ class ActionCollector(Logging):
         self.eos_id = eos_id
 
         # current episode actions
-        self.action2idx = None
-        self.actions = None
-        self.curr_aid = 0
-        self.curr_eid = None
-        self.action_matrix = None
-        self.action_len = None
+        self._action2idx = None
+        self._actions = None
+        self._curr_aid = 0
+        self._curr_eid = None
+        self._action_matrix = None
+        self._action_len = None
 
         self.tokenizer = tokenizer
         self.pad_eos = pad_eos
 
     def init(self):
-        self.action2idx = {}
-        self.actions = [""] * self.n_actions
-        self.curr_aid = 0
-        self.curr_eid = None
-        self.action_matrix = np.full(
+        self._action2idx = {}
+        self._actions = [""] * self.n_actions
+        self._curr_aid = 0
+        self._curr_eid = None
+        self._action_matrix = np.full(
             (self.n_actions, self.n_tokens),
             fill_value=self.padding_val_id, dtype=np.int32)
-        self.action_len = np.zeros(self.n_actions, dtype=np.int32)
+        self._action_len = np.zeros(self.n_actions, dtype=np.int32)
 
     @classmethod
     def _ctime(cls):
@@ -52,27 +52,27 @@ class ActionCollector(Logging):
         if eid is None:
             eid = self._ctime()
 
-        if eid == self.curr_eid:
+        if eid == self._curr_eid:
             # self.info("continue current episode: {}".format(eid))
             return
 
         # self.info("add new episode in actions: {}".format(eid))
 
-        if self.size() != 0 and self.curr_eid is not None:
-            self.actions_base[self.curr_eid] = self.actions[:self.size()]
-            self.action_matrix_base[self.curr_eid] = self.action_matrix
-            self.action_len_base[self.curr_eid] = self.action_len
+        if self.size() != 0 and self._curr_eid is not None:
+            self.actions_base[self._curr_eid] = self._actions[:self.size()]
+            self.action_matrix_base[self._curr_eid] = self._action_matrix
+            self.action_len_base[self._curr_eid] = self._action_len
 
         self.init()
-        self.curr_eid = eid
-        if self.curr_eid in self.actions_base:
-            self.info("found existing episode: {}".format(self.curr_eid))
-            self.curr_aid = len(self.actions_base[self.curr_eid])
-            self.actions[:self.size()] = self.actions_base[self.curr_eid]
-            self.action_matrix = self.action_matrix_base[self.curr_eid]
-            self.action_len = self.action_len_base[self.curr_eid]
-            self.action2idx = dict([(a, i) for (i, a) in
-                                    enumerate(self.actions)])
+        self._curr_eid = eid
+        if self._curr_eid in self.actions_base:
+            self.info("found existing episode: {}".format(self._curr_eid))
+            self._curr_aid = len(self.actions_base[self._curr_eid])
+            self._actions[:self.size()] = self.actions_base[self._curr_eid]
+            self._action_matrix = self.action_matrix_base[self._curr_eid]
+            self._action_len = self.action_len_base[self._curr_eid]
+            self._action2idx = dict([(a, i) for (i, a) in
+                                     enumerate(self._actions)])
             self.info("{} actions loaded".format(self.size()))
         else:
             pass
@@ -103,52 +103,69 @@ class ActionCollector(Logging):
         bit_mask_vec[::] = False
         bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
         for a in actions:
-            if a not in self.action2idx:
-                assert self.curr_aid < self.n_actions - 1, "n_actions too small"
-                self.action2idx[a] = self.curr_aid
+            if a not in self._action2idx:
+                assert self._curr_aid < self.n_actions - 1, \
+                    "n_actions too small"
+                self._action2idx[a] = self._curr_aid
                 action_idx, n_action_tokens = self.idx_tokens(a)
-                self.action_len[self.curr_aid] = n_action_tokens
-                self.action_matrix[self.curr_aid][:n_action_tokens] =\
+                self._action_len[self._curr_aid] = n_action_tokens
+                self._action_matrix[self._curr_aid][:n_action_tokens] =\
                     action_idx[:n_action_tokens]
-                self.actions[self.curr_aid] = a
-                self.curr_aid += 1
-            bit_mask_vec[self.action2idx[a]] = True
+                self._actions[self._curr_aid] = a
+                self._curr_aid += 1
+            bit_mask_vec[self._action2idx[a]] = True
         return bit_mask_vec.tobytes()
 
     def get_action_matrix(self, eid=None):
-        if eid is None or eid == self.curr_eid:
-            return self.action_matrix
+        if eid is None or eid == self._curr_eid:
+            return self._action_matrix
         else:
             return self.action_matrix_base[eid]
 
+    @property
+    def action_matrix(self):
+        return self._action_matrix
+
     def get_action_len(self, eid=None):
-        if eid is None or eid == self.curr_eid:
-            return self.action_len
+        if eid is None or eid == self._curr_eid:
+            return self._action_len
         else:
             return self.action_len_base[eid]
 
+    @property
+    def action_len(self):
+        return self._action_len
+
     def get_actions(self, eid=None):
-        if eid is None or eid == self.curr_eid:
-            return self.actions
+        if eid is None or eid == self._curr_eid:
+            return self._actions
         else:
             return self.actions_base[eid]
 
+    @property
+    def actions(self):
+        return self._actions
+
     def get_action2idx(self, eid=None):
-        if eid is None or eid == self.curr_eid:
-            return self.action2idx
+        if eid is None or eid == self._curr_eid:
+            return self._action2idx
         else:
             action2idx = dict(
                 [(a, i) for (i, a) in enumerate(self.actions_base[eid])])
             return action2idx
 
+    @property
+    def action2idx(self):
+        return self._action2idx
+
     def size(self):
-        return self.curr_aid
+        return self._curr_aid
 
     def save_actions(self, path):
         metadata = ([self.n_actions, self.n_tokens, self.unk_val_id,
                      self.padding_val_id])
-        if self.size() != 0 and self.curr_eid is not None:
-            self.actions_base[self.curr_eid] = self.actions[:self.size()]
+        if self.size() != 0 and self._curr_eid is not None:
+            self.actions_base[self._curr_eid] = self._actions[:self.size()]
         actions_base_keys = list(self.actions_base.keys())
         actions_base_vals = list(self.actions_base.values())
         np.savez(path, metadata=metadata,

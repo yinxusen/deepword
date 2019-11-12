@@ -616,7 +616,7 @@ def get_best_2Daction(q_actions_t, tgt_tokens, eos_id):
     """
     action_idx, q_val, valid_len = get_best_2D_q(q_actions_t, eos_id)
     action = " ".join([tgt_tokens[a] for a in action_idx[:valid_len-1]])
-    return action_idx, q_val, action
+    return action_idx, valid_len, q_val, action
 
 
 def get_best_2D_q(q_actions_t, eos_id) -> (list, float):
