@@ -220,6 +220,7 @@ class TrainDQNGenModel(
          'train_op', 'loss', 'expected_q_',
          'action_len_', 'b_weight_', 'temperature',
          'train_summary_op', 'abs_loss',
+         'p_gen', 'p_gen_infer',
          'loss_seq2seq', 'train_seq2seq_summary_op', 'train_seq2seq_op',
          'initializer'))):
     pass
@@ -229,6 +230,7 @@ class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'temperature',
+         'p_gen', 'p_gen_infer',
          'q_actions', 'q_actions_infer', 'src_', 'src_len_', 'action_idx_',
          'initializer'))):
     pass
@@ -299,20 +301,20 @@ class AttnEncoderDecoderDQN(BaseDQN):
             target_vocab_size=self.hp.vocab_size)
 
     def get_q_actions_infer(self):
-        q_actions = self.transformer(
+        q_actions, p_gen = self.transformer(
             self.inputs["src"], tar=None, training=False,
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id, eos_id=self.hp.eos_id,
             temperature=self.inputs["temperature"])
-        return q_actions
+        return q_actions, p_gen
 
     def get_q_actions(self):
-        q_actions = self.transformer(
+        q_actions, p_gen = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
             training=True,
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id, eos_id=self.hp.eos_id, temperature=None)
-        return q_actions
+        return q_actions, p_gen
 
     def get_train_op(self, q_actions):
         loss, abs_loss = dqn.l2_loss_2Daction(
@@ -429,8 +431,8 @@ def create_train_gen_model(model_creator, hp, device_placement):
             model = model_creator(hp)
             initializer = tf.global_variables_initializer
             inputs = model.inputs
-            q_actions = model.get_q_actions()
-            q_actions_infer = model.get_q_actions_infer()
+            q_actions, p_gen = model.get_q_actions()
+            q_actions_infer, p_gen_infer = model.get_q_actions_infer()
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
             train_summary_op = tf.summary.merge([loss_summary])
@@ -450,6 +452,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
         temperature=inputs["temperature"],
         expected_q_=inputs["expected_q"], loss=loss,
         abs_loss=abs_loss,
+        p_gen=p_gen, p_gen_infer=p_gen_infer,
         train_summary_op=train_summary_op,
         loss_seq2seq=loss_seq2seq,
         train_seq2seq_op=train_seq2seq_op,
@@ -464,8 +467,8 @@ def create_eval_gen_model(model_creator, hp, device_placement):
             model = model_creator(hp, is_infer=True)
             initializer = tf.global_variables_initializer
             inputs = model.inputs
-            q_actions = model.get_q_actions()
-            q_actions_infer = model.get_q_actions_infer()
+            q_actions, p_gen = model.get_q_actions()
+            q_actions_infer, p_gen_infer = model.get_q_actions_infer()
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
@@ -474,4 +477,5 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         src_len_=inputs["src_len"],
         action_idx_=inputs["action_idx"],
         temperature=inputs["temperature"],
+        p_gen=p_gen, p_gen_infer=p_gen_infer,
         initializer=initializer)

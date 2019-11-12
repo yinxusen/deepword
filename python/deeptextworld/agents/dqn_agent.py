@@ -370,17 +370,21 @@ class GenDQNAgent(DQNAgent):
         :param action_mask:
         """
         indexed_state_t, lens_t = self.tjs.fetch_last_state()
-        q_actions_t = self.sess.run(self.model.q_actions_infer, feed_dict={
-            self.model.src_: [indexed_state_t],
-            self.model.src_len_: [lens_t],
-            self.model.temperature: self.eps * 10
-        })[0]
+        res = self.sess.run(
+            [self.model.q_actions_infer, self.model.p_gen_infer], feed_dict={
+                self.model.src_: [indexed_state_t],
+                self.model.src_len_: [lens_t],
+                self.model.temperature: self.eps * 10
+            })
+        q_actions_t = res[0][0]
+        p_gen = res[1][0]
         action_idx, valid_len, q_max, action = get_best_2Daction(
             q_actions_t, self.tokenizer.inv_vocab, self.hp.eos_id)
         action_desc = ActionDesc(
             action_type=ACT_TYPE_GEN, action_idx=None,
             token_idx=action_idx, action_len=valid_len, action=action)
         self.debug("generated action: {}".format(action))
+        self.debug("p_gen: {}".format(p_gen))
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):

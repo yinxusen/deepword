@@ -130,7 +130,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         scaled_attention, attention_weights = scaled_dot_product_attention(
             q, k, v, mask)
         # (batch_size, seq_len_q, seq_len_k)
-        attention_weights = tf.reduce_sum(attention_weights, axis=1)
+        attention_weights = tf.nn.softmax(tf.reduce_sum(attention_weights, axis=1))
 
         scaled_attention = tf.transpose(
             scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
@@ -298,7 +298,9 @@ class Decoder(tf.keras.layers.Layer):
             batch_size * max_action_len * tgt_vocab_size
         :return:
         """
-        total_prob = self.final_layer(x)
+        total_logits = self.final_layer(x)
+        total_prob = tf.nn.softmax(total_logits)
+        p_gen = None
 
         if with_pointer:
             vanilla_attention = attention_weights[-1]
@@ -317,7 +319,7 @@ class Decoder(tf.keras.layers.Layer):
             enc_x = tf.tile(enc_x, [1, dec_t, 1])  # [batch_size, dec, atten_len]
             enc_x = tf.stack([dec, enc_x], axis=3)
 
-            copy_output = tf.map_fn(
+            copy_prob = tf.map_fn(
                 fn=lambda y: tf.scatter_nd(
                     y[0], y[1], [dec_t, self.tgt_vocab_size]),
                 elems=(enc_x, vanilla_attention), dtype=tf.float32)
@@ -333,9 +335,11 @@ class Decoder(tf.keras.layers.Layer):
                 [x, before_dec, context_vectors], axis=-1)
             p_gen = self.p_gen_dense(combined_features)
 
-            total_prob = p_gen * total_prob + (1 - p_gen) * copy_output
+            total_prob = p_gen * total_prob + (1 - p_gen) * copy_prob
         # x.shape == (batch_size, target_seq_len, tgt_vocab_size)
-        return total_prob
+
+        final_logits = tf.log(total_prob)
+        return final_logits, p_gen
 
 
 class Transformer(tf.keras.Model):
@@ -358,20 +362,22 @@ class Transformer(tf.keras.Model):
 
         if training:
             look_ahead_mask = create_decode_masks(tar)
-            final_output = self.decoder(
+            final_output, p_gen = self.decoder(
                 tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask,
                 with_pointer=True)
         else:
             batch_size = tf.shape(inp)[0]
             inc_tar = tf.fill([batch_size, 1], sos_id)
             last_predictions = []
+            p_gen = []
             for i in range(max_tar_len):
                 combined_mask = create_decode_masks(inc_tar)
-                final_prob = self.decoder(
+                final_prob, p_gen_latest = self.decoder(
                     inc_tar, inp, enc_output, training, combined_mask,
                     dec_padding_mask, with_pointer=True)
                 predictions = final_prob[:, -1:, :]
                 last_predictions.append(predictions)
+                p_gen.append(p_gen_latest[:, -1:])
                 predicted_id = tf.multinomial(
                     predictions[:, 0, :] / temperature,
                     1, output_dtype=tf.int32)
@@ -384,11 +390,12 @@ class Transformer(tf.keras.Model):
                 if predicted_id == eos_id:
                     break
             final_output = tf.concat(last_predictions, axis=1)
+            p_gen = tf.concat(p_gen, axis=1)
             src_paddings = tf.constant(
                 [[0, 0], [0, max_tar_len-len(last_predictions)], [0, 0]])
             final_output = tf.pad(
                 final_output, paddings=src_paddings, mode="CONSTANT")
-        return final_output
+        return final_output, p_gen
 
 
 if __name__ == '__main__':
