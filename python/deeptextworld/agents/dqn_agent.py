@@ -383,8 +383,9 @@ class GenDQNAgent(DQNAgent):
         action_desc = ActionDesc(
             action_type=ACT_TYPE_GEN, action_idx=None,
             token_idx=action_idx, action_len=valid_len, action=action)
-        self.debug("generated action: {}".format(action))
-        self.debug("p_gen: {}".format(p_gen))
+        self.debug("generated action: {}".format(
+            " ".join(map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
+                         zip(action.split(), list(np.squeeze(p_gen)))))))
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):

@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import time
 from queue import Queue
@@ -61,8 +62,8 @@ def train_gen_student(
     total_size = len(memory)
     eprint("loaded memory size: {}".format(total_size))
     batch_size = hp.batch_size
-    epoch_size = 10000
-    num_epochs = max((total_size // batch_size) // epoch_size, 1)
+    epoch_size = 5000
+    num_epochs = int(max(np.ceil(total_size / batch_size / epoch_size), 1))
 
     t = Thread(
         target=add_batch,
@@ -79,14 +80,11 @@ def train_gen_student(
     eprint("start training")
     data_in_queue = True
     for et in trange(num_epochs, ascii=True, desc="epoch"):
-        pbar_step = trange(epoch_size, ascii=True, desc="step")
-        for it in pbar_step:
+        for it in trange(epoch_size, ascii=True, desc="step"):
             try:
                 data = queue.get(timeout=10)
                 (p_states, p_len, actions_in, actions_out, action_len,
                  expected_qs, b_weights) = data
-                pbar_step.set_postfix_str(
-                    "original batch size: {}".format(p_states.shape[0]))
                 _, summaries = sess.run(
                     [model.train_seq2seq_op, model.train_seq2seq_summary_op],
                     feed_dict={model.src_: p_states,
@@ -111,8 +109,7 @@ def train_gen_student(
 
 
 def eval_gen_student(
-        hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path, load_student_from):
+        hp, tokenizer, memo_path, tjs_path, action_path, load_student_from):
     model = create_eval_gen_model(
         model_creator=AttnEncoderDecoderDQN, hp=hp,
         device_placement="/device:GPU:0")
@@ -365,42 +362,51 @@ def prepare_data_v2(b_memory, tjs, action_collector, tokenizer, num_tokens):
         actions_in, actions_out, action_len, expected_qs, b_weights)
 
 
-def train():
+def train(combined_data_path, model_path):
     hp = load_hparams_for_training(config_file, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
-    save_hparams(hp, "{}/hparams.json".format(load_student_from))
-    train_gen_student(
-        hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path, load_student_from)
+    last_weights = os.path.join(model_path, "last_weights")
+    ckpt_prefix = os.path.join(last_weights, "after-epoch")
+    summary_writer_path = os.path.join(model_path, "summaries")
+    save_hparams(hp, "{}/hparams.json".format(model_path))
+    for tp, ap, mp in combined_data_path:
+        train_gen_student(
+            hp, tokenizer, mp, tp, ap,
+            ckpt_prefix, summary_writer_path, last_weights)
 
 
-def evaluate():
-    hp = load_hparams_for_evaluation(
-        "{}/hparams.json".format(load_student_from), cmd_args)
+def evaluate(combined_data_path, model_path):
+    hp = load_hparams_for_evaluation(config_file, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
+    last_weights = os.path.join(model_path, "last_weights")
     eprint(output_hparams(hp))
-    eval_gen_student(
-        hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path, load_student_from)
-    pass
+    for tp, ap, mp in combined_data_path:
+        eval_gen_student(
+            hp, tokenizer, mp, tp, ap, last_weights)
 
 
 if __name__ == "__main__":
-    # HOME = "/home/rcf-40/xusenyin/"
-    # MODEL_HOME = HOME + "git-store/experiments-drrn-bak5/agent-drrn-TDRRN-fine-tune-drop-no-theme-w-cookbook-teacher/"
-    MODEL_HOME = "/Users/xusenyin/aaai-drrn-model/"
+    data_path = sys.argv[1]
+    model_path = sys.argv[2]
+    n_data = int(sys.argv[3])
     dir_path = os.path.dirname(os.path.realpath(__file__))
     VOCAB_FILE = dir_path + "/../../resources/vocab.txt"
-    config_file = MODEL_HOME + "hparams.json"
-    tjs_path = MODEL_HOME + "extra-data-2/raw-trajectories-0.npz"
-    action_path = MODEL_HOME + "extra-data-2/actions-0.npz"
-    memo_path = MODEL_HOME + "extra-data-2/memo-0.npz"
-    ckpt_prefix = MODEL_HOME + "gen-student/after-epoch"
-    summary_writer_path = MODEL_HOME + "gen-student-summary/"
-    load_student_from = MODEL_HOME + "gen-student/"
+    config_file = os.path.join(model_path, "hparams.json")
+
+    tjs_prefix = "raw-trajectories"
+    action_prefix = "actions"
+    memo_prefix = "memo"
+
+    combined_data_path = []
+    for i in range(n_data):
+        combined_data_path.append(
+            (os.path.join(data_path, "{}-{}.npz".format(tjs_prefix, i)),
+             os.path.join(data_path, "{}-{}.npz".format(action_prefix, i)),
+             os.path.join(data_path, "{}-{}.npz".format(memo_prefix, i))))
+
     cmd_args = CMD(
-        model_dir=MODEL_HOME,
+        model_dir=model_path,
         model_creator="AttnEncoderDecoderDQN",
         vocab_file=VOCAB_FILE,
         num_tokens=512,
@@ -411,4 +417,4 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         tokenizer_type="NLTK"
     )
-    evaluate()
+    train(combined_data_path, model_path)

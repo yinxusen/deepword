@@ -18,5 +18,5 @@ fi
 
 ./bin/run.sh python/deeptextworld/main.py \
     --game-path $DATAHOME -m $MODELHOME --f-games $F_GAMES \
-    --mode eval-gen-dqn --eval-episode 1 --eval-randomness 0 --eval-mode all \
+    --mode eval-gen-dqn --eval-episode 1 --eval-randomness 0.1 --eval-mode all \
     --game-episode-terminal-t 100
