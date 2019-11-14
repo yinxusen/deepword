@@ -159,21 +159,22 @@ def eval_gen_student(
             (p_states, p_len, actions_in, actions_out, action_len,
              expected_qs, b_weights) = data
             res = sess.run(
-                [model.q_actions_infer, model.p_gen_infer, model.total_prob, model.copy_prob],
+                [model.q_actions_infer, model.p_gen_infer,
+                 model.gen_dist, model.copy_dist],
                 feed_dict={
                     model.src_: p_states,
                     model.src_len_: p_len,
                     model.temperature: 1.})
             q_actions = res[0]
             p_gen = res[1]
-            total_prob = res[2]
+            gen_dist = res[2]
             eprint("total prob")
-            eprint(total_prob[0][np.where(total_prob[0] > 1e-3)])
-            eprint(np.sum(total_prob[0], axis=1))
-            copy_prob = res[3]
+            eprint(gen_dist[0][np.where(gen_dist[0] > 1e-3)])
+            eprint(np.sum(gen_dist[0], axis=1))
+            copy_dist = res[3]
             eprint("copy prob")
-            eprint(copy_prob[0][np.where(copy_prob[0] != 0)])
-            eprint(np.sum(copy_prob[0], axis=1))
+            eprint(copy_dist[0][np.where(copy_dist[0] != 0)])
+            eprint(np.sum(copy_dist[0], axis=1))
         except Exception as e:
             eprint("no more data: {}".format(e))
             break
