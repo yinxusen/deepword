@@ -153,16 +153,27 @@ def eval_gen_student(
     eprint("start eval")
     total_correct = 0
     total_data = 0
-    for it in range(epoch_size):
+    for it in trange(epoch_size):
         try:
             data = queue.get(timeout=10)
             (p_states, p_len, actions_in, actions_out, action_len,
              expected_qs, b_weights) = data
-            q_actions = sess.run(
-                model.q_actions_infer,
+            res = sess.run(
+                [model.q_actions_infer, model.p_gen_infer, model.total_prob, model.copy_prob],
                 feed_dict={
                     model.src_: p_states,
-                    model.src_len_: p_len})
+                    model.src_len_: p_len,
+                    model.temperature: 1.})
+            q_actions = res[0]
+            p_gen = res[1]
+            total_prob = res[2]
+            eprint("total prob")
+            eprint(total_prob[0][np.where(total_prob[0] > 1e-3)])
+            eprint(np.sum(total_prob[0], axis=1))
+            copy_prob = res[3]
+            eprint("copy prob")
+            eprint(copy_prob[0][np.where(copy_prob[0] != 0)])
+            eprint(np.sum(copy_prob[0], axis=1))
         except Exception as e:
             eprint("no more data: {}".format(e))
             break
@@ -170,13 +181,17 @@ def eval_gen_student(
             lambda qa: get_best_2Daction(qa, tokenizer.inv_vocab, hp.eos_id),
             list(q_actions)))
         decoded_action = list(map(lambda x: x[-1], decoded))
+        decoded_action_str = [
+            " ".join(["{}[{:.2f}]".format(a, p)
+                      for a, p in zip(da.split(), list(np.squeeze(pg)))])
+            for da, pg in zip(decoded_action, list(p_gen))]
         true_action = [
             q_idx_to_action(q_idx, l, tokenizer.inv_vocab)
             for q_idx, l in zip(list(actions_out), list(action_len))]
         eprint("\n")
         eprint("\n".join(
             ["{} - {}".format(t, d)
-             for t, d in zip(true_action, decoded_action)]))
+             for t, d in zip(true_action, decoded_action_str)]))
         eprint("-----------")
         correct = np.sum(
             [a1 == a2 for a1, a2 in
@@ -417,4 +432,4 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         tokenizer_type="NLTK"
     )
-    train(combined_data_path, model_path)
+    evaluate(combined_data_path, model_path)

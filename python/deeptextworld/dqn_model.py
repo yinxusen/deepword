@@ -230,7 +230,7 @@ class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'temperature',
-         'p_gen', 'p_gen_infer',
+         'p_gen', 'p_gen_infer', 'gen_dist', 'copy_dist',
          'q_actions', 'q_actions_infer', 'src_', 'src_len_', 'action_idx_',
          'initializer'))):
     pass
@@ -301,15 +301,15 @@ class AttnEncoderDecoderDQN(BaseDQN):
             target_vocab_size=self.hp.vocab_size)
 
     def get_q_actions_infer(self):
-        q_actions, p_gen = self.transformer(
+        q_actions, p_gen, gen_dist, copy_dist = self.transformer(
             self.inputs["src"], tar=None, training=False,
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id, eos_id=self.hp.eos_id,
             temperature=self.inputs["temperature"])
-        return q_actions, p_gen
+        return q_actions, p_gen, gen_dist, copy_dist
 
     def get_q_actions(self):
-        q_actions, p_gen = self.transformer(
+        q_actions, p_gen, _, _ = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
             training=True,
             max_tar_len=self.hp.n_tokens_per_action,
@@ -468,7 +468,8 @@ def create_eval_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            q_actions_infer, p_gen_infer = model.get_q_actions_infer()
+            (q_actions_infer, p_gen_infer, gen_dist, copy_dist
+             ) = model.get_q_actions_infer()
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
@@ -478,4 +479,5 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         action_idx_=inputs["action_idx"],
         temperature=inputs["temperature"],
         p_gen=p_gen, p_gen_infer=p_gen_infer,
+        gen_dist=gen_dist, copy_dist=copy_dist,
         initializer=initializer)

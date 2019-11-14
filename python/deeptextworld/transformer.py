@@ -130,7 +130,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         scaled_attention, attention_weights = scaled_dot_product_attention(
             q, k, v, mask)
         # (batch_size, seq_len_q, seq_len_k)
-        attention_weights = tf.nn.softmax(tf.reduce_sum(attention_weights, axis=1))
+        attention_weights = tf.nn.softmax(
+            tf.reduce_sum(attention_weights, axis=1))
 
         scaled_attention = tf.transpose(
             scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
@@ -269,7 +270,9 @@ class Decoder(tf.keras.layers.Layer):
             units=1, use_bias=True, activation=tf.sigmoid)
         self.final_layer = tf.keras.layers.Dense(tgt_vocab_size)
 
-    def call(self, x, enc_x, enc_output, training, look_ahead_mask, padding_mask, with_pointer=False):
+    def call(
+            self, x, enc_x, enc_output, training,
+            look_ahead_mask, padding_mask, with_pointer=False):
         seq_len = tf.shape(x)[1]
         attention_weights = []
 
@@ -298,48 +301,41 @@ class Decoder(tf.keras.layers.Layer):
             batch_size * max_action_len * tgt_vocab_size
         :return:
         """
-        total_logits = self.final_layer(x)
-        total_prob = tf.nn.softmax(total_logits)
-        p_gen = None
+        gen_logits = self.final_layer(x)
+        gen_dist = tf.nn.softmax(gen_logits)
+
+        vanilla_attention = attention_weights[-1]
+        batch_size = tf.shape(vanilla_attention)[0]
+        dec_t = tf.shape(vanilla_attention)[1]
+        attn_len = tf.shape(vanilla_attention)[2]
+
+        dec = tf.range(0, limit=dec_t)  # [dec]
+        dec = tf.expand_dims(dec, axis=-1)  # [dec, 1]
+        dec = tf.tile(dec, [1, attn_len])  # [dec, atten_len]
+        dec = tf.expand_dims(dec, axis=0)  # [1, dec, atten_len]
+        dec = tf.tile(dec, [batch_size, 1, 1])  # [batch_size, dec, atten_len]
+
+        enc_x = tf.expand_dims(enc_x, axis=1)  # [batch_size, 1, atten_len]
+        enc_x = tf.tile(enc_x, [1, dec_t, 1])  # [batch_size, dec, atten_len]
+        enc_x = tf.stack([dec, enc_x], axis=3)
+
+        copy_dist = tf.map_fn(
+            fn=lambda y: tf.scatter_nd(
+                y[0], y[1], [dec_t, self.tgt_vocab_size]),
+            elems=(enc_x, vanilla_attention), dtype=tf.float32)
+
+        context_vectors = tf.matmul(vanilla_attention, enc_output)
+        combined_features = tf.concat(
+            [x, before_dec, context_vectors], axis=-1)
+        p_gen = self.p_gen_dense(combined_features)
 
         if with_pointer:
-            vanilla_attention = attention_weights[-1]
+            total_dist = p_gen * gen_dist + (1 - p_gen) * copy_dist
+        else:
+            total_dist = gen_dist
 
-            batch_size = tf.shape(vanilla_attention)[0]
-            dec_t = tf.shape(vanilla_attention)[1]
-            attn_len = tf.shape(vanilla_attention)[2]
-
-            dec = tf.range(0, limit=dec_t)  # [dec]
-            dec = tf.expand_dims(dec, axis=-1)  # [dec, 1]
-            dec = tf.tile(dec, [1, attn_len])  # [dec, atten_len]
-            dec = tf.expand_dims(dec, axis=0)  # [1, dec, atten_len]
-            dec = tf.tile(dec, [batch_size, 1, 1])  # [batch_size, dec, atten_len]
-
-            enc_x = tf.expand_dims(enc_x, axis=1)  # [batch_size, 1, atten_len]
-            enc_x = tf.tile(enc_x, [1, dec_t, 1])  # [batch_size, dec, atten_len]
-            enc_x = tf.stack([dec, enc_x], axis=3)
-
-            copy_prob = tf.map_fn(
-                fn=lambda y: tf.scatter_nd(
-                    y[0], y[1], [dec_t, self.tgt_vocab_size]),
-                elems=(enc_x, vanilla_attention), dtype=tf.float32)
-
-            # vanilla_attention_expanded = tf.expand_dims(
-            #     vanilla_attention, axis=3)
-            # inp_idx = tf.expand_dims(
-            #     tf.one_hot(indices=enc_x, depth=self.tgt_vocab_size), axis=1)
-            # copy_output = tf.reduce_sum(
-            #     tf.multiply(vanilla_attention_expanded, inp_idx), axis=2)
-            context_vectors = tf.matmul(vanilla_attention, enc_output)
-            combined_features = tf.concat(
-                [x, before_dec, context_vectors], axis=-1)
-            p_gen = self.p_gen_dense(combined_features)
-
-            total_prob = p_gen * total_prob + (1 - p_gen) * copy_prob
-        # x.shape == (batch_size, target_seq_len, tgt_vocab_size)
-
-        final_logits = tf.log(total_prob)
-        return final_logits, p_gen
+        total_logits = tf.log(total_dist)
+        return total_logits, p_gen, gen_dist, copy_dist
 
 
 class Transformer(tf.keras.Model):
@@ -360,9 +356,11 @@ class Transformer(tf.keras.Model):
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(inp, None, training, enc_padding_mask)
 
+        gen_dist = None
+        copy_dist = None
         if training:
             look_ahead_mask = create_decode_masks(tar)
-            final_output, p_gen = self.decoder(
+            final_output, p_gen, _, _ = self.decoder(
                 tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask,
                 with_pointer=True)
         else:
@@ -372,14 +370,14 @@ class Transformer(tf.keras.Model):
             p_gen = []
             for i in range(max_tar_len):
                 combined_mask = create_decode_masks(inc_tar)
-                final_prob, p_gen_latest = self.decoder(
+                final_prob, p_gen_latest, gen_dist, copy_dist = self.decoder(
                     inc_tar, inp, enc_output, training, combined_mask,
                     dec_padding_mask, with_pointer=True)
                 predictions = final_prob[:, -1:, :]
                 last_predictions.append(predictions)
                 p_gen.append(p_gen_latest[:, -1:])
                 predicted_id = tf.multinomial(
-                    predictions[:, 0, :] / temperature,
+                    predictions[:, 0, :],
                     1, output_dtype=tf.int32)
                 # predicted_id = tf.cast(
                 #     tf.argmax(predictions, axis=-1), tf.int32)
@@ -395,7 +393,7 @@ class Transformer(tf.keras.Model):
                 [[0, 0], [0, max_tar_len-len(last_predictions)], [0, 0]])
             final_output = tf.pad(
                 final_output, paddings=src_paddings, mode="CONSTANT")
-        return final_output, p_gen
+        return final_output, p_gen, gen_dist, copy_dist
 
 
 if __name__ == '__main__':
