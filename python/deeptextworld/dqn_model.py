@@ -333,6 +333,32 @@ class AttnEncoderDecoderDQN(BaseDQN):
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
+    def get_best_2D_q(self, q_actions):
+        max_action_len = tf.shape(q_actions)[1]
+        action_idx = tf.argmax(q_actions, axis=-1, output_type=tf.int32)
+        paddings = tf.constant([[0, 0], [0, 1]])
+        # make sure that every row has at least one </S>
+        padded_action_idx = tf.pad(
+            action_idx[:, :-1], paddings, constant_values=self.hp.eos_id)
+
+        def index1d(t):
+            return tf.cast(
+                tf.reduce_min(tf.where(tf.equal(t, self.hp.eos_id))), tf.int32)
+
+        col_eos_idx = tf.map_fn(index1d, padded_action_idx, dtype=tf.int32)
+        mask = tf.sequence_mask(
+            col_eos_idx+1, maxlen=max_action_len, dtype=tf.int32)
+        final_action_idx = tf.multiply(padded_action_idx, mask)
+        return final_action_idx
+
+    def get_acc(self, q_actions):
+        estimated_idx = self.get_best_2D_q(q_actions)
+        true_idx = self.inputs["action_idx_out"]
+        nnz = tf.count_nonzero(tf.reduce_sum(estimated_idx - true_idx, axis=1))
+        total_cnt = tf.shape(estimated_idx)[0]
+        acc = 1. - tf.cast(nnz, tf.float32) / tf.cast(total_cnt, tf.float32)
+        return acc
+
 
 class CNNEncoderDecoderDQN(CNNEncoderDQN):
     def __init__(
@@ -432,14 +458,19 @@ def create_train_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            q_actions_infer, p_gen_infer = model.get_q_actions_infer()
+            q_actions_infer, p_gen_infer, _, _ = model.get_q_actions_infer()
+            acc_train = model.get_acc(q_actions)
+            acc_infer = model.get_acc(q_actions_infer)
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
+            acc_train_summary = tf.summary.scalar("acc_train", acc_train)
+            acc_infer_summary = tf.summary.scalar("acc_infer", acc_infer)
             train_summary_op = tf.summary.merge([loss_summary])
             loss_seq2seq, train_seq2seq_op = model.get_seq2seq_train_op(
                 q_actions)
             loss_summary_2 = tf.summary.scalar("loss_seq2seq", loss_seq2seq)
-            train_seq2seq_summary_op = tf.summary.merge([loss_summary_2])
+            train_seq2seq_summary_op = tf.summary.merge(
+                [loss_summary_2, acc_train_summary, acc_infer_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
         q_actions_infer=q_actions_infer,

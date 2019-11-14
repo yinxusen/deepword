@@ -378,12 +378,16 @@ def prepare_data_v2(b_memory, tjs, action_collector, tokenizer, num_tokens):
 
 
 def train(combined_data_path, model_path):
-    hp = load_hparams_for_training(config_file, cmd_args)
+    if not os.path.exists(model_path):
+        os.mkdir(model_path)
+
+    hp = load_hparams_for_training(None, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
     last_weights = os.path.join(model_path, "last_weights")
     ckpt_prefix = os.path.join(last_weights, "after-epoch")
     summary_writer_path = os.path.join(model_path, "summaries")
+
     save_hparams(hp, "{}/hparams.json".format(model_path))
     for tp, ap, mp in combined_data_path:
         train_gen_student(
@@ -432,4 +436,4 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         tokenizer_type="NLTK"
     )
-    evaluate(combined_data_path, model_path)
+    train(combined_data_path, model_path)
