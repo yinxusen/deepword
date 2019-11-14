@@ -31,7 +31,9 @@ class CMD:
 
 def train_gen_student(
         hp, tokenizer, memo_path, tjs_path, action_path,
-        ckpt_prefix, summary_writer_path, load_student_from):
+        memo_path_dev, tjs_path_dev, action_path_dev,
+        ckpt_prefix, summary_writer_path, dev_summary_writer_path,
+        load_student_from):
     model = create_train_gen_model(
         model_creator=AttnEncoderDecoderDQN, hp=hp,
         device_placement="/device:GPU:0")
@@ -39,6 +41,8 @@ def train_gen_student(
         log_device_placement=False, allow_soft_placement=True)
     sess = tf.Session(graph=model.graph, config=conf)
     summary_writer = tf.summary.FileWriter(summary_writer_path, sess.graph)
+    dev_summary_writer = tf.summary.FileWriter(
+        dev_summary_writer_path, sess.graph)
     with model.graph.as_default():
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver(
@@ -71,6 +75,19 @@ def train_gen_student(
               hp.num_tokens))
     t.setDaemon(True)
     t.start()
+
+    queue_dev = Queue(maxsize=100)
+    if all(v is not None for v in [action_path_dev, tjs_path_dev,
+                                   memo_path_dev]):
+        memory_dev, tjs_dev, action_collector_dev = load_snapshot(
+            hp, memo_path_dev, tjs_path_dev, action_path_dev, tokenizer)
+        t_dev = Thread(
+            target=add_batch,
+            args=(memory_dev, tjs_dev, action_collector_dev, queue_dev,
+                  batch_size, tokenizer, hp.num_tokens))
+        t_dev.setDaemon(True)
+        t_dev.start()
+
     wait_cnt = 0
     while wait_cnt < 10 and queue.empty():
         eprint("waiting data ...")
@@ -95,6 +112,20 @@ def train_gen_student(
                                model.b_weight_: b_weights})
                 summary_writer.add_summary(
                     summaries, trained_steps + et * epoch_size + it)
+
+                data_dev = queue.get(timeout=1)
+                (p_states, p_len, actions_in, actions_out, action_len,
+                 expected_qs, b_weights) = data_dev
+                dev_summaries = sess.run(
+                    model.train_seq2seq_summary_op,
+                    feed_dict={model.src_: p_states,
+                               model.src_len_: p_len,
+                               model.action_idx_: actions_in,
+                               model.action_idx_out_: actions_out,
+                               model.action_len_: action_len,
+                               model.b_weight_: b_weights})
+                dev_summary_writer.add_summary(
+                    dev_summaries, trained_steps + et * epoch_size + it)
             except Exception as e:
                 data_in_queue = False
                 eprint("no more data: {}".format(e))
@@ -378,7 +409,7 @@ def prepare_data_v2(b_memory, tjs, action_collector, tokenizer, num_tokens):
         actions_in, actions_out, action_len, expected_qs, b_weights)
 
 
-def train(combined_data_path, model_path):
+def train(combined_data_path, model_path, dev_mp, dev_tp, dev_ap):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
@@ -387,13 +418,16 @@ def train(combined_data_path, model_path):
     eprint(output_hparams(hp))
     last_weights = os.path.join(model_path, "last_weights")
     ckpt_prefix = os.path.join(last_weights, "after-epoch")
-    summary_writer_path = os.path.join(model_path, "summaries")
+    summary_writer_path = os.path.join(model_path, "summaries", "train")
+    dev_summary_writer_path = os.path.join(model_path, "summaries", "dev")
 
     save_hparams(hp, "{}/hparams.json".format(model_path))
     for tp, ap, mp in combined_data_path:
         train_gen_student(
             hp, tokenizer, mp, tp, ap,
-            ckpt_prefix, summary_writer_path, last_weights)
+            dev_mp, dev_tp, dev_ap,
+            ckpt_prefix, summary_writer_path, dev_summary_writer_path,
+            last_weights)
 
 
 def evaluate(combined_data_path, model_path):
@@ -408,8 +442,10 @@ def evaluate(combined_data_path, model_path):
 
 if __name__ == "__main__":
     data_path = sys.argv[1]
-    model_path = sys.argv[2]
-    n_data = int(sys.argv[3])
+    n_data = int(sys.argv[2])
+    model_path = sys.argv[3]
+    dev_data_path = sys.argv[4]
+
     dir_path = os.path.dirname(os.path.realpath(__file__))
     VOCAB_FILE = dir_path + "/../../resources/vocab.txt"
     config_file = os.path.join(model_path, "hparams.json")
@@ -425,6 +461,10 @@ if __name__ == "__main__":
              os.path.join(data_path, "{}-{}.npz".format(action_prefix, i)),
              os.path.join(data_path, "{}-{}.npz".format(memo_prefix, i))))
 
+    dev_tp = os.path.join(dev_data_path, "{}-0.npz".format(tjs_prefix))
+    dev_ap = os.path.join(dev_data_path, "{}-0.npz".format(action_prefix))
+    dev_mp = os.path.join(dev_data_path, "{}-0.npz".format(memo_prefix))
+
     cmd_args = CMD(
         model_dir=model_path,
         model_creator="AttnEncoderDecoderDQN",
@@ -437,4 +477,5 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         tokenizer_type="NLTK"
     )
-    train(combined_data_path, model_path)
+
+    train(combined_data_path, model_path, dev_mp, dev_tp, dev_ap)
