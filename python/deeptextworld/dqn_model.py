@@ -329,9 +329,11 @@ class AttnEncoderDecoderDQN(BaseDQN):
             labels=self.inputs["action_idx_out"], logits=q_actions)
         action_len_mask = tf.sequence_mask(
             self.inputs["action_len"], self.hp.n_tokens_per_action)
-        loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
+        bare_loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
+        loss = (bare_loss +
+                tf.add_n(self.transformer.decoder.final_layer.losses))
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op
+        return bare_loss, loss, train_op
 
     def get_best_2D_q(self, q_actions):
         max_action_len = tf.shape(q_actions)[1]
@@ -466,11 +468,14 @@ def create_train_gen_model(model_creator, hp, device_placement):
             acc_train_summary = tf.summary.scalar("acc_train", acc_train)
             acc_infer_summary = tf.summary.scalar("acc_infer", acc_infer)
             train_summary_op = tf.summary.merge([loss_summary])
-            loss_seq2seq, train_seq2seq_op = model.get_seq2seq_train_op(
-                q_actions)
+            (bare_loss_seq2seq, loss_seq2seq, train_seq2seq_op
+             ) = model.get_seq2seq_train_op(q_actions)
             loss_summary_2 = tf.summary.scalar("loss_seq2seq", loss_seq2seq)
+            bare_loss_summary = tf.summary.scalar(
+                "bare_loss_seq2seq", bare_loss_seq2seq)
             train_seq2seq_summary_op = tf.summary.merge(
-                [loss_summary_2, acc_train_summary, acc_infer_summary])
+                [loss_summary_2, bare_loss_summary,
+                 acc_train_summary, acc_infer_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
         q_actions_infer=q_actions_infer,

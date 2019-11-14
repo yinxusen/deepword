@@ -268,7 +268,8 @@ class Decoder(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(rate)
         self.p_gen_dense = tf.keras.layers.Dense(
             units=1, use_bias=True, activation=tf.sigmoid)
-        self.final_layer = tf.keras.layers.Dense(tgt_vocab_size)
+        self.final_layer = tf.keras.layers.Dense(
+            tgt_vocab_size, kernel_regularizer=tf.keras.regularizers.l2(0.01))
 
     def call(
             self, x, enc_x, enc_output, training,
@@ -361,7 +362,8 @@ class Transformer(tf.keras.Model):
         if training:
             look_ahead_mask = create_decode_masks(tar)
             final_output, p_gen, _, _ = self.decoder(
-                tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask,
+                tar, inp, enc_output, training, look_ahead_mask,
+                dec_padding_mask,
                 with_pointer=True)
         else:
             batch_size = tf.shape(inp)[0]
