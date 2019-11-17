@@ -56,12 +56,12 @@ def prepare_model(fn_create_model, hp, device_placement, load_model_from):
 
 
 def train_bert_student(
-        hp, tokenizer, model_dir,
+        hp, tokenizer, model_path,
         memo_path, tjs_path, action_path, hs2tj_path,
         dev_memo_path, dev_tjs_path, dev_action_path, dev_hs2tj_path):
 
-    load_dsqn_from = pjoin(model_dir, "dsqn_last_weights")
-    load_drrn_from = pjoin(model_dir, "drrn_last_weights")
+    load_dsqn_from = pjoin(model_path, "dsqn_last_weights")
+    load_drrn_from = pjoin(model_path, "drrn_last_weights")
     ckpt_dsqn_prefix = pjoin(load_dsqn_from, "after-epoch")
     ckpt_drrn_prefix = pjoin(load_drrn_from, "after-epoch")
 
@@ -72,8 +72,8 @@ def train_bert_student(
     sess_drrn, model_drrn, saver_drrn, train_steps_drrn = prepare_model(
         create_train_student_drrn_model, hp, "/device:GPU:1", load_drrn_from)
 
-    sw_path_dsqn = pjoin(model_dir, "dsqn_summaries", "train")
-    sw_path_drrn = pjoin(model_dir, "drrn_summaries", "train")
+    sw_path_dsqn = pjoin(model_path, "dsqn_summaries", "train")
+    sw_path_drrn = pjoin(model_path, "drrn_summaries", "train")
     sw_dsqn = tf.summary.FileWriter(sw_path_dsqn, sess_dsqn.graph)
     sw_drrn = tf.summary.FileWriter(sw_path_drrn, sess_drrn.graph)
 
@@ -327,10 +327,9 @@ def train(cmd_args, combined_data_path, model_path, combined_dev_data_path):
     save_hparams(hp, pjoin(model_path, "hparams.json"))
     for tp, ap, mp, hs in combined_data_path:
         train_bert_student(
-            hp, tokenizer, mp, tp, ap, hs,
-            dev_mp, dev_tp, dev_ap, dev_hs,
-            ckpt_prefix, summary_writer_path, dev_summary_writer_path,
-            last_weights)
+            hp, tokenizer, model_path,
+            mp, tp, ap, hs,
+            dev_mp, dev_tp, dev_ap, dev_hs)
 
 
 # def evaluate(cmd_args, combined_data_path, model_path):
@@ -348,7 +347,7 @@ def main(data_path, n_data, model_path, dev_data_path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
     home_dir = os.path.expanduser("~")
     bert_ckpt_dir = pjoin(home_dir, "local/opt/bert-models/bert-model")
-    bpe_vocab_file = pjoin(bert_ckpt_dir, "vocab.txt")
+    bert_vocab_file = pjoin(bert_ckpt_dir, "vocab.txt")
     nltk_vocab_file = pjoin(dir_path, "../resources/vocab.txt")
 
     tjs_prefix = "raw-trajectories"
@@ -374,7 +373,7 @@ def main(data_path, n_data, model_path, dev_data_path):
     cmd_args = CMD(
         model_dir=model_path,
         model_creator="BertAttnEncoderDSQN",
-        vocab_file=bpe_vocab_file,
+        vocab_file=bert_vocab_file,
         bert_ckpt_dir=bert_ckpt_dir,
         num_tokens=511,
         num_turns=6,
@@ -389,7 +388,8 @@ def main(data_path, n_data, model_path, dev_data_path):
         sep_val="[SEP]",
         sep_val_id=0,
         mask_val="[MASK]",
-        mask_val_id=0
+        mask_val_id=0,
+        tokenizer_type="BERT"
     )
 
     train(cmd_args, combined_data_path, model_path, combined_dev_data_path)
