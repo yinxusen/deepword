@@ -394,10 +394,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         self.wa = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-        # initialize bert from checkpoint file
-        tf.train.init_from_checkpoint(
-            self.bert_ckpt_file,
-            assignment_map={"bert/": "bert-state-encoder/bert/"})
 
     def get_q_actions(self):
         batch_size = tf.shape(self.inputs["src_len"])[0]
@@ -439,6 +435,11 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             h_actions = tf.reshape(
                 h_actions, shape=(batch_size, self.n_actions, -1))
 
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
+
         with tf.variable_scope("drrn-encoder", reuse=False):
             h_state_expanded = tf.expand_dims(h_state, axis=1)
             q_actions = tf.reduce_sum(
@@ -460,6 +461,11 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
             h_state = bert_model.get_pooled_output()
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
         return h_state
 
     def get_pred(self):
