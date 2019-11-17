@@ -4,7 +4,6 @@ import time
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
-import multiprocessing as mp
 
 import fire
 import numpy as np
@@ -14,7 +13,6 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
-from deeptextworld.dsqn_model import BertAttnEncoderDSQN
 from deeptextworld import dsqn_model
 from deeptextworld.dsqn_model import create_train_student_dsqn_model, create_train_student_drrn_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
