@@ -504,6 +504,25 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
+    def get_merged_student_train_op(self, q_actions, pred):
+        ls_dqn = tf.squared_difference(
+            self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            q_actions * self.inputs["actions_mask"])
+        l_dqn = tf.reduce_mean(ls_dqn)
+        labels = self.inputs["labels"]
+        ls_snn = tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=labels, logits=pred)
+        l_snn = tf.reduce_mean(ls_snn)
+        # Multi-Task Learning Using Uncertainty to Weigh Losses
+        s1 = tf.get_variable("s1", shape=[], dtype=tf.float32)
+        s2 = tf.get_variable("s2", shape=[], dtype=tf.float32)
+        weighted_loss = (
+                0.5 * tf.exp(-s1) * l_dqn + tf.exp(-s2) * l_snn +
+                0.5 * s1 + 0.5 * s2)
+        merged_train_op = self.optimizer.minimize(
+            weighted_loss, global_step=self.global_step)
+        return weighted_loss, l_dqn, l_snn, merged_train_op, s1, s2
+
 
 def create_train_model(model_creator, hp, device_placement):
     graph = tf.Graph()
@@ -581,6 +600,53 @@ def create_eval_model(model_creator, hp, device_placement):
         initializer=initializer)
 
 
+class TrainStudentDSQNModel(
+    collections.namedtuple(
+        "TrainStudentDRRNModel",
+        ("graph", "model", "q_actions", "pred",
+         "src_", "src_len_",
+         "snn_src_", "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
+         "actions_", "actions_len_", "actions_mask_",
+         "expected_qs_",
+         'train_op', 'loss', 'train_summary_op'))):
+    pass
+
+
+def create_train_student_dsqn_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            pred, diff_two_states = model.get_pred()
+            (loss, l_dqn, l_snn, train_op, s1, s2
+             ) = model.get_merged_student_train_op(q_actions, pred)
+            loss_summary = tf.summary.scalar("loss", loss)
+            l_dqn_summary = tf.summary.scalar('l_dqn', l_dqn)
+            l_snn_summary = tf.summary.scalar('l_snn', l_snn)
+            s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
+            s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
+            train_summary_op = tf.summary.merge(
+                [loss_summary, l_dqn_summary, l_snn_summary,
+                 s1_summary, s2_summary])
+    return TrainStudentDSQNModel(
+        graph=graph, model=model, q_actions=q_actions, pred=pred,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        actions_=inputs["actions"],
+        actions_len_=inputs["actions_len"],
+        actions_mask_=inputs["actions_mask"],
+        snn_src_=inputs["snn_src"],
+        snn_src_len_=inputs["snn_src_len"],
+        snn_src2_=inputs["snn_src2"],
+        snn_src2_len_=inputs["snn_src2_len"],
+        labels_=inputs["labels"],
+        expected_qs_=inputs["expected_qs"],
+        train_op=train_op, loss=loss,
+        train_summary_op=train_summary_op)
+
+
 class Train_DSQN_DRRN_Model(
     collections.namedtuple(
         'Train_DSQN_DRRN_Model',
@@ -625,7 +691,7 @@ class TrainStudentDRRNModel(
         ("graph", "model",
          "src_", "src_len_",
          "actions_", "actions_len_", "actions_mask_",
-         "expected_qs",
+         "expected_qs_",
          'train_op', 'loss', 'train_summary_op',
          'initializer'))):
     pass
@@ -649,7 +715,7 @@ def create_train_student_drrn_model(model_creator, hp, device_placement):
         actions_=inputs["actions"],
         actions_len_=inputs["actions_len"],
         actions_mask_=inputs["actions_mask"],
-        expected_qs=inputs["expected_qs"],
+        expected_qs_=inputs["expected_qs"],
         train_op=train_op,
         loss=loss,
         train_summary_op=train_summary_op,

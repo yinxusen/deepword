@@ -7,3 +7,4 @@ bitarray==0.8.3
 nltk==3.4
 PyYAML==3.13
 bert-tensorflow==1.0.1
+fire==0.2.1

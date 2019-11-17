@@ -478,4 +478,5 @@ if __name__ == "__main__":
         tokenizer_type="NLTK"
     )
 
-    train(combined_data_path, model_path, dev_mp, dev_tp, dev_ap)
+    # train(combined_data_path, model_path, dev_mp, dev_tp, dev_ap)
+    evaluate(combined_data_path, model_path)
