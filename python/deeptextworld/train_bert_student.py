@@ -144,7 +144,7 @@ def train_bert_student(
                                model_drrn.actions_mask_: action_mask_t,
                                model_drrn.actions_: action_matrix,
                                model_drrn.actions_len_: action_len,
-                               model_drrn.expected_qs: expected_qs})
+                               model_drrn.expected_qs_: expected_qs})
                 sw_drrn.add_summary(
                     summaries, train_steps_drrn + et * epoch_size + it)
                 t_dsqn.join()
