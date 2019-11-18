@@ -96,7 +96,7 @@ def train_bert_student(
     queue_snn = Queue(maxsize=100)
     t_snn = Thread(
         target=add_batch_snn,
-        args=(queue_snn, tjs, hash_states2tjs, batch_size, tokenizer,
+        args=(queue_snn, tjs, hash_states2tjs, 16, tokenizer,
               hp.num_tokens))
     t_snn.setDaemon(True)
     t_snn.start()
@@ -117,7 +117,7 @@ def train_bert_student(
                 (src, src_len, src2, src2_len, labels) = snn_data
 
                 def run_dsqn():
-                    _, summaries, weighted_loss = sess_dsqn.run(
+                    _, summ = sess_dsqn.run(
                         [model_dsqn.train_op, model_dsqn.train_summary_op],
                         feed_dict={model_dsqn.src_: p_states,
                                    model_dsqn.src_len_: p_len,
@@ -131,13 +131,13 @@ def train_bert_student(
                                    model_dsqn.snn_src2_len_: src2_len,
                                    model_dsqn.labels_: labels})
                     sw_dsqn.add_summary(
-                        summaries, train_steps_dsqn + et * epoch_size + it)
+                        summ, train_steps_dsqn + et * epoch_size + it)
 
                 t_dsqn = Thread(target=run_dsqn)
                 t_dsqn.start()
 
                 # model 2
-                _, summaries, weighted_loss = sess_drrn.run(
+                _, summaries = sess_drrn.run(
                     [model_drrn.train_op, model_drrn.train_summary_op],
                     feed_dict={model_drrn.src_: p_states,
                                model_drrn.src_len_: p_len,
@@ -163,8 +163,6 @@ def train_bert_student(
         eprint("finish and save {} epoch".format(et))
         if not data_in_queue:
             break
-    pool.close()
-    pool.join()
 
 
 def add_batch(
