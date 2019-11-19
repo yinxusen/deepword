@@ -75,126 +75,107 @@ def train_bert_student(
     sw_dsqn = tf.summary.FileWriter(sw_path_dsqn, sess_dsqn.graph)
     sw_drrn = tf.summary.FileWriter(sw_path_drrn, sess_drrn.graph)
 
-    for tp, ap, mp, hs in combined_data_path:
-        memory, tjs, action_collector, hash_states2tjs = load_snapshot(
-            hp, mp, tp, ap, hs, tokenizer)
-        total_size = len(memory)
-        eprint("loaded memory size: {}".format(total_size))
-        batch_size = 32
-        epoch_size = 10000
-        num_epochs = int(max(np.ceil(total_size / batch_size / epoch_size), 1))
-        n_iter = int(max(np.ceil(total_size / batch_size), 1))
+    queue = Queue(maxsize=100)
 
-        queue = Queue(maxsize=100)
-        t = Thread(
-            target=add_batch,
-            args=(memory, tjs, action_collector, queue, batch_size, tokenizer,
-                  hp.num_tokens, n_iter))
-        t.start()
+    batch_size = 32
+    epoch_size = 10000
+    num_epochs = 100
 
-        queue_snn = Queue(maxsize=100)
-        t_snn = Thread(
-            target=add_batch_snn,
-            args=(queue_snn, tjs, hash_states2tjs, 16, tokenizer,
-                  hp.num_tokens, n_iter))
-        t_snn.start()
+    t = Thread(
+        target=add_batch,
+        args=(combined_data_path, queue, hp, batch_size, tokenizer))
+    t.setDaemon(True)
+    t.start()
 
-        while queue.empty() or queue_snn.empty():
-            eprint("waiting data ...")
-            time.sleep(10)
+    wait_times = 10
+    while wait_times > 0 and queue.empty():
+        eprint("waiting data ... (retry times: {})".format(wait_times))
+        time.sleep(10)
+        wait_times -= 1
 
-        eprint("start training")
-        data_in_queue = True
-        for et in trange(num_epochs, ascii=True, desc="epoch"):
-            for it in trange(epoch_size, ascii=True, desc="step"):
-                try:
-                    data = queue.get(timeout=1)
-                    (p_states, p_len, action_matrix, action_mask_t, action_len,
-                     expected_qs) = data
-                    snn_data = queue_snn.get(timeout=1)
-                    (src, src_len, src2, src2_len, labels) = snn_data
+    eprint("start training")
+    data_in_queue = True
+    for et in trange(num_epochs, ascii=True, desc="epoch"):
+        for it in trange(epoch_size, ascii=True, desc="step"):
+            try:
+                data = queue.get(timeout=1)
+                (p_states, p_len, action_matrix, action_mask_t, action_len,
+                 expected_qs) = data[0]
+                (src, src_len, src2, src2_len, labels) = data[1]
 
-                    def run_dsqn():
-                        _, summ = sess_dsqn.run(
-                            [model_dsqn.train_op, model_dsqn.train_summary_op],
-                            feed_dict={
-                                model_dsqn.src_: p_states,
-                                model_dsqn.src_len_: p_len,
-                                model_dsqn.actions_mask_: action_mask_t,
-                                model_dsqn.actions_: action_matrix,
-                                model_dsqn.actions_len_: action_len,
-                                model_dsqn.expected_qs_: expected_qs,
-                                model_dsqn.snn_src_: src,
-                                model_dsqn.snn_src_len_: src_len,
-                                model_dsqn.snn_src2_: src2,
-                                model_dsqn.snn_src2_len_: src2_len,
-                                model_dsqn.labels_: labels})
-                        sw_dsqn.add_summary(
-                            summ, train_steps_dsqn + et * epoch_size + it)
-
-                    t_dsqn = Thread(target=run_dsqn)
-                    t_dsqn.start()
-
-                    # model 2
-                    _, summaries = sess_drrn.run(
-                        [model_drrn.train_op, model_drrn.train_summary_op],
+                def run_dsqn():
+                    _, summ = sess_dsqn.run(
+                        [model_dsqn.train_op, model_dsqn.train_summary_op],
                         feed_dict={
-                            model_drrn.src_: p_states,
-                            model_drrn.src_len_: p_len,
-                            model_drrn.actions_mask_: action_mask_t,
-                            model_drrn.actions_: action_matrix,
-                            model_drrn.actions_len_: action_len,
-                            model_drrn.expected_qs_: expected_qs})
-                    sw_drrn.add_summary(
-                        summaries, train_steps_drrn + et * epoch_size + it)
-                    t_dsqn.join()
-                except Exception as e:
-                    data_in_queue = False
-                    eprint("no more data: {}".format(e))
-                    break
-            saver_dsqn.save(
-                sess_dsqn, ckpt_dsqn_prefix,
-                global_step=tf.train.get_or_create_global_step(
-                    graph=model_dsqn.graph))
-            saver_drrn.save(
-                sess_drrn, ckpt_drrn_prefix,
-                global_step=tf.train.get_or_create_global_step(
-                    graph=model_drrn.graph))
-            eprint("finish and save {} epoch".format(et))
-            if not data_in_queue:
+                            model_dsqn.src_: p_states,
+                            model_dsqn.src_len_: p_len,
+                            model_dsqn.actions_mask_: action_mask_t,
+                            model_dsqn.actions_: action_matrix,
+                            model_dsqn.actions_len_: action_len,
+                            model_dsqn.expected_qs_: expected_qs,
+                            model_dsqn.snn_src_: src,
+                            model_dsqn.snn_src_len_: src_len,
+                            model_dsqn.snn_src2_: src2,
+                            model_dsqn.snn_src2_len_: src2_len,
+                            model_dsqn.labels_: labels})
+                    sw_dsqn.add_summary(
+                        summ, train_steps_dsqn + et * epoch_size + it)
+
+                t_dsqn = Thread(target=run_dsqn)
+                t_dsqn.start()
+
+                # model 2
+                _, summaries = sess_drrn.run(
+                    [model_drrn.train_op, model_drrn.train_summary_op],
+                    feed_dict={
+                        model_drrn.src_: p_states,
+                        model_drrn.src_len_: p_len,
+                        model_drrn.actions_mask_: action_mask_t,
+                        model_drrn.actions_: action_matrix,
+                        model_drrn.actions_len_: action_len,
+                        model_drrn.expected_qs_: expected_qs})
+                sw_drrn.add_summary(
+                    summaries, train_steps_drrn + et * epoch_size + it)
+                t_dsqn.join()
+            except Exception as e:
+                data_in_queue = False
+                eprint("no more data: {}".format(e))
                 break
-        t.join()
-        t_snn.join()
+        saver_dsqn.save(
+            sess_dsqn, ckpt_dsqn_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=model_dsqn.graph))
+        saver_drrn.save(
+            sess_drrn, ckpt_drrn_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=model_drrn.graph))
+        eprint("finish and save {} epoch".format(et))
+        if not data_in_queue:
+            break
+    return
 
 
 def add_batch(
-        memory, tjs, action_collector, queue, batch_size, tokenizer,
-        num_tokens, n_iter):
-    iter_cnt = 0
+        combined_data_path, queue, hp, batch_size, tokenizer):
     while True:
-        random.shuffle(memory)
-        i = 0
-        while i < len(memory) // batch_size:
-            batch_memory = (
-                memory[i*batch_size: min((i+1)*batch_size, len(memory))])
-            queue.put(prepare_data(
-                batch_memory, tjs, action_collector, tokenizer, num_tokens))
-            i += 1
-            iter_cnt += 1
-            if iter_cnt > n_iter:
-                return
-
-
-def add_batch_snn(
-        queue, tjs, hash_states2tjs, batch_size, tokenizer, num_tokens, n_iter):
-    iter_cnt = 0
-    while True:
-        queue.put(
-            prepare_snn_pairs(
-                batch_size, hash_states2tjs, tjs, num_tokens, tokenizer))
-        iter_cnt += 1
-        if iter_cnt > n_iter:
-            return
+        for tp, ap, mp, hs in sorted(combined_data_path, key=random.random()):
+            memory, tjs, action_collector, hash_states2tjs = load_snapshot(
+                hp, mp, tp, ap, hs, tokenizer)
+            random.shuffle(memory)
+            i = 0
+            while i < len(memory) // batch_size:
+                batch_memory = (
+                    memory[i*batch_size: min((i+1)*batch_size, len(memory))])
+                queue.put(
+                    [
+                        prepare_data(
+                            batch_memory, tjs, action_collector, tokenizer,
+                            hp.num_tokens),
+                        prepare_snn_pairs(
+                            batch_size, hash_states2tjs, tjs, hp.num_tokens,
+                            tokenizer)
+                    ])
+                i += 1
 
 
 def load_snapshot(
@@ -215,7 +196,7 @@ def load_snapshot(
 
     eprint(
         "snapshot data loaded:\nmemory path: {}\ntjs path:: {}\n"
-        "action path: {}\n hs2tj path: {}".format(
+        "action path: {}\nhs2tj path: {}".format(
             memo_path, raw_tjs_path, action_path, hs2tj_path))
 
     return memory, tjs, actions, hash_states2tjs
@@ -394,7 +375,8 @@ def main(data_path, n_data, model_path, dev_data_path):
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        tokenizer_type="BERT"
+        tokenizer_type="BERT",
+        max_snapshot_to_keep=100
     )
 
     train(cmd_args, combined_data_path, model_path, combined_dev_data_path)
