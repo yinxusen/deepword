@@ -56,9 +56,7 @@ def prepare_model(fn_create_model, hp, device_placement, load_model_from):
 
 
 def train_bert_student(
-        hp, tokenizer, model_path,
-        memo_path, tjs_path, action_path, hs2tj_path,
-        dev_memo_path, dev_tjs_path, dev_action_path, dev_hs2tj_path):
+        hp, tokenizer, model_path, combined_data_path, combined_dev_data_path):
 
     load_dsqn_from = pjoin(model_path, "dsqn_last_weights")
     load_drrn_from = pjoin(model_path, "drrn_last_weights")
@@ -77,97 +75,102 @@ def train_bert_student(
     sw_dsqn = tf.summary.FileWriter(sw_path_dsqn, sess_dsqn.graph)
     sw_drrn = tf.summary.FileWriter(sw_path_drrn, sess_drrn.graph)
 
-    memory, tjs, action_collector, hash_states2tjs = load_snapshot(
-        hp, memo_path, tjs_path, action_path, hs2tj_path, tokenizer)
-    total_size = len(memory)
-    eprint("loaded memory size: {}".format(total_size))
-    batch_size = 32
-    epoch_size = 10000
-    num_epochs = int(max(np.ceil(total_size / batch_size / epoch_size), 1))
+    for tp, ap, mp, hs in combined_data_path:
+        memory, tjs, action_collector, hash_states2tjs = load_snapshot(
+            hp, mp, tp, ap, hs, tokenizer)
+        total_size = len(memory)
+        eprint("loaded memory size: {}".format(total_size))
+        batch_size = 32
+        epoch_size = 10000
+        num_epochs = int(max(np.ceil(total_size / batch_size / epoch_size), 1))
+        n_iter = int(max(np.ceil(total_size / batch_size), 1))
 
-    queue = Queue(maxsize=100)
-    t = Thread(
-        target=add_batch,
-        args=(memory, tjs, action_collector, queue, batch_size, tokenizer,
-              hp.num_tokens))
-    t.setDaemon(True)
-    t.start()
+        queue = Queue(maxsize=100)
+        t = Thread(
+            target=add_batch,
+            args=(memory, tjs, action_collector, queue, batch_size, tokenizer,
+                  hp.num_tokens, n_iter))
+        t.start()
 
-    queue_snn = Queue(maxsize=100)
-    t_snn = Thread(
-        target=add_batch_snn,
-        args=(queue_snn, tjs, hash_states2tjs, 16, tokenizer,
-              hp.num_tokens))
-    t_snn.setDaemon(True)
-    t_snn.start()
+        queue_snn = Queue(maxsize=100)
+        t_snn = Thread(
+            target=add_batch_snn,
+            args=(queue_snn, tjs, hash_states2tjs, 16, tokenizer,
+                  hp.num_tokens, n_iter))
+        t_snn.start()
 
-    while queue.empty() or queue_snn.empty():
-        eprint("waiting data ...")
-        time.sleep(10)
+        while queue.empty() or queue_snn.empty():
+            eprint("waiting data ...")
+            time.sleep(10)
 
-    eprint("start training")
-    data_in_queue = True
-    for et in trange(num_epochs, ascii=True, desc="epoch"):
-        for it in trange(epoch_size, ascii=True, desc="step"):
-            try:
-                data = queue.get(timeout=1)
-                (p_states, p_len, action_matrix, action_mask_t, action_len,
-                 expected_qs) = data
-                snn_data = queue_snn.get(timeout=1)
-                (src, src_len, src2, src2_len, labels) = snn_data
+        eprint("start training")
+        data_in_queue = True
+        for et in trange(num_epochs, ascii=True, desc="epoch"):
+            for it in trange(epoch_size, ascii=True, desc="step"):
+                try:
+                    data = queue.get(timeout=1)
+                    (p_states, p_len, action_matrix, action_mask_t, action_len,
+                     expected_qs) = data
+                    snn_data = queue_snn.get(timeout=1)
+                    (src, src_len, src2, src2_len, labels) = snn_data
 
-                def run_dsqn():
-                    _, summ = sess_dsqn.run(
-                        [model_dsqn.train_op, model_dsqn.train_summary_op],
-                        feed_dict={model_dsqn.src_: p_states,
-                                   model_dsqn.src_len_: p_len,
-                                   model_dsqn.actions_mask_: action_mask_t,
-                                   model_dsqn.actions_: action_matrix,
-                                   model_dsqn.actions_len_: action_len,
-                                   model_dsqn.expected_qs_: expected_qs,
-                                   model_dsqn.snn_src_: src,
-                                   model_dsqn.snn_src_len_: src_len,
-                                   model_dsqn.snn_src2_: src2,
-                                   model_dsqn.snn_src2_len_: src2_len,
-                                   model_dsqn.labels_: labels})
-                    sw_dsqn.add_summary(
-                        summ, train_steps_dsqn + et * epoch_size + it)
+                    def run_dsqn():
+                        _, summ = sess_dsqn.run(
+                            [model_dsqn.train_op, model_dsqn.train_summary_op],
+                            feed_dict={
+                                model_dsqn.src_: p_states,
+                                model_dsqn.src_len_: p_len,
+                                model_dsqn.actions_mask_: action_mask_t,
+                                model_dsqn.actions_: action_matrix,
+                                model_dsqn.actions_len_: action_len,
+                                model_dsqn.expected_qs_: expected_qs,
+                                model_dsqn.snn_src_: src,
+                                model_dsqn.snn_src_len_: src_len,
+                                model_dsqn.snn_src2_: src2,
+                                model_dsqn.snn_src2_len_: src2_len,
+                                model_dsqn.labels_: labels})
+                        sw_dsqn.add_summary(
+                            summ, train_steps_dsqn + et * epoch_size + it)
 
-                t_dsqn = Thread(target=run_dsqn)
-                t_dsqn.start()
+                    t_dsqn = Thread(target=run_dsqn)
+                    t_dsqn.start()
 
-                # model 2
-                _, summaries = sess_drrn.run(
-                    [model_drrn.train_op, model_drrn.train_summary_op],
-                    feed_dict={model_drrn.src_: p_states,
-                               model_drrn.src_len_: p_len,
-                               model_drrn.actions_mask_: action_mask_t,
-                               model_drrn.actions_: action_matrix,
-                               model_drrn.actions_len_: action_len,
-                               model_drrn.expected_qs_: expected_qs})
-                sw_drrn.add_summary(
-                    summaries, train_steps_drrn + et * epoch_size + it)
-                t_dsqn.join()
-            except Exception as e:
-                data_in_queue = False
-                eprint("no more data: {}".format(e))
+                    # model 2
+                    _, summaries = sess_drrn.run(
+                        [model_drrn.train_op, model_drrn.train_summary_op],
+                        feed_dict={
+                            model_drrn.src_: p_states,
+                            model_drrn.src_len_: p_len,
+                            model_drrn.actions_mask_: action_mask_t,
+                            model_drrn.actions_: action_matrix,
+                            model_drrn.actions_len_: action_len,
+                            model_drrn.expected_qs_: expected_qs})
+                    sw_drrn.add_summary(
+                        summaries, train_steps_drrn + et * epoch_size + it)
+                    t_dsqn.join()
+                except Exception as e:
+                    data_in_queue = False
+                    eprint("no more data: {}".format(e))
+                    break
+            saver_dsqn.save(
+                sess_dsqn, ckpt_dsqn_prefix,
+                global_step=tf.train.get_or_create_global_step(
+                    graph=model_dsqn.graph))
+            saver_drrn.save(
+                sess_drrn, ckpt_drrn_prefix,
+                global_step=tf.train.get_or_create_global_step(
+                    graph=model_drrn.graph))
+            eprint("finish and save {} epoch".format(et))
+            if not data_in_queue:
                 break
-        saver_dsqn.save(
-            sess_dsqn, ckpt_dsqn_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=model_dsqn.graph))
-        saver_drrn.save(
-            sess_drrn, ckpt_drrn_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=model_drrn.graph))
-        eprint("finish and save {} epoch".format(et))
-        if not data_in_queue:
-            break
+        t.join()
+        t_snn.join()
 
 
 def add_batch(
         memory, tjs, action_collector, queue, batch_size, tokenizer,
-        num_tokens):
+        num_tokens, n_iter):
+    iter_cnt = 0
     while True:
         random.shuffle(memory)
         i = 0
@@ -177,14 +180,21 @@ def add_batch(
             queue.put(prepare_data(
                 batch_memory, tjs, action_collector, tokenizer, num_tokens))
             i += 1
+            iter_cnt += 1
+            if iter_cnt > n_iter:
+                return
 
 
 def add_batch_snn(
-        queue, tjs, hash_states2tjs, batch_size, tokenizer, num_tokens):
+        queue, tjs, hash_states2tjs, batch_size, tokenizer, num_tokens, n_iter):
+    iter_cnt = 0
     while True:
         queue.put(
             prepare_snn_pairs(
                 batch_size, hash_states2tjs, tjs, num_tokens, tokenizer))
+        iter_cnt += 1
+        if iter_cnt > n_iter:
+            return
 
 
 def load_snapshot(
@@ -314,20 +324,12 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
 def train(cmd_args, combined_data_path, model_path, combined_dev_data_path):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
-    dev_mp, dev_tp, dev_ap, dev_hs = combined_dev_data_path
     hp = load_hparams_for_training(None, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
-    last_weights = os.path.join(model_path, "last_weights")
-    ckpt_prefix = os.path.join(last_weights, "after-epoch")
-    summary_writer_path = os.path.join(model_path, "summaries", "train")
-    dev_summary_writer_path = os.path.join(model_path, "summaries", "dev")
     save_hparams(hp, pjoin(model_path, "hparams.json"))
-    for tp, ap, mp, hs in combined_data_path:
-        train_bert_student(
-            hp, tokenizer, model_path,
-            mp, tp, ap, hs,
-            dev_mp, dev_tp, dev_ap, dev_hs)
+    train_bert_student(
+        hp, tokenizer, model_path, combined_data_path, combined_dev_data_path)
 
 
 # def evaluate(cmd_args, combined_data_path, model_path):

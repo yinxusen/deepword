@@ -545,9 +545,14 @@ class BaseAgent(Logging):
                         map(lambda v: v[0],
                             tf.train.list_variables(restore_from)))
                     self.debug(
-                        "Try to restore with safe saver with vars: {}".format(
+                        "Try to restore with safe saver with vars:\n{}".format(
                             "\n".join(all_saved_vars)))
-                    safe_saver = tf.train.Saver(var_list=all_saved_vars)
+                    all_vars = tf.global_variables()
+                    self.debug("all vars:\n{}".format("\n".join([v.op.name for v in all_vars])))
+                    var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                    self.debug("Matched vars:\n{}".format(
+                        "\n".join([v.name for v in var_list])))
+                    safe_saver = tf.train.Saver(var_list=var_list)
                     safe_saver.restore(sess, restore_from)
                 if is_training:
                     global_step = tf.train.get_or_create_global_step()
