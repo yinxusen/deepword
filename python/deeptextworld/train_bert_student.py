@@ -213,6 +213,11 @@ def load_snapshot(
     hs2tj = np.load(hs2tj_path)
     hash_states2tjs = hs2tj["hs2tj"][0]
 
+    eprint(
+        "snapshot data loaded:\nmemory path: {}\ntjs path:: {}\n"
+        "action path: {}\n hs2tj path: {}".format(
+            memo_path, raw_tjs_path, action_path, hs2tj_path))
+
     return memory, tjs, actions, hash_states2tjs
 
 
