@@ -197,7 +197,7 @@ def add_batch(
             memory, tjs, action_collector, hash_states2tjs = load_snapshot(
                 hp, mp, tp, ap, hs, tokenizer)
             # clean hs2tj
-            hash_states2tjs = clean_hs2tj(hash_states2tjs, tjs)
+            # hash_states2tjs = clean_hs2tj(hash_states2tjs, tjs)
             random.shuffle(memory)
             i = 0
             while i < len(memory) // batch_size:
