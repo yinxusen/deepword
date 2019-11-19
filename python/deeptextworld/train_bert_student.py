@@ -361,7 +361,7 @@ def main(data_path, n_data, model_path, dev_data_path):
     hs2tj_prefix = "hs2tj"
 
     combined_data_path = []
-    for i in range(n_data):
+    for i in sorted(range(n_data), key=lambda k: random.random()):
         combined_data_path.append(
             (pjoin(data_path, "{}-{}.npz".format(tjs_prefix, i)),
              pjoin(data_path, "{}-{}.npz".format(action_prefix, i)),
