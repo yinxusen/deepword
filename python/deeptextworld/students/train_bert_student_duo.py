@@ -70,6 +70,19 @@ def train_bert_student(
     sess_drrn, model_drrn, saver_drrn, train_steps_drrn = prepare_model(
         create_train_student_drrn_model, hp, "/device:GPU:1", load_drrn_from)
 
+    # save the very first model to verify the Bert weight has been loaded
+    if train_steps_drrn == 0:
+        saver_drrn.save(
+            sess_drrn, ckpt_drrn_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=model_drrn.graph))
+        saver_dsqn.save(
+            sess_dsqn, ckpt_dsqn_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=model_dsqn.graph))
+    else:
+        pass
+
     sw_path_dsqn = pjoin(model_path, "dsqn_summaries", "train")
     sw_path_drrn = pjoin(model_path, "drrn_summaries", "train")
     sw_dsqn = tf.summary.FileWriter(sw_path_dsqn, sess_dsqn.graph)
@@ -155,6 +168,27 @@ def train_bert_student(
     return
 
 
+def clean_hs2tj(hash_states2tjs, tjs):
+    cnt_trashed = 0
+    empty_keys = []
+    all_tids = list(tjs.trajectories.keys())
+    for k in hash_states2tjs.keys():
+        empty_tids = []
+        for tid in hash_states2tjs[k].keys():
+            if tid not in all_tids:
+                empty_tids.append(tid)
+                cnt_trashed += len(hash_states2tjs[k][tid])
+        for tid in empty_tids:
+            hash_states2tjs[k].pop(tid, None)
+        if hash_states2tjs[k] == {}:  # delete the dict if empty
+            empty_keys.append(k)
+    eprint("hs2tj deletes {} items".format(cnt_trashed))
+    for k in empty_keys:
+        hash_states2tjs.pop(k, None)
+    eprint("hs2tj deletes {} keys".format(len(empty_keys)))
+    return hash_states2tjs
+
+
 def add_batch(
         combined_data_path, queue, hp, batch_size, tokenizer):
     while True:
@@ -162,6 +196,8 @@ def add_batch(
                 combined_data_path, key=lambda k: random.random()):
             memory, tjs, action_collector, hash_states2tjs = load_snapshot(
                 hp, mp, tp, ap, hs, tokenizer)
+            # clean hs2tj
+            hash_states2tjs = clean_hs2tj(hash_states2tjs, tjs)
             random.shuffle(memory)
             i = 0
             while i < len(memory) // batch_size:
@@ -173,8 +209,8 @@ def add_batch(
                             batch_memory, tjs, action_collector, tokenizer,
                             hp.num_tokens),
                         prepare_snn_pairs(
-                            batch_size, hash_states2tjs, tjs, hp.num_tokens,
-                            tokenizer)
+                            batch_size // 2, hash_states2tjs, tjs,
+                            hp.num_tokens, tokenizer)
                     ])
                 i += 1
 
