@@ -158,7 +158,8 @@ def train_bert_student(
 def add_batch(
         combined_data_path, queue, hp, batch_size, tokenizer):
     while True:
-        for tp, ap, mp, hs in sorted(combined_data_path, key=random.random()):
+        for tp, ap, mp, hs in sorted(
+                combined_data_path, key=lambda k: random.random()):
             memory, tjs, action_collector, hash_states2tjs = load_snapshot(
                 hp, mp, tp, ap, hs, tokenizer)
             random.shuffle(memory)
