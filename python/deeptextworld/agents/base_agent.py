@@ -208,6 +208,7 @@ class BaseAgent(Logging):
         self.actor = None  # action collector
         self.floor_plan = None
         self.dp = None
+        self.loaded_ckpt_step = 0
 
         self._initialized = False
         self._episode_has_started = False
@@ -505,8 +506,13 @@ class BaseAgent(Logging):
         self._init(load_best)
 
     def reset(self):
+        """
+        reset is only used for evaluation during training
+        do not use it at anywhere else.
+        """
+        self.is_training = False
         self._initialized = False
-        self._init()
+        self._init(load_best=False)
 
     def create_n_load_model(
             self, load_best=False, is_training=True, device=None):
@@ -631,6 +637,7 @@ class BaseAgent(Logging):
         if self.is_training:
             self.sess, self.total_t, self.saver, self.model =\
                 self.create_n_load_model(device=self.d4train)
+            self.loaded_ckpt_step = self.total_t
             self.eps = self.hp.init_eps
             train_summary_dir = os.path.join(
                 self.model_dir, "summaries", "train")
@@ -664,7 +671,8 @@ class BaseAgent(Logging):
                 else:
                     self.info('No checkpoint to load for evaluation')
             else:
-                self.sess, _, self.saver, self.model = self.create_n_load_model(
+                (self.sess, self.loaded_ckpt_step, self.saver, self.model
+                 ) = self.create_n_load_model(
                     load_best=load_best, is_training=self.is_training,
                     device=self.d4eval)
             self.eps = 0

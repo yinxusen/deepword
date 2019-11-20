@@ -1,29 +1,29 @@
 import glob
 import os
-import sys
 import random
+import sys
 import time
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread, Condition
 
 import fire
+import gym
 import numpy as np
 import tensorflow as tf
+import textworld.gym
 from numpy.random import choice as npc
 from tqdm import trange
-import textworld.gym
-import gym
 
-from deeptextworld.action import ActionCollector
-from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
-from deeptextworld.agents import dsqn_agent
 from deeptextworld import dsqn_model
-from deeptextworld.dsqn_model import create_train_student_dsqn_model, create_train_student_drrn_model
+from deeptextworld.action import ActionCollector
+from deeptextworld.agents import dsqn_agent
+from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
+from deeptextworld.dsqn_model import create_train_student_drrn_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
     load_hparams_for_evaluation, save_hparams
 from deeptextworld.trajectory import RawTextTrajectory
-from deeptextworld.utils import flatten, eprint, ctime
+from deeptextworld.utils import flatten, eprint, ctime, setup_logging
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -82,9 +82,9 @@ def train_bert_student(
 
     queue = Queue(maxsize=100)
 
-    batch_size = 32
-    epoch_size = 10000
-    num_epochs = 100
+    batch_size = hp.batch_size
+    epoch_size = hp.save_gap_t
+    num_epochs = 1000
 
     t = Thread(
         target=add_batch,
@@ -117,7 +117,6 @@ def train_bert_student(
                         model_drrn.expected_qs_: expected_qs})
                 sw_drrn.add_summary(
                     summaries, train_steps_drrn + et * epoch_size + it)
-                # t_dsqn.join()
             except Exception as e:
                 data_in_queue = False
                 eprint("no more data: {}".format(e))
@@ -452,7 +451,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
-    agent.eval(load_best=False)
+    # agent.eval(load_best=False)
 
     prev_total_scores = 0
     prev_total_steps = sys.maxsize
@@ -471,8 +470,9 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             eprint("eval_results: {}".format(eval_results))
             eprint("eval aggregated results: {}".format(agg_res))
             eprint(
-                "scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
-                    total_scores, total_steps, n_won))
+                "after-epoch: {}, scores: {:.2f}, steps: {:.2f},"
+                " n_won: {:.2f}".format(
+                    agent.loaded_ckpt_step, total_scores, total_steps, n_won))
             eprint("SNN accuracy: {}".format(snn_acc))
             eprint(
                 "time to finish eval: {}".format(eval_end_t-eval_start_t))
@@ -488,8 +488,6 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
 
 
 def train(cmd_args, combined_data_path, model_path, game_dir, f_games=None):
-    if not os.path.exists(model_path):
-        os.mkdir(model_path)
     hp = load_hparams_for_training(None, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
@@ -511,18 +509,91 @@ def train(cmd_args, combined_data_path, model_path, game_dir, f_games=None):
         hp, tokenizer, model_path, combined_data_path, cond_of_eval)
 
 
-# def evaluate(cmd_args, combined_data_path, model_path):
-#     config_file = pjoin(model_path, "hparams.json")
-#     hp = load_hparams_for_evaluation(config_file, cmd_args)
-#     hp, tokenizer = BaseAgent.init_tokens(hp)
-#     last_weights = os.path.join(model_path, "last_weights")
-#     eprint(output_hparams(hp))
-#     for tp, ap, mp in combined_data_path:
-#         eval_gen_student(
-#             hp, tokenizer, mp, tp, ap, last_weights)
+def run_eval(
+        hp, model_dir, game_path, f_games=None, eval_randomness=None,
+        eval_mode="eval-eval"):
+    """
+    Evaluation an agent.
+    :param hp:
+    :param model_dir:
+    :param game_path:
+    :param f_games:
+    :param eval_randomness:
+    :param eval_mode:
+    :return:
+    """
+    if os.path.isdir(game_path):
+        game_files = load_game_files(game_path, f_games)
+        games = split_train_dev(game_files)
+        if games is None:
+            exit(-1)
+        train_games, dev_games = games
+
+        game_files = None
+        if eval_mode == "all":
+            # remove possible repeated games
+            game_files = list(set(train_games + dev_games))
+        elif eval_mode == "eval-train":
+            game_files = train_games
+        elif eval_mode == "eval-eval":
+            game_files = dev_games
+        else:
+            eprint("unknown mode. choose from [all|eval-train|eval-eval]")
+            exit(-1)
+    elif os.path.isfile(game_path):
+        game_files = [game_path]
+    else:
+        eprint("game path doesn't exist")
+        return
+
+    eprint("load {} game files".format(len(game_files)))
+    game_names = [os.path.basename(fn) for fn in game_files]
+    eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
+
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
+    agent.eval(load_best=False)
+    if eval_randomness is not None:
+        agent.eps = eval_randomness
+    eprint("evaluation randomness: {}".format(agent.eps))
+
+    eval_start_t = ctime()
+    eval_results = run_agent_eval(
+        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
+    eval_end_t = ctime()
+    agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
+    eprint("eval_results: {}".format(eval_results[0]))
+    eprint("eval aggregated results: {}".format(agg_res))
+    eprint("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
+        total_scores, total_steps, n_won))
+    eprint("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
-def main(data_path, n_data, model_path, dev_data_path):
+def evaluate(cmd_args, model_path, game_path, f_games):
+    config_file = pjoin(model_path, "hparams.json")
+    hp = load_hparams_for_evaluation(config_file, cmd_args)
+    hp, tokenizer = BaseAgent.init_tokens(hp)
+    eprint(output_hparams(hp))
+    run_eval(
+        hp, model_path, game_path, f_games,
+        eval_randomness=0,
+        eval_mode="eval-eval")
+
+
+def setup_train_log(model_dir):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    log_config_file = '{}/../../../conf/logging.yaml'.format(current_dir)
+    setup_logging(
+        default_path=log_config_file,
+        local_log_filename=os.path.join(model_dir, 'game_script.log'))
+
+
+def main(data_path, n_data, model_path, game_path, f_games):
+    if not os.path.exists(model_path):
+        os.mkdir(model_path)
+
+    setup_train_log(model_path)
+
     dir_path = os.path.dirname(os.path.realpath(__file__))
     home_dir = os.path.expanduser("~")
     bert_ckpt_dir = pjoin(home_dir, "local/opt/bert-models/bert-model")
@@ -542,13 +613,6 @@ def main(data_path, n_data, model_path, dev_data_path):
              pjoin(data_path, "{}-{}.npz".format(memo_prefix, i)),
              pjoin(data_path, "{}-{}.npz".format(hs2tj_prefix, i))))
 
-    dev_tp = pjoin(dev_data_path, "{}-0.npz".format(tjs_prefix))
-    dev_ap = pjoin(dev_data_path, "{}-0.npz".format(action_prefix))
-    dev_mp = pjoin(dev_data_path, "{}-0.npz".format(memo_prefix))
-    dev_hs = pjoin(dev_data_path, "{}-0.npz".format(hs2tj_prefix))
-
-    combined_dev_data_path = (dev_mp, dev_tp, dev_ap, dev_hs)
-
     cmd_args = CMD(
         model_dir=model_path,
         model_creator="BertAttnEncoderDSQN",
@@ -557,7 +621,7 @@ def main(data_path, n_data, model_path, dev_data_path):
         num_tokens=511,
         num_turns=6,
         batch_size=32,
-        save_gap_t=1000,
+        save_gap_t=5000,
         embedding_size=64,
         learning_rate=5e-5,
         num_conv_filters=32,
@@ -573,8 +637,8 @@ def main(data_path, n_data, model_path, dev_data_path):
         eval_episode=5
     )
 
-    train(cmd_args, combined_data_path, model_path, combined_dev_data_path)
-    # evaluate(combined_data_path, model_path)
+    train(cmd_args, combined_data_path, model_path, game_path, f_games)
+    # evaluate(cmd_args, model_path, game_path, f_games)
 
 
 if __name__ == "__main__":
