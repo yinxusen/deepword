@@ -1,24 +1,29 @@
+import glob
 import os
+import sys
 import random
 import time
 from os.path import join as pjoin
 from queue import Queue
-from threading import Thread
+from threading import Thread, Condition
 
 import fire
 import numpy as np
 import tensorflow as tf
 from numpy.random import choice as npc
 from tqdm import trange
+import textworld.gym
+import gym
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
+from deeptextworld.agents import dsqn_agent
 from deeptextworld import dsqn_model
 from deeptextworld.dsqn_model import create_train_student_dsqn_model, create_train_student_drrn_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
     load_hparams_for_evaluation, save_hparams
 from deeptextworld.trajectory import RawTextTrajectory
-from deeptextworld.utils import flatten, eprint
+from deeptextworld.utils import flatten, eprint, ctime
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -56,7 +61,7 @@ def prepare_model(fn_create_model, hp, device_placement, load_model_from):
 
 
 def train_bert_student(
-        hp, tokenizer, model_path, combined_data_path, combined_dev_data_path):
+        hp, tokenizer, model_path, combined_data_path, cond_of_eval):
 
     load_dsqn_from = pjoin(model_path, "dsqn_last_weights")
     load_drrn_from = pjoin(model_path, "drrn_last_weights")
@@ -159,6 +164,8 @@ def train_bert_student(
             global_step=tf.train.get_or_create_global_step(
                 graph=model_drrn.graph))
         eprint("finish and save {} epoch".format(et))
+        with cond_of_eval:
+            cond_of_eval.notifyAll()
         if not data_in_queue:
             break
     return
@@ -340,15 +347,210 @@ def prepare_data(b_memory, tjs, action_collector, tokenizer, num_tokens):
         p_states, p_len, action_matrix, action_mask_t, action_len, expected_qs)
 
 
-def train(cmd_args, combined_data_path, model_path, combined_dev_data_path):
+def load_game_files(game_dir, f_games=None):
+    """
+    Choose games appearing in f_games in a given game dir. Return all games in
+    the game dir if f_games is None.
+    :param game_dir: a dir
+    :param f_games: a file of game names
+    :return: a list of games
+    """
+    if f_games is not None:
+        with open(f_games, "r") as f:
+            selected_games = map(lambda x: x.strip(), f.readlines())
+        game_files = list(map(
+            lambda x: os.path.join(game_dir, "{}.ulx".format(x)),
+            selected_games))
+    else:
+        game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    return game_files
+
+
+def split_train_dev(game_files):
+    """
+    Split train/dev sets from given game files
+    sort - shuffle w/ Random(42) - 90%/10% split
+      - if #game_files < 10, then use the last one as dev set;
+      - if #game_files == 1, then use the one as both train and dev.
+    :param game_files: game files
+    :return: None if game_files is empty, otherwise (train, dev)
+    """
+    # have to sort first, otherwise after shuffling the result is different
+    # on different platforms, e.g. Linux VS MacOS.
+    game_files = sorted(game_files)
+    random.Random(42).shuffle(game_files)
+    if len(game_files) == 0:
+        print("no game files found!")
+        return None
+    elif len(game_files) == 1:
+        train_games = game_files
+        dev_games = game_files
+    elif len(game_files) < 10:  # use the last one as eval
+        train_games = game_files[:-1]
+        dev_games = game_files[-1:]
+    else:
+        num_train = int(len(game_files) * 0.9)
+        train_games = game_files[:num_train]
+        dev_games = game_files[num_train:]
+    return train_games, dev_games
+
+
+def run_agent_eval(
+        agent, game_files, nb_episodes, max_episode_steps,
+        snn_eval_data_size=100):
+    """
+    Run an eval agent on given games.
+    :param agent:
+    :param game_files:
+    :param nb_episodes:
+    :param max_episode_steps:
+    :param snn_eval_data_size:
+    :return:
+    """
+    eval_results = dict()
+    requested_infos = agent.select_additional_infos()
+    for game_no in range(len(game_files)):
+        game_file = game_files[game_no]
+        game_name = os.path.basename(game_file)
+        env_id = textworld.gym.register_games(
+            [game_file], requested_infos,
+            max_episode_steps=max_episode_steps,
+            name="eval")
+        env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
+        game_env = gym.make(env_id)
+        eprint("eval game: {}".format(game_name))
+
+        for episode_no in range(nb_episodes):
+            action_list = []
+            obs, infos = game_env.reset()
+            scores = [0] * len(obs)
+            dones = [False] * len(obs)
+            steps = [0] * len(obs)
+            while not all(dones):
+                # Increase step counts.
+                steps = ([step + int(not done)
+                          for step, done in zip(steps, dones)])
+                commands = agent.act(obs, scores, dones, infos)
+                action_list.append(commands[0])
+                obs, scores, dones, infos = game_env.step(commands)
+
+            # Let the agent knows the game is done.
+            agent.act(obs, scores, dones, infos)
+
+            if game_name not in eval_results:
+                eval_results[game_name] = []
+            eval_results[game_name].append(
+                (scores[0], infos["max_score"][0], steps[0],
+                 infos["has_won"][0], action_list))
+    # run snn eval after normal agent test
+    accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
+    return eval_results, accuracy
+
+
+def agg_results(eval_results):
+    """
+    Aggregate evaluation results.
+    :param eval_results:
+    :return:
+    """
+    ret_val = {}
+    total_scores = 0
+    total_steps = 0
+    all_scores = 0
+    all_episodes = 0
+    all_won = 0
+    for game_id in eval_results:
+        res = eval_results[game_id]
+        agg_score = sum(map(lambda r: r[0], res))
+        agg_max_score = sum(map(lambda r: r[1], res))
+        all_scores += agg_max_score
+        all_episodes += len(res)
+        agg_step = sum(map(lambda r: r[2], res))
+        agg_nb_won = len(list(filter(lambda r: r[3] , res)))
+        all_won += agg_nb_won
+        ret_val[game_id] = (agg_score, agg_max_score, agg_step, agg_nb_won)
+        total_scores += agg_score
+        total_steps += agg_step
+    all_steps = all_episodes * 100
+    return (ret_val, total_scores * 1. / all_scores,
+            total_steps * 1. / all_steps, all_won * 1. / all_episodes)
+
+
+def evaluation(hp, cv, model_dir, game_files, nb_episodes):
+    """
+    A thread of evaluation.
+    :param hp:
+    :param cv:
+    :param model_dir:
+    :param game_files:
+    :param nb_episodes:
+    :return:
+    """
+    eprint('evaluation worker started ...')
+    eprint("load {} game files".format(len(game_files)))
+    game_names = [os.path.basename(fn) for fn in game_files]
+    eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
+
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
+    # for eval during training, set load_best=False
+    agent.eval(load_best=False)
+
+    prev_total_scores = 0
+    prev_total_steps = sys.maxsize
+
+    while True:
+        with cv:
+            cv.wait()
+            eprint("start evaluation ...")
+            agent.reset()
+            eval_start_t = ctime()
+            eval_results, snn_acc = run_agent_eval(
+                agent, game_files, nb_episodes, hp.game_episode_terminal_t)
+            eval_end_t = ctime()
+            agg_res, total_scores, total_steps, n_won = agg_results(
+                eval_results)
+            eprint("eval_results: {}".format(eval_results))
+            eprint("eval aggregated results: {}".format(agg_res))
+            eprint(
+                "scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
+                    total_scores, total_steps, n_won))
+            eprint("SNN accuracy: {}".format(snn_acc))
+            eprint(
+                "time to finish eval: {}".format(eval_end_t-eval_start_t))
+            if ((total_scores > prev_total_scores) or
+                    ((total_scores == prev_total_scores) and
+                     (total_steps < prev_total_steps))):
+                eprint("found better agent, save model ...")
+                prev_total_scores = total_scores
+                prev_total_steps = total_steps
+                agent.save_best_model()
+            else:
+                eprint("no better model, pass ...")
+
+
+def train(cmd_args, combined_data_path, model_path, game_dir, f_games=None):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
     hp = load_hparams_for_training(None, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
     save_hparams(hp, pjoin(model_path, "hparams.json"))
+
+    game_files = load_game_files(game_dir, f_games)
+    games = split_train_dev(game_files)
+    if games is None:
+        exit(-1)
+    train_games, dev_games = games
+    cond_of_eval = Condition()
+    eval_worker = Thread(
+        name='eval_worker', target=evaluation,
+        args=(hp, cond_of_eval, model_path, dev_games, hp.eval_episode))
+    eval_worker.setDaemon(True)
+    eval_worker.start()
+
     train_bert_student(
-        hp, tokenizer, model_path, combined_data_path, combined_dev_data_path)
+        hp, tokenizer, model_path, combined_data_path, cond_of_eval)
 
 
 # def evaluate(cmd_args, combined_data_path, model_path):
@@ -409,7 +611,8 @@ def main(data_path, n_data, model_path, dev_data_path):
         mask_val="[MASK]",
         mask_val_id=0,
         tokenizer_type="BERT",
-        max_snapshot_to_keep=100
+        max_snapshot_to_keep=100,
+        eval_episode=5
     )
 
     train(cmd_args, combined_data_path, model_path, combined_dev_data_path)
