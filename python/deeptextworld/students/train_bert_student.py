@@ -62,16 +62,9 @@ def prepare_model(fn_create_model, hp, device_placement, load_model_from):
 
 def train_bert_student(
         hp, tokenizer, model_path, combined_data_path, cond_of_eval):
-
-    load_dsqn_from = pjoin(model_path, "dsqn_last_weights")
-    load_drrn_from = pjoin(model_path, "drrn_last_weights")
-    ckpt_dsqn_prefix = pjoin(load_dsqn_from, "after-epoch")
+    load_drrn_from = pjoin(model_path, "last_weights")
     ckpt_drrn_prefix = pjoin(load_drrn_from, "after-epoch")
 
-    # load dsqn model
-    # sess_dsqn, model_dsqn, saver_dsqn, train_steps_dsqn = prepare_model(
-    #     create_train_student_dsqn_model, hp, "/device:GPU:0", load_dsqn_from)
-    # load drrn model
     sess_drrn, model_drrn, saver_drrn, train_steps_drrn = prepare_model(
         create_train_student_drrn_model, hp, "/device:GPU:1", load_drrn_from)
 
@@ -84,9 +77,7 @@ def train_bert_student(
     else:
         pass
 
-    sw_path_dsqn = pjoin(model_path, "dsqn_summaries", "train")
     sw_path_drrn = pjoin(model_path, "drrn_summaries", "train")
-    # sw_dsqn = tf.summary.FileWriter(sw_path_dsqn, sess_dsqn.graph)
     sw_drrn = tf.summary.FileWriter(sw_path_drrn, sess_drrn.graph)
 
     queue = Queue(maxsize=100)
@@ -114,31 +105,7 @@ def train_bert_student(
             try:
                 data = queue.get(timeout=1)
                 (p_states, p_len, action_matrix, action_mask_t, action_len,
-                 expected_qs) = data[0]
-                # (src, src_len, src2, src2_len, labels) = data[1]
-
-                # def run_dsqn():
-                #     _, summ = sess_dsqn.run(
-                #         [model_dsqn.train_op, model_dsqn.train_summary_op],
-                #         feed_dict={
-                #             model_dsqn.src_: p_states,
-                #             model_dsqn.src_len_: p_len,
-                #             model_dsqn.actions_mask_: action_mask_t,
-                #             model_dsqn.actions_: action_matrix,
-                #             model_dsqn.actions_len_: action_len,
-                #             model_dsqn.expected_qs_: expected_qs,
-                #             model_dsqn.snn_src_: src,
-                #             model_dsqn.snn_src_len_: src_len,
-                #             model_dsqn.snn_src2_: src2,
-                #             model_dsqn.snn_src2_len_: src2_len,
-                #             model_dsqn.labels_: labels})
-                #     sw_dsqn.add_summary(
-                #         summ, train_steps_dsqn + et * epoch_size + it)
-
-                # t_dsqn = Thread(target=run_dsqn)
-                # t_dsqn.start()
-
-                # model 2
+                 expected_qs) = data
                 _, summaries = sess_drrn.run(
                     [model_drrn.train_op, model_drrn.train_summary_op],
                     feed_dict={
@@ -155,10 +122,6 @@ def train_bert_student(
                 data_in_queue = False
                 eprint("no more data: {}".format(e))
                 break
-        # saver_dsqn.save(
-        #     sess_dsqn, ckpt_dsqn_prefix,
-        #     global_step=tf.train.get_or_create_global_step(
-        #         graph=model_dsqn.graph))
         saver_drrn.save(
             sess_drrn, ckpt_drrn_prefix,
             global_step=tf.train.get_or_create_global_step(
@@ -199,22 +162,16 @@ def add_batch(
                 combined_data_path, key=lambda k: random.random()):
             memory, tjs, action_collector, hash_states2tjs = load_snapshot(
                 hp, mp, tp, ap, hs, tokenizer)
-            # clean hs2tj
-            # hash_states2tjs = clean_hs2tj(hash_states2tjs, tjs)
             random.shuffle(memory)
             i = 0
             while i < len(memory) // batch_size:
                 batch_memory = (
                     memory[i*batch_size: min((i+1)*batch_size, len(memory))])
                 queue.put(
-                    [
-                        prepare_data(
-                            batch_memory, tjs, action_collector, tokenizer,
-                            hp.num_tokens),
-                        # prepare_snn_pairs(
-                        #     batch_size, hash_states2tjs, tjs, hp.num_tokens,
-                        #     tokenizer)
-                    ])
+                    prepare_data(
+                        batch_memory, tjs, action_collector, tokenizer,
+                        hp.num_tokens),
+                )
                 i += 1
 
 
@@ -443,7 +400,8 @@ def run_agent_eval(
                 (scores[0], infos["max_score"][0], steps[0],
                  infos["has_won"][0], action_list))
     # run snn eval after normal agent test
-    accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
+    # accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
+    accuracy = 0.
     return eval_results, accuracy
 
 
