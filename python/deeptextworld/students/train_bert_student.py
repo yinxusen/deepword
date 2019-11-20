@@ -66,7 +66,7 @@ def train_bert_student(
     ckpt_drrn_prefix = pjoin(load_drrn_from, "after-epoch")
 
     sess_drrn, model_drrn, saver_drrn, train_steps_drrn = prepare_model(
-        create_train_student_drrn_model, hp, "/device:GPU:1", load_drrn_from)
+        create_train_student_drrn_model, hp, "/device:GPU:0", load_drrn_from)
 
     # save the very first model to verify the Bert weight has been loaded
     if train_steps_drrn == 0:
