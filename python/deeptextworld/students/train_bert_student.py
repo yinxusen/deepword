@@ -636,7 +636,8 @@ def main(data_path, n_data, model_path, game_path, f_games):
         max_snapshot_to_keep=100,
         eval_episode=5,
         game_episode_terminal_t=100,
-        replay_mem=500000
+        replay_mem=500000,
+        collect_floor_plan=True
     )
 
     train(cmd_args, combined_data_path, model_path, game_path, f_games)
