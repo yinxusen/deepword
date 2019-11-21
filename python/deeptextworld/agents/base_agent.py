@@ -514,6 +514,41 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init(load_best=False)
 
+    def try_loading(self, sess, saver, restore_from, is_training):
+        # Reload weights from directory if specified
+        self.info(
+            "Try to restore parameters from: {}".format(restore_from))
+        try:
+            saver.restore(sess, restore_from)
+        except Exception as e:
+            self.debug("Restoring failed: {}".format(e))
+            all_saved_vars = list(
+                map(lambda v: v[0],
+                    tf.train.list_variables(restore_from)))
+            self.debug(
+                "Try to restore with safe saver with vars:\n{}".format(
+                    "\n".join(all_saved_vars)))
+            all_vars = tf.global_variables()
+            self.debug("all vars:\n{}".format(
+                "\n".join([v.op.name for v in all_vars])))
+            var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+            self.debug("Matched vars:\n{}".format(
+                "\n".join([v.name for v in var_list])))
+            safe_saver = tf.train.Saver(var_list=var_list)
+            safe_saver.restore(sess, restore_from)
+        if is_training:
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+            if self.hp.start_t_ignore_model_t:
+                start_t = min(
+                    self.hp.observation_t,
+                    len(self.memo) if self.memo is not None else 0)
+            else:
+                start_t = trained_steps + self.hp.observation_t
+        else:
+            start_t = 0
+        return start_t
+
     def create_n_load_model(
             self, load_best=False, is_training=True, device=None):
         start_t = 0
@@ -540,37 +575,8 @@ class BaseAgent(Logging):
                 restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
             if restore_from is not None:
-                # Reload weights from directory if specified
-                self.info(
-                    "Try to restore parameters from: {}".format(restore_from))
-                try:
-                    saver.restore(sess, restore_from)
-                except Exception as e:
-                    self.debug("Restoring failed: {}".format(e))
-                    all_saved_vars = list(
-                        map(lambda v: v[0],
-                            tf.train.list_variables(restore_from)))
-                    self.debug(
-                        "Try to restore with safe saver with vars:\n{}".format(
-                            "\n".join(all_saved_vars)))
-                    all_vars = tf.global_variables()
-                    self.debug("all vars:\n{}".format("\n".join([v.op.name for v in all_vars])))
-                    var_list = [v for v in all_vars if v.op.name in all_saved_vars]
-                    self.debug("Matched vars:\n{}".format(
-                        "\n".join([v.name for v in var_list])))
-                    safe_saver = tf.train.Saver(var_list=var_list)
-                    safe_saver.restore(sess, restore_from)
-                if is_training:
-                    global_step = tf.train.get_or_create_global_step()
-                    trained_steps = sess.run(global_step)
-                    if self.hp.start_t_ignore_model_t:
-                        start_t = min(
-                            self.hp.observation_t,
-                            len(self.memo) if self.memo is not None else 0)
-                    else:
-                        start_t = trained_steps + self.hp.observation_t
-                else:
-                    pass
+                start_t = self.try_loading(
+                    sess, saver, restore_from, self.is_training)
             else:
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
@@ -667,7 +673,8 @@ class BaseAgent(Logging):
                     self.info(
                         "Try to restore parameters from: {}".format(
                             restore_from))
-                    self.saver.restore(self.sess, restore_from)
+                    self.loaded_ckpt_step = self.try_loading(
+                        self.sess, self.saver, restore_from, self.is_training)
                 else:
                     self.info('No checkpoint to load for evaluation')
             else:
