@@ -634,7 +634,9 @@ def main(data_path, n_data, model_path, game_path, f_games):
         mask_val_id=0,
         tokenizer_type="BERT",
         max_snapshot_to_keep=100,
-        eval_episode=5
+        eval_episode=5,
+        game_episode_terminal_t=100,
+        replay_mem=500000
     )
 
     train(cmd_args, combined_data_path, model_path, game_path, f_games)

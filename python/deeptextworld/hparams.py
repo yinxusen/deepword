@@ -64,7 +64,7 @@ def default_hparams_agent():
         replay_mem=100000,
         observation_t=2000,
         total_t=sys.maxsize,
-        game_episode_terminal_t=5000,
+        game_episode_terminal_t=100,
         vocab_size=0,
         n_actions=128,
         n_tokens_per_action=10,

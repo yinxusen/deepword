@@ -1211,7 +1211,8 @@ class BaseAgent(Logging):
         all_actions = self.actor.actions
 
         # make sure appending tjs first, otherwise the judgement could be wrong
-        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+        # pass the 1st master
+        if self.is_training and self.tjs.get_last_sid() > 0:
             self.feed_memory(
                 instant_reward, dones[0],
                 self._last_actions_mask, actions_mask)
