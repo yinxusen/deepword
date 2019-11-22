@@ -57,6 +57,7 @@ class CNNEncoderDSQN(CNNEncoderDQN):
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
+            "expected_qs": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions": tf.placeholder(tf.int32, [None, self.n_actions, None]),
             "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
             "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
@@ -160,6 +161,14 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         merged_train_op = self.optimizer.minimize(
             weighted_loss, global_step=self.global_step)
         return weighted_loss, merged_train_op, s1, s2
+
+    def get_student_train_op(self, q_actions):
+        losses = tf.squared_difference(
+            self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            q_actions * self.inputs["actions_mask"])
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
 
 
 class AttnEncoderDSQN(CNNEncoderDSQN):
@@ -363,23 +372,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         :param is_infer:
         """
         super(BertAttnEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
-        self.inputs = {
-            "src": tf.placeholder(tf.int32, [None, None]),
-            "src_len": tf.placeholder(tf.float32, [None]),
-            "action_idx": tf.placeholder(tf.int32, [None]),
-            "b_weight": tf.placeholder(tf.float32, [None]),
-            "expected_q": tf.placeholder(tf.float32, [None]),
-            "expected_qs": tf.placeholder(tf.float32, [None, self.n_actions]),
-            "actions": tf.placeholder(tf.int32, [None, self.n_actions, None]),
-            "actions_len": tf.placeholder(tf.float32, [None, self.n_actions]),
-            "actions_mask": tf.placeholder(tf.float32, [None, self.n_actions]),
-            "snn_src": tf.placeholder(tf.int32, [None, None]),
-            "snn_src_len": tf.placeholder(tf.float32, [None]),
-            "snn_src2": tf.placeholder(tf.int32, [None, None]),
-            "snn_src2_len": tf.placeholder(tf.float32, [None]),
-            "labels": tf.placeholder(tf.float32, [None])
-        }
-
         self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
             self.bert_init_ckpt_dir)
@@ -487,14 +479,6 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         train_op = self.optimizer.minimize(
             loss, global_step=self.global_step)
         return loss, train_op, abs_loss
-
-    def get_student_train_op(self, q_actions):
-        losses = tf.squared_difference(
-            self.inputs["expected_qs"] * self.inputs["actions_mask"],
-            q_actions * self.inputs["actions_mask"])
-        loss = tf.reduce_mean(losses)
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op
 
     def get_snn_train_op(self, pred):
         labels = self.inputs["labels"]

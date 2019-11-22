@@ -95,7 +95,10 @@ def default_hparams_agent():
         mask_val_id=0,
         use_step_wise_reward=False,
         tokenizer_type="BERT",
-        pad_eos=False
+        pad_eos=False,
+        use_glove_emb=False,
+        glove_emb_path="",
+        glove_trainable=False
     )
 
 
