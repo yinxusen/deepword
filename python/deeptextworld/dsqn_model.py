@@ -247,6 +247,130 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
         return pred, diff_two_states
 
 
+class Attn2LSTMEncoderDSQN(CNNEncoderDSQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(Attn2LSTMEncoderDSQN, self).__init__(hp, src_embeddings, is_infer)
+        # trajectory encoder
+        self.te = txf.Encoder(
+            num_layers=1, d_model=128, num_heads=8, dff=256,
+            input_vocab_size=self.hp.vocab_size)
+        # trajectory pooler
+        self.wt = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        self.wt2 = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+    def get_q_actions(self):
+        batch_size = tf.shape(self.inputs["src_len"])[0]
+        src = self.inputs["src"]
+        raw_src_len = self.inputs["src_len"]
+        # padding the [CLS] in the beginning
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        actions = tf.reshape(
+            self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
+        actions_w_pad = tf.pad(
+            actions, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        actions_mask = txf.create_padding_mask(actions_w_pad)
+
+        with tf.variable_scope("drrn-attn-encoder", reuse=False):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+            h_state_var = self.wt2(first_action_token_tensor)
+
+        with tf.variable_scope("drrn-action-encoder", reuse=False):
+            flat_actions = tf.reshape(
+                self.inputs["actions"],
+                shape=(batch_size * self.n_actions, -1))
+            flat_actions_len = tf.reshape(
+                self.inputs["actions_len"],
+                shape=(-1,))
+            flat_h_actions = dqn.encoder_lstm(
+                flat_actions, flat_actions_len,
+                self.src_embeddings,
+                num_units=32,
+                num_layers=1)[-1].h
+            h_actions = tf.reshape(
+                flat_h_actions,
+                shape=(batch_size, self.n_actions, -1))
+
+        with tf.variable_scope("drrn-scorer", reuse=False):
+            h_state_expanded = tf.expand_dims(h_state + h_state_var, axis=1)
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
+
+        return q_actions
+
+    def get_h_state(self, src, src_len):
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = txf.create_padding_mask(src_w_pad)
+        with tf.variable_scope("drrn-attn-encoder", reuse=tf.AUTO_REUSE):
+            inner_state = self.te(
+                src_w_pad, x_seg=None,
+                training=(not self.is_infer), mask=src_masks_w_pad)
+            first_action_token_tensor = tf.squeeze(
+                inner_state[:, 0:1, :], axis=1)
+            h_state = self.wt(first_action_token_tensor)
+        return h_state
+
+    def get_pred(self):
+        h_state = self.get_h_state(
+            self.inputs["snn_src"], self.inputs["snn_src_len"])
+        h_state2 = self.get_h_state(
+            self.inputs["snn_src2"], self.inputs["snn_src2_len"])
+        diff_two_states = tf.abs(h_state - h_state2)
+        pred = tf.squeeze(tf.layers.dense(
+            diff_two_states, activation=None, units=1, use_bias=True,
+            name="snn_dense"))
+        return pred, diff_two_states
+
+    def get_merged_student_train_op(self, q_actions, pred):
+        ls_dqn = tf.squared_difference(
+            self.inputs["expected_qs"] * self.inputs["actions_mask"],
+            q_actions * self.inputs["actions_mask"])
+        l_dqn = tf.reduce_mean(ls_dqn)
+        labels = self.inputs["labels"]
+        ls_snn = tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=labels, logits=pred)
+        l_snn = tf.reduce_mean(ls_snn)
+        # Multi-Task Learning Using Uncertainty to Weigh Losses
+        s1 = tf.get_variable("s1", shape=[], dtype=tf.float32)
+        s2 = tf.get_variable("s2", shape=[], dtype=tf.float32)
+        weighted_loss = (
+                0.5 * tf.exp(-s1) * l_dqn + tf.exp(-s2) * l_snn +
+                0.5 * s1 + 0.5 * s2)
+        merged_train_op = self.optimizer.minimize(
+            weighted_loss, global_step=self.global_step)
+        return weighted_loss, l_dqn, l_snn, merged_train_op, s1, s2
+
+
 class Attn2EncoderDSQN(CNNEncoderDSQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """
