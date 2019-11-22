@@ -599,6 +599,10 @@ def main(data_path, n_data, model_path, game_path, f_games):
     bert_ckpt_dir = pjoin(home_dir, "local/opt/bert-models/bert-model")
     bert_vocab_file = pjoin(bert_ckpt_dir, "vocab.txt")
     nltk_vocab_file = pjoin(dir_path, "../resources/vocab.txt")
+    glove_vocab_file = pjoin(
+        home_dir, "local/opt/glove-models/glove.6B/vocab.glove.6B.4more.txt")
+    glove_emb_file = pjoin(
+        home_dir, "local/opt/glove-models/glove.6B/glove.6B.50d.4more.txt")
 
     tjs_prefix = "raw-trajectories"
     action_prefix = "actions"
@@ -615,29 +619,32 @@ def main(data_path, n_data, model_path, game_path, f_games):
 
     cmd_args = CMD(
         model_dir=model_path,
-        model_creator="BertAttnEncoderDSQN",
-        vocab_file=bert_vocab_file,
+        model_creator="CNNEncoderDSQN",
+        vocab_file=glove_vocab_file,
         bert_ckpt_dir=bert_ckpt_dir,
-        num_tokens=256,
+        num_tokens=511,
         num_turns=6,
         batch_size=32,
         save_gap_t=5000,
-        embedding_size=64,
+        embedding_size=50,
         learning_rate=5e-5,
         num_conv_filters=32,
-        bert_num_hidden_layers=12,
+        bert_num_hidden_layers=1,
         cls_val="[CLS]",
         cls_val_id=0,
         sep_val="[SEP]",
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        tokenizer_type="BERT",
+        tokenizer_type="NLTK",
         max_snapshot_to_keep=100,
         eval_episode=5,
         game_episode_terminal_t=100,
         replay_mem=500000,
-        collect_floor_plan=True
+        collect_floor_plan=True,
+        use_glove_emb=True,
+        glove_emb_path=glove_emb_file,
+        glove_trainable=False
     )
 
     train(cmd_args, combined_data_path, model_path, game_path, f_games)

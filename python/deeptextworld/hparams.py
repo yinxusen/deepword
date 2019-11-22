@@ -82,7 +82,7 @@ def default_hparams_agent():
         jitter_go=False,
         jitter_eval_prob=1.,
         jitter_train_prob=0.5,
-        collect_floor_plan=False,
+        collect_floor_plan=True,
         start_t_ignore_model_t=False,
         apply_dependency_parser=False,
         use_padding_over_lines=False,
@@ -95,7 +95,10 @@ def default_hparams_agent():
         mask_val_id=0,
         use_step_wise_reward=False,
         tokenizer_type="BERT",
-        pad_eos=False
+        pad_eos=False,
+        use_glove_emb=False,
+        glove_emb_path="",
+        glove_trainable=False
     )
 
 

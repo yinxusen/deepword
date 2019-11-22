@@ -1,4 +1,5 @@
 import collections
+import numpy as np
 import tensorflow as tf
 
 import deeptextworld.dqn_func as dqn
@@ -30,9 +31,15 @@ class BaseDQN(object):
         self.is_infer = is_infer
         self.hp = hp
         if src_embeddings is None:
-            self.src_embeddings = tf.get_variable(
-                name="src_embeddings", dtype=tf.float32,
-                shape=[hp.vocab_size, hp.embedding_size])
+            if hp.use_glove_emb:
+                _, glove_emb = self.init_glove(hp.glove_emb_path)
+                self.src_embeddings = tf.get_variable(
+                    name="src_embeddings", dtype=tf.float32,
+                    initializer=glove_emb, trainable=hp.glove_trainable)
+            else:
+                self.src_embeddings = tf.get_variable(
+                    name="src_embeddings", dtype=tf.float32,
+                    shape=[hp.vocab_size, hp.embedding_size])
         else:
             self.src_embeddings = src_embeddings
 
@@ -45,6 +52,15 @@ class BaseDQN(object):
             "expected_q": tf.placeholder(tf.float32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None])
         }
+
+    @classmethod
+    def init_glove(cls, glove_path):
+        with open(glove_path, "r") as f:
+            glove = list(map(lambda s: s.strip().split(), f.readlines()))
+        glove_tokens = list(map(lambda x: x[0], glove))
+        glove_embeddings = np.asarray(
+            list(map(lambda x: x[1:], glove)), dtype=np.float32)
+        return glove_tokens, glove_embeddings
 
     def get_q_actions(self):
         raise NotImplementedError()
