@@ -501,23 +501,18 @@ class BaseAgent(Logging):
         self.is_training = True
         self._init()
 
-    def eval(self, load_best=True, restore_from=None):
-        """
-        :param load_best:
-        :param restore_from: This parameter only works for evaluation
-        :return:
-        """
+    def eval(self, load_best=True):
         self.is_training = False
-        self._init(load_best, restore_from)
+        self._init(load_best)
 
-    def reset(self):
+    def reset(self, restore_from=None):
         """
         reset is only used for evaluation during training
         do not use it at anywhere else.
         """
         self.is_training = False
         self._initialized = False
-        self._init(load_best=False)
+        self._init(load_best=False, restore_from=restore_from)
 
     def try_loading(self, model, sess, saver, restore_from, is_training):
         # Reload weights from directory if specified

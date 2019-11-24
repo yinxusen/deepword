@@ -550,14 +550,16 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    for model_name in list_all_ckpts(model_dir, "after-epoch", load_best=False):
-        agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
-        agent = agent_clazz(hp, model_dir)
-        agent.eval(load_best=False, restore_from=model_name)
-        if eval_randomness is not None:
-            agent.eps = eval_randomness
-        eprint("evaluation randomness: {}".format(agent.eps))
+    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent = agent_clazz(hp, model_dir)
+    agent.eval(load_best=False)
+    if eval_randomness is not None:
+        agent.eps = eval_randomness
+    eprint("evaluation randomness: {}".format(agent.eps))
+    assert agent.model is not None, "make sure load a model first"
 
+    for model_name in list_all_ckpts(model_dir, "after-epoch", load_best=False):
+        agent.reset(restore_from=model_name)
         eval_start_t = ctime()
         eval_results = run_agent_eval(
             agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
@@ -600,11 +602,32 @@ def list_all_ckpts(model_path, model_prefix, load_best=False):
     return model_names
 
 
+def get_eval_log_filename(func_name, model_dir, game_path, f_games):
+    fn = "tmp-log+{}+{}+{}+{}+{}.txt".format(
+        func_name,
+        os.path.basename(model_dir),
+        os.path.basename(game_path),
+        os.path.basename(f_games) if f_games else "None",
+        str(round(time.time() * 1000)))
+    return os.path.join(os.getcwd(), fn)
+
+
+def setup_eval_log(log_filename):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    log_config_file = '{}/../../conf/logging-eval.yaml'.format(current_dir)
+    setup_logging(
+        default_path=log_config_file,
+        local_log_filename=log_filename)
+
+
 def main(data_path, n_data, model_path, game_path, f_games):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
-    setup_train_log(model_path)
+    # setup_train_log(model_path)
+    setup_eval_log(
+        get_eval_log_filename(
+            "eval_drrn", model_path, game_path, f_games))
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
     home_dir = os.path.expanduser("~")
