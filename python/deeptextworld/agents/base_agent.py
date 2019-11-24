@@ -501,9 +501,14 @@ class BaseAgent(Logging):
         self.is_training = True
         self._init()
 
-    def eval(self, load_best=True):
+    def eval(self, load_best=True, restore_from=None):
+        """
+        :param load_best:
+        :param restore_from: This parameter only works for evaluation
+        :return:
+        """
         self.is_training = False
-        self._init(load_best)
+        self._init(load_best, restore_from)
 
     def reset(self):
         """
@@ -539,9 +544,10 @@ class BaseAgent(Logging):
                     "\n".join([v.name for v in var_list])))
                 safe_saver = tf.train.Saver(var_list=var_list)
                 safe_saver.restore(sess, restore_from)
+
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
             if is_training:
-                global_step = tf.train.get_or_create_global_step()
-                trained_steps = sess.run(global_step)
                 if self.hp.start_t_ignore_model_t:
                     start_t = min(
                         self.hp.observation_t,
@@ -550,11 +556,12 @@ class BaseAgent(Logging):
                     start_t = trained_steps + self.hp.observation_t
             else:
                 start_t = 0
-        return start_t
+        return start_t, trained_steps
 
     def create_n_load_model(
             self, load_best=False, is_training=True, device=None):
         start_t = 0
+        trained_step = 0
         if is_training:
             device = device if device else "/device:GPU:0"
             model = self.create_model_instance(device=device)
@@ -578,11 +585,11 @@ class BaseAgent(Logging):
             restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
         if restore_from is not None:
-            start_t = self.try_loading(
+            start_t, trained_step = self.try_loading(
                 model, sess, saver, restore_from, self.is_training)
         else:
             self.info('No checkpoint to load, training from scratch')
-        return sess, start_t, saver, model
+        return sess, start_t, trained_step, saver, model
 
     def create_model_instance(self, device):
         raise NotImplementedError()
@@ -593,14 +600,14 @@ class BaseAgent(Logging):
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
         raise NotImplementedError()
 
-    def _init(self, load_best=False):
+    def _init(self, load_best=False, restore_from=None):
         """
         load actions, trajectories, memory, model, etc.
         """
         if self._initialized:
             self.error("the agent was initialized")
             return
-        self._init_impl(load_best)
+        self._init_impl(load_best, restore_from)
         self._initialized = True
 
     def _get_context_obj_path_w_tag(self, prefix, tag):
@@ -637,15 +644,15 @@ class BaseAgent(Logging):
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=self.is_training)
 
-    def _init_impl(self, load_best=False):
+    def _init_impl(self, load_best=False, restore_from=None):
         if self.hp.apply_dependency_parser:
             # TODO: stride_len is hard fix here for maximum n-gram filter size 5
             self.dp = DependencyParserReorder(
                 padding_val=self.hp.padding_val, stride_len=4)
         self._load_context_objs()
         if self.is_training:
-            self.sess, self.total_t, self.saver, self.model =\
-                self.create_n_load_model(device=self.d4train)
+            (self.sess, self.total_t, self.loaded_ckpt_step, self.saver,
+             self.model) = self.create_n_load_model(device=self.d4train)
             self.loaded_ckpt_step = self.total_t
             self.eps = self.hp.init_eps
             train_summary_dir = os.path.join(
@@ -656,8 +663,7 @@ class BaseAgent(Logging):
                 os.path.join(self.model_dir, 'last_weights'))
             if self.target_sess is None and restore_from is not None:
                 self.debug("create and load target net")
-                (self.target_sess, start_t, self.target_saver,
-                 self.target_model
+                (self.target_sess, _, _, self.target_saver, self.target_model
                  ) = self.create_n_load_model(
                     is_training=False, device=self.d4target)
             else:
@@ -665,24 +671,28 @@ class BaseAgent(Logging):
                 pass
         else:
             if self.model is not None:
-                if load_best:
-                    restore_from = tf.train.latest_checkpoint(
-                        self.best_ckpt_path)
+                if restore_from is None:
+                    if load_best:
+                        restore_from = tf.train.latest_checkpoint(
+                            self.best_ckpt_path)
+                    else:
+                        restore_from = tf.train.latest_checkpoint(
+                            self.ckpt_path)
                 else:
-                    restore_from = tf.train.latest_checkpoint(self.ckpt_path)
+                    pass
 
                 if restore_from is not None:
                     # Reload weights from directory if specified
                     self.info(
                         "Try to restore parameters from: {}".format(
                             restore_from))
-                    self.loaded_ckpt_step = self.try_loading(
+                    _, self.loaded_ckpt_step = self.try_loading(
                         self.model, self.sess, self.saver, restore_from,
                         self.is_training)
                 else:
                     self.info('No checkpoint to load for evaluation')
             else:
-                (self.sess, self.loaded_ckpt_step, self.saver, self.model
+                (self.sess, _, self.loaded_ckpt_step, self.saver, self.model
                  ) = self.create_n_load_model(
                     load_best=load_best, is_training=self.is_training,
                     device=self.d4eval)
@@ -1130,7 +1140,7 @@ class BaseAgent(Logging):
 
             if self.target_sess is None:
                 self.debug("create and load target net")
-                (self.target_sess, start_t, self.target_saver, self.target_model
+                (self.target_sess, _, _, self.target_saver, self.target_model
                  ) = self.create_n_load_model(
                     is_training=False, device=self.d4target)
             else:

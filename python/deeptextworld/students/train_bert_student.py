@@ -550,23 +550,26 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
-    agent = agent_clazz(hp, model_dir)
-    agent.eval(load_best=False)
-    if eval_randomness is not None:
-        agent.eps = eval_randomness
-    eprint("evaluation randomness: {}".format(agent.eps))
+    for model_name in list_all_ckpts(model_dir, "after-epoch", load_best=False):
+        agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+        agent = agent_clazz(hp, model_dir)
+        agent.eval(load_best=False, restore_from=model_name)
+        if eval_randomness is not None:
+            agent.eps = eval_randomness
+        eprint("evaluation randomness: {}".format(agent.eps))
 
-    eval_start_t = ctime()
-    eval_results = run_agent_eval(
-        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
-    eval_end_t = ctime()
-    agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
-    eprint("eval_results: {}".format(eval_results[0]))
-    eprint("eval aggregated results: {}".format(agg_res))
-    eprint("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
-        total_scores, total_steps, n_won))
-    eprint("time to finish eval: {}".format(eval_end_t-eval_start_t))
+        eval_start_t = ctime()
+        eval_results = run_agent_eval(
+            agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
+        eval_end_t = ctime()
+        agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
+        eprint("eval_results: {}".format(eval_results[0]))
+        eprint("eval aggregated results: {}".format(agg_res))
+        eprint(
+            "after-epoch: {}, scores: {:.2f}, steps: {:.2f},"
+            " n_won: {:.2f}".format(
+                agent.loaded_ckpt_step, total_scores, total_steps, n_won))
+        eprint("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
 def evaluate(cmd_args, model_path, game_path, f_games):
@@ -586,6 +589,15 @@ def setup_train_log(model_dir):
     setup_logging(
         default_path=log_config_file,
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
+
+
+def list_all_ckpts(model_path, model_prefix, load_best=False):
+    middle_path = "best_weights" if load_best else "last_weights"
+    prefix = pjoin(model_path, middle_path, model_prefix)
+    model_files = glob.glob("{}*".format(prefix))
+    model_names = list(set([os.path.splitext(p)[0] for p in model_files]))
+    model_names = sorted(model_names, key=lambda p: int(p.split("-")[-1]))
+    return model_names
 
 
 def main(data_path, n_data, model_path, game_path, f_games):
@@ -640,8 +652,8 @@ def main(data_path, n_data, model_path, game_path, f_games):
         collect_floor_plan=True
     )
 
-    train(cmd_args, combined_data_path, model_path, game_path, f_games)
-    # evaluate(cmd_args, model_path, game_path, f_games)
+    # train(cmd_args, combined_data_path, model_path, game_path, f_games)
+    evaluate(cmd_args, model_path, game_path, f_games)
 
 
 if __name__ == "__main__":
