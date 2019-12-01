@@ -235,6 +235,8 @@ class BaseAgent(Logging):
         self.epoch_start_t = 0
         self.d4train, self.d4eval, self.d4target = self.init_devices()
 
+        self._stale_tids = []
+
         self._last_actions_mask = None
         self._last_action = None
 
@@ -820,6 +822,7 @@ class BaseAgent(Logging):
         self.info('save snapshot of the agent')
         self._save_context_objs()
         self._delete_stale_context_objs()
+        self._clean_stale_context(self._stale_tids)
         # notice that we should not save hparams when evaluating
         # that's why I move this function calling here from __init__
         save_hparams(
@@ -1148,10 +1151,10 @@ class BaseAgent(Logging):
             self.info("snapshot saved, ready for evaluation")
             self.epoch_start_t = ctime()
 
-    def _clean_stale_context(self, tid):
-        self.debug("tjs deletes {}".format(tid))
-        self.tjs.request_delete_key(tid)
-        self.tjs_seg.request_delete_key(tid)
+    def _clean_stale_context(self, tids):
+        self.debug("tjs deletes {}".format(tids))
+        self.tjs.request_delete_keys(tids)
+        self.tjs_seg.request_delete_keys(tids)
 
     def feed_memory(
             self, instant_reward, is_terminal, action_mask, next_action_mask):
@@ -1165,7 +1168,8 @@ class BaseAgent(Logging):
         ))
         if isinstance(original_data, DRRNMemo):
             if original_data.is_terminal:
-                self._clean_stale_context(original_data.tid)
+                self._stale_tids.append(original_data.tid)
+                # self._clean_stale_context(original_data.tid)
 
     def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
         if self.hp.collect_floor_plan:

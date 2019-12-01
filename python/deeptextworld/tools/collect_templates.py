@@ -2,6 +2,7 @@ import glob
 import os
 import sys
 import re
+import random
 
 import gym
 import textworld.gym
@@ -61,14 +62,14 @@ def main(game_files):
     env_id = textworld.gym.make_batch(
         env_id, batch_size=1, parallel=False)
     env = gym.make(env_id)
-
+    total_ingredients = set()
     for game in game_files:
         obs, infos = env.reset()
         dones = [False] * len(obs)
         master_wo_logo = remove_logo(obs[0]).replace("\n", " ")
         # print(master_wo_logo)
-        for ingredient in BaseAgent.get_theme_words(infos["extra.recipe"][0]):
-            print(ingredient)
+        total_ingredients.update(BaseAgent.get_theme_words(infos["extra.recipe"][0]))
+            # print(ingredient)
         # # print("max score is {}".format(infos["max_score"][0]))
         # theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
         # theme_words_search = re.search(theme_regex, infos["extra.recipe"][0].replace("\n", "<|>"))
@@ -83,15 +84,67 @@ def main(game_files):
         # templates.update(infos["command_templates"][0])
 
     # print("\n".join(sorted(templates)))
+    print("\n".join(total_ingredients))
+
+
+def split_train_dev(game_files):
+    """
+    Split train/dev sets from given game files
+    sort - shuffle w/ Random(42) - 90%/10% split
+      - if #game_files < 10, then use the last one as dev set;
+      - if #game_files == 1, then use the one as both train and dev.
+    :param game_files: game files
+    :return: None if game_files is empty, otherwise (train, dev)
+    """
+    # have to sort first, otherwise after shuffling the result is different
+    # on different platforms, e.g. Linux VS MacOS.
+    game_files = sorted(game_files)
+    random.Random(42).shuffle(game_files)
+    if len(game_files) == 0:
+        print("no game files found!")
+        return None
+    elif len(game_files) == 1:
+        train_games = game_files
+        dev_games = game_files
+    elif len(game_files) < 10:  # use the last one as eval
+        train_games = game_files[:-1]
+        dev_games = game_files[-1:]
+    else:
+        num_train = int(len(game_files) * 0.9)
+        train_games = game_files[:num_train]
+        dev_games = game_files[num_train:]
+    return train_games, dev_games
+
+
+def load_game_files(game_dir, f_games=None):
+    """
+    Choose games appearing in f_games in a given game dir. Return all games in
+    the game dir if f_games is None.
+    :param game_dir: a dir
+    :param f_games: a file of game names
+    :return: a list of games
+    """
+    if f_games is not None:
+        with open(f_games, "r") as f:
+            selected_games = map(lambda x: x.strip(), f.readlines())
+        game_files = list(map(
+            lambda x: os.path.join(game_dir, "{}.ulx".format(x)),
+            selected_games))
+    else:
+        game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+    return game_files
 
 
 if __name__ == '__main__':
     game_dir = sys.argv[1]
     if len(sys.argv) > 2:
-        f_game_names = sys.argv[2]
-        with open(f_game_names) as f:
-            game_names = list(map(lambda l: l.strip(), f.readlines()))
-        game_files = list(map(lambda l: os.path.join(game_dir, "{}.ulx".format(l)), game_names))
+        f_games = sys.argv[2]
+        game_files = load_game_files(game_dir, f_games)
+        games = split_train_dev(game_files)
+        if games is None:
+            exit(-1)
+        train_games, dev_games = games
+        game_files = train_games
     else:
         game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
     main(game_files)

@@ -43,6 +43,17 @@ class BaseTrajectory(Logging):
                 self.trajectories.pop(k, None)
                 self.debug('trajectory {} (time<=) {} deleted'.format(k, key))
 
+    def request_delete_keys(self, ks):
+        if not ks:
+            return
+        for k in sorted(self.trajectories.keys()):
+            if k > max(ks):
+                break
+            else:
+                self.trajectories.pop(k, None)
+                self.debug(
+                    'trajectory {} (time<=) {} deleted'.format(k, max(ks)))
+
     @classmethod
     def _ctime(cls):
         return int(round(time.time() * 1000))
@@ -79,6 +90,10 @@ class BaseTrajectory(Logging):
         raise NotImplementedError()
 
     def fetch_batch_states(self, b_tid, b_sid):
+        return self.fetch_batch_states_impl(
+            zip(list(b_tid), list(b_sid)))
+
+    def fetch_batch_states_impl(self, b_tid_sid):
         raise NotImplementedError()
 
     def fetch_batch_states_pair(self, b_tid, b_sid):
@@ -88,7 +103,8 @@ class BaseTrajectory(Logging):
 class RawTextTrajectory(BaseTrajectory):
     def __init__(self, hp):
         super(RawTextTrajectory, self).__init__()
-        # multiply by 2 and plus one here to make it consistent with new Action-Master sentences.
+        # multiply by 2 and plus one here to make it consistent
+        # with new Action-Master sentences.
         self.num_turns = hp.num_turns * 2 + 1
 
     def fetch_last_state(self):
@@ -104,12 +120,12 @@ class RawTextTrajectory(BaseTrajectory):
         state = tj[max(0, sid - self.num_turns):sid + 1]
         return state
 
-    def fetch_batch_states(self, b_tid, b_sid):
+    def fetch_batch_states_impl(self, b_tid_sid):
         """
         Fetch a batch of states and padding to the same length
         """
         b_states = []
-        for tid, sid in zip(b_tid, b_sid):
+        for tid, sid in b_tid_sid:
             stat = self.fetch_raw_state_by_idx(tid, sid)
             b_states.append(stat)
         return b_states
@@ -141,13 +157,13 @@ class StateTextCompanion(BaseTrajectory):
         state = tj[sid]
         return state, len(state)
 
-    def fetch_batch_states(self, b_tid, b_sid):
+    def fetch_batch_states_impl(self, b_tid_sid):
         """
         Fetch a batch of states and padding to the same length
         """
         b_states = []
         b_len = []
-        for tid, sid in zip(b_tid, b_sid):
+        for tid, sid in b_tid_sid:
             stat, stat_len = self.fetch_raw_state_by_idx(tid, sid)
             b_states.append(stat)
             b_len.append(stat_len)
@@ -196,13 +212,13 @@ class VarSizeTrajectory(BaseTrajectory):
         state = flatten(tj[max(0, sid - self.num_turns):sid + 1])
         return state, len(state)
 
-    def fetch_batch_states(self, b_tid, b_sid):
+    def fetch_batch_states_impl(self, b_tid_sid):
         """
         Fetch a batch of states and padding to the same length
         """
         b_states = []
         b_len = []
-        for tid, sid in zip(list(b_tid), list(b_sid)):
+        for tid, sid in b_tid_sid:
             stat, stat_len = self.fetch_raw_state_by_idx(tid, sid)
             b_states.append(stat)
             b_len.append(stat_len)
@@ -245,10 +261,10 @@ class SingleChannelTrajectory(VarSizeTrajectory):
             self.curr_tid, self.get_last_sid())
         return self._pad_raw_state(state)
 
-    def fetch_batch_states(self, b_tid, b_sid):
+    def fetch_batch_states_impl(self, b_tid_sid):
         b_states = []
         b_len = []
-        for tid, sid in zip(b_tid, b_sid):
+        for tid, sid in b_tid_sid:
             stat, _ = self.fetch_raw_state_by_idx(tid, sid)
             padded_state, padded_len = self._pad_raw_state(stat)
             b_states.append(padded_state)
@@ -328,7 +344,7 @@ class MultiChannelTrajectory(BaseTrajectory):
         self.debug('sparsity ratio: {}'.format(sparse_ratio))
         return state, lens
 
-    def fetch_batch_states(self, b_tid, b_sid):
+    def fetch_batch_states_impl(self, b_tid_sid):
         """
         fetch a batch of (state_q, state_q1, lens_q, lens_q1) given
         batch trajectory ids and batch sentence ids.
@@ -337,7 +353,7 @@ class MultiChannelTrajectory(BaseTrajectory):
         """
         b_states = []
         b_len = []
-        for tid, sid in zip(b_tid, b_sid):
+        for tid, sid in b_tid_sid:
             stat, stat_len = self._fetch_state_by_idx(tid, sid)
             b_states.append(stat)
             b_len.append(stat_len)

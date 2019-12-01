@@ -1,5 +1,6 @@
 from os import remove as prm
 from os.path import join as pjoin
+from bisect import bisect_left
 
 import numpy as np
 import tensorflow as tf
@@ -98,20 +99,19 @@ class DSQNAgent(TabularDQNAgent):
             pass
         return action_desc
 
-    def _clean_stale_context(self, tid):
-        super(DSQNAgent, self)._clean_stale_context(tid)
-        cnt_trashed = 0
-        empty_keys = []
+    def _clean_stale_context(self, tids):
+        super(DSQNAgent, self)._clean_stale_context(tids)
+        if not tids:
+            return
+        hs2tj_cleaned = {}
         for k in self.hash_states2tjs.keys():
-            trashed = self.hash_states2tjs[k].pop(tid, None)
-            if trashed is not None:
-                cnt_trashed += len(trashed)
-            if self.hash_states2tjs[k] == {}:  # delete the dict if empty
-                empty_keys.append(k)
-        self.debug("hs2tj deletes {} items".format(cnt_trashed))
-        for k in empty_keys:
-            self.hash_states2tjs.pop(k, None)
-        self.debug("hs2tj deletes {} keys".format(len(empty_keys)))
+            start_t = bisect_left(
+                [t for t, s in self.hash_states2tjs[k]], max(tids))
+            if not self.hash_states2tjs[k][start_t:]:
+                hs2tj_cleaned[k] = self.hash_states2tjs[k][start_t:]
+            else:
+                self.debug("remove key {} from hs2tj".format(k))
+        self.hash_states2tjs = hs2tj_cleaned
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         actions, all_actions, actions_mask, instant_reward = super(
@@ -121,12 +121,10 @@ class DSQNAgent(TabularDQNAgent):
         if not dones[0]:
             hs, _ = self.stc.fetch_last_state()
             if hs not in self.hash_states2tjs:
-                self.hash_states2tjs[hs] = {}
+                self.hash_states2tjs[hs] = []
             last_tid = self.tjs.get_current_tid()
             last_sid = self.tjs.get_last_sid()
-            if last_tid not in self.hash_states2tjs[hs]:
-                self.hash_states2tjs[hs][last_tid] = []
-            self.hash_states2tjs[hs][last_tid].append(last_sid)
+            self.hash_states2tjs[hs].append((last_tid, last_sid))
         else:
             pass  # final states are not considered
 
@@ -182,46 +180,38 @@ class DSQNAgent(TabularDQNAgent):
         return model
 
     def get_snn_pairs(self, n):
-        non_empty_keys = list(
-            filter(lambda x: self.hash_states2tjs[x] != {},
+        # target key set should contain items more than twice, since we need to
+        # separate target set and same set.
+        target_key_set = list(
+            filter(lambda x: len(self.hash_states2tjs[x]) >= 2,
                    self.hash_states2tjs.keys()))
-        hs_keys = npc(non_empty_keys, size=n)
-        diff_keys = [
-            npc(list(filter(lambda x: x != k, non_empty_keys)), size=None)
-            for k in hs_keys]
+        self.debug(
+            "choose from {} keys for SNN target".format(len(target_key_set)))
+        hs_keys = npc(target_key_set, size=n)
 
-        target_tids = []
-        same_tids = []
-        for k in hs_keys:
-            try:
-                tid_pair = npc(
-                    list(self.hash_states2tjs[k].keys()), size=2, replace=False)
-            except ValueError:
-                tid_pair = list(self.hash_states2tjs[k].keys()) * 2
+        diff_keys_duo = npc(
+            list(self.hash_states2tjs.keys()), replace=False, size=(n, 2))
+        diff_keys = diff_keys_duo[:, 0]
+        same_key_ids = np.where(hs_keys == diff_keys)[0]
+        diff_keys[same_key_ids] = diff_keys_duo[same_key_ids, 1]
 
-            target_tids.append(tid_pair[0])
-            same_tids.append(tid_pair[1])
+        tgt_set = []
+        same_set = []
+        diff_set = []
+        for hk, dk in zip(hs_keys, diff_keys):
+            samples_ids = npc(
+                len(self.hash_states2tjs[hk]), size=2, replace=False)
+            tgt_set.append(self.hash_states2tjs[hk][samples_ids[0]])
+            same_set.append(self.hash_states2tjs[hk][samples_ids[1]])
+            diff_set.append(
+                self.hash_states2tjs[dk][npc(len(self.hash_states2tjs[dk]))])
 
-        diff_tids = [npc(list(self.hash_states2tjs[k])) for k in diff_keys]
+        tgt_src, tgt_src_len = self.tjs.fetch_batch_states_impl(tgt_set)
+        same_src, same_src_len = self.tjs.fetch_batch_states_impl(same_set)
+        diff_src, diff_src_len = self.tjs.fetch_batch_states_impl(diff_set)
 
-        target_sids = [npc(list(self.hash_states2tjs[k][tid]))
-                       for k, tid in zip(hs_keys, target_tids)]
-        same_sids = [npc(list(self.hash_states2tjs[k][tid]))
-                     for k, tid in zip(hs_keys, same_tids)]
-        diff_sids = [npc(list(self.hash_states2tjs[k][tid]))
-                     for k, tid in zip(diff_keys, diff_tids)]
-
-        # if one tid doesn't exist in the tjs, a all-padding list will
-        # be returned, with src_len as 0.
-        # TODO: fix it.
-        target_src, target_src_len = self.tjs.fetch_batch_states(
-            target_tids, target_sids)
-        same_src, same_src_len = self.tjs.fetch_batch_states(
-            same_tids, same_sids)
-        diff_src, diff_src_len = self.tjs.fetch_batch_states(
-            diff_tids, diff_sids)
-        src = np.concatenate([target_src, target_src], axis=0)
-        src_len = np.concatenate([target_src_len, target_src_len], axis=0)
+        src = np.concatenate([tgt_src, tgt_src], axis=0)
+        src_len = np.concatenate([tgt_src_len, tgt_src_len], axis=0)
         src2 = np.concatenate([same_src, diff_src], axis=0)
         src2_len = np.concatenate([same_src_len, diff_src_len], axis=0)
         labels = np.concatenate([np.zeros(n), np.ones(n)], axis=0)

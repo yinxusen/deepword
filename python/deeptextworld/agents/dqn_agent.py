@@ -234,10 +234,10 @@ class TabularDQNAgent(DQNAgent):
             pass
         return action_desc
 
-    def _clean_stale_context(self, tid):
-        super(TabularDQNAgent, self)._clean_stale_context(tid)
-        self.debug("stc deletes {}".format(tid))
-        self.stc.request_delete_key(tid)
+    def _clean_stale_context(self, tids):
+        super(TabularDQNAgent, self)._clean_stale_context(tids)
+        self.debug("stc deletes {}".format(tids))
+        self.stc.request_delete_keys(tids)
 
     def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
         actions, all_actions, actions_mask, instant_reward = super(

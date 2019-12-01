@@ -15,4 +15,4 @@ handlers:
 
 root:
     level: DEBUG
-    handlers: []
+    handlers: [console]
