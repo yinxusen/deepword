@@ -1,6 +1,8 @@
 from os import remove as prm
 from os.path import join as pjoin
 from bisect import bisect_left
+from multiprocessing.pool import ThreadPool
+
 
 import numpy as np
 import tensorflow as tf
@@ -20,6 +22,7 @@ class DSQNAgent(TabularDQNAgent):
         super(DSQNAgent, self).__init__(hp, model_dir)
         self.hs2tj_prefix = "hs2tj"
         self.hash_states2tjs = {}  # map states to tjs
+        self.pool_train = ThreadPool(processes=2)
 
     def init_hs2tj(self, hs2tj_path, with_loading=True):
         hash_states2tjs = {}
@@ -240,6 +243,12 @@ class DSQNAgent(TabularDQNAgent):
             self.hp.init_gamma, self.hp.final_gamma,
             t - self.hp.observation_t, self.hp.annealing_gamma_t)
 
+        def get_snn_data(batch_size):
+            return self.get_snn_pairs(batch_size)
+
+        async_snn_data = self.pool_train.apply_async(
+            get_snn_data, args=(self.hp.batch_size,))
+
         t1 = ctime()
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
         t1_end = ctime()
@@ -266,14 +275,18 @@ class DSQNAgent(TabularDQNAgent):
         action_len = (
             [self.actor.get_action_len(gid) for gid in game_id])
 
+        def run_target_net():
+            q_actions = target_sess.run(
+                target_model.q_actions,
+                feed_dict={target_model.src_: s_states,
+                           target_model.src_len_: s_len,
+                           target_model.actions_: action_matrix,
+                           target_model.actions_len_: action_len,
+                           target_model.actions_mask_: action_mask_t1})
+            return q_actions
+
         t2 = ctime()
-        s_q_actions_target = target_sess.run(
-            target_model.q_actions,
-            feed_dict={target_model.src_: s_states,
-                       target_model.src_len_: s_len,
-                       target_model.actions_: action_matrix,
-                       target_model.actions_len_: action_len,
-                       target_model.actions_mask_: action_mask_t1})
+        async_q_actions = self.pool_train.apply_async(run_target_net)
 
         s_q_actions_dqn = sess.run(
             self.model.q_actions,
@@ -282,6 +295,7 @@ class DSQNAgent(TabularDQNAgent):
                        self.model.actions_: action_matrix,
                        self.model.actions_len_: action_len,
                        self.model.actions_mask_: action_mask_t1})
+        s_q_actions_target = async_q_actions.get()
         t2_end = ctime()
 
         expected_q = np.zeros_like(reward)
@@ -293,8 +307,7 @@ class DSQNAgent(TabularDQNAgent):
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
         t_snn = ctime()
-        src, src_len, src2, src2_len, labels = self.get_snn_pairs(
-            self.hp.batch_size)
+        src, src_len, src2, src2_len, labels = async_snn_data.get()
         t_snn_end = ctime()
 
         t3 = ctime()
