@@ -343,7 +343,8 @@ def run_eval(
 
     eval_start_t = ctime()
     eval_results, snn_acc = run_agent_eval(
-        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
+        agent, game_files, hp.eval_episode, hp.game_episode_terminal_t,
+        snn_eval_data_size=10000 * 32)
     eval_end_t = ctime()
     agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
     logger.info("eval_results: {}".format(eval_results))

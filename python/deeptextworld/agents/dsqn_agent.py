@@ -341,6 +341,7 @@ class DSQNAgent(TabularDQNAgent):
         total_acc = 0
         total_samples = 0
         for i in range(n_iter):
+            self.debug("eval snn iter {} total {}".format(i, n_iter))
             src, src_len, src2, src2_len, labels = self.get_snn_pairs(
                 batch_size)
             non_empty_src = list(filter(
