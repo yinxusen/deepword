@@ -342,14 +342,15 @@ def run_eval(
     logger.info("evaluation randomness: {}".format(agent.eps))
 
     eval_start_t = ctime()
-    eval_results = run_agent_eval(
+    eval_results, snn_acc = run_agent_eval(
         agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
     eval_end_t = ctime()
-    agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
-    logger.info("eval_results: {}".format(eval_results[0]))
+    agg_res, total_scores, total_steps, n_won = agg_results(eval_results)
+    logger.info("eval_results: {}".format(eval_results))
     logger.info("eval aggregated results: {}".format(agg_res))
     logger.info("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
         total_scores, total_steps, n_won))
+    logger.info("SNN accuracy: {}".format(snn_acc))
     logger.info("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
