@@ -215,11 +215,11 @@ class BaseAgent(Logging):
         self.total_t = 0
         self.in_game_t = 0
         # eps decaying test for all-tiers
-        # self.eps_getter = ScannerDecayEPS(
-        #     decay_step=1000, decay_range=100)
-        self.eps_getter = LinearDecayedEPS(
-            decay_step=self.hp.annealing_eps_t,
-            init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
+        self.eps_getter = ScannerDecayEPS(
+            decay_step=10000000, decay_range=1000000)
+        # self.eps_getter = LinearDecayedEPS(
+        #     decay_step=self.hp.annealing_eps_t,
+        #     init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps = 0
         self.sess = None
         self.target_sess = None
@@ -1063,26 +1063,8 @@ class BaseAgent(Logging):
             instant_reward = -1
         else:
             instant_reward = self.clip_reward(
-                score - 0.1 - self._cumulative_score -
-                self.negative_response_reward(master))
-            if self.hp.use_step_wise_reward:
-                if (master == self._prev_master
-                        and self._last_action is not None
-                        and self._last_action.action ==
-                        self._prev_last_action and
-                        instant_reward < 0):
-                    instant_reward = self.clip_reward(
-                        instant_reward + self._cumulative_penalty)
-                    # self.debug("repeated bad try, decrease reward by {},"
-                    #            " reward changed to {}".format(
-                    #     self.prev_cumulative_penalty, instant_reward))
-                    self._cumulative_penalty = self._cumulative_penalty - 0.1
-                else:
-                    self._prev_last_action = (
-                        self._last_action.action
-                        if self._last_action is not None else None)
-                    self._prev_master = master
-                    self._cumulative_penalty = -0.1
+                score - 0.1 - self._cumulative_score - self.negative_response_reward(
+                    master))
         self._cumulative_score = score
         return instant_reward
 

@@ -239,9 +239,6 @@ class DSQNAgent(TabularDQNAgent):
             labels=labels)
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        gamma = self.reverse_annealing_gamma(
-            self.hp.init_gamma, self.hp.final_gamma,
-            t - self.hp.observation_t, self.hp.annealing_gamma_t)
 
         def get_snn_data(batch_size):
             return self.get_snn_pairs(batch_size)
@@ -304,7 +301,7 @@ class DSQNAgent(TabularDQNAgent):
             if not is_terminal[i]:
                 s_argmax_q, _ = get_best_1D_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
-                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
+                expected_q[i] += self.hp.final_gamma * s_q_actions_target[i, s_argmax_q]
 
         t_snn = ctime()
         src, src_len, src2, src2_len, labels = async_snn_data.get()

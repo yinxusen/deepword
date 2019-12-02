@@ -429,12 +429,6 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
             first_action_token_tensor = tf.squeeze(
                 inner_state[:, 0:1, :], axis=1)
             h_state = self.wt(first_action_token_tensor)
-            encoder_cell = tf.nn.rnn_cell.GRUCell(num_units=32)
-            _, var_states = tf.nn.dynamic_rnn(
-                encoder_cell, inner_state[:, 1:, :],
-                sequence_length=raw_src_len,
-                initial_state=None, dtype=tf.float32)
-            h_state_var = var_states
 
         with tf.variable_scope("drrn-action-encoder", reuse=False):
             flat_inner_state = self.ae(
@@ -446,7 +440,7 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
                 h_actions, shape=(batch_size, self.n_actions, -1))
 
         with tf.variable_scope("drrn-scorer", reuse=False):
-            h_state_expanded = tf.expand_dims(h_state + h_state_var, axis=1)
+            h_state_expanded = tf.expand_dims(h_state, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
 
