@@ -400,6 +400,9 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
         self.wt = tf.layers.Dense(
             units=32, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        self.wt2 = tf.layers.Dense(
+            units=32, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
         # action pooler
         self.wa = tf.layers.Dense(
             units=32, activation=tf.tanh,
@@ -429,12 +432,7 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
             first_action_token_tensor = tf.squeeze(
                 inner_state[:, 0:1, :], axis=1)
             h_state = self.wt(first_action_token_tensor)
-            encoder_cell = tf.nn.rnn_cell.GRUCell(num_units=32)
-            _, var_states = tf.nn.dynamic_rnn(
-                encoder_cell, inner_state[:, 1:, :],
-                sequence_length=raw_src_len,
-                initial_state=None, dtype=tf.float32)
-            h_state_var = var_states
+            h_state_var = self.wt2(first_action_token_tensor)
 
         with tf.variable_scope("drrn-action-encoder", reuse=False):
             flat_inner_state = self.ae(

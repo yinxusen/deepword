@@ -215,11 +215,11 @@ class BaseAgent(Logging):
         self.total_t = 0
         self.in_game_t = 0
         # eps decaying test for all-tiers
-        # self.eps_getter = ScannerDecayEPS(
-        #     decay_step=1000, decay_range=100)
-        self.eps_getter = LinearDecayedEPS(
-            decay_step=self.hp.annealing_eps_t,
-            init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
+        self.eps_getter = ScannerDecayEPS(
+            decay_step=10000000, decay_range=1000000)
+        # self.eps_getter = LinearDecayedEPS(
+        #     decay_step=self.hp.annealing_eps_t,
+        #     init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps = 0
         self.sess = None
         self.target_sess = None
