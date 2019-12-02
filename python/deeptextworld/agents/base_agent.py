@@ -1063,8 +1063,26 @@ class BaseAgent(Logging):
             instant_reward = -1
         else:
             instant_reward = self.clip_reward(
-                score - 0.1 - self._cumulative_score - self.negative_response_reward(
-                    master))
+                score - 0.1 - self._cumulative_score -
+                self.negative_response_reward(master))
+            if self.hp.use_step_wise_reward:
+                if (master == self._prev_master
+                        and self._last_action is not None
+                        and self._last_action.action ==
+                        self._prev_last_action and
+                        instant_reward < 0):
+                    instant_reward = self.clip_reward(
+                        instant_reward + self._cumulative_penalty)
+                    # self.debug("repeated bad try, decrease reward by {},"
+                    #            " reward changed to {}".format(
+                    #     self.prev_cumulative_penalty, instant_reward))
+                    self._cumulative_penalty = self._cumulative_penalty - 0.1
+                else:
+                    self._prev_last_action = (
+                        self._last_action.action
+                        if self._last_action is not None else None)
+                    self._prev_master = master
+                    self._cumulative_penalty = -0.1
         self._cumulative_score = score
         return instant_reward
 
