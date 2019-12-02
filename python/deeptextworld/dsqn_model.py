@@ -444,7 +444,7 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
                 h_actions, shape=(batch_size, self.n_actions, -1))
 
         with tf.variable_scope("drrn-scorer", reuse=False):
-            h_state_expanded = tf.expand_dims(h_state, axis=1)
+            h_state_expanded = tf.expand_dims(h_state + h_state_var, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
 
