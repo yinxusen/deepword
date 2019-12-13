@@ -17,7 +17,7 @@ class TrainDSQNModel(
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss', 'pred',
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
          'snn_loss', 'weighted_loss', 'merged_train_op', 'snn_train_op',
-         'diff_two_states',
+         'diff_two_states', 'h_state',
          'initializer'))):
     pass
 
@@ -28,7 +28,7 @@ class EvalDSQNModel(
         ('graph', 'model', 'q_actions', 'pred',
          'src_', 'src_len_', 'actions_', 'actions_len_', 'actions_mask_',
          'snn_src_', "snn_src_len_", "snn_src2_", "snn_src2_len_", "labels_",
-         'diff_two_states',
+         'diff_two_states', 'h_state',
          'initializer'))):
     pass
 
@@ -222,7 +222,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
                     shape=(batch_size, self.n_actions, -1))
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions
+        return q_actions, new_h
 
     def get_h_state(self, src, src_len):
         padding_mask = txf.create_padding_mask(src)
@@ -323,7 +323,7 @@ class Attn2LSTMEncoderDSQN(CNNEncoderDSQN):
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
 
-        return q_actions
+        return q_actions, h_state
 
     def get_h_state(self, src, src_len):
         paddings = tf.constant([[0, 0], [1, 0]])
@@ -558,7 +558,7 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
             h_state_expanded = tf.expand_dims(h_state, axis=1)
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions
+        return q_actions, h_state
 
     def get_h_state(self, src, src_len):
         src_masks = tf.sequence_mask(
@@ -637,7 +637,7 @@ def create_train_model(model_creator, hp, device_placement):
             model = model_creator(hp)
             initializer = tf.global_variables_initializer
             inputs = model.inputs
-            q_actions = model.get_q_actions()
+            q_actions, h_state = model.get_q_actions()
             pred, diff_two_states = model.get_pred()
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             snn_loss, snn_train_op = model.get_snn_train_op(pred)
@@ -678,6 +678,7 @@ def create_train_model(model_creator, hp, device_placement):
         snn_train_summary_op=snn_train_summary_op,
         weighted_train_summary_op=weighted_train_summary_op,
         diff_two_states=diff_two_states,
+        h_state=h_state,
         initializer=initializer)
 
 
@@ -688,7 +689,7 @@ def create_eval_model(model_creator, hp, device_placement):
             model = model_creator(hp, is_infer=True)
             initializer = tf.global_variables_initializer
             inputs = model.inputs
-            q_actions = model.get_q_actions()
+            q_actions, h_state = model.get_q_actions()
             pred, diff_two_states = model.get_pred()
     return EvalDSQNModel(
         graph=graph, model=model, q_actions=q_actions, pred=pred,
@@ -703,6 +704,7 @@ def create_eval_model(model_creator, hp, device_placement):
         snn_src2_len_=inputs["snn_src2_len"],
         labels_=inputs["labels"],
         diff_two_states=diff_two_states,
+        h_state=h_state,
         initializer=initializer)
 
 

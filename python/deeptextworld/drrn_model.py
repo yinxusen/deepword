@@ -24,7 +24,7 @@ class EvalDRRNModel(
         'EvalModel',
         ('graph', 'model', 'q_actions',
          'src_', 'src_seg_', 'src_len_',
-         'actions_', 'actions_len_', 'actions_mask_',
+         'actions_', 'actions_len_', 'actions_mask_', 'h_state',
          'initializer'))):
     pass
 
@@ -85,9 +85,9 @@ class CNNEncoderDRRN(CNNEncoderDQN):
         batch_size = tf.shape(self.inputs["src_len"])[0]
 
         with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state = dqn.encoder_cnn_3(
-                self.inputs["src"], self.inputs["src_seg"],
-                self.src_embeddings, self.pos_embeddings, self.seg_embeddings,
+            h_state = dqn.encoder_cnn(
+                self.inputs["src"],
+                self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
             new_h = dqn.decoder_dense_classification(h_state, 32)
@@ -109,7 +109,7 @@ class CNNEncoderDRRN(CNNEncoderDQN):
                                        shape=(batch_size, self.n_actions, -1))
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions
+        return q_actions, new_h
 
 
 class AttnEncoderDRRN(CNNEncoderDRRN):
@@ -490,7 +490,7 @@ def create_eval_model(model_creator, hp):
         model = model_creator(hp, is_infer=True)
         initializer = tf.global_variables_initializer
         inputs = model.inputs
-        q_actions = model.get_q_actions()
+        q_actions, h_state = model.get_q_actions()
     return EvalDRRNModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
@@ -499,4 +499,5 @@ def create_eval_model(model_creator, hp):
         actions_=inputs["actions"],
         actions_len_=inputs["actions_len"],
         actions_mask_=inputs["actions_mask"],
+        h_state=h_state,
         initializer=initializer)
