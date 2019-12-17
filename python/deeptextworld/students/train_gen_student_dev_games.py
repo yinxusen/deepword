@@ -17,7 +17,7 @@ from tqdm import trange
 
 from deeptextworld import dqn_model
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents import dsqn_agent
+from deeptextworld.agents import dqn_agent
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_model import create_train_gen_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
@@ -454,7 +454,7 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     game_names = [os.path.basename(fn) for fn in game_files]
     eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
     # agent.eval(load_best=False)
@@ -555,7 +555,7 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(dsqn_agent, hp.agent_clazz)
+    agent_clazz = getattr(dqn_agent, hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=False)
     if eval_randomness is not None:
@@ -601,9 +601,10 @@ def main(data_path, n_data, model_path, game_path, f_games):
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
     home_dir = os.path.expanduser("~")
+    project_path = pjoin(dir_path, "../../..")
     bert_ckpt_dir = pjoin(home_dir, "local/opt/bert-models/bert-model")
     bert_vocab_file = pjoin(bert_ckpt_dir, "vocab.txt")
-    nltk_vocab_file = pjoin(dir_path, "../resources/vocab.txt")
+    nltk_vocab_file = pjoin(project_path, "resources/vocab.txt")
 
     tjs_prefix = "raw-trajectories"
     action_prefix = "actions"
