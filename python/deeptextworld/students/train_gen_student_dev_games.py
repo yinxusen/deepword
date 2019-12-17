@@ -626,7 +626,7 @@ def main(data_path, n_data, model_path, game_path, f_games):
         num_tokens=512,
         num_turns=6,
         batch_size=32,
-        save_gap_t=5000,
+        save_gap_t=50000,
         embedding_size=64,
         learning_rate=5e-5,
         tokenizer_type="NLTK",
