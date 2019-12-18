@@ -5,7 +5,6 @@ import sys
 import time
 from os.path import join as pjoin
 from queue import Queue
-from threading import Condition
 from threading import Thread
 
 import fire
@@ -62,7 +61,7 @@ def prepare_model(fn_create_model, hp, device_placement, load_model_from):
 
 
 def train_gen_student(
-        hp, tokenizer, model_path, combined_data_path, cond_of_eval):
+        hp, tokenizer, model_path, combined_data_path):
     load_from = pjoin(model_path, "last_weights")
     ckpt_prefix = pjoin(load_from, "after-epoch")
 
@@ -128,8 +127,6 @@ def train_gen_student(
             global_step=tf.train.get_or_create_global_step(
                 graph=model.graph))
         eprint("finish and save {} epoch".format(et))
-        with cond_of_eval:
-            cond_of_eval.notifyAll()
         if not data_in_queue:
             break
     return
@@ -462,26 +459,14 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
                 eprint("no better model, pass ...")
 
 
-def train(cmd_args, combined_data_path, model_path, game_dir, f_games=None):
+def train(cmd_args, combined_data_path, model_path):
     hp = load_hparams_for_training(None, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
     save_hparams(hp, pjoin(model_path, "hparams.json"))
 
-    game_files = load_game_files(game_dir, f_games)
-    games = split_train_dev(game_files)
-    if games is None:
-        exit(-1)
-    train_games, dev_games = games
-    cond_of_eval = Condition()
-    eval_worker = Thread(
-        name='eval_worker', target=evaluation,
-        args=(hp, cond_of_eval, model_path, dev_games, hp.eval_episode))
-    eval_worker.setDaemon(True)
-    eval_worker.start()
-
     train_gen_student(
-        hp, tokenizer, model_path, combined_data_path, cond_of_eval)
+        hp, tokenizer, model_path, combined_data_path)
 
 
 def run_eval(
@@ -563,7 +548,7 @@ def setup_train_log(model_dir):
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
 
 
-def main(data_path, n_data, model_path, game_path, f_games):
+def main(data_path, n_data, model_path):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
@@ -607,7 +592,7 @@ def main(data_path, n_data, model_path, game_path, f_games):
         collect_floor_plan=True
     )
 
-    train(cmd_args, combined_data_path, model_path, game_path, f_games)
+    train(cmd_args, combined_data_path, model_path)
     # evaluate(cmd_args, model_path, game_path, f_games)
 
 
