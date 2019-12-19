@@ -231,7 +231,7 @@ def create_eval_model(model_creator, hp):
 class TrainDQNGenModel(
     collections.namedtuple(
         'TrainModel',
-        ('graph', 'model', 'q_actions', 'q_actions_infer',
+        ('graph', 'model', 'q_actions', 'decoded_idx_infer',
          'src_', 'src_len_', 'action_idx_', 'action_idx_out_',
          'train_op', 'loss', 'expected_q_',
          'action_len_', 'b_weight_', 'temperature',
@@ -246,8 +246,8 @@ class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
         ('graph', 'model', 'temperature',
-         'p_gen', 'p_gen_infer', 'gen_dist', 'copy_dist',
-         'q_actions', 'q_actions_infer', 'src_', 'src_len_', 'action_idx_',
+         'p_gen', 'p_gen_infer',
+         'q_actions', 'decoded_idx_infer', 'src_', 'src_len_', 'action_idx_',
          'initializer'))):
     pass
 
@@ -317,12 +317,16 @@ class AttnEncoderDecoderDQN(BaseDQN):
             target_vocab_size=self.hp.vocab_size)
 
     def get_q_actions_infer(self):
-        q_actions, p_gen, gen_dist, copy_dist = self.transformer(
-            self.inputs["src"], tar=None, training=False,
+        decoded_idx, decoded_logits, p_gen = self.transformer.decode(
+            self.inputs["src"], training=False,
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id, eos_id=self.hp.eos_id,
-            temperature=self.inputs["temperature"])
-        return q_actions, p_gen, gen_dist, copy_dist
+            use_greedy=False, beam_size=1)
+        # squeeze the beam size axis when beam_size=1
+        decoded_idx = tf.squeeze(decoded_idx, axis=1)
+        decoded_logits = tf.squeeze(decoded_logits, axis=1)
+        action_idx = self.format_decoded_idx(decoded_idx)
+        return action_idx, decoded_logits, p_gen
 
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
@@ -350,12 +354,20 @@ class AttnEncoderDecoderDQN(BaseDQN):
         return bare_loss, loss, train_op
 
     def get_best_2D_q(self, q_actions):
-        max_action_len = tf.shape(q_actions)[1]
         action_idx = tf.argmax(q_actions, axis=-1, output_type=tf.int32)
+        return self.format_decoded_idx(action_idx)
+
+    def format_decoded_idx(self, decoded_idx):
+        """
+        Format a decoded idx w/ all padding id after the first </S>.
+        :param decoded_idx:
+        :return:
+        """
+        max_action_len = tf.shape(decoded_idx)[1]
         paddings = tf.constant([[0, 0], [0, 1]])
         # make sure that every row has at least one </S>
         padded_action_idx = tf.pad(
-            action_idx[:, :-1], paddings, constant_values=self.hp.eos_id)
+            decoded_idx[:, :-1], paddings, constant_values=self.hp.eos_id)
 
         def index1d(t):
             return tf.cast(
@@ -363,17 +375,24 @@ class AttnEncoderDecoderDQN(BaseDQN):
 
         col_eos_idx = tf.map_fn(index1d, padded_action_idx, dtype=tf.int32)
         mask = tf.sequence_mask(
-            col_eos_idx+1, maxlen=max_action_len, dtype=tf.int32)
+            col_eos_idx + 1, maxlen=max_action_len, dtype=tf.int32)
         final_action_idx = tf.multiply(padded_action_idx, mask)
         return final_action_idx
 
-    def get_acc(self, q_actions):
-        estimated_idx = self.get_best_2D_q(q_actions)
+    def get_acc_impl(self, action_idx):
         true_idx = self.inputs["action_idx_out"]
-        nnz = tf.count_nonzero(tf.reduce_sum(estimated_idx - true_idx, axis=1))
-        total_cnt = tf.shape(estimated_idx)[0]
+        nnz = tf.count_nonzero(tf.reduce_sum(action_idx - true_idx, axis=1))
+        total_cnt = tf.shape(action_idx)[0]
         acc = 1. - tf.cast(nnz, tf.float32) / tf.cast(total_cnt, tf.float32)
         return acc
+
+    def get_acc(self, q_actions):
+        action_idx = self.get_best_2D_q(q_actions)
+        return self.get_acc_impl(action_idx)
+
+    def get_acc_from_decoded_idx(self, decoded_idx):
+        action_idx = self.format_decoded_idx(decoded_idx)
+        return self.get_acc_impl(action_idx)
 
 
 class CNNEncoderDecoderDQN(CNNEncoderDQN):
@@ -474,9 +493,10 @@ def create_train_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            q_actions_infer, p_gen_infer, _, _ = model.get_q_actions_infer()
+            (decoded_idx, decoded_logits, p_gen_infer
+             ) = model.get_q_actions_infer()
             acc_train = model.get_acc(q_actions)
-            acc_infer = model.get_acc(q_actions_infer)
+            acc_infer = model.get_acc_from_decoded_idx(decoded_idx)
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
             acc_train_summary = tf.summary.scalar("acc_train", acc_train)
@@ -492,7 +512,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
                  acc_train_summary, acc_infer_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
-        q_actions_infer=q_actions_infer,
+        decoded_idx_infer=decoded_idx,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
         train_op=train_op, action_idx_=inputs["action_idx"],
@@ -518,16 +538,15 @@ def create_eval_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            (q_actions_infer, p_gen_infer, gen_dist, copy_dist
+            (decoded_idx, decoded_logits, p_gen_infer
              ) = model.get_q_actions_infer()
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
-        q_actions_infer=q_actions_infer,
+        decoded_idx_infer=decoded_idx,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
         action_idx_=inputs["action_idx"],
         temperature=inputs["temperature"],
         p_gen=p_gen, p_gen_infer=p_gen_infer,
-        gen_dist=gen_dist, copy_dist=copy_dist,
         initializer=initializer)

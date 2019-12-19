@@ -106,8 +106,6 @@ def train_gen_student(
                 data = queue.get(timeout=10)
                 (p_states, p_len, actions_in, actions_out, action_len,
                  expected_qs, b_weights) = data
-                eprint(p_states)
-                eprint(actions_in)
                 _, summaries = sess.run(
                     [model.train_seq2seq_op, model.train_seq2seq_summary_op],
                     feed_dict={model.src_: p_states,
