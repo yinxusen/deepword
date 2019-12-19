@@ -327,9 +327,7 @@ class AttnEncoderDecoderDQN(BaseDQN):
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
-            training=True,
-            max_tar_len=self.hp.n_tokens_per_action,
-            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id, temperature=None)
+            training=True)
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):

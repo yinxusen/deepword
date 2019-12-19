@@ -348,63 +348,104 @@ class Transformer(tf.keras.Model):
             num_layers, d_model, num_heads, dff, input_vocab_size, rate)
         self.decoder = Decoder(
             num_layers, d_model, num_heads, dff, target_vocab_size, rate)
-        self.tgt_vocab_size = target_vocab_size
 
-    def call(
-            self, inp, tar, training, max_tar_len, sos_id, eos_id, temperature):
+    def call(self, inp, tar, training):
         enc_padding_mask = create_padding_mask(inp)
         dec_padding_mask = enc_padding_mask
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(inp, None, training, enc_padding_mask)
-
-        gen_dist = None
-        copy_dist = None
-        if training:
-            look_ahead_mask = create_decode_masks(tar)
-            final_output, p_gen, _, _ = self.decoder(
-                tar, inp, enc_output, training, look_ahead_mask,
-                dec_padding_mask,
-                with_pointer=True)
-        else:
-            batch_size = tf.shape(inp)[0]
-            inc_tar = tf.fill([batch_size, 1], sos_id)
-            last_predictions = []
-            p_gen = []
-            for i in range(max_tar_len):
-                combined_mask = create_decode_masks(inc_tar)
-                final_prob, p_gen_latest, gen_dist, copy_dist = self.decoder(
-                    inc_tar, inp, enc_output, training, combined_mask,
-                    dec_padding_mask, with_pointer=True)
-                predictions = final_prob[:, -1:, :]
-                last_predictions.append(predictions)
-                p_gen.append(p_gen_latest[:, -1:])
-                predicted_id = tf.multinomial(
-                    predictions[:, 0, :],
-                    1, output_dtype=tf.int32)
-                # predicted_id = tf.cast(
-                #     tf.argmax(predictions, axis=-1), tf.int32)
-                # concatentate the predicted_id to the output which is given to the decoder
-                # as its input.
-                inc_tar = tf.concat([inc_tar, predicted_id], axis=-1)
-                # return the result if the predicted_id is equal to the end token
-                if predicted_id == eos_id:
-                    break
-            final_output = tf.concat(last_predictions, axis=1)
-            p_gen = tf.concat(p_gen, axis=1)
-            src_paddings = tf.constant(
-                [[0, 0], [0, max_tar_len-len(last_predictions)], [0, 0]])
-            final_output = tf.pad(
-                final_output, paddings=src_paddings, mode="CONSTANT")
+        look_ahead_mask = create_decode_masks(tar)
+        final_output, p_gen, gen_dist, copy_dist = self.decoder(
+            tar, inp, enc_output, training, look_ahead_mask,
+            dec_padding_mask, with_pointer=True)
         return final_output, p_gen, gen_dist, copy_dist
+
+    def decode(
+            self, inp, training,
+            max_tar_len, sos_id, eos_id,
+            use_greedy=True, beam_size=1):
+        enc_padding_mask = create_padding_mask(inp)
+        # (batch_size, inp_seq_len, d_model)
+        enc_output = self.encoder(inp, None, training, enc_padding_mask)
+
+        batch_size = tf.shape(inp)[0]
+        inp_seq_len = tf.shape(inp)[1]
+        inc_tar = tf.fill([batch_size * beam_size, 1], sos_id)
+        inc_logits = tf.fill([batch_size * beam_size, 1], 0.)
+
+        # (batch_size * beam_size, inp_seq_len, d_model)
+        enc_output = tf.reshape(
+            tf.tile(enc_output[:, None, :, :], (1, beam_size, 1, 1)),
+            (batch_size * beam_size, inp_seq_len, -1))
+        inp = tf.reshape(
+            tf.tile(inp[:, None, :], (1, beam_size, 1)),
+            (batch_size * beam_size, -1))
+        dec_padding_mask = create_padding_mask(inp)
+
+        p_gen = []
+        for i in range(1, max_tar_len+1):
+            combined_mask = create_decode_masks(inc_tar)
+            final_prob, p_gen_latest, gen_dist, copy_dist = self.decoder(
+                inc_tar, inp, enc_output, training, combined_mask,
+                dec_padding_mask, with_pointer=True)
+            # (batch_size * beam_size, tgt_vocab_size)
+            curr_logits = final_prob[:, -1, :]
+            # (batch_size, beam_size * tgt_vocab_size)
+            predictions = tf.reshape(
+                curr_logits + tf.reduce_sum(inc_logits, axis=-1)[:, None],
+                (batch_size, -1))
+            p_gen.append(p_gen_latest[:, -1:])
+            # predicted_id: (batch_size, beam_size)
+            if use_greedy:
+                predicted_id = tf.cast(
+                    tf.math.top_k(predictions, k=beam_size)[1], tf.int32)
+            else:
+                predicted_id = tf.random.categorical(
+                    logits=predictions,
+                    num_samples=beam_size,
+                    dtype=tf.int32)
+
+            token_id = predicted_id % self.decoder.tgt_vocab_size
+            # (batch_size * beam_size, 1)
+            token_id = tf.reshape(token_id, (batch_size * beam_size, -1))
+            # (batch_size, beam_size)
+            beam_id = predicted_id // self.decoder.tgt_vocab_size
+
+            # (batch_size * beam_size, 1)
+            gather_beam_idx = tf.reshape(
+                tf.range(batch_size)[:, None] * beam_size + beam_id,
+                (batch_size * beam_size, -1))
+            inc_tar_beam = tf.gather_nd(inc_tar, gather_beam_idx)
+            inc_tar = tf.concat([inc_tar_beam, token_id], axis=-1)
+
+            # (batch_size * beam_size, 2)
+            gather_token_idx = tf.concat([gather_beam_idx, token_id], axis=-1)
+            selected_logits = tf.gather_nd(
+                curr_logits, gather_token_idx)[:, None]
+            inc_logits_beam = tf.gather_nd(inc_logits, gather_beam_idx)
+            inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
+
+            # if tf.reduce_all(tf.equal(predicted_id, eos_id)):
+            #     break
+
+        p_gen = tf.concat(p_gen, axis=1)
+        decoded_idx = tf.reshape(inc_tar[:, 1:], (batch_size, beam_size, -1))
+        decoded_logits = tf.reshape(
+            inc_logits[:, 1:], (batch_size, beam_size, -1))
+        return decoded_idx, decoded_logits, p_gen
 
 
 if __name__ == '__main__':
-    temp_mha = MultiHeadAttention(d_model=512, num_heads=8)
-    y = tf.random.uniform(
-        (1, 60, 512))  # (batch_size, encoder_sequence, d_model)
-    out, attn = temp_mha(y, k=y, q=y, mask=None)
+    txf = Transformer(
+        num_layers=1, d_model=4, num_heads=2, dff=4,
+        input_vocab_size=10, target_vocab_size=10, rate=0.1)
+    inp = tf.constant([[1, 1, 2, 3, 5, 8], [8, 7, 6, 3, 5, 1]])
+    res, res_logits, p_gen = txf.decode(
+        inp, training=False, max_tar_len=10, sos_id=0, eos_id=9,
+        use_greedy=False, beam_size=10)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    out_res, attn_res = sess.run([out, attn])
-    print(out_res)
-    print(attn_res)
+    res1, res2, res3 = sess.run([res, res_logits, p_gen])
+    print(res1)
+    print(res2)
+    print(res3)
