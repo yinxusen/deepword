@@ -360,10 +360,49 @@ class Transformer(tf.keras.Model):
             dec_padding_mask, with_pointer=True)
         return final_output, p_gen, gen_dist, copy_dist
 
+    @classmethod
+    def categorical_without_replacement(cls, logits, k):
+        """
+        Courtesy of https://github.com/tensorflow/tensorflow/issues/9260#issuecomment-437875125
+        also cite here:
+        @misc{vieira2014gumbel,
+            title = {Gumbel-max trick and weighted reservoir sampling},
+            author = {Tim Vieira},
+            url = {http://timvieira.github.io/blog/post/2014/08/01/gumbel-max-trick-and-weighted-reservoir-sampling/},
+            year = {2014}
+        }
+        Notice that the logits represent unnormalized log probabilities,
+        in the citation above, there is no need to normalized them first to add
+        the Gumbel random variant, which surprises me! since I thought it should
+        be `logits - tf.reduce_logsumexp(logits) + z`
+        """
+        z = -tf.log(-tf.log(tf.random_uniform(tf.shape(logits), 0, 1)))
+        _, indices = tf.nn.top_k(logits + z, k)
+        return indices
+
+    @classmethod
+    def categorical_with_replacement(cls, logits, k):
+        return tf.random.categorical(logits, num_samples=k, dtype=tf.int32)
+
     def decode(
             self, inp, training,
             max_tar_len, sos_id, eos_id,
             use_greedy=True, beam_size=1):
+        """
+        decode indexes given input sentences.
+        :param inp: input sentence (batch_size, seq_len) for the encoder
+        :param training: bool, training or inference
+        :param max_tar_len: maximum target length, int32
+        :param sos_id: <S> id
+        :param use_greedy: bool, use greedy or sampling to decode per token
+        :param beam_size: int, for beam search
+        :return:
+          decoded indexes, (batch_size * beam_size, max_tar_len) int32
+          decoded logits, (batch_size * beam_size, max_tar_len) float32
+          probability of generation (copy otherwise),
+            (batch_size * beam_size, max_tar_len) float32
+        """
+        tgt_vocab_size = self.decoder.tgt_vocab_size
         enc_padding_mask = create_padding_mask(inp)
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(inp, None, training, enc_padding_mask)
@@ -372,6 +411,8 @@ class Transformer(tf.keras.Model):
         inp_seq_len = tf.shape(inp)[1]
         inc_tar = tf.fill([batch_size * beam_size, 1], sos_id)
         inc_logits = tf.fill([batch_size * beam_size, 1], 0.)
+        inc_continue = tf.fill([batch_size * beam_size, 1], True)
+        inc_valid_len = tf.fill([batch_size * beam_size, 1], 1)
 
         # (batch_size * beam_size, inp_seq_len, d_model)
         enc_output = tf.reshape(
@@ -382,41 +423,66 @@ class Transformer(tf.keras.Model):
             (batch_size * beam_size, -1))
         dec_padding_mask = create_padding_mask(inp)
 
+        halt_masking = tf.concat(
+            [tf.constant([0.], dtype=tf.float32),
+             tf.fill([tgt_vocab_size - 1], -np.inf)],
+            axis=0)
+        continue_masking = tf.ones_like(halt_masking)
+
         p_gen = []
         for i in range(1, max_tar_len+1):
             combined_mask = create_decode_masks(inc_tar)
             final_prob, p_gen_latest, gen_dist, copy_dist = self.decoder(
                 inc_tar, inp, enc_output, training, combined_mask,
                 dec_padding_mask, with_pointer=True)
+            masking = tf.map_fn(
+                lambda c: tf.cond(
+                    c,
+                    true_fn=lambda: continue_masking,
+                    false_fn=lambda: halt_masking),
+                tf.squeeze(inc_continue, axis=-1), dtype=tf.float32)
             # (batch_size * beam_size, tgt_vocab_size)
             curr_logits = final_prob[:, -1, :]
+            masked_logits = tf.where(
+                tf.squeeze(inc_continue, axis=-1), curr_logits, masking)
             # (batch_size, beam_size * tgt_vocab_size)
             predictions = tf.reshape(
-                curr_logits + tf.reduce_sum(inc_logits, axis=-1)[:, None],
+                tf.div(
+                    (masked_logits + tf.reduce_sum(inc_logits, axis=-1)[:, None]),
+                    tf.dtypes.cast(inc_valid_len, dtype=tf.float32)),
                 (batch_size, -1))
-            p_gen.append(p_gen_latest[:, -1:])
+            # How to remove the same w/ same weights?
+            p_gen.append(p_gen_latest[:, -1])
+            # for the first token decoding, the beam size is 1.
+            beam_tgt_len = tgt_vocab_size * (1 if i == 1 else beam_size)
             # predicted_id: (batch_size, beam_size)
-            if use_greedy:
-                predicted_id = tf.cast(
-                    tf.math.top_k(predictions, k=beam_size)[1], tf.int32)
-            else:
-                predicted_id = tf.random.categorical(
-                    logits=predictions,
-                    num_samples=beam_size,
-                    dtype=tf.int32)
+            predicted_id = tf.cond(
+                use_greedy,
+                true_fn=lambda: tf.math.top_k(
+                    input=predictions[:, :beam_tgt_len],
+                    k=beam_size)[1],
+                false_fn=lambda: self.categorical_without_replacement(
+                    logits=tf.reshape(
+                        masked_logits, (batch_size, -1))[:, :beam_tgt_len],
+                    k=beam_size))
 
-            token_id = predicted_id % self.decoder.tgt_vocab_size
-            # (batch_size * beam_size, 1)
-            token_id = tf.reshape(token_id, (batch_size * beam_size, -1))
             # (batch_size, beam_size)
-            beam_id = predicted_id // self.decoder.tgt_vocab_size
-
+            beam_id = predicted_id // tgt_vocab_size
+            token_id = tf.reshape(
+                predicted_id % tgt_vocab_size,
+                (batch_size * beam_size, -1))
             # (batch_size * beam_size, 1)
             gather_beam_idx = tf.reshape(
                 tf.range(batch_size)[:, None] * beam_size + beam_id,
                 (batch_size * beam_size, -1))
             inc_tar_beam = tf.gather_nd(inc_tar, gather_beam_idx)
             inc_tar = tf.concat([inc_tar_beam, token_id], axis=-1)
+            inc_continue_beam = tf.gather_nd(inc_continue, gather_beam_idx)
+            inc_continue = tf.math.logical_and(
+                tf.math.not_equal(token_id, eos_id), inc_continue_beam)
+            inc_valid_len_beam = tf.gather_nd(inc_valid_len, gather_beam_idx)
+            inc_valid_len = inc_valid_len_beam + tf.dtypes.cast(
+                inc_continue, dtype=tf.int32)
 
             # (batch_size * beam_size, 2)
             gather_token_idx = tf.concat([gather_beam_idx, token_id], axis=-1)
@@ -424,15 +490,12 @@ class Transformer(tf.keras.Model):
                 curr_logits, gather_token_idx)[:, None]
             inc_logits_beam = tf.gather_nd(inc_logits, gather_beam_idx)
             inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
-
-            # if tf.reduce_all(tf.equal(predicted_id, eos_id)):
-            #     break
+            # end for
 
         p_gen = tf.concat(p_gen, axis=1)
-        decoded_idx = tf.reshape(inc_tar[:, 1:], (batch_size, beam_size, -1))
-        decoded_logits = tf.reshape(
-            inc_logits[:, 1:], (batch_size, beam_size, -1))
-        return decoded_idx, decoded_logits, p_gen
+        decoded_idx = inc_tar[:, 1:]
+        decoded_logits = inc_logits[:, 1:]
+        return decoded_idx, decoded_logits, p_gen, inc_valid_len
 
 
 if __name__ == '__main__':
@@ -440,12 +503,14 @@ if __name__ == '__main__':
         num_layers=1, d_model=4, num_heads=2, dff=4,
         input_vocab_size=10, target_vocab_size=10, rate=0.1)
     inp = tf.constant([[1, 1, 2, 3, 5, 8], [8, 7, 6, 3, 5, 1]])
-    res, res_logits, p_gen = txf.decode(
-        inp, training=False, max_tar_len=10, sos_id=0, eos_id=9,
-        use_greedy=False, beam_size=10)
+    res, res_logits, p_gen, inc_valid_len = txf.decode(
+        inp, training=False, max_tar_len=10, sos_id=0,
+        use_greedy=tf.constant(False), beam_size=5, eos_id=9)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    res1, res2, res3 = sess.run([res, res_logits, p_gen])
+    res1, res2, res3, res4 = sess.run(
+        [res, res_logits, p_gen, inc_valid_len])
     print(res1)
-    print(res2)
+    print(np.sum(res2, axis=1))
     print(res3)
+    print(res4)

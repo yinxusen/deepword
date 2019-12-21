@@ -234,9 +234,10 @@ class TrainDQNGenModel(
         ('graph', 'model', 'q_actions', 'decoded_idx_infer',
          'src_', 'src_len_', 'action_idx_', 'action_idx_out_',
          'train_op', 'loss', 'expected_q_',
-         'action_len_', 'b_weight_', 'temperature',
+         'action_len_', 'b_weight_', 'temperature_',
          'train_summary_op', 'abs_loss',
          'p_gen', 'p_gen_infer',
+         'beam_size_', 'use_greedy_', 'col_eos_idx', 'decoded_logits_infer',
          'loss_seq2seq', 'train_seq2seq_summary_op', 'train_seq2seq_op',
          'initializer'))):
     pass
@@ -245,9 +246,10 @@ class TrainDQNGenModel(
 class EvalDQNGenModel(
     collections.namedtuple(
         'EvalModel',
-        ('graph', 'model', 'temperature',
+        ('graph', 'model', 'temperature_',
          'p_gen', 'p_gen_infer',
          'q_actions', 'decoded_idx_infer', 'src_', 'src_len_', 'action_idx_',
+         'beam_size_', 'use_greedy_', 'col_eos_idx', 'decoded_logits_infer',
          'initializer'))):
     pass
 
@@ -308,7 +310,9 @@ class AttnEncoderDecoderDQN(BaseDQN):
             "expected_q": tf.placeholder(tf.float32, [None]),
             "action_len": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
-            "temperature": tf.placeholder(tf.float32, [])
+            "temperature": tf.placeholder(tf.float32, []),
+            "beam_size": tf.placeholder(tf.int32, []),
+            "use_greedy": tf.placeholder(tf.bool, [])
         }
 
         self.transformer = txf.Transformer(
@@ -316,17 +320,15 @@ class AttnEncoderDecoderDQN(BaseDQN):
             input_vocab_size=self.hp.vocab_size,
             target_vocab_size=self.hp.vocab_size)
 
-    def get_q_actions_infer(self):
-        decoded_idx, decoded_logits, p_gen = self.transformer.decode(
+    def get_decoded_idx_infer(self):
+        decoded_idx, decoded_logits, p_gen, valid_len = self.transformer.decode(
             self.inputs["src"], training=False,
             max_tar_len=self.hp.n_tokens_per_action,
-            sos_id=self.hp.sos_id, eos_id=self.hp.eos_id,
-            use_greedy=False, beam_size=1)
-        # squeeze the beam size axis when beam_size=1
-        decoded_idx = tf.squeeze(decoded_idx, axis=1)
-        decoded_logits = tf.squeeze(decoded_logits, axis=1)
-        action_idx = self.format_decoded_idx(decoded_idx)
-        return action_idx, decoded_logits, p_gen
+            sos_id=self.hp.sos_id,
+            eos_id=self.hp.eos_id,
+            use_greedy=self.inputs["use_greedy"],
+            beam_size=self.inputs["beam_size"])
+        return decoded_idx, tf.squeeze(valid_len, axis=-1), decoded_logits, p_gen
 
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
@@ -355,7 +357,8 @@ class AttnEncoderDecoderDQN(BaseDQN):
 
     def get_best_2D_q(self, q_actions):
         action_idx = tf.argmax(q_actions, axis=-1, output_type=tf.int32)
-        return self.format_decoded_idx(action_idx)
+        formatted_action_idx, _ = self.format_decoded_idx(action_idx)
+        return formatted_action_idx
 
     def format_decoded_idx(self, decoded_idx):
         """
@@ -377,7 +380,7 @@ class AttnEncoderDecoderDQN(BaseDQN):
         mask = tf.sequence_mask(
             col_eos_idx + 1, maxlen=max_action_len, dtype=tf.int32)
         final_action_idx = tf.multiply(padded_action_idx, mask)
-        return final_action_idx
+        return final_action_idx, col_eos_idx
 
     def get_acc_impl(self, action_idx):
         true_idx = self.inputs["action_idx_out"]
@@ -391,7 +394,7 @@ class AttnEncoderDecoderDQN(BaseDQN):
         return self.get_acc_impl(action_idx)
 
     def get_acc_from_decoded_idx(self, decoded_idx):
-        action_idx = self.format_decoded_idx(decoded_idx)
+        action_idx, _ = self.format_decoded_idx(decoded_idx)
         return self.get_acc_impl(action_idx)
 
 
@@ -493,8 +496,8 @@ def create_train_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            (decoded_idx, decoded_logits, p_gen_infer
-             ) = model.get_q_actions_infer()
+            (decoded_idx, col_eos_idx, decoded_logits, p_gen_infer
+             ) = model.get_decoded_idx_infer()
             acc_train = model.get_acc(q_actions)
             acc_infer = model.get_acc_from_decoded_idx(decoded_idx)
             loss, train_op, abs_loss = model.get_train_op(q_actions)
@@ -519,7 +522,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
         action_idx_out_=inputs["action_idx_out"],
         action_len_=inputs["action_len"],
         b_weight_=inputs["b_weight"],
-        temperature=inputs["temperature"],
+        temperature_=inputs["temperature"],
         expected_q_=inputs["expected_q"], loss=loss,
         abs_loss=abs_loss,
         p_gen=p_gen, p_gen_infer=p_gen_infer,
@@ -527,6 +530,10 @@ def create_train_gen_model(model_creator, hp, device_placement):
         loss_seq2seq=loss_seq2seq,
         train_seq2seq_op=train_seq2seq_op,
         train_seq2seq_summary_op=train_seq2seq_summary_op,
+        beam_size_=inputs["beam_size"],
+        use_greedy_=inputs["use_greedy"],
+        col_eos_idx=col_eos_idx,
+        decoded_logits_infer=decoded_logits,
         initializer=initializer)
 
 
@@ -538,8 +545,8 @@ def create_eval_gen_model(model_creator, hp, device_placement):
             initializer = tf.global_variables_initializer
             inputs = model.inputs
             q_actions, p_gen = model.get_q_actions()
-            (decoded_idx, decoded_logits, p_gen_infer
-             ) = model.get_q_actions_infer()
+            (decoded_idx, col_eos_idx, decoded_logits, p_gen_infer
+             ) = model.get_decoded_idx_infer()
     return EvalDQNGenModel(
         graph=graph, model=model,
         q_actions=q_actions,
@@ -547,6 +554,10 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         src_=inputs["src"],
         src_len_=inputs["src_len"],
         action_idx_=inputs["action_idx"],
-        temperature=inputs["temperature"],
+        temperature_=inputs["temperature"],
         p_gen=p_gen, p_gen_infer=p_gen_infer,
+        beam_size_=inputs["beam_size"],
+        use_greedy_=inputs["use_greedy"],
+        col_eos_idx=col_eos_idx,
+        decoded_logits_infer=decoded_logits,
         initializer=initializer)

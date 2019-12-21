@@ -370,27 +370,47 @@ class GenDQNAgent(DQNAgent):
         :param action_mask:
         """
         indexed_state_t, lens_t = self.tjs.fetch_last_state()
+        beam_size = 3
         res = self.sess.run(
-            [self.model.decoded_idx_infer, self.model.p_gen_infer], feed_dict={
+            [self.model.decoded_idx_infer, self.model.col_eos_idx,
+             self.model.decoded_logits_infer, self.model.p_gen_infer],
+            feed_dict={
                 self.model.src_: [indexed_state_t],
                 self.model.src_len_: [lens_t],
-                self.model.temperature: self.eps * 10
+                self.model.temperature_: self.eps * 10,
+                self.model.beam_size_: beam_size,
+                self.model.use_greedy_: False
             })
-        action_idx = res[0][0]
-        p_gen = res[1][0]
-        valid_len = 0
-        for a in action_idx:
-            valid_len += 1
-            if a == self.hp.eos_id:
-                break
-        action = " ".join(
-            self.tokenizer.convert_ids_to_tokens(action_idx[:valid_len]))
+        action_idx = res[0]
+        col_eos_idx = res[1]
+        decoded_logits = res[2]
+        decoded_sum_logits = np.sum(decoded_logits, axis=-1)
+        p_gen = res[3]
+
+        res_summary = []
+        for bid in range(beam_size):
+            action = " ".join(
+                self.tokenizer.convert_ids_to_tokens(
+                    action_idx[bid, :col_eos_idx[bid]]))
+            res_summary.append(
+                (action_idx[bid], col_eos_idx[bid],
+                 action, p_gen[bid],
+                 decoded_sum_logits[bid] / col_eos_idx[bid]))
+
+        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
+        top_action = res_summary[0]
+
         action_desc = ActionDesc(
             action_type=ACT_TYPE_GEN, action_idx=None,
-            token_idx=action_idx, action_len=valid_len, action=action)
-        self.debug("generated action: {}".format(
-            " ".join(map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
-                         zip(action.split(), list(np.squeeze(p_gen)))))))
+            token_idx=top_action[0], action_len=top_action[1],
+            action=top_action[2])
+
+        self.debug("generated actions:\n{}".format(
+            "\n".join(
+                [" ".join(
+                    map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
+                        zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
+                    for ac in res_summary])))
         return action_desc
 
     def get_instant_reward(self, score, master, is_terminal, has_won):

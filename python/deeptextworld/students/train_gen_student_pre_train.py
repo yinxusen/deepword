@@ -534,7 +534,7 @@ def evaluate(cmd_args, model_path, game_path, f_games):
     eprint(output_hparams(hp))
     run_eval(
         hp, model_path, game_path, f_games,
-        eval_randomness=0,
+        eval_randomness=1,
         eval_mode="eval-eval")
 
 
@@ -546,7 +546,7 @@ def setup_train_log(model_dir):
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
 
 
-def main(data_path, n_data, model_path):
+def main(data_path, n_data, model_path, game_path, eval_f_games):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
@@ -590,8 +590,8 @@ def main(data_path, n_data, model_path):
         collect_floor_plan=True
     )
 
-    train(cmd_args, combined_data_path, model_path)
-    # evaluate(cmd_args, model_path, game_path, f_games)
+    # train(cmd_args, combined_data_path, model_path)
+    evaluate(cmd_args, model_path, game_path, eval_f_games)
 
 
 if __name__ == "__main__":
