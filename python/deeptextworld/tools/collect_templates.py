@@ -63,12 +63,15 @@ def main(game_files):
         env_id, batch_size=1, parallel=False)
     env = gym.make(env_id)
     total_ingredients = set()
+    total_score = 0
     for game in game_files:
         obs, infos = env.reset()
         dones = [False] * len(obs)
         master_wo_logo = remove_logo(obs[0]).replace("\n", " ")
         # print(master_wo_logo)
-        total_ingredients.update(BaseAgent.get_theme_words(infos["extra.recipe"][0]))
+        # total_ingredients.update(BaseAgent.get_theme_words(infos["extra.recipe"][0]))
+        print("process: ", game)
+        total_score += infos["max_score"][0]
             # print(ingredient)
         # # print("max score is {}".format(infos["max_score"][0]))
         # theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
@@ -84,7 +87,8 @@ def main(game_files):
         # templates.update(infos["command_templates"][0])
 
     # print("\n".join(sorted(templates)))
-    print("\n".join(total_ingredients))
+    # print("\n".join(total_ingredients))
+    print("total score: ", total_score)
 
 
 def split_train_dev(game_files):

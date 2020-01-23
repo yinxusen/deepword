@@ -1,23 +1,31 @@
 import json
 import sys
 
+import numpy as np
+
+from deeptextworld.stats import mean_confidence_interval
+
 
 def summary_from_keys(keys, j_result):
-    total_scores, total_steps, total_max_scores, total_win = 0, 0, 0, 0
+    total_steps, total_max_scores, total_win = 0, 0, 0
+    total_scores = np.zeros(10, dtype=np.float)
     for game_name in keys:
         game_res = j_result["games"][game_name]
         max_scores = game_res["max_scores"]
-        earned_scores = sum(map(lambda x: x["score"], game_res["runs"]))
+        earned_scores = np.asarray(list(map(lambda x: x["score"], game_res["runs"])))
         used_steps = sum(map(lambda x: x["steps"], game_res["runs"]))
         has_won = len(list(filter(lambda x: x["has_won"], game_res["runs"])))
         total_win += has_won
         total_scores += earned_scores
         total_steps += used_steps
-        total_max_scores += max_scores * 10
+        total_max_scores += max_scores
     total_max_steps = len(keys) * 10 * 100
     if total_max_steps == 0:
         return 0, 0
-    return (total_scores * 1. / total_max_scores,
+    sample_mean, confidence_interval = mean_confidence_interval(
+        total_scores / total_max_scores)
+    return (sample_mean,
+            confidence_interval,
             total_steps * 1. / total_max_steps,
             total_win * 1. / (len(keys) * 10))
 
