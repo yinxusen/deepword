@@ -503,22 +503,30 @@ def decoder_fix_len_cnn_multilayers(
     return q_actions
 
 
-def get_best_1Daction(q_actions_t, actions, mask=None):
+def get_best_1Daction(q_actions_t, actions, mask=1):
     """
     :param q_actions_t: a q-vector of a state computed from TF at step t
     :param actions: action list
+    :param mask:
     """
     action_idx, q_val = get_best_1D_q(q_actions_t, mask)
     action = actions[action_idx]
     return action_idx, q_val, action
 
 
-def get_best_1D_q(q_actions_t, mask=None):
-    if mask is not None:
-        inv_mask = np.logical_not(mask)
-        min_q_val = np.min(q_actions_t)
-        q_actions_t = q_actions_t * mask + inv_mask * min_q_val
-    action_idx = np.argmax(q_actions_t)
+def get_best_1D_q(q_actions_t, mask=1):
+    """
+    choose the action with the best q value, without choosing from inadmissible
+    actions.
+    :param q_actions_t: q vector
+    :param mask: integer 1 means all actions are admissible. otherwise a np
+    array will be given, and each 1 means admissible while 0 not.
+    :return:
+    """
+    # use shaped q vec to avoid selecting inadmissible q action.
+    # make sure inadmissible actions have smallest q-values.
+    shaped_q_vec = (q_actions_t + np.abs(np.min(q_actions_t))) * mask
+    action_idx = np.argmax(shaped_q_vec)
     q_val = q_actions_t[action_idx]
     return action_idx, q_val
 
