@@ -579,9 +579,8 @@ def get_random_1Daction(actions, mask=1):
            could be either an integer, or a numpy array the same size with
            actions.
     """
-    logits = np.ones_like(actions, dtype=np.float) * mask
-    logits[np.where(logits == 0)] = -np.inf
-    action_idx = categorical_without_replacement(logits)
+    mask = np.ones_like(actions) * mask
+    action_idx = np.random.choice(np.where(mask == 1)[0])
     action = actions[action_idx]
     return action_idx, action
 
