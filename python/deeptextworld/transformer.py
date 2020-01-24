@@ -363,12 +363,14 @@ class Transformer(tf.keras.Model):
     @classmethod
     def categorical_without_replacement(cls, logits, k):
         """
-        Courtesy of https://github.com/tensorflow/tensorflow/issues/9260#issuecomment-437875125
+        Courtesy of https://github.com/tensorflow/tensorflow/issues/\
+        9260#issuecomment-437875125
         also cite here:
         @misc{vieira2014gumbel,
             title = {Gumbel-max trick and weighted reservoir sampling},
             author = {Tim Vieira},
-            url = {http://timvieira.github.io/blog/post/2014/08/01/gumbel-max-trick-and-weighted-reservoir-sampling/},
+            url = {http://timvieira.github.io/blog/post/2014/08/01/\
+            gumbel-max-trick-and-weighted-reservoir-sampling/},
             year = {2014}
         }
         Notice that the logits represent unnormalized log probabilities,
