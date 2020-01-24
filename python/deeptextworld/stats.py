@@ -30,6 +30,15 @@ class UCBComputer(object):
     We use the APS bound.
     """
     def __init__(self, d_states, d_actions):
+        """
+        V: covariance matrix for each action a
+        lam: lambda to control parameter size in ridge regression
+        r: R-sub-Gaussian
+        s: bound for |theta_a|_2
+        delta: with probability of 1 - delta, we have the bound
+        :param d_states:
+        :param d_actions:
+        """
         self.V = None
         self.log_det_V = None
         self.inv_V = None
