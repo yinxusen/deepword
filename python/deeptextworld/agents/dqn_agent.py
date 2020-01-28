@@ -370,21 +370,23 @@ class GenDQNAgent(DQNAgent):
         :param action_mask:
         """
         indexed_state_t, lens_t = self.tjs.fetch_last_state()
-        beam_size = 3
+        beam_size = 20
+        temperature = self.eps * 0.01
+        self.debug("temperature: {}".format(temperature))
         res = self.sess.run(
             [self.model.decoded_idx_infer, self.model.col_eos_idx,
              self.model.decoded_logits_infer, self.model.p_gen_infer],
             feed_dict={
                 self.model.src_: [indexed_state_t],
                 self.model.src_len_: [lens_t],
-                self.model.temperature_: self.eps * 10,
+                self.model.temperature_: temperature,
                 self.model.beam_size_: beam_size,
                 self.model.use_greedy_: False
             })
         action_idx = res[0]
         col_eos_idx = res[1]
         decoded_logits = res[2]
-        decoded_sum_logits = np.sum(decoded_logits, axis=-1)
+        # self.debug("decoded logits: {}".format(decoded_logits))
         p_gen = res[3]
 
         res_summary = []
@@ -395,7 +397,8 @@ class GenDQNAgent(DQNAgent):
             res_summary.append(
                 (action_idx[bid], col_eos_idx[bid],
                  action, p_gen[bid],
-                 decoded_sum_logits[bid] / col_eos_idx[bid]))
+                 np.sum(decoded_logits[bid, :col_eos_idx[bid]])
+                 / col_eos_idx[bid]))
 
         res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
         top_action = res_summary[0]

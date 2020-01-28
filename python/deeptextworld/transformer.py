@@ -388,7 +388,7 @@ class Transformer(tf.keras.Model):
 
     def decode(
             self, inp, training, max_tar_len, sos_id, eos_id,
-            use_greedy=True, beam_size=1):
+            use_greedy=True, beam_size=1, temperature=1.):
         """
         decode indexes given input sentences.
         :param inp: input sentence (batch_size, seq_len) for the encoder
@@ -398,6 +398,7 @@ class Transformer(tf.keras.Model):
         :param eos_id: </S> id
         :param use_greedy: tf.bool, use greedy or sampling to decode per token
         :param beam_size: tf.int, for beam search
+        :param temperature: tf.float, to control sampling randomness
         :return:
           decoded indexes, (batch_size * beam_size, max_tar_len) int32
           decoded logits, (batch_size * beam_size, max_tar_len) float32
@@ -456,14 +457,8 @@ class Transformer(tf.keras.Model):
             # (batch_size * beam_size, tgt_vocab_size)
             curr_logits = final_prob[:, -1, :]
             # mask current logits according to stop seq decoding or not
-            masked_logits = tf.where(
-                tf.squeeze(inc_continue, axis=-1), curr_logits, masking)
-            # (batch_size, beam_size * tgt_vocab_size)
-            predictions = tf.reshape(
-                tf.div(
-                    (masked_logits +
-                     tf.reduce_sum(inc_logits, axis=-1)[:, None]),
-                    tf.dtypes.cast(inc_valid_len, dtype=tf.float32)),
+            masked_logits = tf.reshape(tf.where(
+                tf.squeeze(inc_continue, axis=-1), curr_logits, masking),
                 (batch_size, -1))
             # How to remove the same w/ same weights?
             p_gen.append(p_gen_latest[:, -1])
@@ -475,11 +470,10 @@ class Transformer(tf.keras.Model):
             predicted_id = tf.cond(
                 use_greedy,
                 true_fn=lambda: tf.math.top_k(
-                    input=predictions[:, :beam_tgt_len],
+                    input=masked_logits[:, :beam_tgt_len],
                     k=beam_size)[1],
                 false_fn=lambda: self.categorical_without_replacement(
-                    logits=tf.reshape(
-                        masked_logits, (batch_size, -1))[:, :beam_tgt_len],
+                    logits=masked_logits[:, :beam_tgt_len] / temperature,
                     k=beam_size))
 
             # (batch_size, beam_size)
@@ -524,12 +518,21 @@ if __name__ == '__main__':
         res, res_logits, p_gen, inc_valid_len = txf.decode(
             inp, training=False, max_tar_len=10, sos_id=0,
             use_greedy=tf.constant(False), beam_size=5, eos_id=9)
+
+        res2, res_logits2, p_gen2, inc_valid_len2 = txf.decode(
+            inp, training=False, max_tar_len=10, sos_id=0,
+            use_greedy=tf.constant(False), beam_size=1, eos_id=9)
+
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
-        res1, res2, res3, res4 = sess.run(
-            [res, res_logits, p_gen, inc_valid_len])
-        print(res1)
-        print(np.sum(res2, axis=1))
-        print(res3)
-        print(res4)
+        (res_t, res_logits_t, p_gen_t, inc_valid_len_t,
+         res2_t, res_logits2_t, p_gen2_t, inc_valid_len2_t) = sess.run(
+            [res, res_logits, p_gen, inc_valid_len,
+             res2, res_logits2, p_gen2, inc_valid_len2])
+        print(res_t)
+        print(res_logits_t)
+        print(np.sum(res_logits_t, axis=-1))
+        print(res2_t)
+        print(res_logits2_t)
+        print(np.sum(res_logits2_t, axis=-1))
     test()

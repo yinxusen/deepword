@@ -327,7 +327,8 @@ class AttnEncoderDecoderDQN(BaseDQN):
             sos_id=self.hp.sos_id,
             eos_id=self.hp.eos_id,
             use_greedy=self.inputs["use_greedy"],
-            beam_size=self.inputs["beam_size"])
+            beam_size=self.inputs["beam_size"],
+            temperature=self.inputs["temperature"])
         return decoded_idx, tf.squeeze(valid_len, axis=-1), decoded_logits, p_gen
 
     def get_q_actions(self):

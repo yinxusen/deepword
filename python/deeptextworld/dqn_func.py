@@ -579,7 +579,7 @@ def get_random_1Daction(actions, mask=1):
            could be either an integer, or a numpy array the same size with
            actions.
     """
-    mask = np.ones_like(actions) * mask
+    mask = np.ones_like(actions, dtype=np.int) * mask
     action_idx = np.random.choice(np.where(mask == 1)[0])
     action = actions[action_idx]
     return action_idx, action
