@@ -371,7 +371,7 @@ class GenDQNAgent(DQNAgent):
         """
         indexed_state_t, lens_t = self.tjs.fetch_last_state()
         beam_size = 20
-        temperature = self.eps * 0.01
+        temperature = self.eps
         self.debug("temperature: {}".format(temperature))
         res = self.sess.run(
             [self.model.decoded_idx_infer, self.model.col_eos_idx,
@@ -390,10 +390,12 @@ class GenDQNAgent(DQNAgent):
         p_gen = res[3]
 
         res_summary = []
+        special_tokens = {self.hp.padding_val, self.hp.eos}
         for bid in range(beam_size):
             action = " ".join(
-                self.tokenizer.convert_ids_to_tokens(
-                    action_idx[bid, :col_eos_idx[bid]]))
+                filter(lambda t: t not in special_tokens,
+                       self.tokenizer.convert_ids_to_tokens(
+                           action_idx[bid, :col_eos_idx[bid]])))
             res_summary.append(
                 (action_idx[bid], col_eos_idx[bid],
                  action, p_gen[bid],

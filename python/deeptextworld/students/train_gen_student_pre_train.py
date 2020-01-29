@@ -24,6 +24,7 @@ from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import ctime, setup_logging
 from deeptextworld.utils import flatten, eprint
+from deeptextworld.stats import mean_confidence_interval
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -382,25 +383,30 @@ def agg_results(eval_results):
     :return:
     """
     ret_val = {}
-    total_scores = 0
+    total_scores = None
     total_steps = 0
     all_scores = 0
     all_episodes = 0
     all_won = 0
     for game_id in eval_results:
         res = eval_results[game_id]
-        agg_score = sum(map(lambda r: r[0], res))
-        agg_max_score = sum(map(lambda r: r[1], res))
+        agg_score = np.asarray(list(map(lambda r: r[0], res)))
+        # all max scores should be equal, so just pick anyone
+        agg_max_score = max(map(lambda r: r[1], res))
         all_scores += agg_max_score
         all_episodes += len(res)
         agg_step = sum(map(lambda r: r[2], res))
-        agg_nb_won = len(list(filter(lambda r: r[3] , res)))
+        agg_nb_won = len(list(filter(lambda r: r[3], res)))
         all_won += agg_nb_won
-        ret_val[game_id] = (agg_score, agg_max_score, agg_step, agg_nb_won)
+        ret_val[game_id] = (np.sum(agg_score), agg_max_score, agg_step, agg_nb_won)
+        if total_scores is None:
+            total_scores = np.zeros_like(agg_score)
         total_scores += agg_score
         total_steps += agg_step
     all_steps = all_episodes * 100
-    return (ret_val, total_scores * 1. / all_scores,
+    sample_mean, confidence_interval = mean_confidence_interval(
+        total_scores / all_scores)
+    return (ret_val, sample_mean, confidence_interval,
             total_steps * 1. / all_steps, all_won * 1. / all_episodes)
 
 
@@ -436,14 +442,14 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
             eval_results = run_agent_eval(
                 agent, game_files, nb_episodes, hp.game_episode_terminal_t)
             eval_end_t = ctime()
-            agg_res, total_scores, total_steps, n_won = agg_results(
+            agg_res, total_scores, confidence_intervals, total_steps, n_won = agg_results(
                 eval_results)
             eprint("eval_results: {}".format(eval_results))
             eprint("eval aggregated results: {}".format(agg_res))
             eprint(
-                "after-epoch: {}, scores: {:.2f}, steps: {:.2f},"
+                "after-epoch: {}, scores: {:.2f}, confidence: {:2f}, steps: {:.2f},"
                 " n_won: {:.2f}".format(
-                    agent.loaded_ckpt_step, total_scores, total_steps, n_won))
+                    agent.loaded_ckpt_step, total_scores, confidence_intervals, total_steps, n_won))
             eprint(
                 "time to finish eval: {}".format(eval_end_t-eval_start_t))
             if ((total_scores > prev_total_scores) or
@@ -519,11 +525,15 @@ def run_eval(
     eval_results = run_agent_eval(
         agent, game_files, hp.eval_episode, hp.game_episode_terminal_t)
     eval_end_t = ctime()
-    agg_res, total_scores, total_steps, n_won = agg_results(eval_results[0])
+    agg_res, total_scores, confidence_intervals, total_steps, n_won = agg_results(
+        eval_results)
     eprint("eval_results: {}".format(eval_results))
     eprint("eval aggregated results: {}".format(agg_res))
-    eprint("scores: {:.2f}, steps: {:.2f}, n_won: {:.2f}".format(
-        total_scores, total_steps, n_won))
+    eprint(
+        "after-epoch: {}, scores: {:.2f}, confidence: {:2f}, steps: {:.2f},"
+        " n_won: {:.2f}".format(
+            agent.loaded_ckpt_step, total_scores, confidence_intervals,
+            total_steps, n_won))
     eprint("time to finish eval: {}".format(eval_end_t-eval_start_t))
 
 
@@ -546,7 +556,7 @@ def setup_train_log(model_dir):
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
 
 
-def main(data_path, n_data, model_path, game_path, eval_f_games):
+def main(data_path, n_data, model_path, game_path, eval_f_games=None):
     if not os.path.exists(model_path):
         os.mkdir(model_path)
 
