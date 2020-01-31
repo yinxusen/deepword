@@ -12,8 +12,8 @@ from tqdm import trange
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.dqn_func import get_best_2Daction
-from deeptextworld.dqn_model import AttnEncoderDecoderDQN
-from deeptextworld.dqn_model import create_train_gen_model, \
+from deeptextworld.models.dqn_model import AttnEncoderDecoderDQN
+from deeptextworld.models.dqn_model import create_train_gen_model, \
     create_eval_gen_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
     load_hparams_for_evaluation, save_hparams

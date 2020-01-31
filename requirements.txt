@@ -8,3 +8,4 @@ nltk==3.4
 PyYAML==3.13
 bert-tensorflow==1.0.1
 fire==0.2.1
+tqdm==4.31.1

@@ -1,6 +1,6 @@
 import numpy as np
 
-from deeptextworld import drrn_model
+from deeptextworld.models import drrn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
 from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \

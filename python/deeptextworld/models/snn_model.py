@@ -1,9 +1,7 @@
 import collections
 import tensorflow as tf
-from bert import modeling
 
 import deeptextworld.dqn_func as dqn
-from deeptextworld.dqn_model import BaseDQN, CNNEncoderDQN
 
 
 class TrainSNNModel(

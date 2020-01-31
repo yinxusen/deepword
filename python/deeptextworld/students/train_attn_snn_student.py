@@ -15,11 +15,11 @@ import textworld.gym
 from numpy.random import choice as npc
 from tqdm import trange
 
-from deeptextworld import dsqn_model
+from deeptextworld.models import dsqn_model
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents import dsqn_agent
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
-from deeptextworld.dsqn_model import create_train_student_dsqn_model
+from deeptextworld.models.dsqn_model import create_train_student_dsqn_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
     load_hparams_for_evaluation, save_hparams
 from deeptextworld.trajectory import RawTextTrajectory

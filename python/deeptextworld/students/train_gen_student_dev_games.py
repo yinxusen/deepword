@@ -15,11 +15,11 @@ import tensorflow as tf
 import textworld.gym
 from tqdm import trange
 
-from deeptextworld import dqn_model
+from deeptextworld.models import dqn_model
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents import dqn_agent
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.dqn_model import create_train_gen_model
+from deeptextworld.models.dqn_model import create_train_gen_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
     load_hparams_for_evaluation, save_hparams
 from deeptextworld.trajectory import RawTextTrajectory

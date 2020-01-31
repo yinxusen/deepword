@@ -320,6 +320,14 @@ class AttnEncoderDecoderDQN(BaseDQN):
             input_vocab_size=self.hp.vocab_size,
             target_vocab_size=self.hp.vocab_size)
 
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return create_train_gen_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return create_eval_gen_model(cls, hp, device_placement)
+
     def get_decoded_idx_infer(self):
         decoded_idx, decoded_logits, p_gen, valid_len = self.transformer.decode(
             self.inputs["src"], training=False,

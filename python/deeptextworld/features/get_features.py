@@ -11,11 +11,11 @@ import fire
 import numpy as np
 import tensorflow as tf
 
-from deeptextworld import drrn_model
+from deeptextworld.models import drrn_model
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
 # from deeptextworld.dsqn_model import create_eval_model
-from deeptextworld.drrn_model import create_eval_model
+from deeptextworld.models.drrn_model import create_eval_model
 from deeptextworld.hparams import load_hparams_for_evaluation, output_hparams
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint, load_uniq_lines

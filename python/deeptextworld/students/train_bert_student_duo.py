@@ -13,10 +13,10 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
-from deeptextworld import dsqn_model
-from deeptextworld.dsqn_model import create_train_student_dsqn_model, create_train_student_drrn_model
+from deeptextworld.models import dsqn_model
+from deeptextworld.models.dsqn_model import create_train_student_dsqn_model, create_train_student_drrn_model
 from deeptextworld.hparams import load_hparams_for_training, output_hparams, \
-    load_hparams_for_evaluation, save_hparams
+    save_hparams
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
 

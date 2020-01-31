@@ -5,7 +5,7 @@ from bert import modeling
 
 import deeptextworld.dqn_func as dqn
 from deeptextworld import transformer as txf
-from deeptextworld.dqn_model import CNNEncoderDQN
+from deeptextworld.models.dqn_model import CNNEncoderDQN
 
 
 class TrainDSQNModel(

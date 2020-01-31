@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from numpy.random import choice as npc
 
-from deeptextworld import dsqn_model
+from deeptextworld.models import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
 from deeptextworld.agents.dqn_agent import TabularDQNAgent
