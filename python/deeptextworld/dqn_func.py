@@ -518,17 +518,36 @@ def get_best_1D_q(q_actions_t, mask=1):
     """
     choose the action with the best q value, without choosing from inadmissible
     actions.
+    Notice that it is possible q values of all admissible actions are smaller
+    than zero.
     :param q_actions_t: q vector
     :param mask: integer 1 means all actions are admissible. otherwise a np
     array will be given, and each 1 means admissible while 0 not.
     :return:
     """
-    # use shaped q vec to avoid selecting inadmissible q action.
-    # make sure inadmissible actions have smallest q-values.
-    shaped_q_vec = (q_actions_t + np.abs(np.min(q_actions_t))) * mask
-    action_idx = np.argmax(shaped_q_vec)
+    mask = np.ones_like(q_actions_t) * mask
+    inv_mask = np.logical_not(mask)
+    min_q_val = np.min(q_actions_t)
+    q_actions_t = q_actions_t * mask + min_q_val * inv_mask
+    action_idx = np.argmax(q_actions_t)
     q_val = q_actions_t[action_idx]
     return action_idx, q_val
+
+
+def get_batch_best_1D_idx(q_actions_t, mask=1):
+    """
+    Choose the action idx with the best q value, without choosing from
+    inadmissible actions.
+    :param q_actions_t: a batch of q-vectors
+    :param mask:
+    :return:
+    """
+    mask = np.ones_like(q_actions_t) * mask
+    inv_mask = np.logical_not(mask)
+    min_q_val = np.min(q_actions_t, axis=-1)
+    q_actions_t = q_actions_t * mask + min_q_val[:, None] * inv_mask
+    action_idx = np.argmax(q_actions_t, axis=-1)
+    return action_idx
 
 
 def categorical_without_replacement(logits, k=1):

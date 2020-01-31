@@ -508,11 +508,9 @@ def create_train_gen_model(model_creator, hp, device_placement):
             (decoded_idx, col_eos_idx, decoded_logits, p_gen_infer
              ) = model.get_decoded_idx_infer()
             acc_train = model.get_acc(q_actions)
-            acc_infer = model.get_acc_from_decoded_idx(decoded_idx)
             loss, train_op, abs_loss = model.get_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
             acc_train_summary = tf.summary.scalar("acc_train", acc_train)
-            acc_infer_summary = tf.summary.scalar("acc_infer", acc_infer)
             train_summary_op = tf.summary.merge([loss_summary])
             (bare_loss_seq2seq, loss_seq2seq, train_seq2seq_op
              ) = model.get_seq2seq_train_op(q_actions)
@@ -520,8 +518,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
             bare_loss_summary = tf.summary.scalar(
                 "bare_loss_seq2seq", bare_loss_seq2seq)
             train_seq2seq_summary_op = tf.summary.merge(
-                [loss_summary_2, bare_loss_summary,
-                 acc_train_summary, acc_infer_summary])
+                [loss_summary_2, bare_loss_summary, acc_train_summary])
     return TrainDQNGenModel(
         graph=graph, model=model, q_actions=q_actions,
         decoded_idx_infer=decoded_idx,

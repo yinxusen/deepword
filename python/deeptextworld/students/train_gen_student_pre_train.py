@@ -26,10 +26,7 @@ class GenPreTrainLearner(StudentLearner):
                        self.model.action_idx_: actions_in,
                        self.model.action_idx_out_: actions_out,
                        self.model.action_len_: action_len,
-                       self.model.b_weight_: b_weights,
-                       self.model.beam_size_: 1,
-                       self.model.use_greedy_: False,
-                       self.model.temperature_: 1})
+                       self.model.b_weight_: b_weights})
         self.sw.add_summary(summaries)
         return
 
@@ -44,6 +41,7 @@ class GenPreTrainLearner(StudentLearner):
         action_mask = [m[6] for m in b_memory]
         expected_qs = [m[8] for m in b_memory]
         action_mask_t = list(BaseAgent.from_bytes(action_mask))
+        # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
         selected_mask_idx = list(map(
             lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
             action_mask_t))
