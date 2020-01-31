@@ -3,7 +3,7 @@ import collections
 import tensorflow as tf
 from bert import modeling
 
-import deeptextworld.dqn_func as dqn
+import deeptextworld.models.dqn_func as dqn
 import deeptextworld.transformer as txf
 from deeptextworld.models.dqn_model import BaseDQN, CNNEncoderDQN
 

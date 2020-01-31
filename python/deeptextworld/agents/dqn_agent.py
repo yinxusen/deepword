@@ -7,8 +7,8 @@ from textworld import EnvInfos
 from deeptextworld.models import dqn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN, ACT_TYPE_GEN, ACT_TYPE_TBL
-from deeptextworld.dqn_func import get_best_2D_q
-from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
+from deeptextworld.models.dqn_func import get_best_2D_q
+from deeptextworld.models.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
 from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.utils import ctime

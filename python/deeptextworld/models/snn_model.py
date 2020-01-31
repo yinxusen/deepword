@@ -1,7 +1,7 @@
 import collections
 import tensorflow as tf
 
-import deeptextworld.dqn_func as dqn
+import deeptextworld.models.dqn_func as dqn
 
 
 class TrainSNNModel(

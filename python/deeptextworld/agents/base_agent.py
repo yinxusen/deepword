@@ -18,7 +18,7 @@ from textworld import EnvInfos
 from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
 from deeptextworld.dependency_parser import DependencyParserReorder
-from deeptextworld.dqn_func import get_random_1Daction
+from deeptextworld.models.dqn_func import get_random_1Daction
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.log import Logging

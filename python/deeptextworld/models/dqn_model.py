@@ -2,7 +2,7 @@ import collections
 import numpy as np
 import tensorflow as tf
 
-import deeptextworld.dqn_func as dqn
+import deeptextworld.models.dqn_func as dqn
 from deeptextworld import transformer as txf
 
 

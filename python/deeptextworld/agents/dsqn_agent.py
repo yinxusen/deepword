@@ -12,7 +12,7 @@ from deeptextworld.models import dsqn_model
 from deeptextworld.agents.base_agent import ActionDesc, \
     ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
 from deeptextworld.agents.dqn_agent import TabularDQNAgent
-from deeptextworld.dqn_func import get_random_1Daction, get_best_1Daction, \
+from deeptextworld.models.dqn_func import get_random_1Daction, get_best_1Daction, \
     get_best_1D_q
 from deeptextworld.utils import ctime
 

@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.dqn_func import get_batch_best_1D_idx
+from deeptextworld.models.dqn_func import get_batch_best_1D_idx
 from deeptextworld.hparams import load_hparams_for_training
 from deeptextworld.students.student_learner import StudentLearner, CMD
 from deeptextworld.students.utils import get_action_idx_pair, setup_train_log
