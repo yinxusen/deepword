@@ -56,7 +56,7 @@ class StudentLearner(object):
 
     def prepare_model(self, device_placement):
         model_clazz = names2clazz(self.hp.model_creator)
-        model = model_clazz.get_train_model(
+        model = model_clazz.get_train_student_model(
             hp=self.hp,
             device_placement=device_placement)
         conf = tf.ConfigProto(
@@ -210,3 +210,43 @@ class StudentLearner(object):
             indices = indices + [self.hp.padding_val_id] * (
                     self.hp.num_tokens - len(indices))
         return indices
+
+
+class DRRNLearner(StudentLearner):
+    def train_impl(self, data):
+        (p_states, p_len, action_matrix, action_mask_t, action_len,
+         expected_qs) = data
+        _, summaries = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op],
+            feed_dict={
+                self.model.src_: p_states,
+                self.model.src_len_: p_len,
+                self.model.actions_mask_: action_mask_t,
+                self.model.actions_: action_matrix,
+                self.model.actions_len_: action_len,
+                self.model.expected_qs_: expected_qs})
+        self.sw.add_summary(summaries)
+        return
+
+    def prepare_data(self, b_memory, tjs, action_collector):
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = [m.q_actions for m in b_memory]
+        action_mask_t = BaseAgent.from_bytes(action_mask)
+
+        states = tjs.fetch_batch_states(trajectory_id, state_id)
+        p_states = [self.prepare_trajectory(s) for s in states]
+        p_len = [len(state) for state in p_states]
+
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        max_action_len = np.max(action_len)
+        action_matrix = (
+            [action_collector.get_action_matrix(gid)[:, :max_action_len]
+             for gid in game_id])
+
+        return (
+            p_states, p_len, action_matrix, action_mask_t, action_len,
+            expected_qs)

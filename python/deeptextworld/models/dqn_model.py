@@ -321,6 +321,10 @@ class AttnEncoderDecoderDQN(BaseDQN):
             target_vocab_size=self.hp.vocab_size)
 
     @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return cls.get_train_model(hp, device_placement)
+
+    @classmethod
     def get_train_model(cls, hp, device_placement):
         return create_train_gen_model(cls, hp, device_placement)
 

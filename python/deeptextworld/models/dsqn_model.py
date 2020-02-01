@@ -170,6 +170,18 @@ class CNNEncoderDSQN(CNNEncoderDQN):
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return create_train_student_drrn_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return create_train_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return create_eval_model(cls, hp, device_placement)
+
 
 class AttnEncoderDSQN(CNNEncoderDSQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
@@ -222,7 +234,7 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
                     shape=(batch_size, self.n_actions, -1))
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions, new_h
+        return q_actions
 
     def get_h_state(self, src, src_len):
         padding_mask = txf.create_padding_mask(src)
@@ -245,6 +257,18 @@ class AttnEncoderDSQN(CNNEncoderDSQN):
             diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return create_train_student_drrn_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return create_train_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return create_eval_model(cls, hp, device_placement)
 
 
 class Attn2LSTMEncoderDSQN(CNNEncoderDSQN):
@@ -475,6 +499,18 @@ class Attn2EncoderDSQN(CNNEncoderDSQN):
             diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return pred, diff_two_states
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return create_train_student_drrn_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return create_train_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return create_eval_model(cls, hp, device_placement)
 
 
 class BertAttnEncoderDSQN(AttnEncoderDSQN):

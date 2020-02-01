@@ -2,56 +2,14 @@ import os
 from os.path import join as pjoin
 
 import fire
-import numpy as np
 import tensorflow as tf
 
-from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.hparams import load_hparams_for_training
-from deeptextworld.students.student_learner import StudentLearner, CMD
+from deeptextworld.students.student_learner import DRRNLearner, CMD
 from deeptextworld.students.utils import setup_train_log
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
-
-
-class CNNLearner(StudentLearner):
-    def train_impl(self, data):
-        (p_states, p_len, action_matrix, action_mask_t, action_len,
-         expected_qs) = data
-        _, summaries = self.sess.run(
-            [self.model.train_op, self.model.train_summary_op],
-            feed_dict={
-                self.model.src_: p_states,
-                self.model.src_len_: p_len,
-                self.model.actions_mask_: action_mask_t,
-                self.model.actions_: action_matrix,
-                self.model.actions_len_: action_len,
-                self.model.expected_qs_: expected_qs})
-        self.sw.add_summary(summaries)
-        return
-
-    def prepare_data(self, b_memory, tjs, action_collector):
-        trajectory_id = [m.tid for m in b_memory]
-        state_id = [m.sid for m in b_memory]
-        game_id = [m.gid for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        expected_qs = [m.q_actions for m in b_memory]
-        action_mask_t = BaseAgent.from_bytes(action_mask)
-
-        states = tjs.fetch_batch_states(trajectory_id, state_id)
-        p_states = [self.prepare_trajectory(s) for s in states]
-        p_len = [len(state) for state in p_states]
-
-        action_len = (
-            [action_collector.get_action_len(gid) for gid in game_id])
-        max_action_len = np.max(action_len)
-        action_matrix = (
-            [action_collector.get_action_matrix(gid)[:, :max_action_len]
-             for gid in game_id])
-
-        return (
-            p_states, p_len, action_matrix, action_mask_t, action_len,
-            expected_qs)
 
 
 def train(data_path, n_data, model_path):
@@ -95,7 +53,7 @@ def train(data_path, n_data, model_path):
     )
 
     hp = load_hparams_for_training(None, cmd_args)
-    learner = CNNLearner(hp, model_path, data_path, n_data)
+    learner = DRRNLearner(hp, model_path, data_path, n_data)
     learner.train(n_epochs=1000)
 
 
