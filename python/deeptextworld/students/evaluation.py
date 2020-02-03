@@ -1,8 +1,17 @@
+import math
 import os
+import random
 import sys
+import time
+from collections import ChainMap
+from multiprocessing import Pool
+from os.path import basename
+from threading import Lock
 
 import gym
 import textworld.gym
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from deeptextworld.agents import dqn_agent
 from deeptextworld.students.utils import agg_results
@@ -14,47 +23,38 @@ class EvalPlayer(object):
     """
     Evaluate agent with games.
     """
-    def __init__(self, hp, model_dir, game_files):
+    def __init__(self, hp, model_dir, game_files, gpu_device=None):
         self.hp = hp
         self.game_files = game_files
+        self.model_dir = model_dir
         self.game_names = [os.path.basename(fn) for fn in game_files]
         agent_clazz = getattr(dqn_agent, hp.agent_clazz)
         self.agent = agent_clazz(hp, model_dir)
-        self.prev_total_scores = 0
-        self.prev_total_steps = sys.maxsize
+        if gpu_device is not None:
+            self.agent.set_d4eval(gpu_device)
 
-    def evaluate(self, nb_episodes):
+    def reload(self):
         """
-        Run nb_episodes times of all games for evaluation.
-        :param nb_episodes:
-        :return:
+        Reload model for agent
+
+        :return: loaded checkpoint step
         """
         self.agent.reset()
+        return self.agent.loaded_ckpt_step
+
+    def evaluate(self):
+        """
+        Run nb_episodes times of all games for evaluation.
+        :return:
+        """
         eval_start_t = ctime()
         eval_results = eval_agent(
-            self.agent, self.game_files, nb_episodes,
+            self.agent, self.game_files, self.hp.eval_episodes,
             self.hp.game_episode_terminal_t)
         eval_end_t = ctime()
-        (agg_res, total_scores, confidence_intervals, total_steps,
-         n_won) = agg_results(eval_results)
-        eprint("eval_results: {}".format(eval_results))
-        eprint("eval aggregated results: {}".format(agg_res))
-        eprint(
-            "after-epoch: {}, scores: {:.2f}, confidence: {:2f}, steps: {:.2f},"
-            " n_won: {:.2f}".format(
-                self.agent.loaded_ckpt_step, total_scores, confidence_intervals,
-                total_steps, n_won))
         eprint(
             "time to finish eval: {}".format(eval_end_t - eval_start_t))
-        if ((total_scores > self.prev_total_scores) or
-                ((total_scores == self.prev_total_scores) and
-                 (total_steps < self.prev_total_steps))):
-            eprint("found better agent, save model ...")
-            self.prev_total_scores = total_scores
-            self.prev_total_steps = total_steps
-            self.agent.save_best_model()
-        else:
-            eprint("no better model, pass ...")
+        return eval_results
 
 
 def eval_agent(agent, game_files, nb_episodes, max_episode_steps):
@@ -112,3 +112,108 @@ def eval_agent(agent, game_files, nb_episodes, max_episode_steps):
     return eval_results
 
 
+class MultiGPUsEvalPlayer(object):
+    def __init__(self, hp, model_dir, game_files, gpu_devices):
+        self.prev_best_scores = 0
+        self.prev_best_steps = sys.maxsize
+        self.evaluated_epochs = dict()
+        self.portion_files = self.split_game_files(game_files, len(gpu_devices))
+        self.players = [
+            EvalPlayer(hp, model_dir, files, gpu_device)
+            for gpu_device, files in zip(gpu_devices, self.portion_files)]
+        self.pool = Pool(len(gpu_devices))
+
+    @classmethod
+    def split_game_files(cls, game_files, k, rnd_seed=42):
+        """
+        Split game files into k portions for multi GPUs playing
+        :param game_files:
+        :param k:
+        :param rnd_seed:
+        :return:
+        """
+        game_files = sorted(game_files)
+        random.Random(rnd_seed).shuffle(game_files)
+        n_files = len(game_files)
+        if n_files == 0:
+            raise ValueError("no game files found!")
+
+        portion = math.ceil(len(game_files) / k)
+        files = [
+            game_files[i * portion: min(len(game_files), (i + 1) * portion)]
+            for i in range(k)]
+        return files
+
+    def has_better_model(self, total_scores, total_steps):
+        has_better_score = total_scores > self.prev_best_scores
+        has_fewer_steps = (
+                total_scores == self.prev_best_scores and
+                total_steps < self.prev_best_steps)
+        return has_better_score or has_fewer_steps
+
+    def evaluate_with_reload(self):
+        loaded_steps = [player.reload() for player in self.players]
+        assert len(set(loaded_steps)) == 1, "eval players load different models"
+        if loaded_steps[0] in self.evaluated_epochs:
+            eprint("model {} has been evaluated".format(loaded_steps[0]))
+        else:
+            results = self.pool.map(
+                lambda player: player.evaluate(), self.players)
+            eval_results = dict(ChainMap(*results))
+            (agg_res, total_scores, confidence_intervals, total_steps,
+             n_won) = agg_results(eval_results)
+            eprint("eval_results: {}".format(eval_results))
+            eprint("eval aggregated results: {}".format(agg_res))
+            eprint(
+                "after-epoch: {}, scores: {:.2f}, confidence: {:2f},"
+                " steps: {:.2f}, n_won: {:.2f}".format(
+                    loaded_steps[0], total_scores, confidence_intervals,
+                    total_steps, n_won))
+
+            if self.has_better_model(total_scores, total_steps):
+                eprint("found better agent, save model ...")
+                self.prev_best_scores = total_scores
+                self.prev_best_steps = total_steps
+                self.players[0].agent.save_best_model()
+            else:
+                eprint("no better model, pass ...")
+
+
+class NewModelHandler(FileSystemEventHandler):
+    def __init__(self, hp, model_dir, game_files, gpu_devices):
+        self.eval_player = MultiGPUsEvalPlayer(
+            hp, model_dir, game_files, gpu_devices)
+        self.lock = Lock()
+
+    def run_eval_player(self, event):
+        time.sleep(10)  # wait until all files of a model has been saved
+        if self.lock.locked():
+            eprint("Give up evaluation since model {} is running.".format(
+                self.eval_player.players[0].agent.loaded_ckpt_step))
+            return
+        self.lock.acquire()
+        eprint("eval caused by modified file: {}".format(event.src_path))
+        self.eval_player.evaluate_with_reload()
+        self.lock.release()
+
+    def on_created(self, event):
+        if not event.is_directory and basename(event.src_path) == "checkpoint":
+            self.run_eval_player(event)
+
+    def on_modified(self, event):
+        if not event.is_directory and basename(event.src_path) == "checkpoint":
+            self.run_eval_player(event)
+
+
+class WatchDogEvalPlayer(EvalPlayer):
+    def start(self, hp, model_dir, game_files, gpu_devices):
+        event_handler = NewModelHandler(hp, model_dir, game_files, gpu_devices)
+        observer = Observer()
+        observer.schedule(event_handler, self.agent.ckpt_path, recursive=False)
+        observer.start()
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()

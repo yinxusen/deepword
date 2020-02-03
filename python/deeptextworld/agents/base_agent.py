@@ -261,6 +261,9 @@ class BaseAgent(Logging):
         # self._per_game_recorder = None
         # self._actions_to_remove = {}
 
+    def set_d4eval(self, device):
+        self.d4eval = device
+
     @classmethod
     def report_status(cls, lst_of_status):
         return ', '.join(
