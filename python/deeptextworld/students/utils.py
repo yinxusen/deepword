@@ -106,12 +106,32 @@ def load_game_files(game_dir, f_games=None):
     return game_files
 
 
+def load_and_split(game_path, f_games):
+    """
+    Load games and split train dev set
+    :param game_path:
+    :param f_games:
+    :return:
+    """
+    game_files = load_game_files(game_path, f_games)
+    train_games, dev_games = split_train_dev(game_files)
+    return train_games, dev_games
+
+
 def setup_train_log(model_dir):
     current_dir = os.path.dirname(os.path.realpath(__file__))
     log_config_file = '{}/../../../conf/logging.yaml'.format(current_dir)
     setup_logging(
         default_path=log_config_file,
         local_log_filename=os.path.join(model_dir, 'game_script.log'))
+
+
+def setup_eval_log(log_filename):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    log_config_file = '{}/../../conf/logging-eval.yaml'.format(current_dir)
+    setup_logging(
+        default_path=log_config_file,
+        local_log_filename=log_filename)
 
 
 def get_action_idx_pair(action_matrix, action_len, sos_id, eos_id):

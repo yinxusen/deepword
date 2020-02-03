@@ -16,6 +16,7 @@ from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.students.utils import names2clazz
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
+from deeptextworld.hparams import save_hparams
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -24,6 +25,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 class CMD:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+    def set(self, key, val):
+        self.__dict__[key] = val
 
 
 class StudentLearner(object):
@@ -34,6 +38,8 @@ class StudentLearner(object):
         self.load_from = pjoin(self.model_dir, "last_weights")
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
+        save_hparams(
+            hp, pjoin(model_dir, "hparams.json"), use_relative_path=True)
         (self.sess, self.model, self.saver, self.sw, self.train_steps,
          self.queue) = self.prepare_training()
 

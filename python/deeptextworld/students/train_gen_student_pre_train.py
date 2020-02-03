@@ -5,19 +5,43 @@ import fire
 import tensorflow as tf
 
 from deeptextworld.hparams import load_hparams_for_training
+from deeptextworld.students.evaluation import WatchDogEvalPlayer
 from deeptextworld.students.student_learner import GenPreTrainLearner, CMD
-from deeptextworld.students.utils import setup_train_log
+from deeptextworld.students.utils import setup_train_log, setup_eval_log, \
+    load_and_split
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
-def train(data_path, n_data, model_path):
-    if not os.path.exists(model_path):
-        os.mkdir(model_path)
+class TrainEval(object):
+    @staticmethod
+    def train(data_path, n_data, model_path):
+        cmd_args.set("model_dir", model_path)
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
 
-    setup_train_log(model_path)
+        setup_train_log(model_path)
 
+        hp = load_hparams_for_training(None, cmd_args)
+        learner = GenPreTrainLearner(hp, model_path, data_path, n_data)
+        learner.train(n_epochs=1000)
+
+    @staticmethod
+    def dev_eval(model_path, game_path, f_games, n_gpus=1):
+        cmd_args.set("model_dir", model_path)
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+
+        setup_eval_log(log_filename="/tmp/eval-logging.txt")
+
+        _, eval_games = load_and_split(game_path, f_games)
+        gpu_devices = ["/device:CPU:{}".format(i) for i in range(n_gpus)]
+        eval_player = WatchDogEvalPlayer()
+        eval_player.start(cmd_args, model_path, eval_games, gpu_devices)
+
+
+if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
     home_dir = os.path.expanduser("~")
     project_path = pjoin(dir_path, "../../..")
@@ -26,7 +50,7 @@ def train(data_path, n_data, model_path):
     nltk_vocab_file = pjoin(project_path, "resources/vocab.txt")
 
     cmd_args = CMD(
-        model_dir=model_path,
+        model_dir="",
         model_creator="AttnEncoderDecoderDQN",
         vocab_file=nltk_vocab_file,
         num_tokens=512,
@@ -43,10 +67,4 @@ def train(data_path, n_data, model_path):
         collect_floor_plan=True
     )
 
-    hp = load_hparams_for_training(None, cmd_args)
-    learner = GenPreTrainLearner(hp, model_path, data_path, n_data)
-    learner.train(n_epochs=1000)
-
-
-if __name__ == "__main__":
-    fire.Fire(train)
+    fire.Fire(TrainEval)

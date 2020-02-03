@@ -5,8 +5,9 @@ import sys
 import time
 from collections import ChainMap
 from multiprocessing import Pool
-from os.path import basename
+from os.path import join as pjoin
 from threading import Lock
+from threading import Thread
 
 import gym
 import textworld.gym
@@ -14,6 +15,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from deeptextworld.agents import dqn_agent
+from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.students.utils import agg_results
 from deeptextworld.utils import ctime
 from deeptextworld.utils import eprint
@@ -42,15 +44,16 @@ class EvalPlayer(object):
         self.agent.reset()
         return self.agent.loaded_ckpt_step
 
-    def evaluate(self):
+    def evaluate(self, results):
         """
         Run nb_episodes times of all games for evaluation.
         :return:
         """
         eval_start_t = ctime()
         eval_results = eval_agent(
-            self.agent, self.game_files, self.hp.eval_episodes,
+            self.agent, self.game_files, self.hp.eval_episode,
             self.hp.game_episode_terminal_t)
+        results.append(eval_results)
         eval_end_t = ctime()
         eprint(
             "time to finish eval: {}".format(eval_end_t - eval_start_t))
@@ -121,7 +124,7 @@ class MultiGPUsEvalPlayer(object):
         self.players = [
             EvalPlayer(hp, model_dir, files, gpu_device)
             for gpu_device, files in zip(gpu_devices, self.portion_files)]
-        self.pool = Pool(len(gpu_devices))
+        self.pool = Pool(len(self.portion_files))
 
     @classmethod
     def split_game_files(cls, game_files, k, rnd_seed=42):
@@ -157,8 +160,14 @@ class MultiGPUsEvalPlayer(object):
         if loaded_steps[0] in self.evaluated_epochs:
             eprint("model {} has been evaluated".format(loaded_steps[0]))
         else:
-            results = self.pool.map(
-                lambda player: player.evaluate(), self.players)
+            results = []
+            workers = [Thread(target=player.evaluate, args=(results,))
+                       for player in self.players]
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join()
+
             eval_results = dict(ChainMap(*results))
             (agg_res, total_scores, confidence_intervals, total_steps,
              n_won) = agg_results(eval_results)
@@ -180,12 +189,23 @@ class MultiGPUsEvalPlayer(object):
 
 
 class NewModelHandler(FileSystemEventHandler):
-    def __init__(self, hp, model_dir, game_files, gpu_devices):
-        self.eval_player = MultiGPUsEvalPlayer(
-            hp, model_dir, game_files, gpu_devices)
+    def __init__(self, cmd_args, model_dir, game_files, gpu_devices):
+        self.cmd_args = cmd_args
+        self.model_dir = model_dir
+        self.game_files = game_files
+        self.gpu_devices = gpu_devices
+        self.eval_player = None
         self.lock = Lock()
+        self.watched_file = pjoin("last_weights", "checkpoint")
 
     def run_eval_player(self, event):
+        if self.eval_player is None:
+            config_file = pjoin(self.model_dir, "hparams.json")
+            hp = load_hparams_for_evaluation(config_file, self.cmd_args)
+            self.eval_player = MultiGPUsEvalPlayer(
+                hp, self.model_dir, self.game_files, self.gpu_devices)
+        else:
+            pass
         time.sleep(10)  # wait until all files of a model has been saved
         if self.lock.locked():
             eprint("Give up evaluation since model {} is running.".format(
@@ -196,20 +216,26 @@ class NewModelHandler(FileSystemEventHandler):
         self.eval_player.evaluate_with_reload()
         self.lock.release()
 
+    def is_ckpt_file(self, src_path):
+        return self.watched_file in src_path
+
     def on_created(self, event):
-        if not event.is_directory and basename(event.src_path) == "checkpoint":
+        eprint("create ", event.src_path)
+        if not event.is_directory and self.is_ckpt_file(event.src_path):
             self.run_eval_player(event)
 
     def on_modified(self, event):
-        if not event.is_directory and basename(event.src_path) == "checkpoint":
+        eprint("modify", event.src_path)
+        if not event.is_directory and self.is_ckpt_file(event.src_path):
             self.run_eval_player(event)
 
 
-class WatchDogEvalPlayer(EvalPlayer):
-    def start(self, hp, model_dir, game_files, gpu_devices):
-        event_handler = NewModelHandler(hp, model_dir, game_files, gpu_devices)
+class WatchDogEvalPlayer(object):
+    def start(self, cmd_args, model_dir, game_files, gpu_devices):
+        event_handler = NewModelHandler(
+            cmd_args, model_dir, game_files, gpu_devices)
         observer = Observer()
-        observer.schedule(event_handler, self.agent.ckpt_path, recursive=False)
+        observer.schedule(event_handler, model_dir, recursive=True)
         observer.start()
         try:
             while True:
