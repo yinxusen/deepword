@@ -164,7 +164,8 @@ class StudentLearner(object):
             for it in trange(epoch_size, ascii=True, desc="step"):
                 try:
                     data = self.queue.get(timeout=100)
-                    self.train_impl(data)
+                    self.train_impl(
+                        data, self.train_steps + et * epoch_size + it)
                 except Exception as e:
                     data_in_queue = False
                     eprint("no more data: {}".format(e))
@@ -178,11 +179,12 @@ class StudentLearner(object):
                 break
         return
 
-    def train_impl(self, data):
+    def train_impl(self, data, train_step):
         """
         Train the model one time given data.
 
         :param data:
+        :param train_step:
         :return:
         """
         raise NotImplementedError()
@@ -217,7 +219,7 @@ class StudentLearner(object):
 
 
 class DRRNLearner(StudentLearner):
-    def train_impl(self, data):
+    def train_impl(self, data, train_step):
         (p_states, p_len, action_matrix, action_mask_t, action_len,
          expected_qs) = data
         _, summaries = self.sess.run(
@@ -229,7 +231,7 @@ class DRRNLearner(StudentLearner):
                 self.model.actions_: action_matrix,
                 self.model.actions_len_: action_len,
                 self.model.expected_qs_: expected_qs})
-        self.sw.add_summary(summaries)
+        self.sw.add_summary(summaries, train_step)
         return
 
     def prepare_data(self, b_memory, tjs, action_collector):
@@ -256,7 +258,7 @@ class DRRNLearner(StudentLearner):
 
 
 class GenLearner(StudentLearner):
-    def train_impl(self, data):
+    def train_impl(self, data, train_step):
         (p_states, p_len, actions_in, actions_out, action_len,
          expected_qs, b_weights) = data
         _, summaries = self.sess.run(
@@ -267,7 +269,7 @@ class GenLearner(StudentLearner):
                        self.model.action_idx_out_: actions_out,
                        self.model.action_len_: action_len,
                        self.model.b_weight_: b_weights})
-        self.sw.add_summary(summaries)
+        self.sw.add_summary(summaries, train_step)
         return
 
     def prepare_data(self, b_memory, tjs, action_collector):
