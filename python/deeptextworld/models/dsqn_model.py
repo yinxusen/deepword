@@ -111,8 +111,8 @@ class CNNEncoderDSQN(CNNEncoderDQN):
                     self.src_embeddings,
                     num_units=32,
                     num_layers=1)[-1].h
-                h_actions = tf.reshape(flat_h_actions,
-                                       shape=(batch_size, self.n_actions, -1))
+                h_actions = tf.reshape(
+                    flat_h_actions, shape=(batch_size, self.n_actions, -1))
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
@@ -664,6 +664,57 @@ class BertAttnEncoderDSQN(AttnEncoderDSQN):
         merged_train_op = self.optimizer.minimize(
             weighted_loss, global_step=self.global_step)
         return weighted_loss, l_dqn, l_snn, merged_train_op, s1, s2
+
+
+class BertLSTMEncoderDSQN(BertAttnEncoderDSQN):
+    def get_q_actions(self):
+        batch_size = tf.shape(self.inputs["src_len"])[0]
+
+        src = self.inputs["src"]
+        src_len = self.inputs["src_len"]
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=self.num_tokens, dtype=tf.int32)
+
+        # padding the [CLS] in the beginning
+        paddings = tf.constant([[0, 0], [1, 0]])
+        src_w_pad = tf.pad(
+            src, paddings=paddings, mode="CONSTANT",
+            constant_values=self.hp.cls_val_id)
+        src_masks_w_pad = tf.pad(
+            src_masks, paddings=paddings, mode="CONSTANT",
+            constant_values=1)
+
+        with tf.variable_scope("bert-state-encoder"):
+            bert_model = modeling.BertModel(
+                config=self.bert_config, is_training=(not self.is_infer),
+                input_ids=src_w_pad, input_mask=src_masks_w_pad)
+            h_state = self.wp(bert_model.get_pooled_output())
+
+        with tf.variable_scope("drrn-action-encoder", reuse=False):
+            flat_actions = tf.reshape(
+                self.inputs["actions"],
+                shape=(batch_size * self.n_actions, -1))
+            flat_actions_len = tf.reshape(
+                self.inputs["actions_len"],
+                shape=(-1,))
+            flat_h_actions = dqn.encoder_lstm(
+                flat_actions, flat_actions_len,
+                self.src_embeddings,
+                num_units=32,
+                num_layers=1)[-1].h
+            h_actions = tf.reshape(
+                flat_h_actions, shape=(batch_size, self.n_actions, -1))
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
+
+        with tf.variable_scope("drrn-encoder", reuse=False):
+            h_state_expanded = tf.expand_dims(h_state, axis=1)
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, h_actions), axis=-1)
+        return q_actions
 
 
 def create_train_model(model_creator, hp, device_placement):

@@ -42,6 +42,8 @@ def find_default_model_hparams(model_creator=''):
         model_hparams = default_hparams_Attn2LSTMEncoderDSQN()
     elif model_creator == "BertAttnEncoderDSQN":
         model_hparams = default_hparams_BertAttnEncoderDSQN()
+    elif model_creator == "BertLSTMEncoderDSQN":
+        model_hparams = default_hparams_BertLSTMEncoderDSQN()
     elif model_creator == "AttnEncoderDecoderDQN":
         model_hparams = default_hparams_AttnEncoderDecoderDQN()
     else:
@@ -370,6 +372,29 @@ def default_hparams_Attn2LSTMEncoderDSQN():
 
 
 def default_hparams_BertAttnEncoderDSQN():
+    return tf.contrib.training.HParams(
+        agent_clazz='BertDSQNAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=511,
+        num_conv_filters=32,
+        bert_num_hidden_layers=1,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        bert_ckpt_dir="",
+        snn_train_epochs=1000
+    )
+
+
+def default_hparams_BertLSTMEncoderDSQN():
     return tf.contrib.training.HParams(
         agent_clazz='BertDSQNAgent',
         tjs_creator='SingleChannelTrajectory',

@@ -163,7 +163,7 @@ class StudentLearner(object):
         for et in trange(n_epochs, ascii=True, desc="epoch"):
             for it in trange(epoch_size, ascii=True, desc="step"):
                 try:
-                    data = self.queue.get(timeout=10)
+                    data = self.queue.get(timeout=100)
                     self.train_impl(data)
                 except Exception as e:
                     data_in_queue = False
@@ -243,7 +243,6 @@ class DRRNLearner(StudentLearner):
         states = tjs.fetch_batch_states(trajectory_id, state_id)
         p_states = [self.prepare_trajectory(s) for s in states]
         p_len = [len(state) for state in p_states]
-
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         max_action_len = np.max(action_len)
