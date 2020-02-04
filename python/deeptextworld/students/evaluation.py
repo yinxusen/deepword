@@ -225,19 +225,24 @@ class NewModelHandler(FileSystemEventHandler):
             self.run_eval_player(event)
 
 
-class WatchDogEvalPlayer(object):
+class WatchDogEvalPlayer(Logging):
+    def __init__(self):
+        super(WatchDogEvalPlayer, self).__init__()
+
     def start(self, cmd_args, model_dir, game_files, n_gpus):
         event_handler = NewModelHandler(
             cmd_args, model_dir, game_files, n_gpus)
         watched_dir = pjoin(model_dir, "last_weights")
         if not os.path.exists(watched_dir):
             os.mkdir(watched_dir)
+        self.debug("watch on {}".format(watched_dir))
         observer = Observer()
         observer.schedule(event_handler, watched_dir, recursive=False)
         observer.start()
         try:
             while True:
-                time.sleep(1)
+                time.sleep(10)
+                self.debug("watching ...")
         except KeyboardInterrupt:
             observer.stop()
         observer.join()
