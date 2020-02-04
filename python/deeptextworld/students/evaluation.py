@@ -35,7 +35,7 @@ def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
     :param model_dir: model dir of the agent
     :param load_best: bool, load from best_weights or not (last_weights)
     :param game_files: game files for evaluation
-    :param gpu_device: which GPU device to load, in a format of "/device:CPU:i"
+    :param gpu_device: which GPU device to load, in a format of "/device:GPU:i"
     :return: eval_results, loaded_ckpt_step
     """
     eval_results = dict()
@@ -95,7 +95,7 @@ class MultiGPUsEvalPlayer(Logging):
         self.prev_best_scores = 0
         self.prev_best_steps = sys.maxsize
         self.model_dir = model_dir
-        self.gpu_devices = ["/device:CPU:{}".format(i) for i in range(n_gpus)]
+        self.gpu_devices = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
         self.portion_files = self.split_game_files(game_files, n_gpus)
         self.load_best = load_best
 
