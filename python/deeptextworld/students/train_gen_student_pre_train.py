@@ -15,7 +15,7 @@ if __name__ == "__main__":
         model_dir="",
         model_creator="AttnEncoderDecoderDQN",
         vocab_file=conventions.nltk_vocab_file,
-        num_tokens=512,
+        num_tokens=256,
         num_turns=6,
         batch_size=32,
         save_gap_t=50000,

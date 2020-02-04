@@ -16,7 +16,7 @@ if __name__ == "__main__":
         model_creator="CNNEncoderDSQN",
         vocab_file=conventions.bert_vocab_file,
         bert_ckpt_dir=conventions.bert_ckpt_dir,
-        num_tokens=511,
+        num_tokens=256,
         num_turns=6,
         batch_size=32,
         save_gap_t=5000,
