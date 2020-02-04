@@ -5,8 +5,8 @@ import random
 
 import numpy as np
 
-import deeptextworld.models
-import deeptextworld.agents
+from deeptextworld.models import dqn_model, drrn_model, dsqn_model
+from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent
 from deeptextworld.stats import mean_confidence_interval
 from deeptextworld.utils import setup_logging
 
@@ -172,8 +172,10 @@ def model_name2clazz(name):
     :param name:
     :return:
     """
-    clazz = getattr(deeptextworld.models, name)
-    return clazz
+    for namespace in [dqn_model, drrn_model, dsqn_model]:
+        if hasattr(namespace, name):
+            return getattr(namespace, name)
+    raise ValueError("{} not found in models".format(name))
 
 
 def agent_name2clazz(name):
@@ -183,8 +185,10 @@ def agent_name2clazz(name):
     :param name:
     :return:
     """
-    clazz = getattr(deeptextworld.agents, name)
-    return clazz
+    for namespace in [dqn_agent, drrn_agent, dsqn_agent]:
+        if hasattr(namespace, name):
+            return getattr(namespace, name)
+    raise ValueError("{} not found in agents".format(name))
 
 
 def test():
