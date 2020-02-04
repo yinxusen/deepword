@@ -193,7 +193,7 @@ class NewModelHandler(FileSystemEventHandler):
         self.lock = Lock()
         self.watched_file = "checkpoint"
 
-    def run_eval_player(self, event):
+    def run_eval_player(self):
         if self.eval_player is None:
             config_file = pjoin(self.model_dir, "hparams.json")
             hp = load_hparams_for_evaluation(config_file, self.cmd_args)
@@ -207,7 +207,6 @@ class NewModelHandler(FileSystemEventHandler):
             eprint("Give up evaluation since model is running.")
             return
         self.lock.acquire()
-        eprint("eval caused by modified file: {}".format(event.src_path))
         self.eval_player.evaluate()
         self.lock.release()
 
@@ -217,12 +216,12 @@ class NewModelHandler(FileSystemEventHandler):
     def on_created(self, event):
         eprint("create ", event.src_path)
         if not event.is_directory and self.is_ckpt_file(event.src_path):
-            self.run_eval_player(event)
+            self.run_eval_player()
 
     def on_modified(self, event):
         eprint("modify", event.src_path)
         if not event.is_directory and self.is_ckpt_file(event.src_path):
-            self.run_eval_player(event)
+            self.run_eval_player()
 
 
 class WatchDogEvalPlayer(Logging):
@@ -246,3 +245,35 @@ class WatchDogEvalPlayer(Logging):
         except KeyboardInterrupt:
             observer.stop()
         observer.join()
+
+
+class LoopDogEvalPlayer(Logging):
+    def __init__(self):
+        super(LoopDogEvalPlayer, self).__init__()
+        self.file_content = hash("")
+
+    def start(self, cmd_args, model_dir, game_files, n_gpus):
+        event_handler = NewModelHandler(
+            cmd_args, model_dir, game_files, n_gpus)
+        watched_file = pjoin(model_dir, "last_weights", "checkpoint")
+        self.debug("watch on {}".format(watched_file))
+        try:
+            while True:
+                time.sleep(10)
+                self.debug("watching ...")
+                try:
+                    with open(watched_file, 'rb') as f:
+                        content = hash(f.read())
+                    if content != self.file_content:
+                        self.debug(
+                            "encounter new file {} -> {} for evaluation".format(
+                                self.file_content, content))
+                        self.file_content = content
+                        event_handler.run_eval_player()
+                    else:
+                        pass
+                except Exception as e:
+                    self.warning("cannot read watched file: {}\n{}".format(
+                        watched_file, e))
+        except KeyboardInterrupt:
+            pass

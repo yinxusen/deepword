@@ -129,7 +129,7 @@ def setup_train_log(model_dir):
 
 def setup_eval_log(log_filename):
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    log_config_file = '{}/../../conf/logging-eval.yaml'.format(current_dir)
+    log_config_file = '{}/../../../conf/logging-eval.yaml'.format(current_dir)
     setup_logging(
         default_path=log_config_file,
         local_log_filename=log_filename)

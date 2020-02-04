@@ -3,7 +3,7 @@ from os.path import join as pjoin
 from collections import namedtuple
 
 from deeptextworld.hparams import load_hparams_for_training
-from deeptextworld.students.evaluation import WatchDogEvalPlayer
+from deeptextworld.students.evaluation import LoopDogEvalPlayer
 from deeptextworld.students.utils import setup_train_log, setup_eval_log, \
     load_and_split
 
@@ -52,6 +52,6 @@ class TrainEval(object):
         setup_eval_log(log_filename="/tmp/eval-logging.txt")
 
         _, eval_games = load_and_split(game_path, f_games)
-        eval_player = WatchDogEvalPlayer()
+        eval_player = LoopDogEvalPlayer()
         eval_player.start(
             self.cmd_args, model_path, eval_games, n_gpus)
