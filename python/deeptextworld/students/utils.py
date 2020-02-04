@@ -6,6 +6,7 @@ import random
 import numpy as np
 
 import deeptextworld.models
+import deeptextworld.agents
 from deeptextworld.stats import mean_confidence_interval
 from deeptextworld.utils import setup_logging
 
@@ -164,14 +165,25 @@ def get_action_idx_pair(action_matrix, action_len, sos_id, eos_id):
     return action_id_in, action_id_out, new_action_len
 
 
-def names2clazz(model_name):
+def model_name2clazz(name):
     """
     Find the class given the model name in this package.
 
-    :param model_name:
+    :param name:
     :return:
     """
-    clazz = getattr(deeptextworld.models, model_name)
+    clazz = getattr(deeptextworld.models, name)
+    return clazz
+
+
+def agent_name2clazz(name):
+    """
+    Find the class given the model name in this package.
+
+    :param name:
+    :return:
+    """
+    clazz = getattr(deeptextworld.agents, name)
     return clazz
 
 

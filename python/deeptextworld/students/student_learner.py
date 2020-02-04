@@ -13,7 +13,7 @@ from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.models.dqn_func import get_batch_best_1D_idx
 from deeptextworld.students.utils import get_action_idx_pair
-from deeptextworld.students.utils import names2clazz
+from deeptextworld.students.utils import model_name2clazz
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
 from deeptextworld.hparams import save_hparams
@@ -63,7 +63,7 @@ class StudentLearner(object):
         return combined_data_path
 
     def prepare_model(self, device_placement):
-        model_clazz = names2clazz(self.hp.model_creator)
+        model_clazz = model_name2clazz(self.hp.model_creator)
         model = model_clazz.get_train_student_model(
             hp=self.hp,
             device_placement=device_placement)
