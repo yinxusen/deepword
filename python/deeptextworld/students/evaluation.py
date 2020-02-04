@@ -2,13 +2,13 @@ import glob
 import math
 import os
 import random
+import shutil
 import sys
 import time
 from collections import ChainMap
 from multiprocessing import Pool
 from os.path import join as pjoin
 from threading import Lock
-import shutil
 
 import gym
 import textworld.gym
@@ -16,6 +16,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from deeptextworld.hparams import load_hparams_for_evaluation
+from deeptextworld.log import Logging
 from deeptextworld.students.utils import agg_results, agent_name2clazz
 from deeptextworld.utils import eprint
 
@@ -84,11 +85,12 @@ def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
     return eval_results, agent.loaded_ckpt_step
 
 
-class MultiGPUsEvalPlayer(object):
+class MultiGPUsEvalPlayer(Logging):
     """
     Eval Player that runs on multiple GPUs
     """
     def __init__(self, hp, model_dir, game_files, n_gpus, load_best=True):
+        super(MultiGPUsEvalPlayer, self).__init__()
         self.hp = hp
         self.prev_best_scores = 0
         self.prev_best_steps = sys.maxsize
@@ -127,6 +129,7 @@ class MultiGPUsEvalPlayer(object):
 
     def evaluate(self):
         pool = Pool(len(self.portion_files))
+        self.debug("start evaluation ...")
         async_results = [
             pool.apply_async(
                 eval_agent,
@@ -135,6 +138,7 @@ class MultiGPUsEvalPlayer(object):
         results = [res.get() for res in async_results]
         pool.close()
         pool.join()
+        self.debug("evaluation pool closed")
 
         loaded_steps = [res[1] for res in results]
         assert len(set(loaded_steps)) == 1, "load different versions of model"
@@ -143,16 +147,16 @@ class MultiGPUsEvalPlayer(object):
         eval_results = dict(ChainMap(*results))
         (agg_res, total_scores, confidence_intervals, total_steps,
          n_won) = agg_results(eval_results)
-        eprint("eval_results: {}".format(eval_results))
-        eprint("eval aggregated results: {}".format(agg_res))
-        eprint(
+        self.info("eval_results: {}".format(eval_results))
+        self.info("eval aggregated results: {}".format(agg_res))
+        self.info(
             "after-epoch: {}, scores: {:.2f}, confidence: {:2f},"
             " steps: {:.2f}, n_won: {:.2f}".format(
                 loaded_steps[0], total_scores, confidence_intervals,
                 total_steps, n_won))
 
         if self.has_better_model(total_scores, total_steps):
-            eprint(
+            self.info(
                 "found better agent, save model after-epoch-{}".format(
                     loaded_steps[0]))
             self.prev_best_scores = total_scores
@@ -161,9 +165,9 @@ class MultiGPUsEvalPlayer(object):
             try:
                 self.save_best_model(loaded_steps[0])
             except Exception as e:
-                eprint("save best model error:\n{}".format(e))
+                self.warning("save best model error:\n{}".format(e))
         else:
-            eprint("no better model, pass ...")
+            self.info("no better model, pass ...")
 
     def save_best_model(self, loaded_ckpt_step):
         ckpt_path = pjoin(self.model_dir, "last_weights")
@@ -173,10 +177,10 @@ class MultiGPUsEvalPlayer(object):
         for file in glob.glob(
                 pjoin(ckpt_path, "after-epoch-{}*".format(loaded_ckpt_step))):
             dst = shutil.copy(file, best_path)
-            eprint("copied: {} -> {}".format(file, dst))
+            self.debug("copied: {} -> {}".format(file, dst))
         ckpt_file = pjoin(ckpt_path, "checkpoint")
         dst = shutil.copy(ckpt_file, best_path)
-        eprint("copied: {} -> {}".format(ckpt_file, dst))
+        self.debug("copied: {} -> {}".format(ckpt_file, dst))
 
 
 class NewModelHandler(FileSystemEventHandler):
@@ -187,7 +191,7 @@ class NewModelHandler(FileSystemEventHandler):
         self.n_gpus = n_gpus
         self.eval_player = None
         self.lock = Lock()
-        self.watched_file = pjoin("last_weights", "checkpoint")
+        self.watched_file = "checkpoint"
 
     def run_eval_player(self, event):
         if self.eval_player is None:
@@ -208,7 +212,7 @@ class NewModelHandler(FileSystemEventHandler):
         self.lock.release()
 
     def is_ckpt_file(self, src_path):
-        return self.watched_file in src_path
+        return self.watched_file == os.path.basename(src_path)
 
     def on_created(self, event):
         eprint("create ", event.src_path)
@@ -225,8 +229,11 @@ class WatchDogEvalPlayer(object):
     def start(self, cmd_args, model_dir, game_files, n_gpus):
         event_handler = NewModelHandler(
             cmd_args, model_dir, game_files, n_gpus)
+        watched_dir = pjoin(model_dir, "last_weights")
+        if not os.path.exists(watched_dir):
+            os.mkdir(watched_dir)
         observer = Observer()
-        observer.schedule(event_handler, model_dir, recursive=True)
+        observer.schedule(event_handler, watched_dir, recursive=False)
         observer.start()
         try:
             while True:
