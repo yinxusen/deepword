@@ -1,35 +1,21 @@
 import os
-from os.path import join as pjoin
 
 import fire
 import tensorflow as tf
 
-from deeptextworld.hparams import load_hparams_for_training
 from deeptextworld.students.student_learner import DRRNLearner, CMD
-from deeptextworld.students.utils import setup_train_log
+from deeptextworld.students.train_eval_framework import TrainEval, conventions
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
-def train(data_path, n_data, model_path):
-    if not os.path.exists(model_path):
-        os.mkdir(model_path)
-
-    setup_train_log(model_path)
-
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    home_dir = os.path.expanduser("~")
-    project_path = pjoin(dir_path, "../../..")
-    bert_ckpt_dir = pjoin(home_dir, "local/opt/bert-models/bert-model")
-    bert_vocab_file = pjoin(bert_ckpt_dir, "vocab.txt")
-    nltk_vocab_file = pjoin(project_path, "resources/vocab.txt")
-
+if __name__ == '__main__':
     cmd_args = CMD(
-        model_dir=model_path,
+        model_dir="",
         model_creator="BertAttnEncoderDSQN",
-        vocab_file=bert_vocab_file,
-        bert_ckpt_dir=bert_ckpt_dir,
+        vocab_file=conventions.bert_vocab_file,
+        bert_ckpt_dir=conventions.bert_ckpt_dir,
         num_tokens=256,
         num_turns=6,
         batch_size=32,
@@ -51,11 +37,5 @@ def train(data_path, n_data, model_path):
         replay_mem=500000,
         collect_floor_plan=True
     )
-
-    hp = load_hparams_for_training(None, cmd_args)
-    learner = DRRNLearner(hp, model_path, data_path, n_data)
-    learner.train(n_epochs=1000)
-
-
-if __name__ == "__main__":
-    fire.Fire(train)
+    train_eval = TrainEval(cmd_args, DRRNLearner)
+    fire.Fire(train_eval)
