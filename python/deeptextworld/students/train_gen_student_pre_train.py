@@ -5,7 +5,7 @@ import fire
 import tensorflow as tf
 
 from deeptextworld.hparams import load_hparams_for_training
-from deeptextworld.students.evaluation import NewModelEvalPlayer
+from deeptextworld.students.evaluation import WatchDogEvalPlayer
 from deeptextworld.students.student_learner import GenPreTrainLearner, CMD
 from deeptextworld.students.utils import setup_train_log, setup_eval_log, \
     load_and_split
@@ -36,10 +36,9 @@ class TrainEval(object):
         setup_eval_log(log_filename="/tmp/eval-logging.txt")
 
         _, eval_games = load_and_split(game_path, f_games)
-        gpu_devices = ["/device:CPU:{}".format(i) for i in range(n_gpus)]
-        eval_player = NewModelEvalPlayer(
-            cmd_args, model_path, eval_games, gpu_devices)
-        eval_player.start()
+        eval_player = WatchDogEvalPlayer()
+        eval_player.start(
+            cmd_args, model_path, eval_games, n_gpus)
 
 
 if __name__ == "__main__":

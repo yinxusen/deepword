@@ -20,7 +20,7 @@ from deeptextworld.students.utils import agg_results, agent_name2clazz
 from deeptextworld.utils import eprint
 
 
-def eval_agent(hp, model_dir, game_files, gpu_device=None):
+def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
     """
     Evaluate an agent with given games.
     For each game, we run nb_episodes, and max_episode_steps for on episode.
@@ -29,13 +29,23 @@ def eval_agent(hp, model_dir, game_files, gpu_device=None):
     In training, we register all given games to TextWorld structure, and play
     them in a random way.
     For evaluation, we register one game at a time, and play it for nb_episodes.
+
+    :param hp: hyperparameter to create the agent
+    :param model_dir: model dir of the agent
+    :param load_best: bool, load from best_weights or not (last_weights)
+    :param game_files: game files for evaluation
+    :param gpu_device: which GPU device to load, in a format of "/device:CPU:i"
+    :return: eval_results, loaded_ckpt_step
     """
     eval_results = dict()
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     if gpu_device is not None:
         agent.set_d4eval(gpu_device)
-    agent.reset()
+    if load_best:  # load from best_weights for evaluation
+        agent.eval()
+    else:  # load from last_weights for dev test
+        agent.reset()
 
     requested_infos = agent.select_additional_infos()
     for game_no in range(len(game_files)):
@@ -75,14 +85,17 @@ def eval_agent(hp, model_dir, game_files, gpu_device=None):
 
 
 class MultiGPUsEvalPlayer(object):
-    def __init__(self, hp, model_dir, game_files, gpu_devices):
+    """
+    Eval Player that runs on multiple GPUs
+    """
+    def __init__(self, hp, model_dir, game_files, n_gpus, load_best=True):
         self.hp = hp
         self.prev_best_scores = 0
         self.prev_best_steps = sys.maxsize
-        self.evaluated_epochs = dict()
         self.model_dir = model_dir
-        self.gpu_devices = gpu_devices
-        self.portion_files = self.split_game_files(game_files, len(gpu_devices))
+        self.gpu_devices = ["/device:CPU:{}".format(i) for i in range(n_gpus)]
+        self.portion_files = self.split_game_files(game_files, n_gpus)
+        self.load_best = load_best
 
     @classmethod
     def split_game_files(cls, game_files, k, rnd_seed=42):
@@ -116,7 +129,8 @@ class MultiGPUsEvalPlayer(object):
         pool = Pool(len(self.portion_files))
         async_results = [
             pool.apply_async(
-                eval_agent, (self.hp, self.model_dir, files, gpu_device))
+                eval_agent,
+                (self.hp, self.model_dir, self.load_best, files, gpu_device))
             for files, gpu_device in zip(self.portion_files, self.gpu_devices)]
         results = [res.get() for res in async_results]
         pool.close()
@@ -166,11 +180,11 @@ class MultiGPUsEvalPlayer(object):
 
 
 class NewModelHandler(FileSystemEventHandler):
-    def __init__(self, cmd_args, model_dir, game_files, gpu_devices):
+    def __init__(self, cmd_args, model_dir, game_files, n_gpus):
         self.cmd_args = cmd_args
         self.model_dir = model_dir
         self.game_files = game_files
-        self.gpu_devices = gpu_devices
+        self.n_gpus = n_gpus
         self.eval_player = None
         self.lock = Lock()
         self.watched_file = pjoin("last_weights", "checkpoint")
@@ -180,7 +194,8 @@ class NewModelHandler(FileSystemEventHandler):
             config_file = pjoin(self.model_dir, "hparams.json")
             hp = load_hparams_for_evaluation(config_file, self.cmd_args)
             self.eval_player = MultiGPUsEvalPlayer(
-                hp, self.model_dir, self.game_files, self.gpu_devices)
+                hp, self.model_dir, self.game_files, self.n_gpus,
+                load_best=False)
         else:
             pass
         time.sleep(10)  # wait until all files of a model has been saved
@@ -207,9 +222,9 @@ class NewModelHandler(FileSystemEventHandler):
 
 
 class WatchDogEvalPlayer(object):
-    def start(self, cmd_args, model_dir, game_files, gpu_devices):
+    def start(self, cmd_args, model_dir, game_files, n_gpus):
         event_handler = NewModelHandler(
-            cmd_args, model_dir, game_files, gpu_devices)
+            cmd_args, model_dir, game_files, n_gpus)
         observer = Observer()
         observer.schedule(event_handler, model_dir, recursive=True)
         observer.start()

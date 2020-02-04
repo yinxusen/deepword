@@ -20,7 +20,6 @@ class TrainEval(object):
         cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-
         setup_train_log(model_path)
 
         hp = load_hparams_for_training(None, cmd_args)
@@ -32,14 +31,12 @@ class TrainEval(object):
         cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-
         setup_eval_log(log_filename="/tmp/eval-logging.txt")
 
         _, eval_games = load_and_split(game_path, f_games)
-        gpu_devices = ["/device:CPU:{}".format(i) for i in range(n_gpus)]
         eval_player = WatchDogEvalPlayer()
         eval_player.start(
-            cmd_args, model_path, eval_games, gpu_devices)
+            cmd_args, model_path, eval_games, n_gpus)
 
 
 if __name__ == "__main__":

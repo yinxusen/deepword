@@ -1,4 +1,3 @@
-import os
 import random
 import time
 from os.path import join as pjoin
@@ -11,15 +10,12 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.hparams import save_hparams
 from deeptextworld.models.dqn_func import get_batch_best_1D_idx
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.students.utils import model_name2clazz
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
-from deeptextworld.hparams import save_hparams
-
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
 class CMD:
