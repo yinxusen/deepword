@@ -370,8 +370,8 @@ class GenDQNAgent(DQNAgent):
         :param action_mask:
         """
         indexed_state_t, lens_t = self.tjs.fetch_last_state()
-        beam_size = 20
-        temperature = self.eps
+        beam_size = 1
+        temperature = 1
         self.debug("temperature: {}".format(temperature))
         res = self.sess.run(
             [self.model.decoded_idx_infer, self.model.col_eos_idx,

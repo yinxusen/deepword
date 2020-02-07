@@ -21,7 +21,7 @@ from deeptextworld.students.utils import agg_results, agent_name2clazz
 from deeptextworld.utils import eprint
 
 
-def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
+def eval_agent(hp, model_dir, load_best, restore_from, game_files, gpu_device=None):
     """
     Evaluate an agent with given games.
     For each game, we run nb_episodes, and max_episode_steps for on episode.
@@ -34,6 +34,8 @@ def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
     :param hp: hyperparameter to create the agent
     :param model_dir: model dir of the agent
     :param load_best: bool, load from best_weights or not (last_weights)
+    :param restore_from: string, load from a specific model,
+    e.g. {model_dir}/last_weights/after_epoch-0
     :param game_files: game files for evaluation
     :param gpu_device: which GPU device to load, in a format of "/device:GPU:i"
     :return: eval_results, loaded_ckpt_step
@@ -46,7 +48,7 @@ def eval_agent(hp, model_dir, load_best, game_files, gpu_device=None):
     if load_best:  # load from best_weights for evaluation
         agent.eval()
     else:  # load from last_weights for dev test
-        agent.reset()
+        agent.reset(restore_from)
 
     requested_infos = agent.select_additional_infos()
     for game_no in range(len(game_files)):
@@ -127,13 +129,14 @@ class MultiGPUsEvalPlayer(Logging):
                 total_steps < self.prev_best_steps)
         return has_better_score or has_fewer_steps
 
-    def evaluate(self):
+    def evaluate(self, restore_from):
         pool = Pool(len(self.portion_files))
         self.debug("start evaluation ...")
         async_results = [
             pool.apply_async(
                 eval_agent,
-                (self.hp, self.model_dir, self.load_best, files, gpu_device))
+                (self.hp, self.model_dir, self.load_best, restore_from, files,
+                 gpu_device))
             for files, gpu_device in zip(self.portion_files, self.gpu_devices)]
         results = [res.get() for res in async_results]
         pool.close()
@@ -193,7 +196,7 @@ class NewModelHandler(FileSystemEventHandler):
         self.lock = Lock()
         self.watched_file = "checkpoint"
 
-    def run_eval_player(self):
+    def run_eval_player(self, restore_from=None):
         if self.eval_player is None:
             config_file = pjoin(self.model_dir, "hparams.json")
             hp = load_hparams_for_evaluation(config_file, self.cmd_args)
@@ -207,7 +210,10 @@ class NewModelHandler(FileSystemEventHandler):
             eprint("Give up evaluation since model is running.")
             return
         self.lock.acquire()
-        self.eval_player.evaluate()
+        try:
+            self.eval_player.evaluate(restore_from)
+        except Exception as e:
+            eprint("evaluation failed with {}\n{}".format(restore_from, e))
         self.lock.release()
 
     def is_ckpt_file(self, src_path):
@@ -229,8 +235,7 @@ class WatchDogEvalPlayer(Logging):
         super(WatchDogEvalPlayer, self).__init__()
 
     def start(self, cmd_args, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(
-            cmd_args, model_dir, game_files, n_gpus)
+        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
         watched_dir = pjoin(model_dir, "last_weights")
         if not os.path.exists(watched_dir):
             os.mkdir(watched_dir)
@@ -253,8 +258,7 @@ class LoopDogEvalPlayer(Logging):
         self.file_content = hash("")
 
     def start(self, cmd_args, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(
-            cmd_args, model_dir, game_files, n_gpus)
+        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
         watched_file = pjoin(model_dir, "last_weights", "checkpoint")
         self.debug("watch on {}".format(watched_file))
         try:
@@ -277,3 +281,19 @@ class LoopDogEvalPlayer(Logging):
                         watched_file, e))
         except KeyboardInterrupt:
             pass
+
+
+class FullDirEvalPlayer(Logging):
+    def __init__(self):
+        super(FullDirEvalPlayer, self).__init__()
+
+    def start(self, cmd_args, model_dir, game_files, n_gpus):
+        watched_files = pjoin(model_dir, "last_weights", "after-epoch-*.index")
+        files = glob.glob(watched_files)
+        if len(files) == 0:
+            return
+        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
+        for f in files:
+            restore_from = os.path.splitext(f)[0]
+            event_handler.run_eval_player(restore_from)
+

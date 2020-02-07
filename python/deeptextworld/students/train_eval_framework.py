@@ -1,11 +1,13 @@
 import os
-from os.path import join as pjoin
 from collections import namedtuple
+from os.path import join as pjoin
 
-from deeptextworld.hparams import load_hparams_for_training
-from deeptextworld.students.evaluation import LoopDogEvalPlayer
+from deeptextworld.hparams import load_hparams_for_training, \
+    load_hparams_for_evaluation
+from deeptextworld.students.evaluation import LoopDogEvalPlayer, \
+    MultiGPUsEvalPlayer, FullDirEvalPlayer
 from deeptextworld.students.utils import setup_train_log, setup_eval_log, \
-    load_and_split
+    load_and_split, load_game_files
 
 
 class Conventions(namedtuple(
@@ -53,5 +55,28 @@ class TrainEval(object):
 
         _, eval_games = load_and_split(game_path, f_games)
         eval_player = LoopDogEvalPlayer()
+        eval_player.start(
+            self.cmd_args, model_path, eval_games, n_gpus)
+
+    def eval(self, model_path, game_path, f_games, n_gpus=1):
+        self.cmd_args.set("model_dir", model_path)
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+        setup_eval_log(log_filename="/tmp/eval-logging.txt")
+        config_file = pjoin(model_path, "hparams.json")
+        hp = load_hparams_for_evaluation(config_file, self.cmd_args)
+        game_files = load_game_files(game_path, f_games)
+        eval_player = MultiGPUsEvalPlayer(
+            hp, model_path, game_files, n_gpus, load_best=False)
+        eval_player.evaluate(restore_from=None)
+
+    def full_eval(self, model_path, game_path, f_games, n_gpus=1):
+        self.cmd_args.set("model_dir", model_path)
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+        setup_eval_log(log_filename="/tmp/eval-logging.txt")
+
+        _, eval_games = load_and_split(game_path, f_games)
+        eval_player = FullDirEvalPlayer()
         eval_player.start(
             self.cmd_args, model_path, eval_games, n_gpus)
