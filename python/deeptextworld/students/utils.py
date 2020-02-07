@@ -49,7 +49,8 @@ def agg_results(eval_results, max_steps_per_episode=100):
         agg_nb_won = len(list(filter(lambda r: r[3], res)))
         total_won += agg_nb_won
         agg_per_game[game_name] = (
-            np.sum(agg_score), agg_max_score, agg_step, agg_nb_won)
+            np.sum(agg_score), agg_max_score * total_episodes,
+            agg_step, agg_nb_won)
         if total_scores_per_episode is None:
             total_scores_per_episode = np.zeros_like(agg_score)
         total_scores_per_episode += agg_score
