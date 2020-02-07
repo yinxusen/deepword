@@ -138,7 +138,16 @@ class MultiGPUsEvalPlayer(Logging):
                 (self.hp, self.model_dir, self.load_best, restore_from, files,
                  gpu_device))
             for files, gpu_device in zip(self.portion_files, self.gpu_devices)]
-        results = [res.get() for res in async_results]
+        results = []
+        for res in async_results:
+            try:
+                results.append(res.get())
+            except Exception as e:
+                self.error(
+                    "evaluation error with {}\n{}".format(restore_from, e))
+                pool.terminate()
+                self.debug("multi-process pool terminated.")
+                return
         pool.close()
         pool.join()
         self.debug("evaluation pool closed")
