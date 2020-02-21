@@ -38,6 +38,13 @@ class TrainEval(object):
         self.learner_clazz = learner_clazz
 
     def train(self, data_path, n_data, model_path):
+        """
+        Train an agent with supervised dataset
+        :param data_path:
+        :param n_data:
+        :param model_path:
+        :return:
+        """
         self.cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
@@ -48,6 +55,15 @@ class TrainEval(object):
         learner.train(n_epochs=1000)
 
     def dev_eval(self, model_path, game_path, f_games, n_gpus=1):
+        """
+        Use dev set to evaluate agent along with the training process
+        A dev set evaluator will run when a new model saved
+        :param model_path:
+        :param game_path:
+        :param f_games:
+        :param n_gpus:
+        :return:
+        """
         self.cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
@@ -59,6 +75,14 @@ class TrainEval(object):
             self.cmd_args, model_path, eval_games, n_gpus)
 
     def eval(self, model_path, game_path, f_games, n_gpus=1):
+        """
+        Evaluate with a test set once
+        :param model_path:
+        :param game_path:
+        :param f_games:
+        :param n_gpus:
+        :return:
+        """
         self.cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
@@ -71,6 +95,14 @@ class TrainEval(object):
         eval_player.evaluate(restore_from=None)
 
     def full_eval(self, model_path, game_path, f_games, n_gpus=1):
+        """
+        Evaluate all saved models in a directory with a test set
+        :param model_path:
+        :param game_path:
+        :param f_games:
+        :param n_gpus:
+        :return:
+        """
         self.cmd_args.set("model_dir", model_path)
         if not os.path.exists(model_path):
             os.mkdir(model_path)
