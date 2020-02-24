@@ -287,7 +287,6 @@ class Decoder(tf.keras.layers.Layer):
         :return:
         """
         seq_len = tf.shape(x)[1]
-        attention_logits = []
 
         x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
@@ -297,10 +296,12 @@ class Decoder(tf.keras.layers.Layer):
 
         x = self.dropout(x, training=training)
 
-        for i in range(self.num_layers):
+        # move first layer out of loop since we need attn_logits
+        x, attn_logits = self.dec_layers[0](
+            x, enc_output, training, look_ahead_mask, padding_mask)
+        for i in range(1, self.num_layers):
             x, attn_logits = self.dec_layers[i](
                 x, enc_output, training, look_ahead_mask, padding_mask)
-            attention_logits.append(attn_logits)
 
         """
         :param enc_inp: encoder input, batch_size * max_action_len
@@ -317,7 +318,6 @@ class Decoder(tf.keras.layers.Layer):
         gen_logits = self.final_layer(x)
         gen_logits = gen_logits - tf.reduce_logsumexp(gen_logits, axis=-1)
 
-        attn_logits = attention_logits[-1]
         attn_weights = tf.nn.softmax(attn_logits)
         batch_size = tf.shape(attn_logits)[0]
         dec_t = tf.shape(attn_logits)[1]
@@ -340,9 +340,7 @@ class Decoder(tf.keras.layers.Layer):
             elems=(enc_x, attn_weights), dtype=tf.float32) + 1e-10)
         copy_logits = copy_logits - tf.reduce_logsumexp(copy_logits, axis=-1)
 
-        combined_features = tf.concat(
-            [x, before_dec, attn_logits], axis=-1).set_shape(
-            [batch_size, dec_t, 2 * self.d_model + attn_len])
+        combined_features = tf.concat([x, before_dec, attn_logits], axis=-1)
         logit_gen = self.logit_gen_layer(combined_features)
         # normalized logit of gen
         n_logit_gen = -tf.reduce_logsumexp([0, -logit_gen])
