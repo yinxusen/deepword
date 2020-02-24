@@ -70,7 +70,7 @@ def scaled_dot_product_attention(q, k, v, mask):
             to (..., seq_len_q, seq_len_k). Defaults to None.
 
     Returns:
-      output (a.k.a. context vectors), attention_weights
+      output (a.k.a. context vectors), scaled_attention_logits
     """
 
     matmul_qk = tf.matmul(q, k, transpose_b=True)  # (..., seq_len_q, seq_len_k)
@@ -88,7 +88,7 @@ def scaled_dot_product_attention(q, k, v, mask):
     attention_weights = tf.nn.softmax(
         scaled_attention_logits, axis=-1)  # (..., seq_len_q, seq_len_k)
     output = tf.matmul(attention_weights, v)  # (..., seq_len_q, depth_v)
-    return output, attention_weights
+    return output, scaled_attention_logits
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
@@ -125,13 +125,13 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         k = self.split_heads(k, batch_size)  # (batch_size, num_heads, seq_len_k, depth)
         v = self.split_heads(v, batch_size)  # (batch_size, num_heads, seq_len_v, depth)
 
-        # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
-        # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
-        scaled_attention, attention_weights = scaled_dot_product_attention(
-            q, k, v, mask)
+        # (batch_size, num_heads, seq_len_q, depth)
+        # (batch_size, num_heads, seq_len_q, seq_len_k)
+        (scaled_attention, scaled_attention_logits
+         ) = scaled_dot_product_attention(q, k, v, mask)
+
         # (batch_size, seq_len_q, seq_len_k)
-        attention_weights = tf.nn.softmax(
-            tf.reduce_sum(attention_weights, axis=1))
+        attn_logits = tf.reduce_sum(scaled_attention_logits, axis=1)
 
         scaled_attention = tf.transpose(
             scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
@@ -141,7 +141,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
         output = self.dense(concat_attention)  # (batch_size, seq_len_q, d_model)
 
-        return output, attention_weights
+        return output, attn_logits
 
 
 def point_wise_feed_forward_network(d_model, dff):
@@ -195,12 +195,13 @@ class DecoderLayer(tf.keras.layers.Layer):
     def call(self, x, enc_output, training, look_ahead_mask, padding_mask):
         # enc_output.shape == (batch_size, input_seq_len, d_model)
 
-        attn1, attn_weights_block1 = self.mha1(
-            x, x, x, look_ahead_mask)  # (batch_size, target_seq_len, d_model)
+        attn1, _ = self.mha1(x, x, x, look_ahead_mask)  # (batch_size, target_seq_len, d_model)
         attn1 = self.dropout1(attn1, training=training)
         out1 = self.layernorm1(attn1 + x)
 
-        attn2, attn_weights_block2 = self.mha2(
+        # attention weights from decoder output to encoder outputs
+        # attn_logits: (batch_size, target_seq_len, enc_output_seq_len)
+        attn2, attn_logits = self.mha2(
             enc_output, enc_output, out1, padding_mask)  # (batch_size, target_seq_len, d_model)
         attn2 = self.dropout2(attn2, training=training)
         out2 = self.layernorm2(attn2 + out1)  # (batch_size, target_seq_len, d_model)
@@ -209,7 +210,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         ffn_output = self.dropout3(ffn_output, training=training)
         out3 = self.layernorm3(ffn_output + out2)  # (batch_size, target_seq_len, d_model)
 
-        return out3, attn_weights_block2
+        return out3, attn_logits
 
 
 class Encoder(tf.keras.layers.Layer):
@@ -263,19 +264,30 @@ class Decoder(tf.keras.layers.Layer):
         self.embedding = tf.keras.layers.Embedding(tgt_vocab_size, d_model)
         self.pos_encoding = positional_encoding(tgt_vocab_size, d_model)
 
-        self.dec_layers = [DecoderLayer(d_model, num_heads, dff, rate)
-                           for _ in range(num_layers)]
+        self.dec_layers = [
+            DecoderLayer(d_model, num_heads, dff, rate)
+            for _ in range(num_layers)]
         self.dropout = tf.keras.layers.Dropout(rate)
-        self.p_gen_dense = tf.keras.layers.Dense(
-            units=1, use_bias=True, activation=tf.sigmoid)
+        self.logit_gen_layer = tf.keras.layers.Dense(units=1, use_bias=True)
         self.final_layer = tf.keras.layers.Dense(
             tgt_vocab_size, kernel_regularizer=tf.keras.regularizers.l2(0.01))
 
     def call(
             self, x, enc_x, enc_output, training,
             look_ahead_mask, padding_mask, with_pointer=False):
+        """
+        decode one token
+        :param x: decoder input
+        :param enc_x: encoder input
+        :param enc_output: encoder encoded result
+        :param training:
+        :param look_ahead_mask:
+        :param padding_mask:
+        :param with_pointer:
+        :return:
+        """
         seq_len = tf.shape(x)[1]
-        attention_weights = []
+        attention_logits = []
 
         x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
@@ -286,9 +298,9 @@ class Decoder(tf.keras.layers.Layer):
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers):
-            x, vanilla_attn = self.dec_layers[i](
+            x, attn_logits = self.dec_layers[i](
                 x, enc_output, training, look_ahead_mask, padding_mask)
-            attention_weights.append(vanilla_attn)
+            attention_logits.append(attn_logits)
 
         """
         :param enc_inp: encoder input, batch_size * max_action_len
@@ -303,12 +315,13 @@ class Decoder(tf.keras.layers.Layer):
         :return:
         """
         gen_logits = self.final_layer(x)
-        gen_dist = tf.nn.softmax(gen_logits)
+        gen_logits = gen_logits - tf.reduce_logsumexp(gen_logits, axis=-1)
 
-        vanilla_attention = attention_weights[-1]
-        batch_size = tf.shape(vanilla_attention)[0]
-        dec_t = tf.shape(vanilla_attention)[1]
-        attn_len = tf.shape(vanilla_attention)[2]
+        attn_logits = attention_logits[-1]
+        attn_weights = tf.nn.softmax(attn_logits)
+        batch_size = tf.shape(attn_logits)[0]
+        dec_t = tf.shape(attn_logits)[1]
+        attn_len = tf.shape(attn_logits)[2]
 
         dec = tf.range(0, limit=dec_t)  # [dec]
         dec = tf.expand_dims(dec, axis=-1)  # [dec, 1]
@@ -318,25 +331,29 @@ class Decoder(tf.keras.layers.Layer):
 
         enc_x = tf.expand_dims(enc_x, axis=1)  # [batch_size, 1, atten_len]
         enc_x = tf.tile(enc_x, [1, dec_t, 1])  # [batch_size, dec, atten_len]
-        enc_x = tf.stack([dec, enc_x], axis=3)
+        enc_x = tf.stack([dec, enc_x], axis=3)  # [batch_size, dec, atten_len, 2]
 
-        copy_dist = tf.map_fn(
+        # [batch_size, dec, tgt_vocab_size]
+        copy_logits = tf.log(tf.map_fn(
             fn=lambda y: tf.scatter_nd(
                 y[0], y[1], [dec_t, self.tgt_vocab_size]),
-            elems=(enc_x, vanilla_attention), dtype=tf.float32)
+            elems=(enc_x, attn_weights), dtype=tf.float32) + 1e-10)
+        copy_logits = copy_logits - tf.reduce_logsumexp(copy_logits, axis=-1)
 
-        context_vectors = tf.matmul(vanilla_attention, enc_output)
         combined_features = tf.concat(
-            [x, before_dec, context_vectors], axis=-1)
-        p_gen = self.p_gen_dense(combined_features)
+            [x, before_dec, attn_logits], axis=-1)
+        logit_gen = self.logit_gen_layer(combined_features)
+        # normalized logit of gen
+        n_logit_gen = -tf.reduce_logsumexp([0, -logit_gen])
+        n_logit_copy = -logit_gen + n_logit_gen
 
         if with_pointer:
-            total_dist = p_gen * gen_dist + (1 - p_gen) * copy_dist
+            total_logits = tf.reduce_logsumexp(
+                [n_logit_gen + gen_logits, n_logit_copy + copy_logits])
         else:
-            total_dist = gen_dist
+            total_logits = gen_logits
 
-        total_logits = tf.log(total_dist)
-        return total_logits, p_gen, gen_dist, copy_dist
+        return total_logits, tf.exp(n_logit_gen), gen_logits, copy_logits
 
 
 class Transformer(tf.keras.Model):
@@ -355,10 +372,10 @@ class Transformer(tf.keras.Model):
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(inp, None, training, enc_padding_mask)
         look_ahead_mask = create_decode_masks(tar)
-        final_output, p_gen, gen_dist, copy_dist = self.decoder(
+        final_output, p_gen, gen_logits, copy_logits = self.decoder(
             tar, inp, enc_output, training, look_ahead_mask,
             dec_padding_mask, with_pointer=True)
-        return final_output, p_gen, gen_dist, copy_dist
+        return final_output, p_gen, gen_logits, copy_logits
 
     @classmethod
     def categorical_without_replacement(cls, logits, k):
@@ -445,7 +462,7 @@ class Transformer(tf.keras.Model):
         p_gen = []
         for i in range(1, max_tar_len+1):
             combined_mask = create_decode_masks(inc_tar)
-            final_prob, p_gen_latest, gen_dist, copy_dist = self.decoder(
+            final_prob, p_gen_latest, _, _ = self.decoder(
                 inc_tar, inp, enc_output, training, combined_mask,
                 dec_padding_mask, with_pointer=True)
             masking = tf.map_fn(

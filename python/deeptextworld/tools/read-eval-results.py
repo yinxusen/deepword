@@ -6,11 +6,11 @@ import numpy as np
 from deeptextworld.stats import mean_confidence_interval
 
 
-def summary_from_keys(keys, j_result):
+def summary_from_keys(keys, eval_results):
     total_steps, total_max_scores, total_win = 0, 0, 0
     total_scores = np.zeros(10, dtype=np.float)
     for game_name in keys:
-        game_res = j_result["games"][game_name]
+        game_res = eval_results[game_name]
         max_scores = game_res["max_scores"]
         earned_scores = np.asarray(list(map(lambda x: x["score"], game_res["runs"])))
         used_steps = sum(map(lambda x: x["steps"], game_res["runs"]))
@@ -30,11 +30,23 @@ def summary_from_keys(keys, j_result):
             total_win * 1. / (len(keys) * 10))
 
 
-def main(f_result):
+def merge_eval_results(j_res1, j_res2):
+    eval_res = dict()
+    eval_res.update(j_res1['games'])
+    eval_res.update(j_res2['games'])
+    return eval_res
+
+
+def main(f_result, f_result2):
     with open(f_result, "r") as f:
         j_result = json.load(f)
 
-    all_keys = list(j_result["games"].keys())
+    with open(f_result2, 'r') as f:
+        j_result2 = json.load(f)
+
+    eval_results = merge_eval_results(j_result, j_result2)
+
+    all_keys = list(eval_results.keys())
 
     k_tier1 = list(filter(lambda k: "go" not in k and "recipe1" in k, all_keys))
     k_tier2 = list(filter(lambda k: "go" not in k and "recipe2" in k, all_keys))
@@ -70,9 +82,10 @@ def main(f_result):
                        "w/o drop", "w/ drop"]
     for nn, kk in zip(all_tiers_names, all_tiers_keys):
         res = ",".join(
-            map(lambda x: "{:.2f}".format(x), summary_from_keys(kk, j_result)))
+            map(lambda x: "{:.2f}".format(x),
+                summary_from_keys(kk, eval_results)))
         print("{:>15}:  {}".format(nn, res))
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2])

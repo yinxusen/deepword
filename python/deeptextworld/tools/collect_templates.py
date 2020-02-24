@@ -70,7 +70,7 @@ def main(game_files):
         master_wo_logo = remove_logo(obs[0]).replace("\n", " ")
         # print(master_wo_logo)
         # total_ingredients.update(BaseAgent.get_theme_words(infos["extra.recipe"][0]))
-        print("process: ", game)
+        # print("process: ", game)
         total_score += infos["max_score"][0]
             # print(ingredient)
         # # print("max score is {}".format(infos["max_score"][0]))
@@ -144,11 +144,19 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         f_games = sys.argv[2]
         game_files = load_game_files(game_dir, f_games)
-        games = split_train_dev(game_files)
-        if games is None:
-            exit(-1)
-        train_games, dev_games = games
-        game_files = train_games
     else:
         game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+
+    k_tier1 = list(filter(lambda k: "go" not in k and "recipe1" in k, game_files))
+    k_tier2 = list(filter(lambda k: "go" not in k and "recipe2" in k, game_files))
+    k_tier3 = list(filter(lambda k: "go" not in k and "recipe3" in k, game_files))
+    k_tier4 = list(filter(lambda k: "go6" in k, game_files))
+    k_tier5 = list(filter(lambda k: "go9" in k, game_files))
+    k_tier6 = list(filter(lambda k: "go12" in k, game_files))
+    main(k_tier1)
+    main(k_tier2)
+    main(k_tier3)
+    main(k_tier4)
+    main(k_tier5)
+    main(k_tier6)
     main(game_files)

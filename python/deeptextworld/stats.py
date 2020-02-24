@@ -1,5 +1,5 @@
 import numpy as np
-import scipy
+from scipy import stats
 
 
 def mean_confidence_interval(data, confidence=0.95):
@@ -12,8 +12,8 @@ def mean_confidence_interval(data, confidence=0.95):
     """
     a = 1.0 * np.array(data)
     n = len(a)
-    m, se = np.mean(a), scipy.stats.sem(a)
-    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    m, se = np.mean(a), stats.sem(a)
+    h = se * stats.t.ppf((1 + confidence) / 2., n-1)
     return m, h
 
 
