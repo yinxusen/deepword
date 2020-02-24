@@ -293,7 +293,7 @@ class Decoder(tf.keras.layers.Layer):
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
 
-        before_dec = x
+        raw_x = x
 
         x = self.dropout(x, training=training)
 
@@ -315,7 +315,8 @@ class Decoder(tf.keras.layers.Layer):
         :return:
         """
         gen_logits = self.final_layer(x)
-        gen_logits = gen_logits - tf.reduce_logsumexp(gen_logits, axis=-1)
+        gen_logits = gen_logits - tf.reduce_logsumexp(
+            gen_logits, axis=-1, keepdims=True)
 
         attn_logits = attention_logits[-1]
         attn_weights = tf.nn.softmax(attn_logits)
@@ -338,19 +339,28 @@ class Decoder(tf.keras.layers.Layer):
             fn=lambda y: tf.scatter_nd(
                 y[0], y[1], [dec_t, self.tgt_vocab_size]),
             elems=(enc_x, attn_weights), dtype=tf.float32) + 1e-10)
-        copy_logits = copy_logits - tf.reduce_logsumexp(copy_logits, axis=-1)
+        copy_logits = copy_logits - tf.reduce_logsumexp(
+            copy_logits, axis=-1, keepdims=True)
 
-        combined_features = tf.concat(
-            [x, before_dec, attn_logits], axis=-1).set_shape(
-            [None, None, 2 * self.d_model + attn_len])
+        # the combined features is different with LSTM-PGN
+        # LSTM-PGN uses three features, decoder input, decoder state, and
+        # context vectors. but for transformer, the decoder state and context
+        # vectors are highly correlated, so we use one of them.
+        combined_features = tf.concat([x, raw_x], axis=-1)
+        # (batch_size, dec_t, 1)
         logit_gen = self.logit_gen_layer(combined_features)
         # normalized logit of gen
-        n_logit_gen = -tf.reduce_logsumexp([0, -logit_gen])
+        n_logit_gen = -tf.reduce_logsumexp(
+            tf.concat([tf.zeros_like(logit_gen), -logit_gen], axis=-1),
+            axis=-1, keepdims=True)
         n_logit_copy = -logit_gen + n_logit_gen
 
         if with_pointer:
             total_logits = tf.reduce_logsumexp(
-                [n_logit_gen + gen_logits, n_logit_copy + copy_logits])
+                tf.stack(
+                    [n_logit_gen + gen_logits, n_logit_copy + copy_logits],
+                    axis=-1),
+                axis=-1)
         else:
             total_logits = gen_logits
 
