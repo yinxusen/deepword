@@ -341,7 +341,8 @@ class Decoder(tf.keras.layers.Layer):
         copy_logits = copy_logits - tf.reduce_logsumexp(copy_logits, axis=-1)
 
         combined_features = tf.concat(
-            [x, before_dec, attn_logits], axis=-1)
+            [x, before_dec, attn_logits], axis=-1).set_shape(
+            [batch_size, dec_t, 2 * self.d_model + attn_len])
         logit_gen = self.logit_gen_layer(combined_features)
         # normalized logit of gen
         n_logit_gen = -tf.reduce_logsumexp([0, -logit_gen])
