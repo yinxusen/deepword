@@ -361,9 +361,6 @@ class GenPreTrainLearner(GenLearner):
 class BertLearner(StudentLearner):
     def train_impl(self, data, train_step):
         inp, inp_len, expected_q = data
-        print(inp)
-        print(inp_len)
-        print(expected_q)
         _, summaries = self.sess.run(
             [self.model.train_op, self.model.train_summary_op],
             feed_dict={
