@@ -198,7 +198,7 @@ class StudentLearner(object):
         return self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(sentence))
 
-    def prepare_trajectory(self, trajectory):
+    def prepare_trajectory(self, trajectory, max_allowed_size=None):
         """
         Convert a trajectory into indices to a specific length of hp.num_tokens.
 
@@ -207,15 +207,23 @@ class StudentLearner(object):
 
         :param trajectory:
           list of master-player pairs
+        :param max_allowed_size:
+          maximum length of trajectory, None means use hp.num_tokens
         :return:
+          indices: padded or trimmed indices
+          effective_size: length of indices without padding
         """
+        if max_allowed_size is None:
+            max_allowed_size = self.hp.num_tokens
+
         indices = flatten([self.str2idx(s) for s in trajectory])
-        if len(indices) > self.hp.num_tokens:
-            indices = indices[len(indices) - self.hp.num_tokens:]
+        effective_size = min(len(indices), max_allowed_size)
+        if len(indices) > max_allowed_size:
+            indices = indices[len(indices) - max_allowed_size:]
         else:
             indices = indices + [self.hp.padding_val_id] * (
-                    self.hp.num_tokens - len(indices))
-        return indices
+                    max_allowed_size - len(indices))
+        return indices, effective_size
 
 
 class DRRNLearner(StudentLearner):
@@ -243,8 +251,9 @@ class DRRNLearner(StudentLearner):
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
         states = tjs.fetch_batch_states(trajectory_id, state_id)
-        p_states = [self.prepare_trajectory(s) for s in states]
-        p_len = [len(state) for state in p_states]
+        states_n_lens = [self.prepare_trajectory(s) for s in states]
+        p_states = [x[0] for x in states_n_lens]
+        p_len = [x[1] for x in states_n_lens]
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         max_action_len = np.max(action_len)
@@ -286,8 +295,9 @@ class GenLearner(StudentLearner):
             expected_qs, BaseAgent.from_bytes(action_mask))
 
         states = tjs.fetch_batch_states(trajectory_id, state_id)
-        p_states = [self.prepare_trajectory(s) for s in states]
-        p_len = [len(state) for state in p_states]
+        states_n_lens = [self.prepare_trajectory(s) for s in states]
+        p_states = [x[0] for x in states_n_lens]
+        p_len = [x[1] for x in states_n_lens]
 
         action_len = np.asarray(
             [action_collector.get_action_len(gid)[mid]
@@ -322,8 +332,9 @@ class GenPreTrainLearner(GenLearner):
             action_mask_t))
 
         states = tjs.fetch_batch_states(trajectory_id, state_id)
-        p_states = [self.prepare_trajectory(s) for s in states]
-        p_len = [len(state) for state in p_states]
+        states_n_lens = [self.prepare_trajectory(s) for s in states]
+        p_states = [x[0] for x in states_n_lens]
+        p_len = [x[1] for x in states_n_lens]
 
         action_len = np.concatenate(
             [action_collector.get_action_len(gid)[mid]
@@ -346,3 +357,76 @@ class GenPreTrainLearner(GenLearner):
             repeated_p_states, repeated_p_len,
             actions_in, actions_out, action_len, expected_qs, b_weights)
 
+
+class BertLearner(StudentLearner):
+    def train_impl(self, data, train_step):
+        inp, inp_len, expected_q = data
+        print(inp)
+        print(inp_len)
+        print(expected_q)
+        _, summaries = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op],
+            feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_len,
+                self.model.expected_q_: expected_q})
+        self.sw.add_summary(summaries, train_step)
+        return
+
+    def create_bert_input(
+            self, action_matrix, action_len, trajectory, trajectory_len):
+        inp = np.concatenate([
+            trajectory[:trajectory_len],
+            np.asarray([self.hp.sep_val_id])])
+        inp = np.repeat(inp[None, :], len(action_matrix), axis=0)
+        inp = np.concatenate([inp, action_matrix], axis=-1)
+        n_rows, n_cols = inp.shape
+        inp = np.concatenate(
+            [inp, np.zeros([n_rows, self.hp.num_tokens - n_cols])], axis=-1)
+        inp_size = trajectory_len + 1 + action_len
+        return inp, inp_size
+
+    def prepare_data(self, b_memory, tjs, action_collector):
+        """
+        ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+         "action_mask", "next_action_mask", "q_actions")
+        """
+        trajectory_id = [m[0] for m in b_memory]
+        state_id = [m[1] for m in b_memory]
+        game_id = [m[2] for m in b_memory]
+        action_mask = [m[6] for m in b_memory]
+        expected_qs = [m[8] for m in b_memory]
+        action_mask_t = list(BaseAgent.from_bytes(action_mask))
+        # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
+        selected_mask_idx = list(map(
+            lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
+            action_mask_t))
+
+        # [trajectory] + [SEP] + [action] = final sentence for Bert
+        max_allowed_trajectory_size = (
+            self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
+        states = tjs.fetch_batch_states(trajectory_id, state_id)
+        states_n_lens = [self.prepare_trajectory(
+            s, max_allowed_trajectory_size) for s in states]
+        p_states = [x[0] for x in states_n_lens]
+        p_len = [x[1] for x in states_n_lens]
+
+        action_len = [
+            action_collector.get_action_len(gid)[mid]
+            for gid, mid in zip(game_id, selected_mask_idx)]
+        actions = [
+            action_collector.get_action_matrix(gid)[mid, :]
+            for gid, mid in zip(game_id, selected_mask_idx)]
+
+        inp_and_len = [
+            self.create_bert_input(am, al, tj, tj_len)
+            for am, al, tj, tj_len
+            in zip(actions, action_len, p_states, p_len)]
+
+        inp = np.concatenate([a[0] for a in inp_and_len], axis=0)
+        inp_len = np.concatenate([a[1] for a in inp_and_len], axis=0)
+        expected_q = np.concatenate(
+            [qs[mid] for qs, mid in zip(expected_qs, selected_mask_idx)],
+            axis=0)
+
+        return inp, inp_len, expected_q

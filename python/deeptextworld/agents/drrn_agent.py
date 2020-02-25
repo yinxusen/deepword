@@ -152,3 +152,78 @@ class DRRNAgent(BaseAgent):
 class BertDRRNAgent(DRRNAgent):
     def __init__(self, hp, model_dir):
         super(BertDRRNAgent, self).__init__(hp, model_dir)
+
+
+class BertAgent(BaseAgent):
+    """
+    The agent that explores commonsense ability of BERT models.
+    This agent combines each trajectory with all its actions together, separated
+    with [SEP] in the middle. Then feeds the sentence into BERT to get a score
+    from the [CLS] token.
+    refer to https://arxiv.org/pdf/1810.04805.pdf for fine-tuning and evaluation
+    """
+    def __init__(self, hp, model_dir):
+        super(BertAgent, self).__init__(hp, model_dir)
+
+    def get_an_eps_action(self, action_mask):
+        """
+        get either an random action index with action string
+        or the best predicted action index with action string.
+        :param action_mask:
+        """
+        action_mask = self.from_bytes([action_mask])[0]
+        if np.random.random() < self.eps:
+            action_idx, action = get_random_1Daction(
+                self.actor.actions, action_mask)
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action)
+        else:
+            valid_index = np.where(action_mask == 1)
+            action_matrix = self.actor.action_matrix[valid_index]
+            action_len = self.actor.action_len[valid_index]
+            actions = self.actor.actions[valid_index]
+            indexed_state_t, lens_t = self.tjs.fetch_last_state()
+            inp, inp_size = self.create_bert_input(
+                action_matrix, action_len, indexed_state_t, lens_t)
+            q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_size,
+            })
+
+            action_idx = np.argmax(q_actions_t)
+            action = actions[action_idx]
+            true_action_idx = valid_index[action_idx]
+
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE_NN, action_idx=true_action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action)
+        return action_desc
+
+    def create_bert_input(
+            self, action_matrix, action_len, trajectory, trajectory_len):
+        inp = np.concatenate([
+            trajectory[:trajectory_len],
+            np.asarray([self.hp.sep_val_id])])
+        inp = np.tile(inp, len(action_matrix))
+        inp = np.concatenate([inp, action_matrix], axis=-1)
+        inp = np.pad(inp, self.hp.num_tokens - len(inp))
+        inp_size = trajectory_len + 1 + action_len
+        return inp, inp_size
+
+    def create_model_instance(self, device):
+        model_creator = getattr(drrn_model, self.hp.model_creator)
+        model = drrn_model.create_train_model(model_creator, self.hp)
+        return model
+
+    def create_eval_model_instance(self, device):
+        model_creator = getattr(drrn_model, self.hp.model_creator)
+        model = drrn_model.create_eval_model(model_creator, self.hp)
+        return model
+
+    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
+        raise NotImplementedError()

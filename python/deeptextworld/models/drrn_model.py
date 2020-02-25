@@ -330,6 +330,100 @@ class BertEncoderDRRN(BaseDQN):
         return loss, train_op, abs_loss
 
 
+class BertCommonsenseModel(BaseDQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode,
+           has paddings, [CLS], and [SEP] prepared
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(BertCommonsenseModel, self).__init__(hp, src_embeddings, is_infer)
+        self.num_tokens = hp.num_tokens
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.int32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None])
+        }
+        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(
+            self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(
+            self.bert_init_ckpt_dir)
+
+    def get_q_actions(self):
+        src = self.inputs["src"]
+        src_len = self.inputs["src_len"]
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=self.num_tokens, dtype=tf.int32)
+
+        bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+        bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
+
+        with tf.variable_scope("bert-state-encoder"):
+            bert_model = modeling.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=src, input_mask=src_masks)
+            q_actions = tf.layers.dense(
+                bert_model.pooled_output, units=1, use_bias=True)[:, 0]
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
+
+        return q_actions
+
+    def get_train_op(self, q_actions):
+        losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return create_train_bert_commonsense_model(cls, hp, device_placement)
+
+
+class TrainBertCommonsenseModel(
+    collections.namedtuple(
+        "TrainBertCommonsenseModel",
+        ("graph", "model", "q_actions",
+         "src_", "src_len_", "expected_q_",
+         'train_op', 'loss', 'train_summary_op', 'initializer'))):
+    pass
+
+
+def create_train_bert_commonsense_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op = model.get_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
+    return TrainBertCommonsenseModel(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
+        train_op=train_op,
+        expected_q_=inputs["expected_q"], loss=loss,
+        train_summary_op=train_summary_op,
+        initializer=initializer)
+
+
 class BertCNNEncoderDRRN(CNNEncoderDQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """

@@ -7,52 +7,17 @@ from shutil import copyfile
 import tensorflow as tf
 
 
-def find_default_model_hparams(model_creator=''):
-    if model_creator == 'LSTMEncoderDQN':
-        model_hparams = default_hparams_LSTMEncoderDQN()
-    elif model_creator == 'LSTMEncoderDecoderDQN':
-        model_hparams = default_hparams_LSTMEncoderDecoderDQN()
-    elif model_creator == 'CNNEncoderDQN':
-        model_hparams = default_hparams_CNNEncoderDQN()
-    elif model_creator == 'MultiChannelCNNEncoderDQN':
-        model_hparams = default_hparams_MultiChannelCNNEncoderDQN()
-    elif model_creator == 'CNNEncoderDecoderDQN':
-        model_hparams = default_hparams_CNNEncoderDecoderDQN()
-    elif model_creator == 'CNNEDMultiLayerDQN':
-        model_hparams = default_hparams_CNNEDMultiLayerDQN()
-    elif model_creator == 'CNNEncoderMultiLayerDQN':
-        model_hparams = default_hparams_CNNEncoderMultiLayerDQN()
-    elif model_creator == 'CNNEncoderDRRN':
-        model_hparams = default_hparams_CNNEncoderDRRN()
-    elif model_creator == 'CNNAttnEncoderDRRN':
-        model_hparams = default_hparams_CNNAttnEncoderDRRN()
-    elif model_creator == "AttnEncoderDRRN":
-        model_hparams = default_hparams_AttnEncoderDRRN()
-    elif model_creator == 'BertCNNEncoderDRRN':
-        model_hparams = default_hparams_BertCNNEncoderDRRN()
-    elif model_creator == 'BertEncoderDRRN':
-        model_hparams = default_hparams_BertEncoderDRRN()
-    elif model_creator == "CNNEncoderDSQN":
-        model_hparams = default_hparams_CNNEncoderDSQN()
-    elif model_creator == "AttnEncoderDSQN":
-        model_hparams = default_hparams_AttnEncoderDSQN()
-    elif model_creator == "Attn2EncoderDSQN":
-        model_hparams = default_hparams_Attn2EncoderDSQN()
-    elif model_creator == "Attn2LSTMEncoderDSQN":
-        model_hparams = default_hparams_Attn2LSTMEncoderDSQN()
-    elif model_creator == "BertAttnEncoderDSQN":
-        model_hparams = default_hparams_BertAttnEncoderDSQN()
-    elif model_creator == "BertLSTMEncoderDSQN":
-        model_hparams = default_hparams_BertLSTMEncoderDSQN()
-    elif model_creator == "AttnEncoderDecoderDQN":
-        model_hparams = default_hparams_AttnEncoderDecoderDQN()
-    else:
-        raise ValueError('unknown model creator: {}'.format(model_creator))
+def get_model_hparams(model_creator):
+    try:
+        model_hparams = HPARAMS[model_creator]
+    except Exception as e:
+        raise ValueError(
+            'unknown model creator: {}\n{}'.format(model_creator, e))
     return model_hparams
 
 
-def default_hparams_agent():
-    return tf.contrib.training.HParams(
+HPARAMS = {
+    "default": tf.contrib.training.HParams(
         model_dir='',
         data_dir='',
         vocab_file='',
@@ -102,12 +67,8 @@ def default_hparams_agent():
         pad_eos=False,
         use_glove_emb=False,
         glove_emb_path="",
-        glove_trainable=False
-    )
-
-
-def default_hparams_LSTMEncoderDQN():
-    return tf.contrib.training.HParams(
+        glove_trainable=False),
+    "LSTMEncoderDQN": tf.contrib.training.HParams(
         agent_clazz='Agent',
         tjs_creator='VarSizeTrajectory',
         batch_size=32,
@@ -117,12 +78,8 @@ def default_hparams_LSTMEncoderDQN():
         embedding_size=64,
         learning_rate=1e-5,
         num_turns=21,
-        num_tokens=1000,
-    )
-
-
-def default_hparams_LSTMEncoderDecoderDQN():
-    return tf.contrib.training.HParams(
+        num_tokens=1000),
+    "LSTMEncoderDecoderDQN": tf.contrib.training.HParams(
         agent_clazz='GenAgentFromAction',
         tjs_creator='VarSizeTrajectory',
         batch_size=32,
@@ -133,12 +90,8 @@ def default_hparams_LSTMEncoderDecoderDQN():
         learning_rate=1e-5,
         num_turns=21,
         num_tokens=1000,
-        max_action_len=6
-    )
-
-
-def default_hparams_CNNEncoderDQN():
-    return tf.contrib.training.HParams(
+        max_action_len=6),
+    "CNNEncoderDQN": tf.contrib.training.HParams(
         agent_clazz='Agent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -147,12 +100,8 @@ def default_hparams_CNNEncoderDQN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
-    )
-
-
-def default_hparams_CNNEncoderDecoderDQN():
-    return tf.contrib.training.HParams(
+        num_conv_filters=32),
+    "CNNEncoderDecoderDQN": tf.contrib.training.HParams(
         agent_clazz='GenAgentFromAction',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -162,12 +111,8 @@ def default_hparams_CNNEncoderDecoderDQN():
         num_turns=21,
         num_tokens=1000,
         num_conv_filters=32,
-        max_action_len=6
-    )
-
-
-def default_hparams_CNNEncoderMultiLayerDQN():
-    return tf.contrib.training.HParams(
+        max_action_len=6),
+    "CNNEncoderMultiLayerDQN": tf.contrib.training.HParams(
         agent_clazz='Agent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -177,12 +122,8 @@ def default_hparams_CNNEncoderMultiLayerDQN():
         num_turns=21,
         num_tokens=1000,
         max_action_len=6,
-        num_layers=4
-    )
-
-
-def default_hparams_CNNEDMultiLayerDQN():
-    return tf.contrib.training.HParams(
+        num_layers=4),
+    "CNNEDMultiLayerDQN": tf.contrib.training.HParams(
         agent_clazz='GenAgentFromAction',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -192,12 +133,8 @@ def default_hparams_CNNEDMultiLayerDQN():
         num_turns=21,
         num_tokens=1000,
         max_action_len=6,
-        num_layers=4
-    )
-
-
-def default_hparams_MultiChannelCNNEncoderDQN():
-    return tf.contrib.training.HParams(
+        num_layers=4),
+    "MultiChannelCNNEncoderDQN": tf.contrib.training.HParams(
         agent_clazz='Agent',
         tjs_creator='MultiChannelTrajectory',
         batch_size=32,
@@ -206,12 +143,8 @@ def default_hparams_MultiChannelCNNEncoderDQN():
         learning_rate=1e-5,
         num_turns=21,
         num_tokens=300,
-        num_conv_filters=32
-    )
-
-
-def default_hparams_CNNEncoderDRRN():
-    return tf.contrib.training.HParams(
+        num_conv_filters=32),
+    "CNNEncoderDRRN": tf.contrib.training.HParams(
         agent_clazz='DRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -220,12 +153,8 @@ def default_hparams_CNNEncoderDRRN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
-    )
-
-
-def default_hparams_AttnEncoderDRRN():
-    return tf.contrib.training.HParams(
+        num_conv_filters=32),
+    "AttnEncoderDRRN": tf.contrib.training.HParams(
         agent_clazz='DRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -234,12 +163,8 @@ def default_hparams_AttnEncoderDRRN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
-    )
-
-
-def default_hparams_CNNAttnEncoderDRRN():
-    return tf.contrib.training.HParams(
+        num_conv_filters=32),
+    "CNNAttnEncoderDRRN": tf.contrib.training.HParams(
         agent_clazz='DRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -248,12 +173,8 @@ def default_hparams_CNNAttnEncoderDRRN():
         learning_rate=1e-5,
         num_turns=11,
         num_tokens=1000,
-        num_conv_filters=32
-    )
-
-
-def default_hparams_BertCNNEncoderDRRN():
-    return tf.contrib.training.HParams(
+        num_conv_filters=32),
+    "BertCNNEncoderDRRN": tf.contrib.training.HParams(
         agent_clazz='BertDRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -270,12 +191,8 @@ def default_hparams_BertCNNEncoderDRRN():
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        bert_ckpt_dir=""
-    )
-
-
-def default_hparams_BertEncoderDRRN():
-    return tf.contrib.training.HParams(
+        bert_ckpt_dir=""),
+    "BertEncoderDRRN": tf.contrib.training.HParams(
         agent_clazz='BertDRRNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -291,12 +208,8 @@ def default_hparams_BertEncoderDRRN():
         sep_val_id=0,
         mask_val="[MASK]",
         mask_val_id=0,
-        bert_ckpt_dir="",
-    )
-
-
-def default_hparams_CNNEncoderDSQN():
-    return tf.contrib.training.HParams(
+        bert_ckpt_dir=""),
+    "CNNEncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='DSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -306,12 +219,8 @@ def default_hparams_CNNEncoderDSQN():
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32,
-        snn_train_epochs=1000
-    )
-
-
-def default_hparams_AttnEncoderDSQN():
-    return tf.contrib.training.HParams(
+        snn_train_epochs=1000),
+    "AttnEncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='DSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -321,12 +230,8 @@ def default_hparams_AttnEncoderDSQN():
         num_turns=6,
         num_tokens=500,
         num_conv_filters=32,
-        snn_train_epochs=1000
-    )
-
-
-def default_hparams_AttnEncoderDecoderDQN():
-    return tf.contrib.training.HParams(
+        snn_train_epochs=1000),
+    "AttnEncoderDecoderDQN": tf.contrib.training.HParams(
         agent_clazz='GenDQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -337,12 +242,8 @@ def default_hparams_AttnEncoderDecoderDQN():
         num_tokens=1000,
         max_action_len=10,
         tokenizer_type="NLTK",
-        pad_eos=True
-    )
-
-
-def default_hparams_Attn2EncoderDSQN():
-    return tf.contrib.training.HParams(
+        pad_eos=True),
+    "Attn2EncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='DSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -352,12 +253,8 @@ def default_hparams_Attn2EncoderDSQN():
         num_turns=6,
         num_tokens=500,
         num_conv_filters=32,
-        snn_train_epochs=1000
-    )
-
-
-def default_hparams_Attn2LSTMEncoderDSQN():
-    return tf.contrib.training.HParams(
+        snn_train_epochs=1000),
+    "Attn2LSTMEncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='DSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -367,12 +264,8 @@ def default_hparams_Attn2LSTMEncoderDSQN():
         num_turns=6,
         num_tokens=500,
         num_conv_filters=32,
-        snn_train_epochs=1000
-    )
-
-
-def default_hparams_BertAttnEncoderDSQN():
-    return tf.contrib.training.HParams(
+        snn_train_epochs=1000),
+    "BertAttnEncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='BertDSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -390,12 +283,8 @@ def default_hparams_BertAttnEncoderDSQN():
         mask_val="[MASK]",
         mask_val_id=0,
         bert_ckpt_dir="",
-        snn_train_epochs=1000
-    )
-
-
-def default_hparams_BertLSTMEncoderDSQN():
-    return tf.contrib.training.HParams(
+        snn_train_epochs=1000),
+    "BertLSTMEncoderDSQN": tf.contrib.training.HParams(
         agent_clazz='BertDSQNAgent',
         tjs_creator='SingleChannelTrajectory',
         batch_size=32,
@@ -413,8 +302,27 @@ def default_hparams_BertLSTMEncoderDSQN():
         mask_val="[MASK]",
         mask_val_id=0,
         bert_ckpt_dir="",
-        snn_train_epochs=1000
-    )
+        snn_train_epochs=1000),
+    "BertCommonsenseModel": tf.contrib.training.HParams(
+        agent_clazz='NertAgent',
+        tjs_creator='SingleChannelTrajectory',
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=511,
+        num_conv_filters=32,
+        bert_num_hidden_layers=1,
+        cls_val="[CLS]",
+        cls_val_id=0,
+        sep_val="[SEP]",
+        sep_val_id=0,
+        mask_val="[MASK]",
+        mask_val_id=0,
+        bert_ckpt_dir="",
+        snn_train_epochs=1000)
+}
 
 
 def output_hparams(hp):
@@ -470,8 +378,8 @@ def load_hparams_for_training(file_args=None, cmd_args=None):
     load hparams for training.
     priority(cmd_args) > priority(file_args)
     """
-    hp = default_hparams_agent()
-    model_hp = find_default_model_hparams(cmd_args.model_creator)
+    hp = get_model_hparams("default")
+    model_hp = get_model_hparams(cmd_args.model_creator)
     hp = update_hparams_from_hparams(hp, model_hp)
     if file_args is not None:
         hp = update_hparams_from_file(hp, file_args)
@@ -519,11 +427,11 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
     allowed_to_change = ['model_dir', 'eval_episode', 'game_episode_terminal_t']
     deps_to_change = [
         'data_dir', 'vocab_file', 'tgt_vocab_file', 'action_file']
-    hp = default_hparams_agent()
+    hp = get_model_hparams("default")
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
     hp = update_hparams_from_file(hp, pre_config_file)
-    model_hp = find_default_model_hparams(hp.model_creator)
+    model_hp = get_model_hparams(hp.model_creator)
     hp = update_hparams_from_hparams(hp, model_hp)
     # second load hp from file to change params back
     hp = update_hparams_from_file(hp, pre_config_file)
