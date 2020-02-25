@@ -165,6 +165,14 @@ class BertAgent(BaseAgent):
     def __init__(self, hp, model_dir):
         super(BertAgent, self).__init__(hp, model_dir)
 
+    def _init_impl(self, load_best=False, restore_from=None):
+        super(BertAgent, self)._init_impl(load_best, restore_from)
+        # for Bert commonsense model, we combine [trajectory], [SEP], [action]
+        # as a input sentence, so we need to subtract [SEP] and [action]
+        # from maximum allowed number of tokens.
+        self.tjs.num_tokens = (
+                self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
+
     def get_an_eps_action(self, action_mask):
         """
         get either an random action index with action string
@@ -181,10 +189,10 @@ class BertAgent(BaseAgent):
                 action_len=self.actor.action_len[action_idx],
                 action=action)
         else:
-            valid_index = np.where(action_mask == 1)
-            action_matrix = self.actor.action_matrix[valid_index]
-            action_len = self.actor.action_len[valid_index]
-            actions = self.actor.actions[valid_index]
+            mask_idx = np.where(action_mask == 1)[0]
+            action_matrix = self.actor.action_matrix[mask_idx, :]
+            action_len = self.actor.action_len[mask_idx]
+            actions = np.asarray(self.actor.actions)[mask_idx]
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             inp, inp_size = self.create_bert_input(
                 action_matrix, action_len, indexed_state_t, lens_t)
@@ -195,7 +203,7 @@ class BertAgent(BaseAgent):
 
             action_idx = np.argmax(q_actions_t)
             action = actions[action_idx]
-            true_action_idx = valid_index[action_idx]
+            true_action_idx = mask_idx[action_idx]
 
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_NN, action_idx=true_action_idx,
@@ -206,23 +214,34 @@ class BertAgent(BaseAgent):
 
     def create_bert_input(
             self, action_matrix, action_len, trajectory, trajectory_len):
+        """
+        Given one trajectory and its admissible actions, create a training
+        set of input for Bert.
+        :param action_matrix:
+        :param action_len:
+        :param trajectory:
+        :param trajectory_len:
+        :return:
+        """
         inp = np.concatenate([
             trajectory[:trajectory_len],
             np.asarray([self.hp.sep_val_id])])
-        inp = np.tile(inp, len(action_matrix))
+        inp = np.repeat(inp[None, :], len(action_matrix), axis=0)
         inp = np.concatenate([inp, action_matrix], axis=-1)
-        inp = np.pad(inp, self.hp.num_tokens - len(inp))
+        n_rows, n_cols = inp.shape
+        inp = np.concatenate(
+            [inp, np.zeros([n_rows, self.hp.num_tokens - n_cols])], axis=-1)
         inp_size = trajectory_len + 1 + action_len
         return inp, inp_size
 
     def create_model_instance(self, device):
         model_creator = getattr(drrn_model, self.hp.model_creator)
-        model = drrn_model.create_train_model(model_creator, self.hp)
+        model = model_creator.get_train_model(self.hp, device)
         return model
 
     def create_eval_model_instance(self, device):
         model_creator = getattr(drrn_model, self.hp.model_creator)
-        model = drrn_model.create_eval_model(model_creator, self.hp)
+        model = model_creator.get_eval_model(self.hp, device)
         return model
 
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):

@@ -372,6 +372,15 @@ class BertLearner(StudentLearner):
 
     def create_bert_input(
             self, action_matrix, action_len, trajectory, trajectory_len):
+        """
+        Given one trajectory and its admissible actions, create a training
+        set of input for Bert.
+        :param action_matrix:
+        :param action_len:
+        :param trajectory:
+        :param trajectory_len:
+        :return:
+        """
         inp = np.concatenate([
             trajectory[:trajectory_len],
             np.asarray([self.hp.sep_val_id])])

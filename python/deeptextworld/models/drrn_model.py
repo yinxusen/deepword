@@ -393,6 +393,18 @@ class BertCommonsenseModel(BaseDQN):
     def get_train_student_model(cls, hp, device_placement):
         return create_train_bert_commonsense_model(cls, hp, device_placement)
 
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return create_eval_bert_commonsense_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return cls.get_train_student_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return cls.get_eval_student_model(hp, device_placement)
+
 
 class TrainBertCommonsenseModel(
     collections.namedtuple(
@@ -400,6 +412,13 @@ class TrainBertCommonsenseModel(
         ("graph", "model", "q_actions",
          "src_", "src_len_", "expected_q_",
          'train_op', 'loss', 'train_summary_op', 'initializer'))):
+    pass
+
+
+class EvalBertCommonsenseModel(
+    collections.namedtuple(
+        "TrainBertCommonsenseModel",
+        ("graph", "model", "q_actions", "src_", "src_len_", 'initializer'))):
     pass
 
 
@@ -421,6 +440,21 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         train_op=train_op,
         expected_q_=inputs["expected_q"], loss=loss,
         train_summary_op=train_summary_op,
+        initializer=initializer)
+
+
+def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+    return EvalBertCommonsenseModel(
+        graph=graph, model=model, q_actions=q_actions,
+        src_=inputs["src"],
+        src_len_=inputs["src_len"],
         initializer=initializer)
 
 

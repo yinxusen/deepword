@@ -54,7 +54,7 @@ class TrainEval(object):
         learner = self.learner_clazz(hp, model_path, data_path, n_data)
         learner.train(n_epochs=1000)
 
-    def dev_eval(self, model_path, game_path, f_games, n_gpus=1):
+    def dev_eval(self, model_path, game_path, f_games=None, n_gpus=1):
         """
         Use dev set to evaluate agent along with the training process
         A dev set evaluator will run when a new model saved
@@ -74,7 +74,7 @@ class TrainEval(object):
         eval_player.start(
             self.cmd_args, model_path, eval_games, n_gpus)
 
-    def eval(self, model_path, game_path, f_games, n_gpus=1):
+    def eval(self, model_path, game_path, f_games=None, n_gpus=1):
         """
         Evaluate with a test set once
         :param model_path:
@@ -94,7 +94,7 @@ class TrainEval(object):
             hp, model_path, game_files, n_gpus, load_best=False)
         eval_player.evaluate(restore_from=None)
 
-    def full_eval(self, model_path, game_path, f_games, n_gpus=1):
+    def full_eval(self, model_path, game_path, f_games=None, n_gpus=1):
         """
         Evaluate all saved models in a directory with a test set
         :param model_path:
