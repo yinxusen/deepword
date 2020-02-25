@@ -180,19 +180,20 @@ class BertAgent(BaseAgent):
         :param action_mask:
         """
         action_mask = self.from_bytes([action_mask])[0]
+        mask_idx = np.where(action_mask == 1)[0]
+        action_matrix = self.actor.action_matrix[mask_idx, :]
+        action_len = self.actor.action_len[mask_idx]
+        actions = np.asarray(self.actor.actions)[mask_idx]
+
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
-                self.actor.actions, action_mask)
+            action_idx, action = get_random_1Daction(actions)
+            true_action_idx = mask_idx[action_idx]
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
-                token_idx=self.actor.action_matrix[action_idx],
-                action_len=self.actor.action_len[action_idx],
+                action_type=ACT_TYPE_RND_CHOOSE, action_idx=true_action_idx,
+                token_idx=action_matrix[action_idx],
+                action_len=action_len[action_idx],
                 action=action)
         else:
-            mask_idx = np.where(action_mask == 1)[0]
-            action_matrix = self.actor.action_matrix[mask_idx, :]
-            action_len = self.actor.action_len[mask_idx]
-            actions = np.asarray(self.actor.actions)[mask_idx]
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             inp, inp_size = self.create_bert_input(
                 action_matrix, action_len, indexed_state_t, lens_t)
@@ -207,8 +208,8 @@ class BertAgent(BaseAgent):
 
             action_desc = ActionDesc(
                 action_type=ACT_TYPE_NN, action_idx=true_action_idx,
-                token_idx=self.actor.action_matrix[action_idx],
-                action_len=self.actor.action_len[action_idx],
+                token_idx=action_matrix[action_idx],
+                action_len=action_len[action_idx],
                 action=action)
         return action_desc
 
