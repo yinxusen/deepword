@@ -436,7 +436,7 @@ class EvalBertCommonsenseModel(
 def create_train_bert_commonsense_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        gpu_list = ["/device:GPU0", "/device:GPU1"]
+        gpu_list = ["/device:GPU:0", "/device:GPU:1"]
         model = model_creator(gpu_list, hp)
         initializer = tf.global_variables_initializer
         inputs = model.inputs
