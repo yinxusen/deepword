@@ -171,7 +171,7 @@ class BertAgent(BaseAgent):
         # as a input sentence, so we need to subtract [SEP] and [action]
         # from maximum allowed number of tokens.
         self.tjs.num_tokens = (
-                self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
+            self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
 
     def get_an_eps_action(self, action_mask):
         """

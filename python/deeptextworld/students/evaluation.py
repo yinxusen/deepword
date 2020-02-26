@@ -4,6 +4,7 @@ import os
 import random
 import shutil
 import sys
+import traceback
 import time
 from collections import ChainMap
 from multiprocessing import Pool
@@ -21,7 +22,8 @@ from deeptextworld.students.utils import agg_results, agent_name2clazz
 from deeptextworld.utils import eprint
 
 
-def eval_agent(hp, model_dir, load_best, restore_from, game_files, gpu_device=None):
+def eval_agent(
+        hp, model_dir, load_best, restore_from, game_files, gpu_device=None):
     """
     Evaluate an agent with given games.
     For each game, we run nb_episodes, and max_episode_steps for on episode.
@@ -98,6 +100,7 @@ class MultiGPUsEvalPlayer(Logging):
         self.prev_best_steps = sys.maxsize
         self.model_dir = model_dir
         self.gpu_devices = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
+        self.game_files = game_files
         self.portion_files = self.split_game_files(game_files, n_gpus)
         self.load_best = load_best
 
@@ -129,28 +132,36 @@ class MultiGPUsEvalPlayer(Logging):
                 total_steps < self.prev_best_steps)
         return has_better_score or has_fewer_steps
 
-    def evaluate(self, restore_from):
-        pool = Pool(len(self.portion_files))
+    def evaluate(self, restore_from, debug=False):
         self.debug("start evaluation ...")
-        async_results = [
-            pool.apply_async(
-                eval_agent,
-                (self.hp, self.model_dir, self.load_best, restore_from, files,
-                 gpu_device))
-            for files, gpu_device in zip(self.portion_files, self.gpu_devices)]
         results = []
-        for res in async_results:
-            try:
-                results.append(res.get())
-            except Exception as e:
-                self.error(
-                    "evaluation error with {}\n{}".format(restore_from, e))
-                pool.terminate()
-                self.debug("multi-process pool terminated.")
-                return
-        pool.close()
-        pool.join()
-        self.debug("evaluation pool closed")
+        if debug:
+            res = eval_agent(
+               self.hp, self.model_dir, self.load_best, restore_from,
+               self.game_files, self.gpu_devices[0])
+            results.append(res)
+        else:
+            pool = Pool(len(self.portion_files))
+            async_results = [
+                pool.apply_async(
+                    eval_agent,
+                    (self.hp, self.model_dir, self.load_best, restore_from,
+                     files, gpu_device))
+                for files, gpu_device in zip(
+                    self.portion_files, self.gpu_devices)]
+            for res in async_results:
+                try:
+                    results.append(res.get())
+                except Exception as e:
+                    self.error(
+                        "evaluation error with {}\n{}".format(restore_from, e))
+                    traceback.print_tb(e.__traceback__)
+                    pool.terminate()
+                    self.debug("multi-process pool terminated.")
+                    return
+            pool.close()
+            pool.join()
+            self.debug("evaluation pool closed")
 
         loaded_steps = [res[1] for res in results]
         assert len(set(loaded_steps)) == 1, "load different versions of model"
