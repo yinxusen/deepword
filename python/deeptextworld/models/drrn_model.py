@@ -373,11 +373,13 @@ class BertCommonsenseModel(BaseDQN):
 
         with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
             pooled = []
-            for gpu in self.gpu_list:
+            new_src = tf.split(src, len(self.gpu_list))
+            new_src_masks = tf.split(src_masks, len(self.gpu_list))
+            for i, gpu in enumerate(self.gpu_list):
                 with tf.device(gpu):
                     bert_model = modeling.BertModel(
                         config=bert_config, is_training=(not self.is_infer),
-                        input_ids=src, input_mask=src_masks)
+                        input_ids=new_src[i], input_mask=new_src_masks[i])
                     pooled.append(bert_model.pooled_output)
             pooled = tf.concat(pooled, axis=0)
 
