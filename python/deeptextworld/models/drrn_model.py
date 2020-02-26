@@ -331,7 +331,7 @@ class BertEncoderDRRN(BaseDQN):
 
 
 class BertCommonsenseModel(BaseDQN):
-    def __init__(self, hp, src_embeddings=None, is_infer=False):
+    def __init__(self, gpu_list, hp, src_embeddings=None, is_infer=False):
         """
         inputs:
           src: source sentences to encode,
@@ -343,11 +343,13 @@ class BertCommonsenseModel(BaseDQN):
           actions_len: length of actions
           actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
                         some actions for a certain state.
+        :param gpus: available gpu list
         :param hp:
         :param src_embeddings:
         :param is_infer:
         """
         super(BertCommonsenseModel, self).__init__(hp, src_embeddings, is_infer)
+        self.gpu_list = gpu_list
         self.num_tokens = hp.num_tokens
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
@@ -369,12 +371,19 @@ class BertCommonsenseModel(BaseDQN):
         bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
         bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
-        with tf.variable_scope("bert-state-encoder"):
-            bert_model = modeling.BertModel(
-                config=bert_config, is_training=(not self.is_infer),
-                input_ids=src, input_mask=src_masks)
+        with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
+            pooled = []
+            for gpu in self.gpu_list:
+                with tf.device(gpu):
+                    bert_model = modeling.BertModel(
+                        config=bert_config, is_training=(not self.is_infer),
+                        input_ids=src, input_mask=src_masks)
+                    pooled.append(bert_model.pooled_output)
+            pooled = tf.concat(pooled, axis=0)
+
+        with tf.device(self.gpu_list[0]):
             q_actions = tf.layers.dense(
-                bert_model.pooled_output, units=1, use_bias=True)[:, 0]
+                pooled, units=1, use_bias=True)[:, 0]
 
         # initialize bert from checkpoint file
         tf.train.init_from_checkpoint(
@@ -425,14 +434,14 @@ class EvalBertCommonsenseModel(
 def create_train_bert_commonsense_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        with tf.device(device_placement):
-            model = model_creator(hp)
-            initializer = tf.global_variables_initializer
-            inputs = model.inputs
-            q_actions = model.get_q_actions()
-            loss, train_op = model.get_train_op(q_actions)
-            loss_summary = tf.summary.scalar("loss", loss)
-            train_summary_op = tf.summary.merge([loss_summary])
+        gpu_list = ["/device:GPU0", "/device:GPU1"]
+        model = model_creator(gpu_list, hp)
+        initializer = tf.global_variables_initializer
+        inputs = model.inputs
+        q_actions = model.get_q_actions()
+        loss, train_op = model.get_train_op(q_actions)
+        loss_summary = tf.summary.scalar("loss", loss)
+        train_summary_op = tf.summary.merge([loss_summary])
     return TrainBertCommonsenseModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
