@@ -458,10 +458,11 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
     gpu_list = [device_placement]
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(gpu_list, hp)
-        initializer = tf.global_variables_initializer
-        inputs = model.inputs
-        q_actions = model.get_q_actions()
+        with tf.device(device_placement):
+            model = model_creator(gpu_list, hp)
+            initializer = tf.global_variables_initializer
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
     return EvalBertCommonsenseModel(
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
