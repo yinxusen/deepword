@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from deeptextworld.models import drrn_model
@@ -197,10 +199,26 @@ class BertAgent(BaseAgent):
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
             inp, inp_size = self.create_bert_input(
                 action_matrix, action_len, indexed_state_t, lens_t)
-            q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
-                self.model.src_: inp,
-                self.model.src_len_: inp_size,
-            })
+            n_actions = inp.shape[0]
+            self.debug("number of actions: {}".format(n_actions))
+            allowed_batch_size = self.hp.batch_size
+            n_batches = int(math.ceil(n_actions * 1. / allowed_batch_size))
+            self.debug("compute q-values through {} batches".format(n_batches))
+            total_q_actions = []
+            for i in range(n_batches):
+                ss = i * allowed_batch_size
+                ee = min((i + 1) * allowed_batch_size, n_actions)
+                q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
+                    self.model.src_: inp[ss: ee],
+                    self.model.src_len_: inp_size[ss: ee],
+                })
+                total_q_actions.append(q_actions_t)
+
+            q_actions_t = np.concatenate(total_q_actions, axis=-1)
+            results = sorted(
+                zip(list(actions), list(q_actions_t)), key=lambda x: x[-1])
+            results = ["{}\t{}".format(a, q) for a, q in results]
+            self.debug("\n".join(results))
 
             action_idx = np.argmax(q_actions_t)
             action = actions[action_idx]
