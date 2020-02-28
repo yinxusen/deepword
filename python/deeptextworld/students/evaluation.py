@@ -4,8 +4,8 @@ import os
 import random
 import shutil
 import sys
-import traceback
 import time
+import traceback
 from collections import ChainMap
 from multiprocessing import Pool
 from os.path import join as pjoin
@@ -18,7 +18,8 @@ from watchdog.observers import Observer
 
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.log import Logging
-from deeptextworld.students.utils import agg_results, agent_name2clazz
+from deeptextworld.students.utils import agg_results, agent_name2clazz, \
+    scores_of_tiers
 from deeptextworld.utils import eprint
 
 
@@ -177,6 +178,8 @@ class MultiGPUsEvalPlayer(Logging):
             " steps: {:.2f}, n_won: {:.2f}".format(
                 loaded_steps[0], total_scores, confidence_intervals,
                 total_steps, n_won))
+        tiers2scores = scores_of_tiers(agg_res)
+        self.info("scores per tiers:\n{}".format(tiers2scores))
 
         if self.has_better_model(total_scores, total_steps):
             self.info(
