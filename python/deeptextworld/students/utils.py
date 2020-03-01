@@ -22,7 +22,7 @@ def agg_results(eval_results, max_steps_per_episode=100):
       dict(game_name, [eval_result1, evaluate_result2, ..., evaluate_resultM])
       and the number of eval_results are the same for all games.
       evaluate_result:
-        score, max_score, steps, has_won (bool), used_action_list
+        score, max_score, steps, won (bool), used_action_list
     :param max_steps_per_episode: i.e. M, default = 100
 
     :return:

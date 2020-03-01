@@ -4,11 +4,12 @@ from os import remove as prm
 import numpy as np
 from textworld import EnvInfos
 
+from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE, \
+    INFO_KEY
 from deeptextworld.models import dqn_model
-from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
-    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN, ACT_TYPE_GEN, ACT_TYPE_TBL
 from deeptextworld.models.dqn_func import get_best_2D_q
-from deeptextworld.models.dqn_func import get_random_1Daction, get_best_1Daction, \
+from deeptextworld.models.dqn_func import get_random_1Daction, \
+    get_best_1Daction, \
     get_best_1D_q
 from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.utils import ctime
@@ -17,6 +18,7 @@ from deeptextworld.utils import ctime
 class DQNAgent(BaseAgent):
     """
     """
+
     def __init__(self, hp, model_dir):
         super(DQNAgent, self).__init__(hp, model_dir)
 
@@ -28,7 +30,7 @@ class DQNAgent(BaseAgent):
             description=True,
             inventory=True,
             max_score=True,
-            has_won=True,
+            won=True,
             admissible_commands=True,
             extras=['recipe'])
 
@@ -43,7 +45,7 @@ class DQNAgent(BaseAgent):
             action_idx, action = get_random_1Daction(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action_type=ACT_TYPE.rnd, action_idx=action_idx,
                 action=action)
         else:
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
@@ -55,7 +57,8 @@ class DQNAgent(BaseAgent):
                 q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=action_idx, action=action)
+                action_type=ACT_TYPE.policy_drrn,
+                action_idx=action_idx, action=action)
         return action_desc
 
     def create_model_instance(self, device):
@@ -86,7 +89,7 @@ class DQNAgent(BaseAgent):
 
         action_mask_t1 = self.from_bytes(next_action_mask)
 
-        p_states, s_states, p_len, s_len =\
+        p_states, s_states, p_len, s_len = \
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
         t2 = ctime()
@@ -124,7 +127,7 @@ class DQNAgent(BaseAgent):
 
         self.info('loss: {}'.format(loss_eval))
         self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end-t1, t2_end-t2, t3_end-t3))
+            t1_end - t1, t2_end - t2, t3_end - t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)
 
 
@@ -204,7 +207,7 @@ class TabularDQNAgent(DQNAgent):
     def _jitter_go_condition(self, action_desc, admissible_go_actions):
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
-                action_desc.action_type == ACT_TYPE_TBL):
+                action_desc.action_type == ACT_TYPE.policy_tbl):
             return False
         else:
             if self.is_training:
@@ -249,10 +252,12 @@ class TabularDQNAgent(DQNAgent):
         # because the game terminal observation + inventory is the same with
         # its previous state
         if not dones[0]:
-            state_text = infos["description"][0] + "\n" + infos["inventory"][0]
+            state_text = (
+                infos[INFO_KEY.desc][0] + "\n" + infos[INFO_KEY.inventory][0])
         else:
-            state_text = ("terminal and win" if infos["has_won"]
-                          else "terminal and lose")
+            state_text = (
+                "terminal and win" if infos[INFO_KEY.won]
+                else "terminal and lose")
         self.stc.append(self.get_hash(state_text))
 
         return actions, all_actions, actions_mask, instant_reward
@@ -268,7 +273,7 @@ class TabularDQNAgent(DQNAgent):
             action_idx, action = get_random_1Daction(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action_type=ACT_TYPE.rnd, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -279,7 +284,7 @@ class TabularDQNAgent(DQNAgent):
                 q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_TBL, action_idx=action_idx,
+                action_type=ACT_TYPE.policy_tbl, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -303,7 +308,7 @@ class TabularDQNAgent(DQNAgent):
 
         action_mask_t1 = self.from_bytes(next_action_mask)
 
-        p_states, s_states, p_len, s_len =\
+        p_states, s_states, p_len, s_len = \
             self.stc.fetch_batch_states_pair(trajectory_id, state_id)
 
         t2 = ctime()
@@ -338,7 +343,7 @@ class TabularDQNAgent(DQNAgent):
         self.memo.batch_update(b_idx, abs_loss)
 
         self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end-t1, t2_end-t2, t3_end-t3))
+            t1_end - t1, t2_end - t2, t3_end - t3))
 
 
 class GenDQNAgent(DQNAgent):
@@ -353,9 +358,9 @@ class GenDQNAgent(DQNAgent):
             description=True,
             inventory=True,
             max_score=True,
-            has_won=True,
+            won=True,
             admissible_commands=True,
-            extras=['recipe'])
+            extras=["recipe", "walkthrough"])
 
     @classmethod
     def negative_response_reward(cls, master):
@@ -406,7 +411,7 @@ class GenDQNAgent(DQNAgent):
         top_action = res_summary[0]
 
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_GEN, action_idx=None,
+            action_type=ACT_TYPE.policy_gen, action_idx=None,
             token_idx=top_action[0], action_len=top_action[1],
             action=top_action[2])
 
@@ -415,16 +420,16 @@ class GenDQNAgent(DQNAgent):
                 [" ".join(
                     map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
                         zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
-                    for ac in res_summary])))
+                 for ac in res_summary])))
         return action_desc
 
-    def get_instant_reward(self, score, master, is_terminal, has_won):
+    def get_instant_reward(self, score, master, is_terminal, won):
         """
         increase instance reward 10 times to fit cross entropy loss trained
         model
         """
         ir = super(GenDQNAgent, self).get_instant_reward(
-            score, master, is_terminal, has_won)
+            score, master, is_terminal, won)
         return ir * 10
 
     def create_model_instance(self, device):
@@ -456,7 +461,7 @@ class GenDQNAgent(DQNAgent):
         is_terminal = [m[0].is_terminal for m in b_memory]
         at_id_wo_eos = np.asarray(at_id)
         at_id_wo_eos[
-            range(len(at_id)), np.asarray(action_len)-1] = 0
+            range(len(at_id)), np.asarray(action_len) - 1] = 0
         at_id_in = np.concatenate(
             [np.asarray([[self.hp.sos_id]] * len(action_len)),
              at_id_wo_eos[:, :-1]], axis=1)
@@ -470,7 +475,7 @@ class GenDQNAgent(DQNAgent):
             self.tokenizer.convert_ids_to_tokens(
                 at_id[0, :action_len[0]])))
 
-        p_states, s_states, p_len, s_len =\
+        p_states, s_states, p_len, s_len = \
             self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
 
         t2 = ctime()
@@ -514,5 +519,5 @@ class GenDQNAgent(DQNAgent):
 
         if t % 1000 == 0:
             self.debug('t1: {}, t2: {}, t3: {}'.format(
-                t1_end-t1, t2_end-t2, t3_end-t3))
+                t1_end - t1, t2_end - t2, t3_end - t3))
         summary_writer.add_summary(summaries, t - self.hp.observation_t)

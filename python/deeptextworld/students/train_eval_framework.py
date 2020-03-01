@@ -92,7 +92,7 @@ class TrainEval(object):
         game_files = load_game_files(game_path, f_games)
         eval_player = MultiGPUsEvalPlayer(
             hp, model_path, game_files, n_gpus, load_best=False)
-        eval_player.evaluate(restore_from=None)
+        eval_player.evaluate(restore_from=None, debug=True)
 
     def full_eval(self, model_path, game_path, f_games=None, n_gpus=1):
         """

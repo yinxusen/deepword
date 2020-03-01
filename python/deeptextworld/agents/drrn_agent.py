@@ -3,10 +3,9 @@ import math
 import numpy as np
 
 from deeptextworld.models import drrn_model
-from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, \
-    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
-from deeptextworld.models.dqn_func import get_random_1Daction, get_best_1Daction, \
-    get_best_1D_q
+from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE
+from deeptextworld.models.dqn_func import get_random_1Daction, \
+    get_best_1Daction, get_best_1D_q
 from deeptextworld.utils import ctime
 
 
@@ -27,7 +26,7 @@ class DRRNAgent(BaseAgent):
             action_idx, action = get_random_1Daction(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action_type=ACT_TYPE.rnd, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -49,7 +48,7 @@ class DRRNAgent(BaseAgent):
                 q_actions_t - self._cnt_action, actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=action_idx,
+                action_type=ACT_TYPE.policy_drrn, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -191,7 +190,7 @@ class BertAgent(BaseAgent):
             action_idx, action = get_random_1Daction(actions)
             true_action_idx = mask_idx[action_idx]
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=true_action_idx,
+                action_type=ACT_TYPE.rnd, action_idx=true_action_idx,
                 token_idx=action_matrix[action_idx],
                 action_len=action_len[action_idx],
                 action=action)
@@ -225,7 +224,7 @@ class BertAgent(BaseAgent):
             true_action_idx = mask_idx[action_idx]
 
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=true_action_idx,
+                action_type=ACT_TYPE.policy_drrn, action_idx=true_action_idx,
                 token_idx=action_matrix[action_idx],
                 action_len=action_len[action_idx],
                 action=action)

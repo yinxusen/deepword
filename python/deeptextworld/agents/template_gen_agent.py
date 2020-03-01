@@ -1,9 +1,11 @@
+from abc import ABC
+
 from deeptextworld.agents.base_agent import *
 
 
-class GenBaseAgent(BaseAgent):
+class TemplateGenAgent(BaseAgent, ABC):
     def __init__(self, hp, model_dir):
-        super(GenBaseAgent, self).__init__(hp, model_dir)
+        super(TemplateGenAgent, self).__init__(hp, model_dir)
         self._require_drop_actions = False
         self._inventory = None
         self._see_inventory = False
@@ -38,14 +40,14 @@ class GenBaseAgent(BaseAgent):
 
     @classmethod
     def get_possible_closed_doors(cls, obs):
-        doors = re.findall(r'a closed ([a-z \-]+ door)', obs)
+        doors = re.findall(r"a closed ([a-z \-]+ door)", obs)
         return doors
 
     @classmethod
     def retrieve_name_from_inventory(cls, inventory, item):
-        for i in inventory:
-            if item in i:
-                return i
+        for thing in inventory:
+            if item in thing:
+                return thing
         return None
 
     @classmethod
@@ -64,7 +66,7 @@ class GenBaseAgent(BaseAgent):
     def remove_logo(cls, first_master):
         lines = first_master.split("\n")
         start_line = 0
-        room_regex = "^\s*-= (.*) =-.*"
+        room_regex = r"^\s*-= (.*) =-.*"
         for i, l in enumerate(lines):
             room_search = re.search(room_regex, l)
             if room_search is not None:
@@ -88,25 +90,26 @@ class GenBaseAgent(BaseAgent):
     @classmethod
     def get_connections(cls, raw_recipe, theme_words):
         connections = {}
-        lines = list(filter(
-            lambda line: line != "",
-            map(lambda line: line.strip(), raw_recipe.split("\n"))))
+        lines = list(
+            filter(
+                lambda x: x != "",
+                map(lambda x: x.strip(), raw_recipe.split("\n"))))
         start_line = 0
-        directions_regex = "^\sDirections"
-        for i, l in enumerate(lines):
-            d_search = re.search(directions_regex, l)
+        directions_regex = r"^\sDirections"
+        for i, line in enumerate(lines):
+            d_search = re.search(directions_regex, line)
             if d_search is not None:
                 start_line = i
                 break
             else:
                 pass
         lines = lines[start_line:]
-        for l in lines:
+        for line in lines:
             for t in theme_words:
-                if t in l:
+                if t in line:
                     if t not in connections:
                         connections[t] = set()
-                    connections[t].add(l.split()[0])
+                    connections[t].add(line.split()[0])
                 else:
                     pass
         return connections
@@ -137,10 +140,10 @@ class GenBaseAgent(BaseAgent):
         """
         return EnvInfos(
             max_score=True,
-            has_won=True)
+            won=True)
 
     def _start_episode_impl(self, obs, infos):
-        super(GenBaseAgent, self)._start_episode_impl(obs, infos)
+        super(TemplateGenAgent, self)._start_episode_impl(obs, infos)
         if self.game_id not in self._connections:
             self._connections[self.game_id] = {}
         self._require_drop_actions = False
@@ -154,11 +157,11 @@ class GenBaseAgent(BaseAgent):
         theme_words = self._theme_words[self.game_id]
         connections = self._connections[self.game_id]
 
-        all_actions = [ACT_PREPARE_MEAL, ACT_LOOK, ACT_INVENTORY]
+        all_actions = [ACT.prepare_meal, ACT.look, ACT.inventory]
         inventory_sent = " ".join(inventory)
 
         if "cookbook" in obs:
-            all_actions += [ACT_EXAMINE_COOKBOOK]
+            all_actions += [ACT.examine_cookbook]
 
         for d in ["north", "south", "east", "west"]:
             if d in obs.split():
@@ -228,7 +231,7 @@ class GenBaseAgent(BaseAgent):
             all_actions += drop_actions
 
         if "meal" in inventory_sent:
-            all_actions += [ACT_EAT_MEAL]
+            all_actions += [ACT.eat_meal]
 
         return all_actions
 
@@ -247,20 +250,21 @@ class GenBaseAgent(BaseAgent):
 
         :param master:
         :param cleaned_obs:
+        :param instant_reward:
         :param infos:
         :return:
         """
-        super(GenBaseAgent, self).update_status_impl(
+        super(TemplateGenAgent, self).update_status_impl(
             master, cleaned_obs, instant_reward, infos)
         if self._curr_place != self._prev_place:
             self._obs = cleaned_obs
         if self._last_action is not None:
-            if self._last_action.action == ACT_EXAMINE_COOKBOOK:
+            if self._last_action.action == ACT.examine_cookbook:
                 self._theme_words[self.game_id] = self.get_theme_words(
                     master)
                 self._connections[self.game_id] = self.get_connections(
                     master, self._theme_words[self.game_id])
-            elif self._last_action.action == ACT_INVENTORY:
+            elif self._last_action.action == ACT.inventory:
                 self._inventory = self.get_inventory(master)
             elif self._last_action.action.startswith("drop"):
                 if not self.is_negative(cleaned_obs):
@@ -279,7 +283,7 @@ class GenBaseAgent(BaseAgent):
                 if ((not self.is_negative(cleaned_obs)) and
                         ("already open" not in cleaned_obs)):
                     self._obs += " " + cleaned_obs
-            elif self._last_action.action == ACT_LOOK:
+            elif self._last_action.action == ACT.look:
                 self._obs = cleaned_obs
             else:
                 pass
@@ -300,22 +304,22 @@ class GenBaseAgent(BaseAgent):
         #     except IndexError as _:
         #         self.debug("same game ID for different games error")
         #         action = None
-        if ACT_INVENTORY in actions and not self._see_inventory:
-            action = ACT_INVENTORY
+        if ACT.inventory in actions and not self._see_inventory:
+            action = ACT.inventory
             self._see_inventory = True
         elif "meal" in self._inventory:
-            action = ACT_EAT_MEAL
-        elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
-            action = ACT_EXAMINE_COOKBOOK
+            action = ACT.eat_meal
+        elif ACT.examine_cookbook in actions and not self._see_cookbook:
+            action = ACT.examine_cookbook
             self._see_cookbook = True
         elif (self._last_action is not None and
-              self._last_action.action == ACT_EXAMINE_COOKBOOK and
+              self._last_action.action == ACT.examine_cookbook and
               instant_reward <= 0):
-            action = ACT_INVENTORY
+            action = ACT.inventory
         elif (self._last_action is not None and
               self._last_action.action.startswith("take") and
               instant_reward <= 0):
-            action = ACT_INVENTORY
+            action = ACT.inventory
         else:
             action = None
 
@@ -328,7 +332,7 @@ class GenBaseAgent(BaseAgent):
         else:
             action_idx = None
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_RULE, action_idx=action_idx,
+            action_type=ACT_TYPE.rule, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
             action=action)

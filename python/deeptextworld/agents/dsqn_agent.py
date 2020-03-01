@@ -1,19 +1,17 @@
-from os import remove as prm
-from os.path import join as pjoin
 from bisect import bisect_left
 from multiprocessing.pool import ThreadPool
-
+from os import remove as prm
+from os.path import join as pjoin
 
 import numpy as np
 import tensorflow as tf
 from numpy.random import choice as npc
 
-from deeptextworld.models import dsqn_model
-from deeptextworld.agents.base_agent import ActionDesc, \
-    ACT_TYPE_RND_CHOOSE, ACT_TYPE_NN
+from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
 from deeptextworld.agents.dqn_agent import TabularDQNAgent
-from deeptextworld.models.dqn_func import get_random_1Daction, get_best_1Daction, \
-    get_best_1D_q
+from deeptextworld.models import dsqn_model
+from deeptextworld.models.dqn_func import get_random_1Daction, \
+    get_best_1Daction, get_best_1D_q
 from deeptextworld.utils import ctime
 
 
@@ -66,7 +64,7 @@ class DSQNAgent(TabularDQNAgent):
     def _jitter_go_condition(self, action_desc, admissible_go_actions):
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
-                action_desc.action_type == ACT_TYPE_NN):
+                action_desc.action_type == ACT_TYPE.policy_drrn):
             return False
         else:
             if self.is_training:
@@ -144,7 +142,7 @@ class DSQNAgent(TabularDQNAgent):
             action_idx, action = get_random_1Daction(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_RND_CHOOSE, action_idx=action_idx,
+                action_type=ACT_TYPE.rnd, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -164,7 +162,7 @@ class DSQNAgent(TabularDQNAgent):
                 q_actions_t - self._cnt_action, actions,
                 mask=action_mask)
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_NN, action_idx=action_idx,
+                action_type=ACT_TYPE.policy_drrn, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -301,7 +299,8 @@ class DSQNAgent(TabularDQNAgent):
             if not is_terminal[i]:
                 s_argmax_q, _ = get_best_1D_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
-                expected_q[i] += self.hp.final_gamma * s_q_actions_target[i, s_argmax_q]
+                expected_q[i] += (
+                    self.hp.final_gamma * s_q_actions_target[i, s_argmax_q])
 
         t_snn = ctime()
         src, src_len, src2, src2_len, labels = async_snn_data.get()
@@ -671,8 +670,8 @@ class BertDSQNIndAgent(DSQNAlterAgent):
                 self.info('No checkpoint to load, training from scratch')
         return sess, start_t, saver, model
 
-    def _init_impl(self, load_best=False):
-        super(BertDSQNIndAgent, self)._init_impl(load_best)
+    def _init_impl(self, load_best=False, restore_from=None):
+        super(BertDSQNIndAgent, self)._init_impl(load_best, restore_from)
         (self.snn_sess, _, self.snn_saver, self.snn_model
          ) = self.create_n_load_snn_model(load_best, self.is_training)
         if self.is_training:

@@ -22,7 +22,7 @@ AVAILABLE_INFORMATION = EnvInfos(
     description=True, inventory=True,
     max_score=True, objective=True, entities=True, verbs=True,
     command_templates=True, admissible_commands=True,
-    has_won=True, has_lost=True,
+    won=True, has_lost=True,
     extras=["recipe"]
 )
 
@@ -122,7 +122,7 @@ def run_agent_eval(
                 eval_results[game_name] = []
             eval_results[game_name].append(
                 (scores[0], infos["max_score"][0], steps[0],
-                 infos["has_won"][0], action_list))
+                 infos["won"][0], action_list))
     # run snn eval after normal agent test
     accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
     return eval_results, accuracy

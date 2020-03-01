@@ -16,6 +16,7 @@ import textworld.gym
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from deeptextworld.agents.utils import INFO_KEY
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.log import Logging
 from deeptextworld.students.utils import agg_results, agent_name2clazz, \
@@ -58,10 +59,9 @@ def eval_agent(
         game_file = game_files[game_no]
         game_name = os.path.basename(game_file)
         env_id = textworld.gym.register_games(
-            [game_file], requested_infos,
+            [game_file], requested_infos, batch_size=1,
             max_episode_steps=hp.game_episode_terminal_t,
             name="eval")
-        env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
         eprint("eval game: {}".format(game_name))
 
@@ -85,8 +85,8 @@ def eval_agent(
             if game_name not in eval_results:
                 eval_results[game_name] = []
             eval_results[game_name].append(
-                (scores[0], infos["max_score"][0], steps[0],
-                 infos["has_won"][0], action_list))
+                (scores[0], infos[INFO_KEY.max_score][0], steps[0],
+                 infos[INFO_KEY.won][0], action_list))
     return eval_results, agent.loaded_ckpt_step
 
 

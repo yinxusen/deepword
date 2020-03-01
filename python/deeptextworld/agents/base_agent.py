@@ -1,4 +1,3 @@
-import collections
 import glob
 import hashlib
 import os
@@ -11,7 +10,6 @@ import numpy as np
 import tensorflow as tf
 from bert.tokenization import FullTokenizer
 from bitarray import bitarray
-from nltk import word_tokenize
 from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
@@ -19,168 +17,16 @@ from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
-from deeptextworld.log import Logging
 from deeptextworld.models.dqn_func import get_random_1Daction
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import ctime, load_vocab, get_token2idx
-
-
-class DRRNMemo(collections.namedtuple(
-    "DRRNMemo",
-    ("tid", "sid", "gid", "aid", "token_id", "a_len", "reward", "is_terminal",
-     "action_mask", "next_action_mask"))):
-    pass
-
-
-class DRRNMemoTeacher(collections.namedtuple(
-    "DRRNMemoTeacher",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask", "q_actions"))):
-    pass
-
-
-class ActionDesc(collections.namedtuple(
-        "ActionDesc",
-        ("action_type", "action_idx", "token_idx", "action_len", "action"))):
-    def __repr__(self):
-        return "{}/{}/{}/{}/{}".format(
-            self.action_type, self.action_idx, self.token_idx, self.action_len,
-            self.action)
-
-
-class NLTKTokenizer(object):
-    """
-    Vocab is token2idx, inv_vocab is idx2token
-    """
-    def __init__(self, vocab_file, do_lower_case):
-        self._special_chars = ["[UNK]", "[PAD]", "<S>", "</S>"]
-        self._inv_vocab = load_vocab(vocab_file)
-        if do_lower_case:
-            self._inv_vocab = [
-                w.lower() if w not in self._special_chars else w
-                for w in self._inv_vocab]
-        self._do_lower_case = do_lower_case
-        self._vocab = get_token2idx(self._inv_vocab)
-        self._unk_val_id = self._vocab["[UNK]"]
-        self._s2c = {"[UNK]": "U", "[PAD]": "O", "<S>": "S", "</S>": "E"}
-        self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
-
-    @property
-    def vocab(self):
-        return self._vocab
-
-    @property
-    def inv_vocab(self):
-        return self._inv_vocab
-
-    def convert_tokens_to_ids(self, tokens):
-        indexed = [self._vocab.get(t, self._unk_val_id) for t in tokens]
-        return indexed
-
-    def convert_ids_to_tokens(self, ids):
-        tokens = [self._inv_vocab[i] for i in ids]
-        return tokens
-
-    def tokenize(self, text):
-        if any([sc in text for sc in self._special_chars]):
-            new_txt = text
-            for sc in self._special_chars:
-                new_txt = new_txt.replace(sc, self._s2c[sc])
-            tokens = word_tokenize(new_txt)
-            tokens = [self._c2s[t] if t in self._c2s else t for t in tokens]
-        else:
-            tokens = word_tokenize(text)
-
-        if self._do_lower_case:
-            return [
-                t.lower() if t not in self._special_chars else t
-                for t in tokens]
-        else:
-            return tokens
-
-
-ACT_EXAMINE_COOKBOOK = "examine cookbook"
-ACT_PREPARE_MEAL = "prepare meal"
-ACT_EAT_MEAL = "eat meal"
-ACT_LOOK = "look"
-ACT_INVENTORY = "inventory"
-ACT_GN = "go north"
-ACT_GS = "go south"
-ACT_GE = "go east"
-ACT_GW = "go west"
-
-ACT_TYPE_RND_CHOOSE = "random_choose_action"
-ACT_TYPE_RULE = "rule_based_action"
-ACT_TYPE_RND_WALK = "random_walk_action"
-ACT_TYPE_NN = "drrn_action"
-ACT_TYPE_GEN = "gen_action"
-ACT_TYPE_JITTER = "jitter_action"
-ACT_TYPE_TBL = "tabular_action"
-
-K_RECIPE = "extra.recipe"
-K_DESC = "description"
-K_INVENTORY = "inventory"
-K_MAX_SCORE = "max_score"
-K_HAS_WON = "has_won"
-K_ADMISSIBLE_ACTIONS = "admissible_commands"
-
-
-class ScheduledEPS(Logging):
-    def eps(self, t):
-        raise NotImplementedError()
-
-
-class LinearDecayedEPS(ScheduledEPS):
-    def __init__(self, decay_step, init_eps=1, final_eps=0):
-        super(LinearDecayedEPS, self).__init__()
-        self.init_eps = init_eps
-        self.final_eps = final_eps
-        self.decay_step = decay_step
-        self.decay_speed = (
-            1. * (self.init_eps - self.final_eps) / self.decay_step)
-
-    def eps(self, t):
-        if t < 0:
-            return self.init_eps
-        eps_t = max(self.init_eps - self.decay_speed * t, self.final_eps)
-        self.debug("eps: {}".format(eps_t))
-        return eps_t
-
-
-class ScannerDecayEPS(ScheduledEPS):
-    def __init__(
-            self, decay_step, decay_range,
-            next_init_eps_rate=0.8, init_eps=1, final_eps=0):
-        super(ScannerDecayEPS, self).__init__()
-        self.init_eps = init_eps
-        self.final_eps = final_eps
-        self.decay_range = decay_range
-        self.n_ranges = decay_step // decay_range
-        self.range_init = list(map(
-            lambda i: max(init_eps * (next_init_eps_rate ** i), 0.3),
-            range(self.n_ranges)))
-        self.decay_speed = list(map(
-            lambda es: 1. * (es - self.final_eps) / self.decay_range,
-            self.range_init))
-
-    def eps(self, t):
-        if t < 0:
-            return self.init_eps
-        range_idx = t // self.decay_range
-        range_t = t % self.decay_range
-        if range_idx >= self.n_ranges:
-            return self.final_eps
-        eps_t = (self.range_init[range_idx]
-                 - range_t * self.decay_speed[range_idx])
-        self.debug("{} - {} - {} - {} - {}".format(
-            range_idx, range_t, self.range_init[range_idx],
-            self.decay_speed[range_idx], eps_t))
-        return eps_t
+from deeptextworld.utils import ctime
+from deeptextworld.agents.utils import *
 
 
 class BaseAgent(Logging):
     """
     """
+
     def __init__(self, hp, model_dir):
         super(BaseAgent, self).__init__()
         self.model_dir = model_dir
@@ -192,8 +38,8 @@ class BaseAgent(Logging):
         self.fp_prefix = "floor_plan"
 
         self.inv_direction = {
-            ACT_GS: ACT_GN, ACT_GN: ACT_GS,
-            ACT_GE: ACT_GW, ACT_GW: ACT_GE}
+            ACT.gs: ACT.gn, ACT.gn: ACT.gs,
+            ACT.ge: ACT.gw, ACT.gw: ACT.ge}
 
         self.hp, self.tokenizer = self.init_tokens(hp)
 
@@ -318,7 +164,7 @@ class BaseAgent(Logging):
 
     @classmethod
     def get_theme_words(cls, recipe):
-        theme_regex = ".*Ingredients:<\|>(.*)<\|>Directions.*"
+        theme_regex = r".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
             theme_regex, recipe.replace("\n", "<|>"))
         if theme_words_search:
@@ -355,7 +201,7 @@ class BaseAgent(Logging):
         :param master:
         :return:
         """
-        room_regex = "^\s*-= (.*) =-.*"
+        room_regex = r"^\s*-= (.*) =-.*"
         room_search = re.search(room_regex, master)
         if room_search is not None:
             room_name = room_search.group(1).lower()
@@ -380,7 +226,7 @@ class BaseAgent(Logging):
             description=True,
             inventory=True,
             max_score=True,
-            has_won=True,
+            won=True,
             admissible_commands=True,
             extras=['recipe'])
 
@@ -582,41 +428,6 @@ class BaseAgent(Logging):
             trained_step = 0
         return trained_step
 
-    def create_n_load_model(
-            self, load_best=False, is_training=True, device=None,
-            restore_from=None):
-        start_t = 0
-        trained_step = 0
-        if is_training:
-            device = device if device else "/device:GPU:0"
-            model = self.create_model_instance(device=device)
-            self.info("create train model")
-        else:
-            device = device if device else "/device:GPU:1"
-            model = self.create_eval_model_instance(device=device)
-            self.info("create eval model")
-
-        conf = tf.ConfigProto(
-            log_device_placement=False, allow_soft_placement=True)
-        sess = tf.Session(graph=model.graph, config=conf)
-        with model.graph.as_default():
-            sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(
-                max_to_keep=self.hp.max_snapshot_to_keep,
-                save_relative_paths=True)
-        if restore_from is None:
-            if load_best:
-                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
-            else:
-                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
-
-        if restore_from is not None:
-            start_t, trained_step = self.try_loading(
-                model, sess, saver, restore_from, self.is_training)
-        else:
-            self.info('No checkpoint to load, training from scratch')
-        return sess, start_t, trained_step, saver, model
-
     def create_model_instance(self, device):
         raise NotImplementedError()
 
@@ -697,9 +508,10 @@ class BaseAgent(Logging):
             self.total_t = 0
 
     def _get_master_starter(self, obs, infos):
-        assert K_DESC in infos, "request description is required"
-        assert K_INVENTORY in infos, "request inventory is required"
-        return "{}\n{}".format(infos[K_DESC][0], infos[K_INVENTORY][0])
+        assert INFO_KEY.desc in infos, "request description is required"
+        assert INFO_KEY.inventory in infos, "request inventory is required"
+        return "{}\n{}".format(
+            infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0])
 
     def _start_episode(self, obs, infos):
         """
@@ -735,8 +547,9 @@ class BaseAgent(Logging):
             self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
-        self._theme_words[self.game_id] = self.get_theme_words(
-            infos[K_RECIPE][0])
+        self.debug("infos: {}".format(infos))
+        # self._theme_words[self.game_id] = self.get_theme_words(
+        #     infos[INFO_KEY.recipe][0])
 
     def mode(self):
         return "train" if self.is_training else "eval"
@@ -755,9 +568,10 @@ class BaseAgent(Logging):
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
         self.info(
-            "mode: {}, #step: {}, score: {}, has_won: {}, last_eps: {}".format(
-                self.mode(), self.in_game_t, scores[0], infos[K_HAS_WON],
-                self.eps))
+            "mode: {}, obs: {}, #step: {}, score: {}, won: {},"
+            " last_eps: {}".format(
+                self.mode(), obs[0], self.in_game_t, scores[0],
+                infos[INFO_KEY.won], self.eps))
         # TODO: make clear of what need to clean before & after an episode.
         # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
         # self._action_recorder[self.game_id] = self._per_game_recorder
@@ -849,7 +663,7 @@ class BaseAgent(Logging):
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
     def contain_theme_words(self, actions):
-        if self._theme_words[self.game_id] is None:
+        if not self._theme_words[self.game_id]:
             self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
@@ -874,7 +688,7 @@ class BaseAgent(Logging):
         :return:
         """
         contained, others = self.contain_theme_words(admissible_actions)
-        actions = [ACT_INVENTORY, ACT_LOOK] + contained
+        actions = [ACT.inventory, ACT.look] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
         actions = list(filter(lambda c: not c.startswith("insert"), actions))
@@ -885,7 +699,7 @@ class BaseAgent(Logging):
             actions = list(filter(lambda c: not c.startswith("drop"), actions))
         actions = list(filter(lambda c: not c.startswith("put"), actions))
         other_valid_commands = {
-            ACT_PREPARE_MEAL, ACT_EAT_MEAL, ACT_EXAMINE_COOKBOOK
+            ACT.prepare_meal, ACT.eat_meal, ACT.examine_cookbook
         }
         actions += list(filter(
             lambda a: a in other_valid_commands, admissible_actions))
@@ -950,20 +764,20 @@ class BaseAgent(Logging):
         #         self.debug("same game ID for different games error")
         #         action = None
         if (self._last_action is not None and
-                self._last_action.action == ACT_PREPARE_MEAL and
+                self._last_action.action == ACT.prepare_meal and
                 instant_reward > 0):
-            action = ACT_EAT_MEAL
-        elif ACT_EXAMINE_COOKBOOK in actions and not self._see_cookbook:
-            action = ACT_EXAMINE_COOKBOOK
+            action = ACT.eat_meal
+        elif ACT.examine_cookbook in actions and not self._see_cookbook:
+            action = ACT.examine_cookbook
             self._see_cookbook = True
         elif (self._last_action is not None and
-              self._last_action.action == ACT_EXAMINE_COOKBOOK and
+              self._last_action.action == ACT.examine_cookbook and
               instant_reward <= 0):
-            action = ACT_INVENTORY
+            action = ACT.inventory
         elif (self._last_action is not None and
               self._last_action.action.startswith("take") and
               instant_reward <= 0):
-            action = ACT_INVENTORY
+            action = ACT.inventory
         else:
             action = None
 
@@ -976,7 +790,7 @@ class BaseAgent(Logging):
         else:
             action_idx = None
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_RULE, action_idx=action_idx,
+            action_type=ACT_TYPE.rule, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
             action=action)
@@ -985,7 +799,7 @@ class BaseAgent(Logging):
     def _jitter_go_condition(self, action_desc, admissible_go_actions):
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
-                action_desc.action_type == ACT_TYPE_NN):
+                action_desc.action_type == ACT_TYPE.policy_drrn):
             return False
         else:
             if self.is_training:
@@ -1003,7 +817,7 @@ class BaseAgent(Logging):
             action_idx = all_actions.index(jitter_go_action)
             action = jitter_go_action
             action_desc = ActionDesc(
-                action_type=ACT_TYPE_JITTER, action_idx=action_idx,
+                action_type=ACT_TYPE.jitter, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
                 action=action)
@@ -1035,7 +849,7 @@ class BaseAgent(Logging):
         else:
             pass
         action_desc = ActionDesc(
-            action_type=ACT_TYPE_RND_WALK, action_idx=action_idx,
+            action_type=ACT_TYPE.rnd_walk, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
             action=action)
@@ -1069,10 +883,10 @@ class BaseAgent(Logging):
             pass
         return action_desc
 
-    def get_instant_reward(self, score, master, is_terminal, has_won):
+    def get_instant_reward(self, score, master, is_terminal, won):
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
-        if is_terminal and not has_won and "you lost" in master:
+        if is_terminal and not won and "you lost" in master:
             # self.info("game terminate and fail, final reward change"
             #           " from {} to -1".format(instant_reward))
             instant_reward = -1
@@ -1198,8 +1012,8 @@ class BaseAgent(Logging):
             self._see_cookbook = False
 
     def get_admissible_actions(self, infos=None):
-        assert infos is not None and K_ADMISSIBLE_ACTIONS in infos
-        return [a.lower() for a in infos[K_ADMISSIBLE_ACTIONS][0]]
+        assert infos is not None and INFO_KEY.actions in infos
+        return [a.lower() for a in infos[INFO_KEY.actions][0]]
 
     def update_status(self, obs, scores, dones, infos):
         self._prev_place = self._curr_place
@@ -1210,8 +1024,14 @@ class BaseAgent(Logging):
         else:
             cleaned_obs = self.tokenize(master)
 
+        if (self._last_action is not None
+                and self._last_action.action == ACT.examine_cookbook):
+            self._theme_words[self.game_id] = self.get_theme_words(master)
+            self.debug(
+                "get theme words: {}".format(self._theme_words[self.game_id]))
+
         instant_reward = self.get_instant_reward(
-            scores[0], cleaned_obs, dones[0], infos[K_HAS_WON][0])
+            scores[0], cleaned_obs, dones[0], infos[INFO_KEY.won][0])
 
         self.update_status_impl(master, cleaned_obs, instant_reward, infos)
 
@@ -1225,7 +1045,7 @@ class BaseAgent(Logging):
         elif self.in_game_t == 0:
             self.info(
                 "mode: {}, master: {}, max_score: {}".format(
-                    self.mode(), cleaned_obs, infos[K_MAX_SCORE]))
+                    self.mode(), cleaned_obs, infos[INFO_KEY.max_score]))
         else:
             pass
         return cleaned_obs, instant_reward
@@ -1271,7 +1091,7 @@ class BaseAgent(Logging):
 
         # self._per_game_recorder.append(action)
 
-        if self._last_action.action_type == ACT_TYPE_NN:
+        if self._last_action.action_type == ACT_TYPE.policy_drrn:
             self._cnt_action[action_idx] += 0.1
         else:
             # self.debug("cnt action ignore hard_set_action")

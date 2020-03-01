@@ -407,7 +407,7 @@ def run_agent_eval(
                 eval_results[game_name] = []
             eval_results[game_name].append(
                 (scores[0], infos["max_score"][0], steps[0],
-                 infos["has_won"][0], action_list))
+                 infos["won"][0], action_list))
     # run snn eval after normal agent test
     # accuracy = agent.eval_snn(eval_data_size=snn_eval_data_size)
     accuracy = 0.

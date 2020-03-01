@@ -1,5 +1,5 @@
-textworld==1.0.1
-gym==0.10.4
+textworld==1.2.0
+gym==0.17.0
 scipy==1.2.0
 numpy==1.16.0
 tensorflow==1.14.1
@@ -10,3 +10,4 @@ bert-tensorflow==1.0.1
 fire==0.2.1
 tqdm==4.31.1
 watchdog==0.10.1
+TatSu==4.4.0
