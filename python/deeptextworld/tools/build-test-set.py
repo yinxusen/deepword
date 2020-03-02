@@ -1,10 +1,19 @@
-import os
-import sys
 import glob
+import os
 import random
 
+import fire
 
-def build_test_set(all_game_dir, all_types):
+
+def build_test_set(f_all_types, all_game_dir):
+    """
+    Random select two games for each type as test set
+    :param f_all_types: file contains type info, one per line
+    :param all_game_dir: dir contains all games
+    :return: names of selected test games, without file extension
+    """
+    with open(f_all_types, "r") as f:
+        all_types = map(lambda x: x.strip(), f.readlines())
     for t in all_types:
         files = glob.glob("{}/*-{}-*.ulx".format(all_game_dir, t))
         files = sorted(files)
@@ -15,9 +24,4 @@ def build_test_set(all_game_dir, all_types):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("Usage: argv[1]=f_all_types, argv[2]=all_game_dir")
-        exit(1)
-    with open(sys.argv[1], "r") as f:
-        all_types = map(lambda x: x.strip(), f.readlines())
-    build_test_set(sys.argv[2], all_types)
+    fire.Fire(build_test_set)

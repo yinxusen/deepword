@@ -121,7 +121,7 @@ ACT_TYPE = ActType(
 class EnvInfosKey(namedtuple(
     "KeyInfo",
     ("recipe", "desc", "inventory", "max_score", "won",
-     "actions"))):
+     "actions", "templates", "verbs", "entities"))):
     pass
 
 
@@ -131,7 +131,10 @@ INFO_KEY = EnvInfosKey(
     inventory="inventory",
     max_score="max_score",
     won="won",
-    actions="admissible_commands")
+    actions="admissible_commands",
+    templates="command_templates",
+    verbs="verbs",
+    entities="entities")
 
 
 class ScheduledEPS(Logging):

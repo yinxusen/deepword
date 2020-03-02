@@ -9,6 +9,17 @@ from deeptextworld.utils import eprint
 
 
 def clean_hs2tj(hash_states2tjs, tjs):
+    """
+    Due to code problem, some hash_states2tjs contains states that don't have
+    tjs companions.
+    These states should be removed, otherwise the request for their companions
+    would cause error.
+
+    :param hash_states2tjs: a map from states to tjs. States are composed of
+      observation + inventory
+    :param tjs:
+    :return:
+    """
     cnt_trashed = 0
     empty_keys = []
     all_tids = set(tjs.keys())

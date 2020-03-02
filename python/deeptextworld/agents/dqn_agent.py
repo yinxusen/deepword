@@ -31,8 +31,7 @@ class DQNAgent(BaseAgent):
             inventory=True,
             max_score=True,
             won=True,
-            admissible_commands=True,
-            extras=['recipe'])
+            admissible_commands=True)
 
     def get_an_eps_action(self, action_mask):
         """
@@ -359,8 +358,7 @@ class GenDQNAgent(DQNAgent):
             inventory=True,
             max_score=True,
             won=True,
-            admissible_commands=True,
-            extras=["recipe", "walkthrough"])
+            admissible_commands=True)
 
     @classmethod
     def negative_response_reward(cls, master):
