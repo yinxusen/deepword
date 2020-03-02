@@ -14,7 +14,7 @@ from deeptextworld.hparams import save_hparams
 from deeptextworld.models.dqn_func import get_batch_best_1D_idx
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.students.utils import model_name2clazz
-from deeptextworld.students.utils import bert_commonsense_input
+from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
 

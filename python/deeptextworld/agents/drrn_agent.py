@@ -2,12 +2,12 @@ import math
 
 import numpy as np
 
-from deeptextworld.models import drrn_model
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE
+from deeptextworld.models import drrn_model
 from deeptextworld.models.dqn_func import get_random_1Daction, \
     get_best_1Daction, get_best_1D_q
+from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.utils import ctime
-from deeptextworld.students.utils import bert_commonsense_input
 
 
 class DRRNAgent(BaseAgent):

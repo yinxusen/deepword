@@ -1,5 +1,6 @@
 from collections import namedtuple
 
+import numpy as np
 from nltk import word_tokenize
 
 from deeptextworld.log import Logging
@@ -189,3 +190,48 @@ class ScannerDecayEPS(ScheduledEPS):
             self.decay_speed[range_idx], eps_t))
         return eps_t
 
+
+def bert_commonsense_input(
+        action_matrix, action_len, trajectory, trajectory_len,
+        sep_val_id, num_tokens):
+    """
+    Given one trajectory and its admissible actions, create a training
+    set of input for Bert.
+
+    E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
+    suppose we need length to be 10.
+    output:
+      [[1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],
+       [1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
+       [1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]
+    segment of trajectory and actions:
+    [[0, 0, 0, 0, 1, 1, 1],
+     [0, 0, 0, 0, 1, 1, 0],
+     [0, 0, 0, 0, 1, 1, 0]]
+    input size:
+    [7, 6, 6]
+    :param action_matrix:
+    :param action_len:
+    :param trajectory:
+    :param trajectory_len:
+    :param sep_val_id:
+    :param num_tokens:
+    :return: trajectory + action; segmentation ids; sizes
+    """
+    inp = np.concatenate([
+        trajectory[:trajectory_len],
+        np.asarray([sep_val_id])])
+    n_actions = len(action_matrix)
+    action_matrix = np.concatenate(
+        [action_matrix, np.zeros([n_actions, 1])], axis=-1)
+    action_matrix[
+        range(n_actions), action_len] = sep_val_id
+    inp = np.repeat(inp[None, :], n_actions, axis=0)
+    inp = np.concatenate([inp, action_matrix], axis=-1)
+    n_rows, n_cols = inp.shape
+    inp = np.concatenate(
+        [inp, np.zeros([n_rows, num_tokens - n_cols])], axis=-1)
+    inp_size = trajectory_len + action_len + 2
+    seg_tj_action = np.zeros_like(inp)
+    seg_tj_action[:, trajectory_len + 1:] = 1
+    return inp, seg_tj_action, inp_size
