@@ -18,7 +18,7 @@ if __name__ == '__main__':
         bert_ckpt_dir=conventions.bert_ckpt_dir,
         num_tokens=300,
         num_turns=6,
-        batch_size=16,
+        batch_size=10,
         save_gap_t=5000,
         embedding_size=64,
         learning_rate=5e-5,

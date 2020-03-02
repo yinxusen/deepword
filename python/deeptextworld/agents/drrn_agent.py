@@ -202,7 +202,8 @@ class BertAgent(BaseAgent):
                 self.hp.sep_val_id, self.hp.num_tokens)
             n_actions = inp.shape[0]
             self.debug("number of actions: {}".format(n_actions))
-            allowed_batch_size = self.hp.batch_size
+            # TODO: better allowed batch
+            allowed_batch_size = 32
             n_batches = int(math.ceil(n_actions * 1. / allowed_batch_size))
             self.debug("compute q-values through {} batches".format(n_batches))
             total_q_actions = []
