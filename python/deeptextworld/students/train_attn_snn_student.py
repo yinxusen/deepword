@@ -186,7 +186,7 @@ def add_batch(
 
 def load_snapshot(
         hp, memo_path, raw_tjs_path, action_path, hs2tj_path, tokenizer):
-    memory = np.load(memo_path)['data']
+    memory = np.load(memo_path, allow_pickle=True)['data']
     memory = list(filter(lambda x: isinstance(x, DRRNMemoTeacher), memory))
 
     tjs = RawTextTrajectory(hp)
@@ -197,7 +197,7 @@ def load_snapshot(
         unk_val_id=hp.unk_val_id, padding_val_id=hp.padding_val_id)
     actions.load_actions(action_path)
 
-    hs2tj = np.load(hs2tj_path)
+    hs2tj = np.load(hs2tj_path, allow_pickle=True)
     hash_states2tjs = hs2tj["hs2tj"][0]
 
     eprint(

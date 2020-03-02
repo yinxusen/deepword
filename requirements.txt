@@ -1,13 +1,20 @@
+# textworld required
 textworld==1.2.0
 gym==0.17.0
-scipy==1.2.0
-numpy==1.16.0
-tensorflow==1.14.1
-bitarray==0.8.3
-nltk==3.4
-PyYAML==3.13
-bert-tensorflow==1.0.1
-fire==0.2.1
-tqdm==4.31.1
-watchdog==0.10.1
 TatSu==4.4.0
+
+# NN required
+tensorflow==1.14.1
+bert-tensorflow==1.0.1
+albert-tensorflow==1.1
+sentencepiece==0.1.85
+
+# Agent required
+bitarray==1.2.1
+nltk==3.4.5
+PyYAML==5.3
+fire==0.2.1
+tqdm==4.43.0
+watchdog==0.10.2
+scipy==1.4.1
+numpy==1.18.1

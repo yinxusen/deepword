@@ -109,7 +109,7 @@ class FloorPlanCollector(Logging):
             navi_base=list(self.navi_base.items()))
 
     def load_fps(self, path):
-        saved = np.load(path)
+        saved = np.load(path, allow_pickle=True)
         fp_base = dict(saved["fp_base"])
         self.fp_base.update(fp_base)
         try:

@@ -1,7 +1,8 @@
 import collections
 
 import tensorflow as tf
-from bert import modeling
+import bert.modeling as b_model
+import albert.modeling as ab_model
 
 import deeptextworld.models.dqn_func as dqn
 import deeptextworld.transformer as txf
@@ -281,7 +282,7 @@ class BertEncoderDRRN(BaseDQN):
             self.inputs["actions"], shape=(batch_size * self.n_actions, -1))
         actions_mask = txf.create_padding_mask(actions)
 
-        bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+        bert_config = b_model.BertConfig.from_json_file(self.bert_config_file)
         bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
         # padding the [CLS] in the beginning
@@ -294,7 +295,7 @@ class BertEncoderDRRN(BaseDQN):
             constant_values=1)
 
         with tf.variable_scope("bert-state-encoder"):
-            bert_model = modeling.BertModel(
+            bert_model = b_model.BertModel(
                 config=bert_config, is_training=(not self.is_infer),
                 input_ids=src_w_pad, input_mask=src_masks_w_pad)
             h_state = bert_model.pooled_output
@@ -366,11 +367,89 @@ class BertCommonsenseModel(BaseDQN):
         src_masks = tf.sequence_mask(
             src_len, maxlen=self.num_tokens, dtype=tf.int32)
 
-        bert_config = modeling.BertConfig.from_json_file(self.bert_config_file)
+        bert_config = b_model.BertConfig.from_json_file(self.bert_config_file)
         bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
         with tf.variable_scope("bert-state-encoder"):
-            bert_model = modeling.BertModel(
+            bert_model = b_model.BertModel(
+                config=bert_config, is_training=(not self.is_infer),
+                input_ids=src, input_mask=src_masks)
+            pooled = bert_model.pooled_output
+            q_actions = tf.layers.dense(pooled, units=1, use_bias=True)[:, 0]
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-state-encoder/bert/"})
+
+        return q_actions
+
+    def get_train_op(self, q_actions):
+        losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return create_train_bert_commonsense_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return create_eval_bert_commonsense_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return cls.get_train_student_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return cls.get_eval_student_model(hp, device_placement)
+
+
+class AlbertCommonsenseModel(BaseDQN):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        """
+        inputs:
+          src: source sentences to encode,
+           has paddings, [CLS], and [SEP] prepared
+          src_len: length of source sentences
+          action_idx: the action chose to run
+          expected_q: E(q) computed from the iterative equation of DQN
+          actions: all possible actions
+          actions_len: length of actions
+          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
+                        some actions for a certain state.
+        :param hp:
+        :param src_embeddings:
+        :param is_infer:
+        """
+        super(AlbertCommonsenseModel, self).__init__(
+            hp, src_embeddings, is_infer)
+        self.num_tokens = hp.num_tokens
+        self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+            "src_len": tf.placeholder(tf.int32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None])
+        }
+        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_config_file = "{}/albert_config.json".format(
+            self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/model.ckpt-best".format(
+            self.bert_init_ckpt_dir)
+
+    def get_q_actions(self):
+        src = self.inputs["src"]
+        src_len = self.inputs["src_len"]
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=self.num_tokens, dtype=tf.int32)
+
+        bert_config = ab_model.AlbertConfig.from_json_file(
+            self.bert_config_file)
+        bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
+
+        with tf.variable_scope("bert-state-encoder"):
+            bert_model = ab_model.AlbertModel(
                 config=bert_config, is_training=(not self.is_infer),
                 input_ids=src, input_mask=src_masks)
             pooled = bert_model.pooled_output

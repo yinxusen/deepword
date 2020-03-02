@@ -42,7 +42,7 @@ def clean_hs2tj(hash_states2tjs, tjs):
 
 def load_snapshot(raw_tjs_path, hs2tj_path):
     trajectories = {}
-    tjs = np.load(raw_tjs_path)
+    tjs = np.load(raw_tjs_path, allow_pickle=True)
     curr_tid = tjs["curr_tid"][0]
     curr_tj = list(tjs["curr_tj"][0])
     tids = tjs["tids"]
@@ -53,7 +53,7 @@ def load_snapshot(raw_tjs_path, hs2tj_path):
     if curr_tid not in trajectories:
         trajectories[curr_tid] = curr_tj
 
-    hs2tj = np.load(hs2tj_path)
+    hs2tj = np.load(hs2tj_path, allow_pickle=True)
     hash_states2tjs = hs2tj["hs2tj"][0]
 
     return trajectories, hash_states2tjs

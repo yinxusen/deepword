@@ -174,7 +174,7 @@ class ActionCollector(Logging):
                  action_matrix=[self.action_matrix_base])
 
     def load_actions(self, path):
-        saved = np.load(path)
+        saved = np.load(path, allow_pickle=True)
         metadata = saved["metadata"]
         assert len(metadata) == 4, "wrong saved actions format"
         (n_actions, n_tokens, unk_val_id, padding_val_id) = tuple(metadata)

@@ -156,7 +156,7 @@ class TabularDQNAgent(DQNAgent):
         # TODO: easier by loading like a context object.
         q_mat_path = self._get_context_obj_path(self.q_mat_prefix)
         try:
-            npz_q_mat = np.load(q_mat_path)
+            npz_q_mat = np.load(q_mat_path, allow_pickle=True)
             q_mat_key = npz_q_mat["q_mat_key"]
             q_mat_val = npz_q_mat["q_mat_val"]
             self.q_mat = dict(zip(q_mat_key, q_mat_val))

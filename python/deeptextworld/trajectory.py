@@ -77,7 +77,7 @@ class BaseTrajectory(Logging):
                  curr_tid=[self.curr_tid], curr_tj=[self.curr_tj])
 
     def load_tjs(self, path):
-        tjs = np.load(path)
+        tjs = np.load(path, allow_pickle=True)
         self.curr_tid = tjs["curr_tid"][0]
         self.curr_tj = list(tjs["curr_tj"][0])
         tids = tjs["tids"]

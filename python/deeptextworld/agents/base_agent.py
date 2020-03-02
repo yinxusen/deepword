@@ -8,7 +8,8 @@ from typing import List, Dict, Any, Optional
 
 import numpy as np
 import tensorflow as tf
-from bert.tokenization import FullTokenizer
+from bert.tokenization import FullTokenizer as BertTokenizer
+from albert.tokenization import FullTokenizer as AlbertTokenizer
 from bitarray import bitarray
 from tensorflow.python.client import device_lib
 from textworld import EnvInfos
@@ -238,8 +239,21 @@ class BaseAgent(Logging):
         :return:
         """
         if hp.tokenizer_type == "BERT":
-            tokenizer = FullTokenizer(
+            tokenizer = BertTokenizer(
                 vocab_file=hp.vocab_file, do_lower_case=True)
+            new_hp = copy_hparams(hp)
+            # make sure that padding_val is indexed as 0.
+            new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+            new_hp.set_hparam('padding_val_id', tokenizer.vocab[hp.padding_val])
+            new_hp.set_hparam('unk_val_id', tokenizer.vocab[hp.unk_val])
+            # bert specific tokens
+            new_hp.set_hparam('cls_val_id', tokenizer.vocab[hp.cls_val])
+            new_hp.set_hparam('sep_val_id', tokenizer.vocab[hp.sep_val])
+            new_hp.set_hparam('mask_val_id', tokenizer.vocab[hp.mask_val])
+        elif hp.tokenizer_type == "Albert":
+            tokenizer = AlbertTokenizer(
+                vocab_file=hp.vocab_file, do_lower_case=True,
+                spm_model_file=hp.spm_model_file)
             new_hp = copy_hparams(hp)
             # make sure that padding_val is indexed as 0.
             new_hp.set_hparam('vocab_size', len(tokenizer.vocab))

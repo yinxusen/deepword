@@ -131,7 +131,7 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
         :param path:
         :return:
         """
-        memo = np.load(path)
+        memo = np.load(path, allow_pickle=True)
         self.tree.tree = memo["tree"]
         self.tree.data = memo["data"]
         self.tree.data_pointer = memo["data_pointer"]

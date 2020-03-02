@@ -84,7 +84,7 @@ class StudentLearner(object):
         return sess, model, saver, trained_steps
 
     def load_snapshot(self, memo_path, raw_tjs_path, action_path):
-        memory = np.load(memo_path)['data']
+        memory = np.load(memo_path, allow_pickle=True)['data']
         memory = list(filter(lambda x: isinstance(x, tuple), memory))
 
         tjs = RawTextTrajectory(self.hp)

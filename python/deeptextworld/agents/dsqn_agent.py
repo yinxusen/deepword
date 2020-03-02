@@ -26,7 +26,7 @@ class DSQNAgent(TabularDQNAgent):
         hash_states2tjs = {}
         if with_loading:
             try:
-                hs2tj = np.load(hs2tj_path)
+                hs2tj = np.load(hs2tj_path, allow_pickle=True)
                 hash_states2tjs = hs2tj["hs2tj"][0]
                 self.debug("load hash_states2tjs from file")
             except IOError as e:
