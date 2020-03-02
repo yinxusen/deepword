@@ -7,6 +7,7 @@ from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE
 from deeptextworld.models.dqn_func import get_random_1Daction, \
     get_best_1Daction, get_best_1D_q
 from deeptextworld.utils import ctime
+from deeptextworld.students.utils import bert_commonsense_input
 
 
 class DRRNAgent(BaseAgent):
@@ -196,8 +197,9 @@ class BertAgent(BaseAgent):
                 action=action)
         else:
             indexed_state_t, lens_t = self.tjs.fetch_last_state()
-            inp, inp_size = self.create_bert_input(
-                action_matrix, action_len, indexed_state_t, lens_t)
+            inp, seg_tj_action, inp_size = bert_commonsense_input(
+                action_matrix, action_len, indexed_state_t, lens_t,
+                self.hp.sep_val_id, self.hp.num_tokens)
             n_actions = inp.shape[0]
             self.debug("number of actions: {}".format(n_actions))
             allowed_batch_size = self.hp.batch_size
@@ -209,6 +211,7 @@ class BertAgent(BaseAgent):
                 ee = min((i + 1) * allowed_batch_size, n_actions)
                 q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
                     self.model.src_: inp[ss: ee],
+                    self.model.seg_tj_action_: seg_tj_action[ss: ee],
                     self.model.src_len_: inp_size[ss: ee],
                 })
                 total_q_actions.append(q_actions_t)
@@ -229,28 +232,6 @@ class BertAgent(BaseAgent):
                 action_len=action_len[action_idx],
                 action=action)
         return action_desc
-
-    def create_bert_input(
-            self, action_matrix, action_len, trajectory, trajectory_len):
-        """
-        Given one trajectory and its admissible actions, create a training
-        set of input for Bert.
-        :param action_matrix:
-        :param action_len:
-        :param trajectory:
-        :param trajectory_len:
-        :return:
-        """
-        inp = np.concatenate([
-            trajectory[:trajectory_len],
-            np.asarray([self.hp.sep_val_id])])
-        inp = np.repeat(inp[None, :], len(action_matrix), axis=0)
-        inp = np.concatenate([inp, action_matrix], axis=-1)
-        n_rows, n_cols = inp.shape
-        inp = np.concatenate(
-            [inp, np.zeros([n_rows, self.hp.num_tokens - n_cols])], axis=-1)
-        inp_size = trajectory_len + 1 + action_len
-        return inp, inp_size
 
     def create_model_instance(self, device):
         model_creator = getattr(drrn_model, self.hp.model_creator)

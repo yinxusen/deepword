@@ -14,6 +14,7 @@ from deeptextworld.hparams import save_hparams
 from deeptextworld.models.dqn_func import get_batch_best_1D_idx
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.students.utils import model_name2clazz
+from deeptextworld.students.utils import bert_commonsense_input
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
 
@@ -371,48 +372,6 @@ class BertLearner(StudentLearner):
         self.sw.add_summary(summaries, train_step)
         return
 
-    def create_bert_input(
-            self, action_matrix, action_len, trajectory, trajectory_len):
-        """
-        Given one trajectory and its admissible actions, create a training
-        set of input for Bert.
-
-        E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
-        suppose we need length to be 10.
-        output:
-          [[1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],
-           [1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
-           [1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]
-        segment of trajectory and actions:
-        [[0, 0, 0, 0, 1, 1, 1],
-         [0, 0, 0, 0, 1, 1, 0],
-         [0, 0, 0, 0, 1, 1, 0]]
-        input size:
-        [7, 6, 6]
-        :param action_matrix:
-        :param action_len:
-        :param trajectory:
-        :param trajectory_len:
-        :return: trajectory + action; segmentation ids; sizes
-        """
-        inp = np.concatenate([
-            trajectory[:trajectory_len],
-            np.asarray([self.hp.sep_val_id])])
-        n_actions = len(action_matrix)
-        action_matrix = np.concatenate(
-            [action_matrix, np.zeros([n_actions, 1])], axis=-1)
-        action_matrix[
-            range(n_actions), action_len] = self.hp.sep_val_id
-        inp = np.repeat(inp[None, :], n_actions, axis=0)
-        inp = np.concatenate([inp, action_matrix], axis=-1)
-        n_rows, n_cols = inp.shape
-        inp = np.concatenate(
-            [inp, np.zeros([n_rows, self.hp.num_tokens - n_cols])], axis=-1)
-        inp_size = trajectory_len + action_len + 2
-        seg_tj_action = np.zeros_like(inp)
-        seg_tj_action[:, trajectory_len + 1:] = 1
-        return inp, seg_tj_action, inp_size
-
     def prepare_data(self, b_memory, tjs, action_collector):
         """
         ("tid", "sid", "gid", "aid", "reward", "is_terminal",
@@ -446,7 +405,8 @@ class BertLearner(StudentLearner):
             for gid, mid in zip(game_id, selected_mask_idx)]
 
         processed_input = [
-            self.create_bert_input(am, al, tj, tj_len)
+            bert_commonsense_input(
+                am, al, tj, tj_len, self.hp.sep_val_id, self.hp.num_tokens)
             for am, al, tj, tj_len
             in zip(actions, action_len, p_states, p_len)]
 
