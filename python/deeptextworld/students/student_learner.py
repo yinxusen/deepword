@@ -360,12 +360,13 @@ class GenPreTrainLearner(GenLearner):
 
 class BertLearner(StudentLearner):
     def train_impl(self, data, train_step):
-        inp, inp_len, expected_q = data
+        inp, seg_tj_action, inp_len, expected_q = data
         _, summaries = self.sess.run(
             [self.model.train_op, self.model.train_summary_op],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
+                self.model.seg_tj_action_: seg_tj_action,
                 self.model.expected_q_: expected_q})
         self.sw.add_summary(summaries, train_step)
         return
@@ -375,22 +376,42 @@ class BertLearner(StudentLearner):
         """
         Given one trajectory and its admissible actions, create a training
         set of input for Bert.
+
+        E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
+        suppose we need length to be 10.
+        output:
+          [[1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],
+           [1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
+           [1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]
+        segment of trajectory and actions:
+        [[0, 0, 0, 0, 1, 1, 1],
+         [0, 0, 0, 0, 1, 1, 0],
+         [0, 0, 0, 0, 1, 1, 0]]
+        input size:
+        [7, 6, 6]
         :param action_matrix:
         :param action_len:
         :param trajectory:
         :param trajectory_len:
-        :return:
+        :return: trajectory + action; segmentation ids; sizes
         """
         inp = np.concatenate([
             trajectory[:trajectory_len],
             np.asarray([self.hp.sep_val_id])])
-        inp = np.repeat(inp[None, :], len(action_matrix), axis=0)
+        n_actions = len(action_matrix)
+        action_matrix = np.concatenate(
+            [action_matrix, np.zeros([n_actions, 1])], axis=-1)
+        action_matrix[
+            range(n_actions), action_len] = self.hp.sep_val_id
+        inp = np.repeat(inp[None, :], n_actions, axis=0)
         inp = np.concatenate([inp, action_matrix], axis=-1)
         n_rows, n_cols = inp.shape
         inp = np.concatenate(
             [inp, np.zeros([n_rows, self.hp.num_tokens - n_cols])], axis=-1)
-        inp_size = trajectory_len + 1 + action_len
-        return inp, inp_size
+        inp_size = trajectory_len + action_len + 2
+        seg_tj_action = np.zeros_like(inp)
+        seg_tj_action[:, trajectory_len + 1:] = 1
+        return inp, seg_tj_action, inp_size
 
     def prepare_data(self, b_memory, tjs, action_collector):
         """
@@ -408,9 +429,9 @@ class BertLearner(StudentLearner):
             lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
             action_mask_t))
 
-        # [trajectory] + [SEP] + [action] = final sentence for Bert
+        # [trajectory] + [SEP] + [action] + [SEP] = final sentence for Bert
         max_allowed_trajectory_size = (
-            self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
+            self.hp.num_tokens - 2 - self.hp.n_tokens_per_action)
         states = tjs.fetch_batch_states(trajectory_id, state_id)
         states_n_lens = [self.prepare_trajectory(
             s, max_allowed_trajectory_size) for s in states]
@@ -424,15 +445,16 @@ class BertLearner(StudentLearner):
             action_collector.get_action_matrix(gid)[mid, :]
             for gid, mid in zip(game_id, selected_mask_idx)]
 
-        inp_and_len = [
+        processed_input = [
             self.create_bert_input(am, al, tj, tj_len)
             for am, al, tj, tj_len
             in zip(actions, action_len, p_states, p_len)]
 
-        inp = np.concatenate([a[0] for a in inp_and_len], axis=0)
-        inp_len = np.concatenate([a[1] for a in inp_and_len], axis=0)
+        inp = np.concatenate([a[0] for a in processed_input], axis=0)
+        seg_tj_action = np.concatenate([a[1] for a in processed_input], axis=0)
+        inp_len = np.concatenate([a[2] for a in processed_input], axis=0)
         expected_q = np.concatenate(
             [qs[mid] for qs, mid in zip(expected_qs, selected_mask_idx)],
             axis=0)
 
-        return inp, inp_len, expected_q
+        return inp, seg_tj_action, inp_len, expected_q

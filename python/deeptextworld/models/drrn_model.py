@@ -353,6 +353,7 @@ class BertCommonsenseModel(BaseDQN):
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.int32, [None]),
+            "seg_tj_action": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None])
         }
         self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
@@ -364,6 +365,7 @@ class BertCommonsenseModel(BaseDQN):
     def get_q_actions(self):
         src = self.inputs["src"]
         src_len = self.inputs["src_len"]
+        seg_tj_action = self.inputs["seg_tj_action"]
         src_masks = tf.sequence_mask(
             src_len, maxlen=self.num_tokens, dtype=tf.int32)
 
@@ -373,7 +375,8 @@ class BertCommonsenseModel(BaseDQN):
         with tf.variable_scope("bert-state-encoder"):
             bert_model = b_model.BertModel(
                 config=bert_config, is_training=(not self.is_infer),
-                input_ids=src, input_mask=src_masks)
+                input_ids=src, input_mask=src_masks,
+                token_type_ids=seg_tj_action)
             pooled = bert_model.pooled_output
             q_actions = tf.layers.dense(pooled, units=1, use_bias=True)[:, 0]
 
@@ -407,7 +410,7 @@ class BertCommonsenseModel(BaseDQN):
         return cls.get_eval_student_model(hp, device_placement)
 
 
-class AlbertCommonsenseModel(BaseDQN):
+class AlbertCommonsenseModel(BertCommonsenseModel):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """
         inputs:
@@ -426,13 +429,6 @@ class AlbertCommonsenseModel(BaseDQN):
         """
         super(AlbertCommonsenseModel, self).__init__(
             hp, src_embeddings, is_infer)
-        self.num_tokens = hp.num_tokens
-        self.inputs = {
-            "src": tf.placeholder(tf.int32, [None, None]),
-            "src_len": tf.placeholder(tf.int32, [None]),
-            "expected_q": tf.placeholder(tf.float32, [None])
-        }
-        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
         self.bert_config_file = "{}/albert_config.json".format(
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/model.ckpt-best".format(
@@ -441,6 +437,7 @@ class AlbertCommonsenseModel(BaseDQN):
     def get_q_actions(self):
         src = self.inputs["src"]
         src_len = self.inputs["src_len"]
+        seg_tj_action = self.inputs["seg_tj_action"]
         src_masks = tf.sequence_mask(
             src_len, maxlen=self.num_tokens, dtype=tf.int32)
 
@@ -451,7 +448,8 @@ class AlbertCommonsenseModel(BaseDQN):
         with tf.variable_scope("bert-state-encoder"):
             bert_model = ab_model.AlbertModel(
                 config=bert_config, is_training=(not self.is_infer),
-                input_ids=src, input_mask=src_masks)
+                input_ids=src, input_mask=src_masks,
+                token_type_ids=seg_tj_action)
             pooled = bert_model.pooled_output
             q_actions = tf.layers.dense(pooled, units=1, use_bias=True)[:, 0]
 
@@ -462,34 +460,12 @@ class AlbertCommonsenseModel(BaseDQN):
 
         return q_actions
 
-    def get_train_op(self, q_actions):
-        losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
-        loss = tf.reduce_mean(losses)
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op
-
-    @classmethod
-    def get_train_student_model(cls, hp, device_placement):
-        return create_train_bert_commonsense_model(cls, hp, device_placement)
-
-    @classmethod
-    def get_eval_student_model(cls, hp, device_placement):
-        return create_eval_bert_commonsense_model(cls, hp, device_placement)
-
-    @classmethod
-    def get_train_model(cls, hp, device_placement):
-        return cls.get_train_student_model(hp, device_placement)
-
-    @classmethod
-    def get_eval_model(cls, hp, device_placement):
-        return cls.get_eval_student_model(hp, device_placement)
-
 
 class TrainBertCommonsenseModel(
     collections.namedtuple(
         "TrainBertCommonsenseModel",
         ("graph", "model", "q_actions",
-         "src_", "src_len_", "expected_q_",
+         "src_", "src_len_", "seg_tj_action_", "expected_q_",
          'train_op', 'loss', 'train_summary_op', 'initializer'))):
     pass
 
@@ -497,7 +473,8 @@ class TrainBertCommonsenseModel(
 class EvalBertCommonsenseModel(
     collections.namedtuple(
         "TrainBertCommonsenseModel",
-        ("graph", "model", "q_actions", "src_", "src_len_", 'initializer'))):
+        ("graph", "model", "q_actions", "src_", "src_len_", "seg_tj_action_",
+         'initializer'))):
     pass
 
 
@@ -516,6 +493,7 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
+        seg_tj_action_=inputs["seg_tj_action"],
         train_op=train_op,
         expected_q_=inputs["expected_q"], loss=loss,
         train_summary_op=train_summary_op,
@@ -534,6 +512,7 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
         graph=graph, model=model, q_actions=q_actions,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
+        seg_tj_action_=inputs["seg_tj_action"],
         initializer=initializer)
 
 
