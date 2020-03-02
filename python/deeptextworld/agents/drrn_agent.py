@@ -169,11 +169,12 @@ class BertAgent(BaseAgent):
 
     def _init_impl(self, load_best=False, restore_from=None):
         super(BertAgent, self)._init_impl(load_best, restore_from)
-        # for Bert commonsense model, we combine [trajectory], [SEP], [action]
-        # as a input sentence, so we need to subtract [SEP] and [action]
+        # for Bert commonsense model, we combine
+        # [trajectory], [SEP], [action], [SEP]
+        # as a input sentence, so we need to subtract two [SEP]s and [action]
         # from maximum allowed number of tokens.
         self.tjs.num_tokens = (
-            self.hp.num_tokens - 1 - self.hp.n_tokens_per_action)
+            self.hp.num_tokens - self.hp.n_tokens_per_action - 2)
 
     def get_an_eps_action(self, action_mask):
         """
