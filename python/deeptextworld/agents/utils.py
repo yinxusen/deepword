@@ -1,7 +1,10 @@
 from collections import namedtuple
+from typing import List, Dict, Any, Optional, Tuple
 
 import numpy as np
 from nltk import word_tokenize
+from bert.tokenization import FullTokenizer as BertTok
+from albert.tokenization import FullTokenizer as AlbertTok
 
 from deeptextworld.log import Logging
 from deeptextworld.utils import load_vocab, get_token2idx
@@ -21,6 +24,10 @@ class DRRNMemoTeacher(namedtuple(
     pass
 
 
+class ActionMaster(namedtuple("ActionMaster", ("action", "master"))):
+    pass
+
+
 class ActionDesc(namedtuple(
     "ActionDesc",
     ("action_type", "action_idx", "token_idx",
@@ -31,7 +38,26 @@ class ActionDesc(namedtuple(
             self.action)
 
 
-class NLTKTokenizer(object):
+class Tokenizer(object):
+    @property
+    def vocab(self) -> Dict[int, str]:
+        raise NotImplementedError()
+
+    @property
+    def inv_vocab(self) -> Dict[str, int]:
+        raise NotImplementedError()
+
+    def tokenize(self, text: str) -> List[str]:
+        raise NotImplementedError()
+
+    def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
+        raise NotImplementedError()
+
+    def convert_ids_to_tokens(self, ids: List[int]) -> List[str]:
+        raise NotImplementedError()
+
+
+class NLTKTokenizer(Tokenizer):
     """
     Vocab is token2idx, inv_vocab is idx2token
     """
@@ -45,6 +71,7 @@ class NLTKTokenizer(object):
                 for w in self._inv_vocab]
         self._do_lower_case = do_lower_case
         self._vocab = get_token2idx(self._inv_vocab)
+        self._inv_vocab = dict([(v, k) for k, v in self._vocab.items()])
         self._unk_val_id = self._vocab["[UNK]"]
         self._s2c = {"[UNK]": "U", "[PAD]": "O", "<S>": "S", "</S>": "E"}
         self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
@@ -81,6 +108,34 @@ class NLTKTokenizer(object):
                 for t in tokens]
         else:
             return tokens
+
+
+class BertTokenizer(Tokenizer):
+    def __init__(self, vocab_file, do_lower_case):
+        self.tokenizer = BertTok(vocab_file, do_lower_case)
+
+    @property
+    def vocab(self):
+        return self.tokenizer.vocab
+
+    @property
+    def inv_vocab(self):
+        return self.tokenizer.inv_vocab
+
+    def convert_tokens_to_ids(self, tokens):
+        return self.tokenizer.convert_tokens_to_ids(tokens)
+
+    def convert_ids_to_tokens(self, ids):
+        return self.tokenizer.convert_ids_to_tokens(ids)
+
+    def tokenize(self, text):
+        return self.tokenizer.tokenize(text)
+
+
+class AlbertTokenizer(BertTokenizer):
+    def __init__(self, vocab_file, do_lower_case, spm_model_file):
+        super(BertTokenizer, self).__init__(vocab_file, do_lower_case)
+        self.tokenizer = AlbertTok(vocab_file, do_lower_case, spm_model_file)
 
 
 class CommonActs(namedtuple(

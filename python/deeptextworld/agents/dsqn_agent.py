@@ -61,7 +61,7 @@ class DSQNAgent(TabularDQNAgent):
             for tag in self._stale_tags:
                 prm(self._get_context_obj_path_w_tag(self.hs2tj_prefix, tag))
 
-    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+    def _is_jitter_go(self, action_desc, admissible_go_actions):
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
                 action_desc.action_type == ACT_TYPE.policy_drrn):

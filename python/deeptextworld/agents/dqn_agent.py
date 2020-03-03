@@ -60,21 +60,7 @@ class DQNAgent(BaseAgent):
                 action_idx=action_idx, action=action)
         return action_desc
 
-    def create_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_train_model(model_creator, self.hp)
-        return model
-
-    def create_eval_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_eval_model(model_creator, self.hp)
-        return model
-
     def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        gamma = self.reverse_annealing_gamma(
-            self.hp.init_gamma, self.hp.final_gamma,
-            t - self.hp.observation_t, self.hp.annealing_gamma_t)
-
         t1 = ctime()
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
         t1_end = ctime()
@@ -109,7 +95,8 @@ class DQNAgent(BaseAgent):
             if not is_terminal[i]:
                 s_argmax_q, _ = get_best_1D_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
-                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
+                expected_q[i] += (self.hp.final_gamma
+                                  * s_q_actions_target[i, s_argmax_q])
 
         t3 = ctime()
         _, summaries, loss_eval, abs_loss = sess.run(
@@ -203,7 +190,7 @@ class TabularDQNAgent(DQNAgent):
         super(TabularDQNAgent, self)._start_episode_impl(obs, infos)
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
 
-    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+    def _is_jitter_go(self, action_desc, admissible_go_actions):
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
                 action_desc.action_type == ACT_TYPE.policy_tbl):
