@@ -12,7 +12,7 @@ from deeptextworld.models.dqn_model import BaseDQN, CNNEncoderDQN
 class TrainDRRNModel(
     collections.namedtuple(
         'TrainModel',
-        ('graph', 'model', 'q_actions','train_op', 'loss', 'train_summary_op',
+        ('graph', 'model', 'q_actions', 'train_op', 'loss', 'train_summary_op',
          'src_', 'src_seg_', 'src_len_',
          'actions_', 'actions_len_', 'actions_mask_',
          'action_idx_', 'expected_q_', 'b_weight_', 'abs_loss',

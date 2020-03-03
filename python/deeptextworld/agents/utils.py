@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict
 
 import numpy as np
 from nltk import word_tokenize

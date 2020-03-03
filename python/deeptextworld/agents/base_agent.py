@@ -4,6 +4,7 @@ import os
 import re
 from os import remove as prm
 from os.path import join as pjoin
+from typing import Any, Optional, Tuple
 
 import tensorflow as tf
 from tensorflow.contrib.training import HParams
@@ -14,7 +15,8 @@ from bitarray import bitarray
 from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
-from deeptextworld.utils import agent_name2clazz, model_name2clazz
+from deeptextworld.models.dqn_model import DQNModel
+from deeptextworld.utils import model_name2clazz
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.action import ActionCollector
 from deeptextworld.floor_plan import FloorPlanCollector
@@ -49,8 +51,8 @@ class BaseAgent(Logging):
 
         self.tjs: Optional[Trajectory] = None
         self.memo: Optional[DRRNMemo] = None
-        self.model = None
-        self.target_model = None
+        self.model: Optional[DQNModel] = None
+        self.target_model: Optional[DQNModel] = None
         self.actor: Optional[ActionCollector] = None
         self.floor_plan: Optional[FloorPlanCollector] = None
         self.dp: Optional[DependencyParserReorder] = None
@@ -372,7 +374,8 @@ class BaseAgent(Logging):
         self._init(load_best=False, restore_from=restore_from)
 
     def safe_loading(
-            self, model, sess: Session, saver: Saver, restore_from: str) -> int:
+            self, model: DQNModel, sess: Session, saver: Saver,
+            restore_from: str) -> int:
         """
         Load weights from restore_from to model.
         If weights in loaded model are incompatible with current model,
@@ -444,7 +447,7 @@ class BaseAgent(Logging):
         return sess, model, saver
 
     def load_model(
-            self, sess: Session, model: Any, saver: Saver,
+            self, sess: Session, model: DQNModel, saver: Saver,
             restore_from: Optional[str] = None, load_best=False) -> int:
         if restore_from is None:
             if load_best:
@@ -461,7 +464,7 @@ class BaseAgent(Logging):
 
     def train_impl(
             self, sess: Session, t: int, summary_writer: FileWriter,
-            target_sess: Session, target_model: Any) -> None:
+            target_sess: Session, target_model: DQNModel) -> None:
         raise NotImplementedError()
 
     def _init(
