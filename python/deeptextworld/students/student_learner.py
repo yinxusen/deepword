@@ -391,7 +391,8 @@ class BertLearner(StudentLearner):
         # [trajectory] + [SEP] + [action] + [SEP] = final sentence for Bert
         max_allowed_trajectory_size = (
             self.hp.num_tokens - 2 - self.hp.n_tokens_per_action)
-        states = tjs.fetch_batch_states(trajectory_id, state_id)
+        # fetch pre-trajectory
+        states = tjs.fetch_batch_states(trajectory_id, np.asarray(state_id) - 2)
         states_n_lens = [self.prepare_trajectory(
             s, max_allowed_trajectory_size) for s in states]
         p_states = [x[0] for x in states_n_lens]
