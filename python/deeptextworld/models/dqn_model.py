@@ -1,26 +1,11 @@
-from dataclasses import dataclass
-from typing import Optional
-
 import numpy as np
 import tensorflow as tf
 
-import deeptextworld.models.dqn_func as dqn
-from deeptextworld import transformer as txf
-
-
-@dataclass
-class DQNModel:
-    graph: tf.Graph
-    q_actions: tf.Tensor
-    src_: tf.placeholder
-    src_len_: tf.placeholder
-    action_idx_: Optional[tf.placeholder]
-    train_op: Optional[tf.Operation]
-    loss: Optional[tf.Tensor]
-    expected_q_: Optional[tf.placeholder]
-    b_weight_: Optional[tf.placeholder]
-    train_summary_op: Optional[tf.Operation]
-    abs_loss: Optional[tf.Tensor]
+import deeptextworld.models.utils as dqn
+from deeptextworld.models import transformer as txf
+from deeptextworld.models.export_models import DQNModel, GenDQNModel
+from deeptextworld.models.simple_lstm import LstmEncoder
+from deeptextworld.models.cnn import CnnEncoder
 
 
 class BaseDQN(object):
@@ -43,18 +28,6 @@ class BaseDQN(object):
     def get_train_op(self, q_actions):
         raise NotImplementedError()
 
-    def get_src_embeddings(self):
-        if self.hp.use_glove_emb:
-            _, glove_emb = self.init_glove(self.hp.glove_emb_path)
-            src_embeddings = tf.get_variable(
-                name="src_embeddings", dtype=tf.float32,
-                initializer=glove_emb, trainable=self.hp.glove_trainable)
-        else:
-            src_embeddings = tf.get_variable(
-                name="src_embeddings", dtype=tf.float32,
-                shape=[self.hp.vocab_size, self.hp.embedding_size])
-        return src_embeddings
-
     @classmethod
     def init_glove(cls, glove_path):
         with open(glove_path, "r") as f:
@@ -66,35 +39,6 @@ class BaseDQN(object):
 
     @classmethod
     def get_train_model(cls, hp, device_placement):
-        raise NotImplementedError()
-
-    @classmethod
-    def get_eval_model(cls, hp, device_placement):
-        raise NotImplementedError()
-
-
-class LSTMEncoderDQN(BaseDQN):
-    def __init__(self, hp, is_infer=False):
-        super(LSTMEncoderDQN, self).__init__(hp, is_infer)
-
-    def get_q_actions(self):
-        inner_states = dqn.encoder_lstm(
-            self.inputs["src"], self.inputs["src_len"],
-            self.get_src_embeddings(),
-            self.hp.lstm_num_units, self.hp.lstm_num_layers)
-        q_actions = dqn.decoder_dense_classification(
-            inner_states[-1].c, self.hp.n_actions)
-        return q_actions
-
-    def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_1Daction(
-            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.hp.n_actions, self.inputs["b_weight"])
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op, abs_loss
-
-    @classmethod
-    def get_train_model(cls, hp, device_placement):
         return create_train_model(cls, hp, device_placement)
 
     @classmethod
@@ -102,30 +46,52 @@ class LSTMEncoderDQN(BaseDQN):
         return create_eval_model(cls, hp, device_placement)
 
 
-class CNNEncoderDQN(LSTMEncoderDQN):
+class LstmDQN(BaseDQN):
     def __init__(self, hp, is_infer=False):
-        super(CNNEncoderDQN, self).__init__(hp, is_infer)
-        self.filter_sizes = [3, 4, 5]
-        self.num_filters = hp.num_conv_filters
-        self.num_tokens = hp.num_tokens
-        self.l2_loss = tf.constant(0.0)
-        self.l2_reg_lambda = 0.5
-
-    def get_pos_embeddings(self):
-        pos_embeddings = tf.get_variable(
-            name="pos_embeddings", dtype=tf.float32,
-            shape=[self.num_tokens, self.hp.embedding_size])
-        return pos_embeddings
+        super(LstmDQN, self).__init__(hp, is_infer)
+        self.enc_tj = LstmEncoder(
+            self.hp.lstm_num_units, self.hp.lstm_num_layers,
+            self.hp.vocab_size, self.hp.embedding_size)
+        self.enc_actions = tf.layers.Dense(
+            units=self.hp.n_actions, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     def get_q_actions(self):
-        inner_states = dqn.encoder_cnn(
-            self.inputs["src"],
-            self.get_src_embeddings(), self.get_pos_embeddings(),
-            self.filter_sizes, self.num_filters, self.hp.embedding_size,
-            self.is_infer)
-        q_actions = dqn.decoder_dense_classification(
-            inner_states, self.hp.n_actions)
+        h_state = self.enc_tj(self.inputs["src"])
+        q_actions = self.enc_actions(h_state)
         return q_actions
+
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_1d_action(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.inputs["b_weight"])
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op, abs_loss
+
+
+class CnnDQN(BaseDQN):
+    def __init__(self, hp, is_infer=False):
+        super(CnnDQN, self).__init__(hp, is_infer)
+        filter_sizes = [3, 4, 5]
+        num_filters = hp.num_conv_filters
+        self.enc_tj = CnnEncoder(
+            filter_sizes=filter_sizes, num_filters=num_filters,
+            num_layers=1, input_vocab_size=self.hp.vocab_size)
+        self.enc_actions = tf.layers.Dense(
+            units=self.hp.n_actions, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+    def get_q_actions(self):
+        h_state = self.enc_tj(self.inputs["src"])
+        q_actions = self.enc_actions(h_state)
+        return q_actions
+
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_1d_action(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.inputs["b_weight"])
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op, abs_loss
 
 
 def create_train_model(model_creator, hp, device_placement):
@@ -144,15 +110,19 @@ def create_train_model(model_creator, hp, device_placement):
             loss_summary = tf.summary.scalar("loss", loss)
             train_summary_op = tf.summary.merge([loss_summary])
     return DQNModel(
-        graph=graph, q_actions=q_actions,
+        graph=graph,
+        q_actions=q_actions,
         src_=src_placeholder,
         src_len_=src_len_placeholder,
-        train_op=train_op, action_idx_=action_idx_placeholder,
+        train_op=train_op,
+        action_idx_=action_idx_placeholder,
         expected_q_=expected_q_placeholder,
         b_weight_=b_weight_placeholder,
         loss=loss,
         train_summary_op=train_summary_op,
-        abs_loss=abs_loss)
+        abs_loss=abs_loss,
+        src_seg_=None,
+        h_state=None)
 
 
 def create_eval_model(model_creator, hp, device_placement):
@@ -165,32 +135,19 @@ def create_eval_model(model_creator, hp, device_placement):
             src_len_placeholder = inputs["src_len"]
             q_actions = model.get_q_actions()
     return DQNModel(
-        graph=graph, q_actions=q_actions,
+        graph=graph,
+        q_actions=q_actions,
         src_=src_placeholder,
         src_len_=src_len_placeholder,
-        train_op=None, action_idx_=None,
+        train_op=None,
+        action_idx_=None,
         expected_q_=None,
         b_weight_=None,
         loss=None,
         train_summary_op=None,
-        abs_loss=None)
-
-
-@dataclass
-class GenDQNModel(DQNModel):
-    decoded_idx_infer: tf.Tensor
-    action_idx_out_: tf.placeholder
-    action_len_: tf.placeholder
-    temperature_: tf.placeholder
-    p_gen: tf.Tensor
-    p_gen_infer: tf.Tensor
-    beam_size_: tf.placeholder
-    use_greedy_: tf.placeholder
-    col_eos_idx: tf.Tensor
-    decoded_logits_infer: tf.Tensor
-    loss_seq2seq: Optional[tf.Tensor]
-    train_seq2seq_summary_op: Optional[tf.Operation]
-    train_seq2seq_op: Optional[tf.Operation]
+        abs_loss=None,
+        src_seg_=None,
+        h_state=None)
 
 
 class TransformerGenDQN(BaseDQN):
@@ -247,7 +204,7 @@ class TransformerGenDQN(BaseDQN):
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_2Daction(
+        loss, abs_loss = dqn.l2_loss_2d_action(
             q_actions, self.inputs["action_idx_out"], self.inputs["expected_q"],
             self.hp.vocab_size, self.inputs["action_len"],
             self.hp.max_action_len, self.inputs["b_weight"])
@@ -349,7 +306,8 @@ def create_train_gen_model(model_creator, hp, device_placement):
         beam_size_=inputs["beam_size"],
         use_greedy_=inputs["use_greedy"],
         col_eos_idx=col_eos_idx,
-        decoded_logits_infer=decoded_logits)
+        decoded_logits_infer=decoded_logits,
+        src_seg_=None, h_state=None)
 
 
 def create_eval_gen_model(model_creator, hp, device_placement):
@@ -381,4 +339,5 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         beam_size_=inputs["beam_size"],
         use_greedy_=inputs["use_greedy"],
         col_eos_idx=col_eos_idx,
-        decoded_logits_infer=decoded_logits)
+        decoded_logits_infer=decoded_logits,
+        src_seg_=None, h_state=None)

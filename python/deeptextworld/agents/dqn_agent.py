@@ -7,10 +7,10 @@ from textworld import EnvInfos
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE, \
     INFO_KEY
 from deeptextworld.models import dqn_model
-from deeptextworld.models.dqn_func import get_best_2D_q
-from deeptextworld.models.dqn_func import get_random_1Daction, \
-    get_best_1Daction, \
-    get_best_1D_q
+from deeptextworld.models.utils import get_best_2d_q
+from deeptextworld.models.utils import get_random_1d_action, \
+    get_best_1d_action, \
+    get_best_1d_q
 from deeptextworld.trajectory import StateTextCompanion
 from deeptextworld.utils import ctime
 
@@ -41,7 +41,7 @@ class DQNAgent(BaseAgent):
         """
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
+            action_idx, action = get_random_1d_action(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.rnd, action_idx=action_idx,
@@ -52,7 +52,7 @@ class DQNAgent(BaseAgent):
                 self.model.src_: [indexed_state_t],
                 self.model.src_len_: [lens_t]
             })[0]
-            action_idx, q_max, action = get_best_1Daction(
+            action_idx, q_max, action = get_best_1d_action(
                 q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
@@ -93,7 +93,7 @@ class DQNAgent(BaseAgent):
         for i in range(len(expected_q)):
             expected_q[i] = reward[i]
             if not is_terminal[i]:
-                s_argmax_q, _ = get_best_1D_q(
+                s_argmax_q, _ = get_best_1d_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
                 expected_q[i] += (self.hp.final_gamma
                                   * s_q_actions_target[i, s_argmax_q])
@@ -256,7 +256,7 @@ class TabularDQNAgent(DQNAgent):
         """
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
+            action_idx, action = get_random_1d_action(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.rnd, action_idx=action_idx,
@@ -266,7 +266,7 @@ class TabularDQNAgent(DQNAgent):
         else:
             hs, _ = self.stc.fetch_last_state()
             q_actions_t = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
-            action_idx, q_max, action = get_best_1Daction(
+            action_idx, q_max, action = get_best_1d_action(
                 q_actions_t, self.actor.actions,
                 mask=action_mask)
             action_desc = ActionDesc(
@@ -310,7 +310,7 @@ class TabularDQNAgent(DQNAgent):
         for i in range(len(expected_q)):
             expected_q[i] = reward[i]
             if not is_terminal[i]:
-                s_argmax_q, _ = get_best_1D_q(
+                s_argmax_q, _ = get_best_1d_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
@@ -481,7 +481,7 @@ class GenDQNAgent(DQNAgent):
         for i in range(len(expected_q)):
             expected_q[i] = reward[i]
             if not is_terminal[i]:
-                s_argmax_q, _, valid_len = get_best_2D_q(
+                s_argmax_q, _, valid_len = get_best_2d_q(
                     s_q_actions_dqn[i, :, :], self.hp.eos_id)
                 expected_q[i] += gamma * np.mean(
                     s_q_actions_target[i, range(valid_len),

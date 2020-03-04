@@ -4,8 +4,8 @@ import numpy as np
 
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE
 from deeptextworld.models import drrn_model
-from deeptextworld.models.dqn_func import get_random_1Daction, \
-    get_best_1Daction, get_best_1D_q
+from deeptextworld.models.utils import get_random_1d_action, \
+    get_best_1d_action, get_best_1d_q
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.utils import ctime
 
@@ -24,7 +24,7 @@ class DRRNAgent(BaseAgent):
         """
         action_mask = self.from_bytes([action_mask])[0]
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
+            action_idx, action = get_random_1d_action(
                 self.actor.actions, action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.rnd, action_idx=action_idx,
@@ -45,7 +45,7 @@ class DRRNAgent(BaseAgent):
                 self.model.actions_len_: [action_len]
             })[0]
             actions = self.actor.actions
-            action_idx, q_max, action = get_best_1Daction(
+            action_idx, q_max, action = get_best_1d_action(
                 q_actions_t - self._cnt_action, actions,
                 mask=action_mask)
             action_desc = ActionDesc(
@@ -125,7 +125,7 @@ class DRRNAgent(BaseAgent):
         for i in range(len(expected_q)):
             expected_q[i] = reward[i]
             if not is_terminal[i]:
-                s_argmax_q, _ = get_best_1D_q(
+                s_argmax_q, _ = get_best_1d_q(
                     s_q_actions_dqn[i, :], mask=action_mask_t1[i])
                 expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
 
@@ -189,7 +189,7 @@ class BertAgent(BaseAgent):
         actions = np.asarray(self.actor.actions)[mask_idx]
 
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(actions)
+            action_idx, action = get_random_1d_action(actions)
             true_action_idx = mask_idx[action_idx]
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.rnd, action_idx=true_action_idx,

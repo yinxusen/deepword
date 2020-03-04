@@ -290,3 +290,126 @@ def bert_commonsense_input(
     seg_tj_action = np.zeros_like(inp)
     seg_tj_action[:, trajectory_len + 1:] = 1
     return inp, seg_tj_action, inp_size
+
+
+def get_best_1d_action(q_actions_t, actions, mask=1):
+    """
+    :param q_actions_t: a q-vector of a state computed from TF at step t
+    :param actions: action list
+    :param mask:
+    """
+    action_idx, q_val = get_best_1d_q(q_actions_t, mask)
+    action = actions[action_idx]
+    return action_idx, q_val, action
+
+
+def get_best_1d_q(q_actions_t, mask=1):
+    """
+    choose the action with the best q value, without choosing from inadmissible
+    actions.
+    Notice that it is possible q values of all admissible actions are smaller
+    than zero.
+    :param q_actions_t: q vector
+    :param mask: integer 1 means all actions are admissible. otherwise a np
+    array will be given, and each 1 means admissible while 0 not.
+    :return:
+    """
+    mask = np.ones_like(q_actions_t) * mask
+    inv_mask = np.logical_not(mask)
+    min_q_val = np.min(q_actions_t)
+    q_actions_t = q_actions_t * mask + min_q_val * inv_mask
+    action_idx = np.argmax(q_actions_t)
+    q_val = q_actions_t[action_idx]
+    return action_idx, q_val
+
+
+def get_batch_best_1d_idx(q_actions_t, mask=1):
+    """
+    Choose the action idx with the best q value, without choosing from
+    inadmissible actions.
+    :param q_actions_t: a batch of q-vectors
+    :param mask:
+    :return:
+    """
+    mask = np.ones_like(q_actions_t) * mask
+    inv_mask = np.logical_not(mask)
+    min_q_val = np.min(q_actions_t, axis=-1)
+    q_actions_t = q_actions_t * mask + min_q_val[:, None] * inv_mask
+    action_idx = np.argmax(q_actions_t, axis=-1)
+    return action_idx
+
+
+def categorical_without_replacement(logits, k=1):
+    """
+    Courtesy of https://github.com/tensorflow/tensorflow/issues/\
+    9260#issuecomment-437875125
+    also cite here:
+    @misc{vieira2014gumbel,
+        title = {Gumbel-max trick and weighted reservoir sampling},
+        author = {Tim Vieira},
+        url = {http://timvieira.github.io/blog/post/2014/08/01/\
+        gumbel-max-trick-and-weighted-reservoir-sampling/},
+        year = {2014}
+    }
+    Notice that the logits represent unnormalized log probabilities,
+    in the citation above, there is no need to normalized them first to add
+    the Gumbel random variant, which surprises me! since I thought it should
+    be `logits - tf.reduce_logsumexp(logits) + z`
+    """
+    z = -np.log(-np.log(np.random.uniform(0, 1, logits.shape)))
+    return np.argsort(logits + z)[:k] if k > 1 else np.argmax(logits + z)
+
+
+def get_random_1d_action(actions, mask=1):
+    """
+    Random sample an action but avoid choosing where mask == 0
+    :param actions: action list
+    :param mask: mask for the action list. 1 means OK to choose, 0 means NO.
+           could be either an integer, or a numpy array the same size with
+           actions.
+    """
+    mask = np.ones_like(actions, dtype=np.int) * mask
+    action_idx = np.random.choice(np.where(mask == 1)[0])
+    action = actions[action_idx]
+    return action_idx, action
+
+
+def get_sampled_1d_action(q_actions_t, actions, mask, temperature=1):
+    """
+    Choose an action w.r.t q_actions_t as logits and avoid choosing
+    where mask == 0. Use temperature to control randomness.
+    :param q_actions_t: logits
+    :param actions: action list
+    :param mask: array of mask, mask == 0 means inadmissible actions.
+    :param temperature: use to control randomness, the higher the more random
+    """
+    q_actions_t[np.where(mask == 0)] = -np.inf
+    action_idx = categorical_without_replacement(q_actions_t * temperature)
+    q_val = q_actions_t[action_idx]
+    action = actions[action_idx]
+    return action_idx, q_val, action
+
+
+def get_best_2d_q(q_actions_t, eos_id) -> (list, float):
+    """
+    </S> also counts for an action, which is the empty action
+    the last token should be </S>
+    if it's not </S> according to the argmax, then force set it to be </S>.
+    Q val for a whole action is the average of all Q val of valid tokens.
+    :param q_actions_t: a q-matrix of a state computed from TF at step t
+    :param eos_id: end-of-sentence
+    """
+    action_idx = np.argmax(q_actions_t, axis=1)
+    valid_len = 0
+    for a in action_idx:
+        valid_len += 1
+        if a == eos_id:
+            break
+    padded_action_idx = np.zeros_like(action_idx)
+    padded_action_idx[:valid_len] = action_idx[:valid_len]
+    # make sure the last token is eos no matter what
+    padded_action_idx[valid_len-1] = eos_id
+    q_val = np.mean(
+        q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
+    return padded_action_idx, q_val, valid_len
+

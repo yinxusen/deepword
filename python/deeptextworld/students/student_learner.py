@@ -11,7 +11,7 @@ from tqdm import trange
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.hparams import save_hparams
-from deeptextworld.models.dqn_func import get_batch_best_1D_idx
+from deeptextworld.models.utils import get_batch_best_1d_idx
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.utils import model_name2clazz
 from deeptextworld.agents.utils import bert_commonsense_input
@@ -292,7 +292,7 @@ class GenLearner(StudentLearner):
         game_id = [m[2] for m in b_memory]
         action_mask = [m[6] for m in b_memory]
         expected_qs = [m[8] for m in b_memory]
-        best_q_idx = get_batch_best_1D_idx(
+        best_q_idx = get_batch_best_1d_idx(
             expected_qs, BaseAgent.from_bytes(action_mask))
 
         states = tjs.fetch_batch_states(trajectory_id, state_id)

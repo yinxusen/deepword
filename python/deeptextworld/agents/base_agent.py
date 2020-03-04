@@ -21,7 +21,7 @@ from deeptextworld.trajectory import Trajectory
 from deeptextworld.action import ActionCollector
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
-from deeptextworld.models.dqn_func import get_random_1Daction
+from deeptextworld.models.utils import get_random_1d_action
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import ctime
 from deeptextworld.agents.utils import *
@@ -831,7 +831,7 @@ class BaseAgent(Logging):
                 admissible_actions = cardinal_go + open_actions
                 self.debug("admissible actions for random walk:\n{}".format(
                     admissible_actions))
-                _, action = get_random_1Daction(admissible_actions)
+                _, action = get_random_1d_action(admissible_actions)
                 action_idx = all_actions.index(action)
             else:
                 pass
