@@ -7,8 +7,9 @@ from textworld import EnvInfos
 from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE, \
     INFO_KEY
 from deeptextworld.models import dqn_model
-from deeptextworld.models.utils import get_best_2d_q
-from deeptextworld.models.utils import get_random_1d_action, \
+from deeptextworld.agents.utils import get_best_2d_q
+from deeptextworld.agents.utils import dqn_input
+from deeptextworld.agents.utils import get_random_1d_action, \
     get_best_1d_action, \
     get_best_1d_q
 from deeptextworld.trajectory import StateTextCompanion
@@ -40,21 +41,26 @@ class DQNAgent(BaseAgent):
         :param action_mask:
         """
         action_mask = self.from_bytes([action_mask])[0]
+        mask_idx = np.where(action_mask == 1)[0]
+        all_actions = self.actor.actions
+
         if np.random.random() < self.eps:
-            action_idx, action = get_random_1d_action(
-                self.actor.actions, action_mask)
+            action_idx = np.random.choice(mask_idx)
+            action = all_actions[action_idx]
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.rnd, action_idx=action_idx,
                 action=action)
         else:
-            indexed_state_t, lens_t = self.tjs.fetch_last_state()
+            trajectory = self.tjs.fetch_last_state()
+            src, src_len = dqn_input(
+                trajectory, self.tokenizer, self.hp.num_tokens,
+                self.hp.padding_val_id)
             q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
-                self.model.src_: [indexed_state_t],
-                self.model.src_len_: [lens_t]
+                self.model.src_: [src],
+                self.model.src_len_: [src_len]
             })[0]
             action_idx, q_max, action = get_best_1d_action(
-                q_actions_t, self.actor.actions,
-                mask=action_mask)
+                q_actions_t, all_actions, mask=action_mask)
             action_desc = ActionDesc(
                 action_type=ACT_TYPE.policy_drrn,
                 action_idx=action_idx, action=action)

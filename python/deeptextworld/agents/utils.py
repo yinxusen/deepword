@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import numpy as np
 from nltk import word_tokenize
@@ -244,6 +244,25 @@ class ScannerDecayEPS(ScheduledEPS):
             range_idx, range_t, self.range_init[range_idx],
             self.decay_speed[range_idx], eps_t))
         return eps_t
+
+
+def dqn_input(
+        trajectory: List[str], tokenizer: Tokenizer, num_tokens: int,
+        padding_val_id: int) -> Tuple[List[int], int]:
+    """
+    Given trajectory (a list of str), return the src and src_len as DQN input
+    """
+    trajectory = " ".join(trajectory)
+    trajectory_ids = tokenizer.convert_tokens_to_ids(
+        tokenizer.tokenize(trajectory))
+    padding_size = num_tokens - len(trajectory)
+    if padding_size >= 0:
+        src = trajectory_ids + [padding_val_id] * padding_size
+        src_len = len(trajectory_ids)
+    else:
+        src = trajectory_ids[-padding_size:]
+        src_len = num_tokens
+    return src, src_len
 
 
 def bert_commonsense_input(
