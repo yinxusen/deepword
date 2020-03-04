@@ -7,7 +7,7 @@ from os.path import join as pjoin
 from typing import Any, Optional, Tuple
 
 import tensorflow as tf
-from tensorflow.contrib.training import HParams
+import tensorflow.contrib.training.HParams as HParams
 from tensorflow import Session
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
@@ -21,10 +21,9 @@ from deeptextworld.trajectory import Trajectory
 from deeptextworld.action import ActionCollector
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
-from deeptextworld.models.utils import get_random_1d_action
+from deeptextworld.agents.utils import *
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import ctime
-from deeptextworld.agents.utils import *
 from deeptextworld.dependency_parser import DependencyParserReorder
 
 
