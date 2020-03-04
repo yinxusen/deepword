@@ -1,5 +1,6 @@
 import tensorflow as tf
 from deeptextworld.models.utils import positional_encoding
+from deeptextworld.models.transformer import Encoder, create_padding_mask
 
 
 class CnnEncoderLayer(tf.keras.layers.Layer):
@@ -69,5 +70,50 @@ class CnnEncoder(tf.keras.layers.Layer):
         x = self.dropout(x, training=training)
         for i in range(self.num_layers):
             x = self.enc_layers[i](x, training)
+        pooled = tf.reduce_max(x, axis=1)
+        return x, pooled
+
+
+class LstmEncoder(tf.keras.layers.Layer):
+    def __init__(self, num_units, num_layers, input_vocab_size, d_model):
+        super(LstmEncoder, self).__init__()
+
+        self.d_model = d_model
+        self.num_layers = num_layers
+
+        self.embedding = tf.keras.layers.Embedding(
+            input_vocab_size, self.d_model)
+
+        self.enc_layers = [
+            tf.keras.layers.LSTM(
+                units=num_units, activation=tf.tanh,
+                return_sequences=True, return_state=True)
+            for _ in range(num_layers)]
+
+    def call(self, x, training=None):
+        # index-0 is paddings
+        mask = tf.math.equal(x, 0)
+        # adding embedding and position encoding.
+        x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
+        state = None
+        for i in range(self.num_layers):
+            output, x, state = self.enc_layers[i](
+                x, mask=mask, training=training)
+        return x, state
+
+
+class TxEncoder(tf.keras.layers.Layer):
+    def __init__(
+            self, num_layers, d_model, num_heads, dff, input_vocab_size,
+            rate=0.1):
+        super(TxEncoder, self).__init__()
+
+        self.encoder = Encoder(
+            num_layers, d_model, num_heads, dff, input_vocab_size, rate)
+
+    def call(self, x, x_seg=None, training=None):
+        enc_padding_mask = create_padding_mask(x)
+        x = self.encoder(
+            x, x_seg=x_seg, training=training, mask=enc_padding_mask)
         pooled = tf.reduce_max(x, axis=1)
         return x, pooled

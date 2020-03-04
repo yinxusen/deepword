@@ -1,9 +1,8 @@
 import tensorflow as tf
 
-import deeptextworld.models.utils as dqn
-from deeptextworld.models import transformer as txf
 from deeptextworld.models.drrn_model import CnnDRRN
 from deeptextworld.models.export_models import DSQNModel
+from deeptextworld.models.encoders import TxEncoder
 
 
 class CnnDSQN(CnnDRRN):
@@ -100,7 +99,7 @@ class TransformerDSQN(CnnDSQN):
         :param is_infer:
         """
         super(TransformerDSQN, self).__init__(hp, is_infer)
-        self.enc_tj = txf.Encoder(
+        self.enc_tj = TxEncoder(
             num_layers=1, d_model=128, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
@@ -110,21 +109,18 @@ class TransformerDSQN(CnnDSQN):
         and hidden actions
         :return:
         """
-        padding_mask = txf.create_padding_mask(self.inputs["src"])
-        inner_state = self.enc_tj(
-            self.inputs["src"],
-            training=(not self.is_infer), mask=padding_mask)
-        pooled = tf.reduce_max(inner_state, axis=1)
+        _, pooled = self.enc_tj(
+            self.inputs["src"], training=(not self.is_infer))
         h_state = self.wt(pooled)
         h_state_expanded = tf.repeat(
             h_state, self.inputs["actions_repeats"], axis=0)
-        h_actions = self.enc_actions(self.inputs["actions"])
+        _, h_actions = self.enc_actions(self.inputs["actions"])
         q_actions = tf.reduce_sum(
-            tf.multiply(h_state_expanded, h_actions), axis=-1)
+            tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
         return q_actions
 
 
-class TransformerDSQNWithFactor(CnnDSQN):
+class TransformerDSQNWithFactor(TransformerDSQN):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -141,30 +137,27 @@ class TransformerDSQNWithFactor(CnnDSQN):
         """
         super(TransformerDSQNWithFactor, self).__init__(hp, is_infer)
         # trajectory pooler
-        self.wt = tf.layers.Dense(
-            units=self.h_state_size, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-        self.wt2 = tf.layers.Dense(
+        self.wt_var = tf.layers.Dense(
             units=self.h_state_size, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     def get_q_actions(self):
-        inner_state = self.enc_tj(self.inputs["src"])
-        h_state = self.wt(inner_state)
-        h_state_var = self.wt2(inner_state)
+        _, pooled = self.enc_tj(self.inputs["src"])
+        h_state = self.wt(pooled)
+        h_state_var = self.wt_var(pooled)
         h_state_sum = h_state + h_state_var
-        h_actions = self.enc_actions(self.inputs["actions"])
+        _, h_actions = self.enc_actions(self.inputs["actions"])
         h_state_expanded = tf.repeat(
             h_state_sum, self.inputs["actions_repeats"], axis=0)
         q_actions = tf.reduce_sum(
-            tf.multiply(h_state_expanded, h_actions), axis=-1)
+            tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
         return q_actions
 
     def is_semantic_same(self):
-        h_state = self.enc_tj(self.inputs["snn_src"])
-        h_state = self.wt(h_state)
-        h_state2 = self.enc_tj(self.inputs["snn_src2"])
-        h_state2 = self.wt(h_state2)
+        _, pooled = self.enc_tj(self.inputs["snn_src"])
+        h_state = self.wt(pooled)
+        _, pooled2 = self.enc_tj(self.inputs["snn_src2"])
+        h_state2 = self.wt(pooled2)
         h_states_diff = tf.abs(h_state - h_state2)
         semantic_same = self.w_snn(h_states_diff)
         return semantic_same, h_states_diff
