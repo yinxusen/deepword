@@ -58,7 +58,7 @@ class BaseCore(Logging, ABC):
             rewards: List[float],
             action_idx: List[int],
             b_weight: np.ndarray,
-            step: int) -> np.ndarray:
+            step: int, others: Any) -> np.ndarray:
         raise NotImplementedError()
 
     def create_or_reload_target_model(
@@ -596,11 +596,6 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init(load_best=False, restore_from=restore_from)
 
-    def _train_impl(
-            self, sess: Session, t: int, summary_writer: FileWriter,
-            target_sess: Session, target_model: DQNModel) -> None:
-        raise NotImplementedError()
-
     def _init(
             self, load_best=False, restore_from: Optional[str] = None) -> None:
         """
@@ -1105,7 +1100,7 @@ class BaseAgent(Logging):
             rewards=reward,
             action_idx=action_id,
             b_weight=b_weight,
-            step=self.total_t)
+            step=self.total_t, others=None)
 
         self.memo.batch_update(b_idx, b_weight)
 
@@ -1172,9 +1167,9 @@ class BaseAgent(Logging):
         return master, cleaned_obs, instant_reward
 
     def collect_new_sample(
-            self, master: str, cleaned_obs: str, instant_reward: float,
-            dones: List[bool], infos: Dict[str, List[Any]]
-            ) -> Tuple[List[str], List[str], bytes, float]:
+            self, master: str, instant_reward: float, dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Tuple[
+            List[str], List[str], bytes, float]:
 
         self.tjs.append(ActionMaster(
             action=self._last_action if self._last_action else "",
@@ -1261,8 +1256,7 @@ class BaseAgent(Logging):
         master, cleaned_obs, instant_reward = self.update_status(
             obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
-         ) = self.collect_new_sample(
-            master, cleaned_obs, instant_reward, dones, infos)
+         ) = self.collect_new_sample(master, instant_reward, dones, infos)
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
         if all(dones):

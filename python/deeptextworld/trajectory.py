@@ -1,13 +1,15 @@
 import time
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Dict
+from typing import TypeVar, Generic
 
-from deeptextworld.log import Logging
-from deeptextworld.utils import flatten
-from deeptextworld.agents.utils import ActionMaster
+from deeptextworld.utils import eprint
 
 
-class Trajectory(Logging):
+T = TypeVar('T')
+
+
+class Trajectory(Generic[T]):
     """
     BaseTrajectory only takes care of interacting with Agent on collecting
     game scripts.
@@ -16,10 +18,10 @@ class Trajectory(Logging):
     """
     def __init__(self, num_turns: int) -> None:
         super(Trajectory, self).__init__()
-        self.trajectories = {}
-        self.curr_tj = None
-        self.curr_tid = None
-        self.num_turns = num_turns
+        self.trajectories: Dict[int, List[T]] = dict()
+        self.curr_tj: Optional[List[T]] = None
+        self.curr_tid: Optional[int] = None
+        self.num_turns: int = num_turns
 
     def get_last_sid(self) -> int:
         """
@@ -42,8 +44,7 @@ class Trajectory(Logging):
                 break
             else:
                 self.trajectories.pop(k, None)
-                self.debug(
-                    'trajectory {} (time<=) {} deleted'.format(k, max(ks)))
+                eprint('trajectory {} (time<=) {} deleted'.format(k, max(ks)))
 
     @classmethod
     def _ctime(cls) -> int:
@@ -58,8 +59,16 @@ class Trajectory(Logging):
         self.curr_tj = []
         return tid
 
-    def append(self, action_master: ActionMaster) -> None:
-        self.curr_tj.append(action_master)
+    def append(self, content: T) -> None:
+        """
+        Use generic type for content
+        the trajectory class doesn't care what has been stored
+        and also doesn't process them
+
+        :param content:
+        :return:
+        """
+        self.curr_tj.append(content)
 
     def save_tjs(self, path: str) -> None:
         tids = list(self.trajectories.keys())
@@ -78,21 +87,21 @@ class Trajectory(Logging):
         for i in range(len(tids)):
             self.trajectories[tids[i]] = list(vals[i])
 
-    def fetch_state_by_idx(self, tid: int, sid: int) -> List[str]:
+    def fetch_state_by_idx(self, tid: int, sid: int) -> List[T]:
         if tid == self.curr_tid:
             tj = self.curr_tj
         elif tid in self.trajectories:
             tj = self.trajectories[tid]
         else:
             return []
-        state = flatten(
-            [list(am) for am in tj[max(0, sid - self.num_turns):sid + 1]])
+        state = tj[max(0, sid - self.num_turns):sid + 1]
         return state
 
-    def fetch_last_state(self) -> List[str]:
+    def fetch_last_state(self) -> List[T]:
         return self.fetch_state_by_idx(self.curr_tid, self.get_last_sid())
 
-    def fetch_batch_states(self, b_tid, b_sid) -> List[List[str]]:
+    def fetch_batch_states(
+            self, b_tid: List[int], b_sid: List[int]) -> List[List[T]]:
         batch_states = []
         for tid, sid in zip(b_tid, b_sid):
             batch_states.append(self.fetch_state_by_idx(tid, sid))

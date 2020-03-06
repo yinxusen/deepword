@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 from nltk import word_tokenize
@@ -25,6 +25,10 @@ class DRRNMemoTeacher(namedtuple(
 
 
 class ActionMaster(namedtuple("ActionMaster", ("action", "master"))):
+    pass
+
+
+class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
     pass
 
 
@@ -265,9 +269,68 @@ def dqn_input(
     return src, src_len
 
 
+def batch_dqn_input(
+        trajectories: List[List[str]], tokenizer: Tokenizer, num_tokens: int,
+        padding_val_id: int) -> Tuple[List[List[int]], List[int]]:
+    batch_src = []
+    batch_src_len = []
+    for tj in trajectories:
+        src, src_len = dqn_input(tj, tokenizer, num_tokens, padding_val_id)
+        batch_src.append(src)
+        batch_src_len.append(src_len)
+    return batch_src, batch_src_len
+
+
+def drrn_action_input(
+        action_matrix: np.ndarray, action_len: np.ndarray,
+        action_mask: np.ndarray
+        ) -> Tuple[np.ndarray, np.ndarray, int, Dict[int, int]]:
+    valid_idx = np.where(action_mask)[0]
+    inv_valid_idx = dict([(mid, i) for i, mid in enumerate(valid_idx)])
+    admissible_action_matrix = action_matrix[valid_idx, :]
+    admissible_action_len = action_len[valid_idx]
+    return (
+        admissible_action_matrix, admissible_action_len, len(valid_idx),
+        inv_valid_idx)
+
+
+def batch_drrn_action_input(
+        action_matrices: List[np.ndarray], action_lens: List[np.ndarray],
+        action_masks: np.ndarray
+        ) -> Tuple[np.ndarray, np.ndarray, List[int], List[Dict[int, int]]]:
+    admissible_action_matrices = []
+    admissible_action_lens = []
+    actions_repeats = []
+    group_inv_valid_idx = []
+    for i in range(len(action_masks)):
+        a_matrix, a_len, size, inv_valid_idx = drrn_action_input(
+            action_matrices[i], action_lens[i], action_masks[i])
+        admissible_action_matrices.append(a_matrix)
+        admissible_action_lens.append(a_len)
+        actions_repeats.append(size)
+        group_inv_valid_idx.append(inv_valid_idx)
+    return (
+        np.concatenate(np.asarray(admissible_action_matrices), axis=0),
+        np.concatenate(np.asarray(admissible_action_lens), axis=0),
+        actions_repeats,
+        group_inv_valid_idx)
+
+
+def convert_real_id_to_group_id(
+        real_id: List[int], group_inv_valid_idx: List[Dict[int, int]],
+        actions_repeats: List[int]) -> List[int]:
+    actions_slices = np.insert(np.cumsum(actions_repeats)[:-1], 0, 0)
+    masked_id = [
+        inv_idx[rid] for rid, inv_idx in zip(real_id, group_inv_valid_idx)]
+    group_id = masked_id + actions_slices
+    return group_id
+
+
 def bert_commonsense_input(
-        action_matrix, action_len, trajectory, trajectory_len,
-        sep_val_id, num_tokens):
+        action_matrix: np.ndarray, action_len: np.ndarray,
+        trajectory: List[int], trajectory_len: int,
+        sep_val_id: int,
+        num_tokens: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Given one trajectory and its admissible actions, create a training
     set of input for Bert.
@@ -342,20 +405,23 @@ def get_best_1d_q(q_actions_t, mask=1):
     return action_idx, q_val
 
 
-def get_batch_best_1d_idx(q_actions_t, mask=1):
+def get_batch_best_1d_idx(
+        q_actions: np.ndarray, actions_repeats: List[int]) -> List[int]:
     """
-    Choose the action idx with the best q value, without choosing from
-    inadmissible actions.
-    :param q_actions_t: a batch of q-vectors
-    :param mask:
+    get a batch of best action index of q-values
+    actions_repeats indicates how many elements are in the same group.
+    e.g. q_actions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    actions_repeats = [3, 4, 3]
+    then q_actions can be split into three groups:
+    [1, 2, 3], [4, 5, 6, 7], [8, 9, 10];
+    we compute the best idx for each group
     :return:
     """
-    mask = np.ones_like(q_actions_t) * mask
-    inv_mask = np.logical_not(mask)
-    min_q_val = np.min(q_actions_t, axis=-1)
-    q_actions_t = q_actions_t * mask + min_q_val[:, None] * inv_mask
-    action_idx = np.argmax(q_actions_t, axis=-1)
-    return action_idx
+    actions_slices = np.cumsum(actions_repeats)[:-1]
+    qs_slices = np.split(q_actions, actions_slices)
+    actions_idx_per_slice = np.asarray([np.argmax(qs) for qs in qs_slices])
+    actions_idx = np.insert(actions_slices, 0, 0) + actions_idx_per_slice
+    return actions_idx
 
 
 def categorical_without_replacement(logits, k=1):

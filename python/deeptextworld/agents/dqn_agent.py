@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 import numpy as np
 from textworld import EnvInfos
@@ -120,7 +120,7 @@ class DQNCore(TFCore):
             rewards: List[float],
             action_idx: List[int],
             b_weight: np.ndarray,
-            step: int) -> np.ndarray:
+            step: int, others: Any) -> np.ndarray:
 
         expected_q = self._compute_expected_q(
             action_mask=post_action_mask, trajectories=post_trajectories,
@@ -175,7 +175,7 @@ class TabularCore(BaseCore):
             rewards: List[float],
             action_idx: List[int],
             b_weight: np.ndarray,
-            step: int) -> np.ndarray:
+            step: int, others: Any) -> np.ndarray:
 
         expected_q = self._compute_expected_q(
             post_action_mask, post_states, dones, rewards)

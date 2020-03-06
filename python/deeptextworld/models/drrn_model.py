@@ -168,6 +168,7 @@ class BertDRRN(BaseDQN):
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
 
+
 def create_train_model(model_creator, hp):
     graph = tf.Graph()
     with graph.as_default():
