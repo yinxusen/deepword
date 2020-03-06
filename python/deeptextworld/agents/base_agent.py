@@ -1,34 +1,262 @@
 import glob
-import hashlib
 import os
+import random
 import re
+from abc import ABC
 from os import remove as prm
 from os.path import join as pjoin
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import tensorflow as tf
 import tensorflow.contrib.training.HParams as HParams
+from bitarray import bitarray
 from tensorflow import Session
+from tensorflow.python.client import device_lib
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
-from bitarray import bitarray
-from tensorflow.python.client import device_lib
 from textworld import EnvInfos
 
-from deeptextworld.models.dqn_model import DQNModel
-from deeptextworld.utils import model_name2clazz
-from deeptextworld.trajectory import Trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.agents.utils import *
+from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
-from deeptextworld.agents.utils import *
+from deeptextworld.models.dqn_model import DQNModel
+from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import ctime
-from deeptextworld.dependency_parser import DependencyParserReorder
+from deeptextworld.utils import model_name2clazz, get_hash
+
+
+class BaseCore(Logging, ABC):
+    def get_a_policy_action(
+            self,
+            trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray, actions: List[str],
+            action_mask: np.ndarray) -> ActionDesc:
+        raise NotImplementedError()
+
+    def save_model(self) -> None:
+        raise NotImplementedError()
+
+    def init(self, load_best=False, restore_from: Optional[str] = None) -> None:
+        raise NotImplementedError()
+
+    def train_one_batch(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: np.ndarray,
+            post_action_mask: np.ndarray,
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int) -> np.ndarray:
+        raise NotImplementedError()
+
+    def create_or_reload_target_model(
+            self, restore_from: Optional[str] = None) -> None:
+        raise NotImplementedError()
+
+
+class TFCore(BaseCore, ABC):
+    def __init__(
+            self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+        super(TFCore, self).__init__()
+        self.hp: HParams = hp
+        self.model_dir: str = model_dir
+        self.model: Optional[DQNModel] = None
+        self.target_model: Optional[DQNModel] = None
+        self.loaded_ckpt_step: int = 0
+        self.sess: Optional[Session] = None
+        self.target_sess: Optional[Session] = None
+        self.is_training: bool = True
+        self.train_summary_writer: Optional[FileWriter] = None
+        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
+        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
+        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
+        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
+        self.saver: Optional[Saver] = None
+        self.target_saver: Optional[Saver] = None
+        self.d4train, self.d4eval, self.d4target = self.init_devices()
+        self.tokenizer = tokenizer
+
+    @classmethod
+    def init_devices(cls):
+        devices = [d.name for d in device_lib.list_local_devices()
+                   if d.device_type == "GPU"]
+        if len(devices) == 0:
+            d4train, d4eval, d4target = (
+                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
+        elif len(devices) == 1:
+            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
+        elif len(devices) == 2:
+            d4train = devices[0]
+            d4eval, d4target = devices[1], devices[1]
+        else:
+            d4train = devices[0]
+            d4eval = devices[1]
+            d4target = devices[2]
+        return d4train, d4eval, d4target
+
+    def save_model(self) -> None:
+        self.info('save model')
+        self.saver.save(
+            self.sess, self.ckpt_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+
+    def safe_loading(
+            self, model: DQNModel, sess: Session, saver: Saver,
+            restore_from: str) -> int:
+        """
+        Load weights from restore_from to model.
+        If weights in loaded model are incompatible with current model,
+        try to load those weights that have the same name.
+
+        This method is useful when saved model lacks of training part, e.g.
+        Adam optimizer.
+        :param model:
+        :param sess:
+        :param saver:
+        :param restore_from:
+        :return: trained steps
+        """
+        self.info(
+            "Try to restore parameters from: {}".format(restore_from))
+        with model.graph.as_default():
+            try:
+                saver.restore(sess, restore_from)
+            except Exception as e:
+                self.debug(
+                    "Restoring from saver failed,"
+                    " try to restore from safe saver\n{}".format(e))
+                all_saved_vars = list(
+                    map(lambda v: v[0],
+                        tf.train.list_variables(restore_from)))
+                self.debug(
+                    "Try to restore with safe saver with vars:\n{}".format(
+                        "\n".join(all_saved_vars)))
+                all_vars = tf.global_variables()
+                self.debug("all vars:\n{}".format(
+                    "\n".join([v.op.name for v in all_vars])))
+                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                self.debug("Matched vars:\n{}".format(
+                    "\n".join([v.name for v in var_list])))
+                safe_saver = tf.train.Saver(var_list=var_list)
+                safe_saver.restore(sess, restore_from)
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+        return trained_steps
+
+    def create_model_instance(self, device):
+        model_creator = model_name2clazz(self.hp.model_creator)
+        return model_creator.get_train_model(self.hp, device)
+
+    def create_eval_model_instance(self, device):
+        model_creator = model_name2clazz(self.hp.model_creator)
+        return model_creator.get_eval_model(self.hp, device)
+
+    def create_model(
+            self, is_training=True,
+            device: Optional[str] = None) -> Tuple[Session, Any, Saver]:
+        if is_training:
+            device = device if device else self.d4train
+            model = self.create_model_instance(device)
+            self.info("create train model on device {}".format(device))
+        else:
+            device = device if device else self.d4eval
+            model = self.create_eval_model_instance(device)
+            self.info("create eval model on device {}".format(device))
+
+        conf = tf.ConfigProto(
+            log_device_placement=False, allow_soft_placement=True)
+        sess = tf.Session(graph=model.graph, config=conf)
+        with model.graph.as_default():
+            sess.run(tf.global_variables_initializer())
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
+        return sess, model, saver
+
+    def set_d4eval(self, device: str) -> None:
+        self.d4eval = device
+
+    def load_model(
+            self, sess: Session, model: DQNModel, saver: Saver,
+            restore_from: Optional[str] = None, load_best=False) -> int:
+        if restore_from is None:
+            if load_best:
+                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
+            else:
+                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
+
+        if restore_from is not None:
+            trained_step = self.safe_loading(model, sess, saver, restore_from)
+        else:
+            self.warning('No checkpoint to load, using untrained model')
+            trained_step = 0
+        return trained_step
+
+    def init(
+            self, load_best=False, restore_from: Optional[str] = None) -> None:
+        if self.model is None:
+            self.sess, self.model, self.saver = self.create_model(
+                self.is_training)
+        self.loaded_ckpt_step = self.load_model(
+            self.sess, self.model, self.saver, restore_from, load_best)
+
+        if self.is_training:
+            if self.loaded_ckpt_step > 0:
+                self.create_or_reload_target_model(restore_from)
+            train_summary_dir = os.path.join(
+                self.model_dir, "summaries", "train")
+            self.train_summary_writer = tf.summary.FileWriter(
+                train_summary_dir, self.sess.graph)
+
+    def save_best_model(self) -> None:
+        self.info("save the best model so far")
+        self.saver.save(
+            self.sess, self.best_ckpt_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+        self.info("the best model saved")
+
+    def create_or_reload_target_model(
+            self, restore_from: Optional[str] = None) -> None:
+        """
+        Create the target model if not exists, then load model from the most
+        recent saved weights.
+        :param restore_from:
+        :return:
+        """
+        if self.target_sess is None:
+            self.debug("create target model ...")
+            (self.target_sess, self.target_model, self.target_saver
+             ) = self.create_model(is_training=False, device=self.d4target)
+        else:
+            pass
+        trained_step = self.load_model(
+            self.target_sess, self.target_model, self.target_saver,
+            restore_from, load_best=False)
+        self.debug(
+            "load target model from trained step {}".format(trained_step))
 
 
 class BaseAgent(Logging):
     """
+    Base agent class that using
+     1. action collector
+     2. trajectory collector
+     3. floor plan collector
+     4. tree memory storage and sampling
     """
 
     def __init__(self, hp: HParams, model_dir: str) -> None:
@@ -39,6 +267,7 @@ class BaseAgent(Logging):
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
+        self.stc_prefix = "state_text"
 
         self.inv_direction = {
             ACT.gs: ACT.gn, ACT.gn: ACT.gs,
@@ -48,14 +277,14 @@ class BaseAgent(Logging):
 
         self.info(output_hparams(self.hp))
 
-        self.tjs: Optional[Trajectory] = None
-        self.memo: Optional[DRRNMemo] = None
-        self.model: Optional[DQNModel] = None
-        self.target_model: Optional[DQNModel] = None
+        self.core: Optional[BaseCore] = None
+
+        self.tjs: Optional[Trajectory[ActionMaster]] = None
+        self.memo: Optional[TreeMemory] = None
         self.actor: Optional[ActionCollector] = None
         self.floor_plan: Optional[FloorPlanCollector] = None
         self.dp: Optional[DependencyParserReorder] = None
-        self.loaded_ckpt_step: int = 0
+        self.stc: Optional[Trajectory[ObsInventory]] = None
 
         self._initialized: bool = False
         self._episode_has_started: bool = False
@@ -68,19 +297,9 @@ class BaseAgent(Logging):
         #     decay_step=self.hp.annealing_eps_t,
         #     init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps: float = 0.
-        self.sess: Optional[Session] = None
-        self.target_sess: Optional[Session] = None
         self.is_training: bool = True
-        self.train_summary_writer: Optional[FileWriter] = None
-        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
-        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
-        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
-        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
-        self.saver: Optional[Saver] = None
-        self.target_saver: Optional[Saver] = None
         self.snapshot_saved = False
         self.epoch_start_t = 0
-        self.d4train, self.d4eval, self.d4target = self.init_devices()
 
         self._stale_tids: List[int] = []
 
@@ -101,7 +320,7 @@ class BaseAgent(Logging):
         self._cnt_action: Optional[np.ndarray] = None
 
         self._largest_valid_tag = 0
-        self._stale_tags: Optional[List[str]] = None
+        self._stale_tags: Optional[List[int]] = None
 
     @classmethod
     def report_status(cls, lst_of_status: List[Tuple[str, object]]) -> str:
@@ -195,15 +414,6 @@ class BaseAgent(Logging):
         return 0
 
     @classmethod
-    def get_hash(cls, txt: str) -> str:
-        """
-        Compute hash value for a text as a label
-        :param txt:
-        :return:
-        """
-        return hashlib.md5(txt.encode("utf-8")).hexdigest()
-
-    @classmethod
     def select_additional_infos(cls) -> EnvInfos:
         """
         additional information needed when playing the game
@@ -264,27 +474,6 @@ class BaseAgent(Logging):
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))
         return new_hp, tokenizer
 
-    @classmethod
-    def init_devices(cls):
-        devices = [d.name for d in device_lib.list_local_devices()
-                   if d.device_type == "GPU"]
-        if len(devices) == 0:
-            d4train, d4eval, d4target = (
-                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
-        elif len(devices) == 1:
-            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
-        elif len(devices) == 2:
-            d4train = devices[0]
-            d4eval, d4target = devices[1], devices[1]
-        else:
-            d4train = devices[0]
-            d4eval = devices[1]
-            d4target = devices[2]
-        return d4train, d4eval, d4target
-
-    def set_d4eval(self, device: str) -> None:
-        self.d4eval = device
-
     def init_actions(
             self, hp: HParams, tokenizer: Tokenizer, action_path: str,
             with_loading=True) -> ActionCollector:
@@ -301,13 +490,22 @@ class BaseAgent(Logging):
 
     def init_trajectory(
             self, hp: HParams, tjs_path: str, with_loading=True) -> Trajectory:
-        tjs = Trajectory(num_turns=hp.num_turns)
+        tjs = Trajectory[ActionMaster](num_turns=hp.num_turns)
         if with_loading:
             try:
                 tjs.load_tjs(tjs_path)
             except IOError as e:
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
+
+    def init_state_text(self, state_text_path, with_loading=True):
+        stc = Trajectory[ObsInventory](num_turns=1)
+        if with_loading:
+            try:
+                stc.load_tjs(state_text_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return stc
 
     def init_memo(
             self, hp: HParams, memo_path: str, with_loading=True) -> TreeMemory:
@@ -338,13 +536,39 @@ class BaseAgent(Logging):
         """
         return " ".join(self.tokenizer.tokenize(master))
 
+    def get_a_random_action(self, action_mask: bytes) -> ActionDesc:
+        """
+        Select a random action according to action mask
+        :param action_mask:
+        :return:
+        """
+        action_mask = self.from_bytes([action_mask])[0]
+        mask_idx = np.where(action_mask == 1)[0]
+        action_idx = np.random.choice(mask_idx)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.rnd,
+            action_idx=action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
+            action=self.actor.actions[action_idx])
+        return action_desc
+
     def get_an_eps_action(self, action_mask: bytes) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
         :param action_mask:
         """
-        raise NotImplementedError()
+        if random.random() < self.eps:
+            action_desc = self.get_a_random_action(action_mask)
+        else:
+            action_mask = self.from_bytes([action_mask])[0]
+            trajectory = self.tjs.fetch_last_state()
+            state = self.stc.fetch_last_state()[0]
+            action_desc = self.core.get_a_policy_action(
+                trajectory, state, self.actor.action_matrix,
+                self.actor.action_len, self.actor.actions, action_mask)
+        return action_desc
 
     def train(self) -> None:
         """
@@ -372,96 +596,7 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init(load_best=False, restore_from=restore_from)
 
-    def safe_loading(
-            self, model: DQNModel, sess: Session, saver: Saver,
-            restore_from: str) -> int:
-        """
-        Load weights from restore_from to model.
-        If weights in loaded model are incompatible with current model,
-        try to load those weights that have the same name.
-
-        This method is useful when saved model lacks of training part, e.g.
-        Adam optimizer.
-        :param model:
-        :param sess:
-        :param saver:
-        :param restore_from:
-        :return: trained steps
-        """
-        self.info(
-            "Try to restore parameters from: {}".format(restore_from))
-        with model.graph.as_default():
-            try:
-                saver.restore(sess, restore_from)
-            except Exception as e:
-                self.debug(
-                    "Restoring from saver failed,"
-                    " try to restore from safe saver\n{}".format(e))
-                all_saved_vars = list(
-                    map(lambda v: v[0],
-                        tf.train.list_variables(restore_from)))
-                self.debug(
-                    "Try to restore with safe saver with vars:\n{}".format(
-                        "\n".join(all_saved_vars)))
-                all_vars = tf.global_variables()
-                self.debug("all vars:\n{}".format(
-                    "\n".join([v.op.name for v in all_vars])))
-                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
-                self.debug("Matched vars:\n{}".format(
-                    "\n".join([v.name for v in var_list])))
-                safe_saver = tf.train.Saver(var_list=var_list)
-                safe_saver.restore(sess, restore_from)
-            global_step = tf.train.get_or_create_global_step()
-            trained_steps = sess.run(global_step)
-        return trained_steps
-
-    def create_model_instance(self, device):
-        model_creator = model_name2clazz(self.hp.model_creator)
-        return model_creator.get_train_model(self.hp, device)
-
-    def create_eval_model_instance(self, device):
-        model_creator = model_name2clazz(self.hp.model_creator)
-        return model_creator.get_eval_model(self.hp, device)
-
-    def create_model(
-            self, is_training=True,
-            device: Optional[str] = None) -> Tuple[Session, Any, Saver]:
-        if is_training:
-            device = device if device else self.d4train
-            model = self.create_model_instance(device)
-            self.info("create train model on device {}".format(device))
-        else:
-            device = device if device else self.d4eval
-            model = self.create_eval_model_instance(device)
-            self.info("create eval model on device {}".format(device))
-
-        conf = tf.ConfigProto(
-            log_device_placement=False, allow_soft_placement=True)
-        sess = tf.Session(graph=model.graph, config=conf)
-        with model.graph.as_default():
-            sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(
-                max_to_keep=self.hp.max_snapshot_to_keep,
-                save_relative_paths=True)
-        return sess, model, saver
-
-    def load_model(
-            self, sess: Session, model: DQNModel, saver: Saver,
-            restore_from: Optional[str] = None, load_best=False) -> int:
-        if restore_from is None:
-            if load_best:
-                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
-            else:
-                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
-
-        if restore_from is not None:
-            trained_step = self.safe_loading(model, sess, saver, restore_from)
-        else:
-            self.warning('No checkpoint to load, using untrained model')
-            trained_step = 0
-        return trained_step
-
-    def train_impl(
+    def _train_impl(
             self, sess: Session, t: int, summary_writer: FileWriter,
             target_sess: Session, target_model: DQNModel) -> None:
         raise NotImplementedError()
@@ -496,6 +631,7 @@ class BaseAgent(Logging):
         tjs_path = self._get_context_obj_path(self.tjs_prefix)
         memo_path = self._get_context_obj_path(self.memo_prefix)
         fp_path = self._get_context_obj_path(self.fp_prefix)
+        stc_path = self._get_context_obj_path(self.stc_prefix)
 
         # always loading actions to avoid different action index for DQN
         self.actor = self.init_actions(
@@ -507,30 +643,22 @@ class BaseAgent(Logging):
             self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=self.is_training)
+        # load stc
+        self.stc = self.init_state_text(stc_path, with_loading=True)
 
     def _init_impl(
             self, load_best=False, restore_from: Optional[str] = None) -> None:
         self._load_context_objs()
-        if self.model is None:
-            self.sess, self.model, self.saver = self.create_model(
-                self.is_training)
-        self.loaded_ckpt_step = self.load_model(
-            self.sess, self.model, self.saver, restore_from, load_best)
+        self.core.init(load_best, restore_from)
 
         if self.is_training:
-            if self.loaded_ckpt_step > 0:
-                self._create_n_load_target_model(restore_from, load_best)
-            self.eps = self.hp.init_eps
-            train_summary_dir = os.path.join(
-                self.model_dir, "summaries", "train")
-            self.train_summary_writer = tf.summary.FileWriter(
-                train_summary_dir, self.sess.graph)
             if self.hp.start_t_ignore_model_t:
                 self.total_t = min(
                     self.hp.observation_t,
                     len(self.memo) if self.memo is not None else 0)
             else:
-                self.total_t = self.loaded_ckpt_step + self.hp.observation_t
+                self.total_t = (
+                        self.core.loaded_ckpt_step + self.hp.observation_t)
         else:
             self.eps = 0
             self.total_t = 0
@@ -557,8 +685,9 @@ class BaseAgent(Logging):
     def _start_episode_impl(
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         self.tjs.add_new_tj()
+        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
-        self.game_id = self.get_hash(master_starter)
+        self.game_id = get_hash(master_starter)
         self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -603,14 +732,6 @@ class BaseAgent(Logging):
         self._prev_last_action = None
         self._prev_master = None
 
-    def save_best_model(self) -> None:
-        self.info("save the best model so far")
-        self.saver.save(
-            self.sess, self.best_ckpt_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=self.model.graph))
-        self.info("the best model saved")
-
     def _delete_stale_context_objs(self) -> None:
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
@@ -622,24 +743,22 @@ class BaseAgent(Logging):
                 prm(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.action_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
 
     def _save_context_objs(self) -> None:
         action_path = self._get_context_obj_new_path(self.action_prefix)
         tjs_path = self._get_context_obj_new_path(self.tjs_prefix)
         memo_path = self._get_context_obj_new_path(self.memo_prefix)
         fp_path = self._get_context_obj_new_path(self.fp_prefix)
+        stc_path = self._get_context_obj_new_path(self.stc_prefix)
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
         self.actor.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
+        self.stc.save_tjs(stc_path)
 
     def save_snapshot(self) -> None:
-        self.info('save model')
-        self.saver.save(
-            self.sess, self.ckpt_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=self.model.graph))
         self.info('save snapshot of the agent')
         self._save_context_objs()
         self._delete_stale_context_objs()
@@ -655,11 +774,13 @@ class BaseAgent(Logging):
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
         fp_tags = self.get_path_tags(self.model_dir, self.fp_prefix)
+        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
         valid_tags.intersection_update(fp_tags)
+        valid_tags.intersection_update(stc_tags)
 
         return list(valid_tags)
 
@@ -937,53 +1058,66 @@ class BaseAgent(Logging):
             self.epoch_start_t = ctime()
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
-        self.train_impl(
-            self.sess, self.total_t, self.train_summary_writer,
-            self.target_sess if self.target_sess else self.sess,
-            self.target_model if self.target_model else self.model)
-        self._save_agent_n_reload_target()
+        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
 
-    def _create_n_load_target_model(
-            self, restore_from: Optional[str], load_best: bool) -> None:
-        """
-        Create the target model if not exists, then load model from the most
-        recent saved weights.
-        :param restore_from:
-        :param load_best:
-        :return:
-        """
-        if self.target_sess is None:
-            self.debug("create target model ...")
-            (self.target_sess, self.target_model, self.target_saver
-             ) = self.create_model(is_training=False, device=self.d4target)
-        else:
-            pass
-        trained_step = self.load_model(
-            self.target_sess, self.target_model, self.target_saver,
-            restore_from, load_best)
-        self.debug(
-            "load target model from trained step {}".format(trained_step))
+        trajectory_id = [m[0].tid for m in b_memory]
+        state_id = [m[0].sid for m in b_memory]
+        action_id = [m[0].aid for m in b_memory]
+        game_id = [m[0].gid for m in b_memory]
+        reward = [m[0].reward for m in b_memory]
+        is_terminal = [m[0].is_terminal for m in b_memory]
+        action_mask = [m[0].action_mask for m in b_memory]
+        next_action_mask = [m[0].next_action_mask for m in b_memory]
 
-    def _save_agent_n_reload_target(self) -> None:
+        pre_action_mask = self.from_bytes(action_mask)
+        post_action_mask = self.from_bytes(next_action_mask)
+
+        post_trajectories = self.tjs.fetch_batch_states(trajectory_id, state_id)
+        pre_trajectories = self.tjs.fetch_batch_states(
+            trajectory_id, [sid - 1 for sid in state_id])
+
+        post_states = [
+            state[0] for state in
+            self.stc.fetch_batch_states(trajectory_id, state_id)]
+        pre_states = [
+            state[0] for state in self.stc.fetch_batch_states(
+                trajectory_id, [sid - 1 for sid in state_id])]
+
+        # make sure the p_states and s_states are in the same game.
+        # otherwise, it won't make sense to use the same action matrix.
+        action_len = (
+            [self.actor.get_action_len(gid) for gid in game_id])
+        max_action_len = np.max(action_len)
+        action_matrix = (
+            [self.actor.get_action_matrix(gid)[:, :max_action_len]
+             for gid in game_id])
+
+        b_weight = self.core.train_one_batch(
+            pre_trajectories=pre_trajectories,
+            post_trajectories=post_trajectories,
+            pre_states=pre_states,
+            post_states=post_states,
+            action_matrix=action_matrix,
+            action_len=action_len,
+            pre_action_mask=pre_action_mask,
+            post_action_mask=post_action_mask,
+            dones=is_terminal,
+            rewards=reward,
+            action_idx=action_id,
+            b_weight=b_weight,
+            step=self.total_t)
+
+        self.memo.batch_update(b_idx, b_weight)
+
         if self.is_time_to_save():
-            epoch_end_t = ctime()
-            delta_time = epoch_end_t - self.epoch_start_t
-            self.info('current epoch end')
-            reports_time = [
-                ('epoch time', delta_time),
-                ('#batches per epoch', self.hp.save_gap_t),
-                ('avg step time',
-                 delta_time * 1.0 / self.hp.save_gap_t)]
-            self.info(self.report_status(reports_time))
             self.save_snapshot()
-            self._create_n_load_target_model(restore_from=None, load_best=False)
-            self.snapshot_saved = True
-            self.info("snapshot saved, ready for evaluation")
-            self.epoch_start_t = ctime()
+            self.core.save_model()
+            self.core.create_or_reload_target_model()
 
     def _clean_stale_context(self, tids: List[int]) -> None:
         self.debug("tjs deletes {}".format(tids))
         self.tjs.request_delete_keys(tids)
+        self.stc.request_delete_keys(tids)
 
     def update_status_impl(
             self, master: str, cleaned_obs: str, instant_reward: float,
@@ -1045,6 +1179,17 @@ class BaseAgent(Logging):
         self.tjs.append(ActionMaster(
             action=self._last_action if self._last_action else "",
             master=master))
+
+        if not dones[0]:
+            state = ObsInventory(
+                obs=infos[INFO_KEY.desc][0],
+                inventory=infos[INFO_KEY.inventory][0])
+        else:
+            obs = (
+                "terminal and win" if infos[INFO_KEY.won]
+                else "terminal and lose")
+            state = ObsInventory(obs=obs, inventory="")
+        self.stc.append(state)
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
