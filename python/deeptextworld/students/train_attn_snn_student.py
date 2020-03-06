@@ -209,11 +209,11 @@ def load_snapshot(
 
 
 def prepare_master(master_str, tokenizer):
-    return tokenizer.convert_tokens_to_ids(tokenizer.tokenize(master_str))
+    return tokenizer.convert_tokens_to_ids(tokenizer.get_cleaned_master(master_str))
 
 
 def prepare_action(action_str, tokenizer):
-    tokens = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(action_str))
+    tokens = tokenizer.convert_tokens_to_ids(tokenizer.get_cleaned_master(action_str))
     tokens = tokens[:max(10, len(tokens))]
     return tokens
 

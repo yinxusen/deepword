@@ -37,6 +37,7 @@ HPARAMS = {
         vocab_size=0,
         n_actions=128,
         n_tokens_per_action=10,
+        hidden_state_size=32,
         sos='<S>',
         sos_id=0,
         eos='</S>',

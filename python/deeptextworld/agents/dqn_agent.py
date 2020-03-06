@@ -1,28 +1,28 @@
 from copy import deepcopy
-from os import remove as prm
+from typing import Dict, Optional, List, Any
 
 import numpy as np
 from textworld import EnvInfos
 
-from deeptextworld.agents.base_agent import BaseAgent, ActionDesc, ACT_TYPE, \
-    INFO_KEY
-from deeptextworld.models import dqn_model
-from deeptextworld.models.dqn_func import get_best_2D_q
-from deeptextworld.models.dqn_func import get_random_1Daction, \
-    get_best_1Daction, \
-    get_best_1D_q
-from deeptextworld.trajectory import StateTextCompanion
-from deeptextworld.utils import ctime
+from deeptextworld.agents.base_agent import BaseCore
+from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
+from deeptextworld.agents.utils import ActionMaster
+from deeptextworld.agents.utils import ObsInventory
+from deeptextworld.agents.utils import dqn_input, batch_dqn_input
+from deeptextworld.agents.utils import get_best_1d_q
+from deeptextworld.utils import get_hash
 
 
-class DQNAgent(BaseAgent):
+class DQNCore(TFCore):
     """
+    DQNAgent that treats actions as types
     """
 
-    def __init__(self, hp, model_dir):
-        super(DQNAgent, self).__init__(hp, model_dir)
+    def __init__(self, hp, model_dir, tokenizer):
+        super(DQNCore, self).__init__(hp, model_dir, tokenizer)
 
-    def select_additional_infos(self):
+    @classmethod
+    def select_additional_infos(cls):
         """
         additional information needed when playing the game
         """
@@ -33,127 +33,195 @@ class DQNAgent(BaseAgent):
             won=True,
             admissible_commands=True)
 
-    def get_an_eps_action(self, action_mask):
+    def get_a_policy_action(
+            self,
+            trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray, actions: List[str],
+            action_mask: np.ndarray) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
-        :param action_mask:
         """
-        action_mask = self.from_bytes([action_mask])[0]
-        if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
-                self.actor.actions, action_mask)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE.rnd, action_idx=action_idx,
-                action=action)
-        else:
-            indexed_state_t, lens_t = self.tjs.fetch_last_state()
-            q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
-                self.model.src_: [indexed_state_t],
-                self.model.src_len_: [lens_t]
-            })[0]
-            action_idx, q_max, action = get_best_1Daction(
-                q_actions_t, self.actor.actions,
-                mask=action_mask)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE.policy_drrn,
-                action_idx=action_idx, action=action)
+        mask_idx = np.where(action_mask == 1)[0]
+        src, src_len = dqn_input(
+            trajectory, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id)
+        q_actions = self.sess.run(self.model.q_actions, feed_dict={
+            self.model.src_: [src],
+            self.model.src_len_: [src_len]
+        })[0]
+        admissible_q_actions = q_actions[mask_idx]
+        action_idx, q_val = get_best_1d_q(admissible_q_actions)
+        real_action_idx = mask_idx[action_idx]
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.policy_drrn,
+            action_idx=real_action_idx,
+            token_idx=action_matrix[real_action_idx],
+            action_len=action_len[real_action_idx],
+            action=actions[real_action_idx])
         return action_desc
 
-    def create_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_train_model(model_creator, self.hp)
-        return model
+    def _compute_expected_q(
+            self,
+            action_mask: np.ndarray,
+            trajectories: List[List[ActionMaster]],
+            dones: List[bool],
+            rewards: List[float]) -> np.ndarray:
+        """
+        Compute expected q values given post trajectories and post actions
 
-    def create_eval_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_eval_model(model_creator, self.hp)
-        return model
+        notice that action_mask, tids, sids should belong to post game states,
+        while dones, rewards belong to pre game states.
+        """
 
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        gamma = self.reverse_annealing_gamma(
-            self.hp.init_gamma, self.hp.final_gamma,
-            t - self.hp.observation_t, self.hp.annealing_gamma_t)
+        src, src_len = batch_dqn_input(
+            trajectories, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id)
 
-        t1 = ctime()
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
-        t1_end = ctime()
+        # target network provides the value used as expected q-values
+        qs_target = self.target_sess.run(
+            self.target_model.q_actions,
+            feed_dict={
+                self.target_model.src_: src,
+                self.target_model.src_len_: src_len})
 
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        action_id = [m[0].aid for m in b_memory]
-        reward = [m[0].reward for m in b_memory]
-        is_terminal = [m[0].is_terminal for m in b_memory]
-        next_action_mask = [m[0].next_action_mask for m in b_memory]
-
-        action_mask_t1 = self.from_bytes(next_action_mask)
-
-        p_states, s_states, p_len, s_len = \
-            self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
-
-        t2 = ctime()
-        s_q_actions_target = target_sess.run(
-            target_model.q_actions,
-            feed_dict={target_model.src_: s_states,
-                       target_model.src_len_: s_len})
-
-        s_q_actions_dqn = sess.run(
+        # current network decides which action provides best q-value
+        qs_dqn = self.sess.run(
             self.model.q_actions,
-            feed_dict={self.model.src_: s_states,
-                       self.model.src_len_: s_len})
-        t2_end = ctime()
+            feed_dict={
+                self.model.src_: src,
+                self.model.src_len_: src_len})
 
-        expected_q = np.zeros_like(reward)
+        expected_q = np.zeros_like(rewards)
         for i in range(len(expected_q)):
-            expected_q[i] = reward[i]
-            if not is_terminal[i]:
-                s_argmax_q, _ = get_best_1D_q(
-                    s_q_actions_dqn[i, :], mask=action_mask_t1[i])
-                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
+            expected_q[i] = rewards[i]
+            if not dones[i]:
+                mask_idx = np.where(action_mask[i] == 1)[0]
+                action_idx, _ = get_best_1d_q(qs_dqn[i, mask_idx])
+                real_action_idx = mask_idx[action_idx]
+                expected_q[i] += (
+                        self.hp.final_gamma
+                        * qs_target[i, real_action_idx])
+        return expected_q
 
-        t3 = ctime()
-        _, summaries, loss_eval, abs_loss = sess.run(
+    def train_one_batch(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: np.ndarray,
+            post_action_mask: np.ndarray,
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int, others: Any) -> np.ndarray:
+
+        expected_q = self._compute_expected_q(
+            action_mask=post_action_mask, trajectories=post_trajectories,
+            dones=dones, rewards=rewards)
+
+        pre_src, pre_src_len = batch_dqn_input(
+            pre_trajectories, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id)
+        _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
-            feed_dict={self.model.src_: p_states,
-                       self.model.src_len_: p_len,
-                       self.model.b_weight_: b_weight,
-                       self.model.action_idx_: action_id,
-                       self.model.expected_q_: expected_q})
-        t3_end = ctime()
-
-        self.memo.batch_update(b_idx, abs_loss)
+            feed_dict={
+                self.model.src_: pre_src,
+                self.model.src_len_: pre_src_len,
+                self.model.b_weight_: b_weight,
+                self.model.action_idx_: action_idx,
+                self.model.expected_q_: expected_q})
 
         self.info('loss: {}'.format(loss_eval))
-        self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end - t1, t2_end - t2, t3_end - t3))
-        summary_writer.add_summary(summaries, t - self.hp.observation_t)
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
+        return abs_loss
 
 
-class TabularDQNAgent(DQNAgent):
-    def __init__(self, hp, model_dir):
-        super(TabularDQNAgent, self).__init__(hp, model_dir)
+class TabularCore(BaseCore):
+    """
+    Tabular-wise DQN agent that uses matrix to store q-vectors and uses
+    hashed values of observation + inventory as game states
+    """
+    def __init__(self, hp, model_dir, tokenizer):
+        super(TabularCore, self).__init__()
+        self.hp = hp
         self.q_mat_prefix = "q_mat"
-        self.q_mat = {}  # map hash of a state to a q-vec
-        self.target_q_mat = {}  # target q-mat for Double DQN
-        self.stc_prefix = "state_text"
-        self.stc = None
+        # model of tabular Q-learning, map from state to q-vectors
+        self.q_mat: Dict[str, np.ndarray] = dict()
+        self.target_q_mat: Dict[str, np.ndarray] = dict()
+        self.state2hash: Dict[ObsInventory, str] = dict()
+        self.tokenizer = tokenizer
+        self.model_dir = model_dir
 
-    def init_state_text(self, state_text_path, with_loading=True):
-        stc = StateTextCompanion()
-        if with_loading:
-            try:
-                stc.load_tjs(state_text_path)
-            except IOError as e:
-                self.info("load trajectory error: \n{}".format(e))
-        return stc
+    def train_one_batch(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: np.ndarray,
+            post_action_mask: np.ndarray,
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int, others: Any) -> np.ndarray:
 
-    def _load_context_objs(self):
-        # load others
-        super(TabularDQNAgent, self)._load_context_objs()
-        # load q_mat
-        # TODO: q_mat is actually the model for TabularDQN, but let's make it
-        # TODO: easier by loading like a context object.
+        expected_q = self._compute_expected_q(
+            post_action_mask, post_states, dones, rewards)
+
+        pre_hash_states = [
+            self.get_state_hash(state[0]) for state in pre_states]
+
+        abs_loss = np.zeros_like(rewards)
+        for i, ps in enumerate(pre_hash_states):
+            if ps not in self.q_mat:
+                self.q_mat[ps] = np.zeros(self.hp.n_actions)
+            prev_q_val = self.q_mat[ps][action_idx[i]]
+            delta_q_val = expected_q[i] - prev_q_val
+            abs_loss[i] = abs(delta_q_val)
+            self.q_mat[ps][action_idx[i]] = (
+                    prev_q_val + delta_q_val * b_weight[i])
+        return abs_loss
+
+    def get_a_policy_action(
+            self,
+            trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            actions: List[str],
+            action_mask: np.ndarray) -> ActionDesc:
+
+        mask_idx = np.where(action_mask == 1)[0]
+        hs = self.get_state_hash(state)
+        q_actions = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
+        admissible_q_actions = q_actions[mask_idx]
+        action_idx, q_val = get_best_1d_q(admissible_q_actions)
+        real_action_idx = mask_idx[action_idx]
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.policy_tbl,
+            action_idx=real_action_idx,
+            token_idx=action_matrix[real_action_idx],
+            action_len=action_len[real_action_idx],
+            action=actions[real_action_idx])
+        return action_desc
+
+    def create_or_reload_target_model(
+            self, restore_from: Optional[str] = None) -> None:
+        self.target_q_mat = deepcopy(self.q_mat)
+
+    def init(self, load_best=False, restore_from: Optional[str] = None) -> None:
         q_mat_path = self._get_context_obj_path(self.q_mat_prefix)
         try:
             npz_q_mat = np.load(q_mat_path, allow_pickle=True)
@@ -165,15 +233,11 @@ class TabularDQNAgent(DQNAgent):
             self.debug("init target_q_mat with q_mat")
         except IOError as e:
             self.debug("load q_mat error:\n{}".format(e))
-        # load stc
-        stc_path = self._get_context_obj_path(self.stc_prefix)
-        self.stc = self.init_state_text(stc_path, with_loading=True)
+        pass
 
-    def _save_context_objs(self):
-        super(TabularDQNAgent, self)._save_context_objs()
-        q_mat_path = self._get_context_obj_new_path(self.q_mat_prefix)
-        stc_path = self._get_context_obj_new_path(self.stc_prefix)
-        self.stc.save_tjs(stc_path)
+    def save_model(self) -> None:
+        q_mat_path = "{}/{}/step-{}.npz".format(
+            self.model_dir, "tbl-model", self.total_t)
         np.savez(
             q_mat_path,
             q_mat_key=list(self.q_mat.keys()),
@@ -181,341 +245,39 @@ class TabularDQNAgent(DQNAgent):
         self.target_q_mat = deepcopy(self.q_mat)
         self.debug("target q_mat is updated with q_mat")
 
-    def get_compatible_snapshot_tag(self):
-        # get parent valid tags
-        valid_tags = super(TabularDQNAgent, self).get_compatible_snapshot_tag()
-        valid_tags = set(valid_tags)
-        # mix valid tags w/ context objs
-        q_mat_tags = self.get_path_tags(self.model_dir, self.q_mat_prefix)
-        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
-        valid_tags.intersection_update(q_mat_tags)
-        valid_tags.intersection_update(stc_tags)
-        return list(valid_tags)
-
-    def _delete_stale_context_objs(self):
-        super(TabularDQNAgent, self)._delete_stale_context_objs()
-        if self._stale_tags is not None:
-            for tag in self._stale_tags:
-                prm(self._get_context_obj_path_w_tag(self.q_mat_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
-
-    def _start_episode_impl(self, obs, infos):
-        super(TabularDQNAgent, self)._start_episode_impl(obs, infos)
-        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
-
-    def _jitter_go_condition(self, action_desc, admissible_go_actions):
-        if not (self.hp.jitter_go and
-                action_desc.action in admissible_go_actions and
-                action_desc.action_type == ACT_TYPE.policy_tbl):
-            return False
+    def get_state_hash(self, state: ObsInventory) -> str:
+        if state in self.state2hash:
+            hs = self.state2hash[state]
         else:
-            if self.is_training:
-                return np.random.random() > 1. - self.hp.jitter_train_prob
-            else:
-                return np.random.random() > 1. - self.hp.jitter_eval_prob
+            hs = get_hash(state.obs + "\n" + state.inventory)
+            self.state2hash[state] = hs
+        return hs
 
-    def choose_action(
-            self, actions, all_actions, actions_mask, instant_reward):
-        """
-        Choose an action by
-          1) try epsilon search learned policy;
-          2) jitter go
-        :param actions:
-        :param all_actions:
-        :param actions_mask:
-        :param instant_reward:
-        :return:
-        """
-        action_desc = self.random_walk_for_collecting_fp(
-            actions, all_actions)
-        if action_desc.action_idx is None:
-            action_desc = self.get_an_eps_action(actions_mask)
-            action_desc = self.jitter_go_action(
-                action_desc, actions, all_actions)
-        else:
-            pass
-        return action_desc
+    def _compute_expected_q(
+            self,
+            action_mask: np.ndarray,
+            states: List[ObsInventory],
+            dones: List[bool],
+            rewards: List[float]) -> np.ndarray:
 
-    def _clean_stale_context(self, tids):
-        super(TabularDQNAgent, self)._clean_stale_context(tids)
-        self.debug("stc deletes {}".format(tids))
-        self.stc.request_delete_keys(tids)
+        post_hash_states = [
+            self.get_state_hash(state[0]) for state in states]
 
-    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
-        actions, all_actions, actions_mask, instant_reward = super(
-            TabularDQNAgent, self).collect_new_sample(
-            cleaned_obs, instant_reward, dones, infos)
-
-        # due to game design flaw, we need to make a new terminal
-        # observation + inventory
-        # because the game terminal observation + inventory is the same with
-        # its previous state
-        if not dones[0]:
-            state_text = (
-                infos[INFO_KEY.desc][0] + "\n" + infos[INFO_KEY.inventory][0])
-        else:
-            state_text = (
-                "terminal and win" if infos[INFO_KEY.won]
-                else "terminal and lose")
-        self.stc.append(self.get_hash(state_text))
-
-        return actions, all_actions, actions_mask, instant_reward
-
-    def get_an_eps_action(self, action_mask):
-        """
-        get either an random action index with action string
-        or the best predicted action index with action string.
-        :param action_mask:
-        """
-        action_mask = self.from_bytes([action_mask])[0]
-        if np.random.random() < self.eps:
-            action_idx, action = get_random_1Daction(
-                self.actor.actions, action_mask)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE.rnd, action_idx=action_idx,
-                token_idx=self.actor.action_matrix[action_idx],
-                action_len=self.actor.action_len[action_idx],
-                action=action)
-        else:
-            hs, _ = self.stc.fetch_last_state()
-            q_actions_t = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
-            action_idx, q_max, action = get_best_1Daction(
-                q_actions_t, self.actor.actions,
-                mask=action_mask)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE.policy_tbl, action_idx=action_idx,
-                token_idx=self.actor.action_matrix[action_idx],
-                action_len=self.actor.action_len[action_idx],
-                action=action)
-        return action_desc
-
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        gamma = self.reverse_annealing_gamma(
-            self.hp.init_gamma, self.hp.final_gamma,
-            t - self.hp.observation_t, self.hp.annealing_gamma_t)
-
-        t1 = ctime()
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
-        t1_end = ctime()
-
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        action_id = [m[0].aid for m in b_memory]
-        reward = [m[0].reward for m in b_memory]
-        is_terminal = [m[0].is_terminal for m in b_memory]
-        next_action_mask = [m[0].next_action_mask for m in b_memory]
-
-        action_mask_t1 = self.from_bytes(next_action_mask)
-
-        p_states, s_states, p_len, s_len = \
-            self.stc.fetch_batch_states_pair(trajectory_id, state_id)
-
-        t2 = ctime()
-        s_q_actions_target = np.asarray(
+        post_qs_target = np.asarray(
             [self.target_q_mat.get(s, np.zeros(self.hp.n_actions))
-             for s in s_states])
-        s_q_actions_dqn = np.asarray(
+             for s in post_hash_states])
+        post_qs_dqn = np.asarray(
             [self.q_mat.get(s, np.zeros(self.hp.n_actions))
-             for s in s_states])
-        t2_end = ctime()
+             for s in post_hash_states])
 
-        expected_q = np.zeros_like(reward)
+        expected_q = np.zeros_like(rewards)
         for i in range(len(expected_q)):
-            expected_q[i] = reward[i]
-            if not is_terminal[i]:
-                s_argmax_q, _ = get_best_1D_q(
-                    s_q_actions_dqn[i, :], mask=action_mask_t1[i])
-                expected_q[i] += gamma * s_q_actions_target[i, s_argmax_q]
-
-        t3 = ctime()
-        abs_loss = np.zeros_like(reward)
-        for i, ps in enumerate(p_states):
-            if ps not in self.q_mat:
-                self.q_mat[ps] = np.zeros(self.hp.n_actions)
-            prev_q_val = self.q_mat[ps][action_id[i]]
-            delta_q_val = expected_q[i] - prev_q_val
-            abs_loss[i] = abs(delta_q_val)
-            self.q_mat[ps][action_id[i]] = (
-                    prev_q_val + delta_q_val * b_weight[i])
-        t3_end = ctime()
-
-        self.memo.batch_update(b_idx, abs_loss)
-
-        self.debug('t1: {}, t2: {}, t3: {}'.format(
-            t1_end - t1, t2_end - t2, t3_end - t3))
-
-
-class GenDQNAgent(DQNAgent):
-    def __init__(self, hp, model_dir):
-        super(GenDQNAgent, self).__init__(hp, model_dir)
-
-    def select_additional_infos(self):
-        """
-        additional information needed when playing the game
-        """
-        return EnvInfos(
-            description=True,
-            inventory=True,
-            max_score=True,
-            won=True,
-            admissible_commands=True)
-
-    @classmethod
-    def negative_response_reward(cls, master):
-        if master == "that 's not a verb i recognise .":
-            return 1
-        return 0
-
-    def get_an_eps_action(self, action_mask):
-        """
-        get either an random action index with action string
-        or the best predicted action index with action string.
-        :param action_mask:
-        """
-        indexed_state_t, lens_t = self.tjs.fetch_last_state()
-        beam_size = 1
-        temperature = 1
-        self.debug("temperature: {}".format(temperature))
-        res = self.sess.run(
-            [self.model.decoded_idx_infer, self.model.col_eos_idx,
-             self.model.decoded_logits_infer, self.model.p_gen_infer],
-            feed_dict={
-                self.model.src_: [indexed_state_t],
-                self.model.src_len_: [lens_t],
-                self.model.temperature_: temperature,
-                self.model.beam_size_: beam_size,
-                self.model.use_greedy_: False
-            })
-        action_idx = res[0]
-        col_eos_idx = res[1]
-        decoded_logits = res[2]
-        # self.debug("decoded logits: {}".format(decoded_logits))
-        p_gen = res[3]
-
-        res_summary = []
-        special_tokens = {self.hp.padding_val, self.hp.eos}
-        for bid in range(beam_size):
-            action = " ".join(
-                filter(lambda t: t not in special_tokens,
-                       self.tokenizer.convert_ids_to_tokens(
-                           action_idx[bid, :col_eos_idx[bid]])))
-            res_summary.append(
-                (action_idx[bid], col_eos_idx[bid],
-                 action, p_gen[bid],
-                 np.sum(decoded_logits[bid, :col_eos_idx[bid]])
-                 / col_eos_idx[bid]))
-
-        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
-        top_action = res_summary[0]
-
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_gen, action_idx=None,
-            token_idx=top_action[0], action_len=top_action[1],
-            action=top_action[2])
-
-        self.debug("generated actions:\n{}".format(
-            "\n".join(
-                [" ".join(
-                    map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
-                        zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
-                 for ac in res_summary])))
-        return action_desc
-
-    def get_instant_reward(self, score, master, is_terminal, won):
-        """
-        increase instance reward 10 times to fit cross entropy loss trained
-        model
-        """
-        ir = super(GenDQNAgent, self).get_instant_reward(
-            score, master, is_terminal, won)
-        return ir * 10
-
-    def create_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_train_gen_model(
-            model_creator, self.hp, device_placement=device)
-        return model
-
-    def create_eval_model_instance(self, device):
-        model_creator = getattr(dqn_model, self.hp.model_creator)
-        model = dqn_model.create_eval_gen_model(
-            model_creator, self.hp, device_placement=device)
-        return model
-
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        gamma = self.reverse_annealing_gamma(
-            self.hp.init_gamma, self.hp.final_gamma,
-            t - self.hp.observation_t, self.hp.annealing_gamma_t)
-
-        t1 = ctime()
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
-        t1_end = ctime()
-
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        at_id = [m[0].token_id for m in b_memory]
-        action_len = [m[0].a_len for m in b_memory]
-        reward = [m[0].reward for m in b_memory]
-        is_terminal = [m[0].is_terminal for m in b_memory]
-        at_id_wo_eos = np.asarray(at_id)
-        at_id_wo_eos[
-            range(len(at_id)), np.asarray(action_len) - 1] = 0
-        at_id_in = np.concatenate(
-            [np.asarray([[self.hp.sos_id]] * len(action_len)),
-             at_id_wo_eos[:, :-1]], axis=1)
-
-        at_id = np.asarray(at_id)
-        self.debug("action in/out example:\n{} -- {}\n{} -- {}".format(
-            at_id_in[0, :],
-            self.tokenizer.convert_ids_to_tokens(
-                at_id_in[0, :action_len[0]]),
-            at_id[0, :],
-            self.tokenizer.convert_ids_to_tokens(
-                at_id[0, :action_len[0]])))
-
-        p_states, s_states, p_len, s_len = \
-            self.tjs.fetch_batch_states_pair(trajectory_id, state_id)
-
-        t2 = ctime()
-        s_q_actions_target = target_sess.run(
-            target_model.q_actions,
-            feed_dict={target_model.src_: s_states,
-                       target_model.src_len_: s_len,
-                       target_model.action_idx_: at_id_in})
-
-        s_q_actions_dqn = sess.run(
-            self.model.q_actions,
-            feed_dict={self.model.src_: s_states,
-                       self.model.src_len_: s_len,
-                       self.model.action_idx_: at_id_in})
-        t2_end = ctime()
-
-        expected_q = np.zeros_like(reward)
-        for i in range(len(expected_q)):
-            expected_q[i] = reward[i]
-            if not is_terminal[i]:
-                s_argmax_q, _, valid_len = get_best_2D_q(
-                    s_q_actions_dqn[i, :, :], self.hp.eos_id)
-                expected_q[i] += gamma * np.mean(
-                    s_q_actions_target[i, range(valid_len),
-                                       s_argmax_q[:valid_len]])
-
-        t3 = ctime()
-        _, summaries, loss_eval, abs_loss = sess.run(
-            [self.model.train_op, self.model.train_summary_op, self.model.loss,
-             self.model.abs_loss],
-            feed_dict={self.model.src_: p_states,
-                       self.model.src_len_: p_len,
-                       self.model.b_weight_: b_weight,
-                       self.model.action_idx_: at_id_in,
-                       self.model.action_idx_out_: at_id,
-                       self.model.action_len_: action_len,
-                       self.model.expected_q_: expected_q})
-        t3_end = ctime()
-
-        self.memo.batch_update(b_idx, abs_loss)
-
-        if t % 1000 == 0:
-            self.debug('t1: {}, t2: {}, t3: {}'.format(
-                t1_end - t1, t2_end - t2, t3_end - t3))
-        summary_writer.add_summary(summaries, t - self.hp.observation_t)
+            expected_q[i] = rewards[i]
+            if not dones[i]:
+                mask_idx = np.where(action_mask[i] == 1)[0]
+                action_idx, _ = get_best_1d_q(post_qs_dqn[i, mask_idx])
+                real_action_idx = mask_idx[action_idx]
+                expected_q[i] += (
+                        self.hp.final_gamma
+                        * post_qs_target[i, real_action_idx])
+        return expected_q

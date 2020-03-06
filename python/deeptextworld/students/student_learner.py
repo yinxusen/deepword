@@ -11,9 +11,9 @@ from tqdm import trange
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.hparams import save_hparams
-from deeptextworld.models.dqn_func import get_batch_best_1D_idx
+from deeptextworld.models.utils import get_batch_best_1d_idx
 from deeptextworld.students.utils import get_action_idx_pair
-from deeptextworld.students.utils import model_name2clazz
+from deeptextworld.utils import model_name2clazz
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.trajectory import RawTextTrajectory
 from deeptextworld.utils import flatten, eprint
@@ -292,7 +292,7 @@ class GenLearner(StudentLearner):
         game_id = [m[2] for m in b_memory]
         action_mask = [m[6] for m in b_memory]
         expected_qs = [m[8] for m in b_memory]
-        best_q_idx = get_batch_best_1D_idx(
+        best_q_idx = get_batch_best_1d_idx(
             expected_qs, BaseAgent.from_bytes(action_mask))
 
         states = tjs.fetch_batch_states(trajectory_id, state_id)
@@ -419,3 +419,42 @@ class BertLearner(StudentLearner):
             axis=0)
 
         return inp, seg_tj_action, inp_len, expected_q
+
+
+class DataDeliver(DRRNLearner):
+    def train_impl(self, data, train_step):
+        for state, answer, actions in data:
+            print([s.replace("\n", " ") for s in state])
+            print([s.replace("\n", " ") for s in answer])
+            print(actions)
+
+    def prepare_data(self, b_memory, tjs, action_collector):
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = [m.q_actions for m in b_memory]
+        action_mask_t = BaseAgent.from_bytes(action_mask)
+
+        states_pair = tjs.fetch_batch_states_pair(trajectory_id, state_id)
+        states = states_pair[0]
+        answers = states_pair[1]
+
+        result_data = []
+
+        for i in range(len(game_id)):
+            # mask_idx = np.where(action_mask_t[i] == 1)[0]
+            gid = game_id[i]
+            q_actions = expected_qs[i]
+            actions = action_collector.get_actions(gid)
+            actions_n_scores = []
+            for j in range(len(actions)):
+                if actions[j] == "":
+                    break
+                actions_n_scores.append(
+                    (actions[j], q_actions[j], action_mask_t[i][j]))
+            result_data.append(
+                (states[i], answers[i],
+                 sorted(actions_n_scores, key=lambda x: -x[1])))
+
+        return result_data

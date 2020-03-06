@@ -1,42 +1,273 @@
 import glob
-import hashlib
 import os
+import random
 import re
+from abc import ABC
 from os import remove as prm
 from os.path import join as pjoin
-from typing import List, Dict, Any, Optional
+from typing import Any
 
-import numpy as np
 import tensorflow as tf
-from bert.tokenization import FullTokenizer as BertTokenizer
-from albert.tokenization import FullTokenizer as AlbertTokenizer
+import tensorflow.contrib.training.HParams as HParams
 from bitarray import bitarray
+from tensorflow import Session
 from tensorflow.python.client import device_lib
+from tensorflow.summary import FileWriter
+from tensorflow.train import Saver
 from textworld import EnvInfos
 
-from deeptextworld import trajectory
 from deeptextworld.action import ActionCollector
+from deeptextworld.agents.utils import *
+from deeptextworld.dependency_parser import DependencyParserReorder
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
-from deeptextworld.models.dqn_func import get_random_1Daction
+from deeptextworld.models.dqn_model import DQNModel
+from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import ctime
-from deeptextworld.agents.utils import *
+from deeptextworld.utils import model_name2clazz, get_hash
+
+
+class BaseCore(Logging, ABC):
+    def get_a_policy_action(
+            self,
+            trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray, actions: List[str],
+            action_mask: np.ndarray) -> ActionDesc:
+        raise NotImplementedError()
+
+    def save_model(self) -> None:
+        raise NotImplementedError()
+
+    def init(self, load_best=False, restore_from: Optional[str] = None) -> None:
+        raise NotImplementedError()
+
+    def train_one_batch(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: np.ndarray,
+            post_action_mask: np.ndarray,
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int, others: Any) -> np.ndarray:
+        raise NotImplementedError()
+
+    def create_or_reload_target_model(
+            self, restore_from: Optional[str] = None) -> None:
+        raise NotImplementedError()
+
+
+class TFCore(BaseCore, ABC):
+    def __init__(
+            self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+        super(TFCore, self).__init__()
+        self.hp: HParams = hp
+        self.model_dir: str = model_dir
+        self.model: Optional[DQNModel] = None
+        self.target_model: Optional[DQNModel] = None
+        self.loaded_ckpt_step: int = 0
+        self.sess: Optional[Session] = None
+        self.target_sess: Optional[Session] = None
+        self.is_training: bool = True
+        self.train_summary_writer: Optional[FileWriter] = None
+        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
+        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
+        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
+        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
+        self.saver: Optional[Saver] = None
+        self.target_saver: Optional[Saver] = None
+        self.d4train, self.d4eval, self.d4target = self.init_devices()
+        self.tokenizer = tokenizer
+
+    @classmethod
+    def init_devices(cls):
+        devices = [d.name for d in device_lib.list_local_devices()
+                   if d.device_type == "GPU"]
+        if len(devices) == 0:
+            d4train, d4eval, d4target = (
+                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
+        elif len(devices) == 1:
+            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
+        elif len(devices) == 2:
+            d4train = devices[0]
+            d4eval, d4target = devices[1], devices[1]
+        else:
+            d4train = devices[0]
+            d4eval = devices[1]
+            d4target = devices[2]
+        return d4train, d4eval, d4target
+
+    def save_model(self) -> None:
+        self.info('save model')
+        self.saver.save(
+            self.sess, self.ckpt_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+
+    def safe_loading(
+            self, model: DQNModel, sess: Session, saver: Saver,
+            restore_from: str) -> int:
+        """
+        Load weights from restore_from to model.
+        If weights in loaded model are incompatible with current model,
+        try to load those weights that have the same name.
+
+        This method is useful when saved model lacks of training part, e.g.
+        Adam optimizer.
+        :param model:
+        :param sess:
+        :param saver:
+        :param restore_from:
+        :return: trained steps
+        """
+        self.info(
+            "Try to restore parameters from: {}".format(restore_from))
+        with model.graph.as_default():
+            try:
+                saver.restore(sess, restore_from)
+            except Exception as e:
+                self.debug(
+                    "Restoring from saver failed,"
+                    " try to restore from safe saver\n{}".format(e))
+                all_saved_vars = list(
+                    map(lambda v: v[0],
+                        tf.train.list_variables(restore_from)))
+                self.debug(
+                    "Try to restore with safe saver with vars:\n{}".format(
+                        "\n".join(all_saved_vars)))
+                all_vars = tf.global_variables()
+                self.debug("all vars:\n{}".format(
+                    "\n".join([v.op.name for v in all_vars])))
+                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                self.debug("Matched vars:\n{}".format(
+                    "\n".join([v.name for v in var_list])))
+                safe_saver = tf.train.Saver(var_list=var_list)
+                safe_saver.restore(sess, restore_from)
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+        return trained_steps
+
+    def create_model_instance(self, device):
+        model_creator = model_name2clazz(self.hp.model_creator)
+        return model_creator.get_train_model(self.hp, device)
+
+    def create_eval_model_instance(self, device):
+        model_creator = model_name2clazz(self.hp.model_creator)
+        return model_creator.get_eval_model(self.hp, device)
+
+    def create_model(
+            self, is_training=True,
+            device: Optional[str] = None) -> Tuple[Session, Any, Saver]:
+        if is_training:
+            device = device if device else self.d4train
+            model = self.create_model_instance(device)
+            self.info("create train model on device {}".format(device))
+        else:
+            device = device if device else self.d4eval
+            model = self.create_eval_model_instance(device)
+            self.info("create eval model on device {}".format(device))
+
+        conf = tf.ConfigProto(
+            log_device_placement=False, allow_soft_placement=True)
+        sess = tf.Session(graph=model.graph, config=conf)
+        with model.graph.as_default():
+            sess.run(tf.global_variables_initializer())
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
+        return sess, model, saver
+
+    def set_d4eval(self, device: str) -> None:
+        self.d4eval = device
+
+    def load_model(
+            self, sess: Session, model: DQNModel, saver: Saver,
+            restore_from: Optional[str] = None, load_best=False) -> int:
+        if restore_from is None:
+            if load_best:
+                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
+            else:
+                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
+
+        if restore_from is not None:
+            trained_step = self.safe_loading(model, sess, saver, restore_from)
+        else:
+            self.warning('No checkpoint to load, using untrained model')
+            trained_step = 0
+        return trained_step
+
+    def init(
+            self, load_best=False, restore_from: Optional[str] = None) -> None:
+        if self.model is None:
+            self.sess, self.model, self.saver = self.create_model(
+                self.is_training)
+        self.loaded_ckpt_step = self.load_model(
+            self.sess, self.model, self.saver, restore_from, load_best)
+
+        if self.is_training:
+            if self.loaded_ckpt_step > 0:
+                self.create_or_reload_target_model(restore_from)
+            train_summary_dir = os.path.join(
+                self.model_dir, "summaries", "train")
+            self.train_summary_writer = tf.summary.FileWriter(
+                train_summary_dir, self.sess.graph)
+
+    def save_best_model(self) -> None:
+        self.info("save the best model so far")
+        self.saver.save(
+            self.sess, self.best_ckpt_prefix,
+            global_step=tf.train.get_or_create_global_step(
+                graph=self.model.graph))
+        self.info("the best model saved")
+
+    def create_or_reload_target_model(
+            self, restore_from: Optional[str] = None) -> None:
+        """
+        Create the target model if not exists, then load model from the most
+        recent saved weights.
+        :param restore_from:
+        :return:
+        """
+        if self.target_sess is None:
+            self.debug("create target model ...")
+            (self.target_sess, self.target_model, self.target_saver
+             ) = self.create_model(is_training=False, device=self.d4target)
+        else:
+            pass
+        trained_step = self.load_model(
+            self.target_sess, self.target_model, self.target_saver,
+            restore_from, load_best=False)
+        self.debug(
+            "load target model from trained step {}".format(trained_step))
 
 
 class BaseAgent(Logging):
     """
+    Base agent class that using
+     1. action collector
+     2. trajectory collector
+     3. floor plan collector
+     4. tree memory storage and sampling
     """
 
-    def __init__(self, hp, model_dir):
+    def __init__(self, hp: HParams, model_dir: str) -> None:
         super(BaseAgent, self).__init__()
         self.model_dir = model_dir
 
         self.tjs_prefix = "trajectories"
-        self.tjs_seg_prefix = "segmentation"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
         self.fp_prefix = "floor_plan"
+        self.stc_prefix = "state_text"
 
         self.inv_direction = {
             ACT.gs: ACT.gn, ACT.gn: ACT.gs,
@@ -46,87 +277,58 @@ class BaseAgent(Logging):
 
         self.info(output_hparams(self.hp))
 
-        self.tjs = None
-        self.tjs_seg = None
-        self.memo = None
-        self.model = None
-        self.target_model = None
-        self.actor = None  # action collector
-        self.floor_plan = None
-        self.dp = None
-        self.loaded_ckpt_step = 0
+        self.core: Optional[BaseCore] = None
 
-        self._initialized = False
-        self._episode_has_started = False
-        self.total_t = 0
-        self.in_game_t = 0
+        self.tjs: Optional[Trajectory[ActionMaster]] = None
+        self.memo: Optional[TreeMemory] = None
+        self.actor: Optional[ActionCollector] = None
+        self.floor_plan: Optional[FloorPlanCollector] = None
+        self.dp: Optional[DependencyParserReorder] = None
+        self.stc: Optional[Trajectory[ObsInventory]] = None
+
+        self._initialized: bool = False
+        self._episode_has_started: bool = False
+        self.total_t: int = 0
+        self.in_game_t: int = 0
         # eps decaying test for all-tiers
         self.eps_getter = ScannerDecayEPS(
             decay_step=10000000, decay_range=1000000)
         # self.eps_getter = LinearDecayedEPS(
         #     decay_step=self.hp.annealing_eps_t,
         #     init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
-        self.eps = 0
-        self.sess = None
-        self.target_sess = None
-        self.is_training = True
-        self.train_summary_writer = None
-        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
-        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
-        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
-        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
-        self.saver = None
-        self.target_saver = None
+        self.eps: float = 0.
+        self.is_training: bool = True
         self.snapshot_saved = False
         self.epoch_start_t = 0
-        self.d4train, self.d4eval, self.d4target = self.init_devices()
 
-        self._stale_tids = []
+        self._stale_tids: List[int] = []
 
-        self._last_actions_mask = None
-        self._last_action = None
+        self._last_actions_mask: Optional[bytes] = None
+        self._last_action: Optional[ActionDesc] = None
 
         self._cumulative_score = 0
         self._cumulative_penalty = -0.1
-        self._prev_last_action = None
-        self._prev_master = None
-        self._prev_place = None
-        self._curr_place = None
+        self._prev_last_action: Optional[str] = None
+        self._prev_master: Optional[str] = None
+        self._prev_place: Optional[str] = None
+        self._curr_place: Optional[str] = None
 
-        self.game_id = None
-        self._theme_words = {}
+        self.game_id: Optional[str] = None
+        self._theme_words: Dict[str, List[str]] = {}
 
         self._see_cookbook = False
-        self._cnt_action = None
+        self._cnt_action: Optional[np.ndarray] = None
 
         self._largest_valid_tag = 0
-        self._stale_tags = None
-
-        # self._action_recorder = {}
-        # self._winning_recorder = {}
-        # self._per_game_recorder = None
-        # self._actions_to_remove = {}
-
-    def set_d4eval(self, device):
-        self.d4eval = device
+        self._stale_tags: Optional[List[int]] = None
 
     @classmethod
-    def report_status(cls, lst_of_status):
+    def report_status(cls, lst_of_status: List[Tuple[str, object]]) -> str:
         return ', '.join(
             map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
 
     @classmethod
-    def reverse_annealing_gamma(cls, init_gamma, final_gamma, t, total_t):
-        gamma_t = init_gamma + ((final_gamma - init_gamma) * 1. / total_t) * t
-        return min(gamma_t, final_gamma)
-
-    @classmethod
-    def annealing_eps(cls, init_eps, final_eps, t, total_t):
-        eps_t = init_eps - ((init_eps - final_eps) * 1. / total_t) * t
-        return max(eps_t, final_eps)
-
-    @classmethod
-    def from_bytes(cls, byte_action_masks):
+    def from_bytes(cls, byte_action_masks: List[bytes]) -> np.ndarray:
         """
         Convert a list of byte-array masks to a list of np-array masks.
         :param byte_action_masks:
@@ -141,30 +343,7 @@ class BaseAgent(Logging):
         return np.asarray(vec_action_masks, dtype=np.int32)
 
     @classmethod
-    def count_trainable(cls, trainable_vars, mask=None):
-        total_parameters = 0
-        if mask is not None:
-            if type(mask) is list:
-                trainable_vars = filter(lambda v: v.op.name not in mask,
-                                        trainable_vars)
-            elif type(mask) is str:
-                trainable_vars = filter(lambda v: v.op.name != mask,
-                                        trainable_vars)
-            else:
-                pass
-        else:
-            pass
-        for variable in trainable_vars:
-            # shape is an array of tf.Dimension
-            shape = variable.get_shape()
-            variable_parameters = 1
-            for dim in shape:
-                variable_parameters *= dim.value
-            total_parameters += variable_parameters
-        return total_parameters
-
-    @classmethod
-    def get_theme_words(cls, recipe):
+    def get_theme_words(cls, recipe: str) -> List[str]:
         theme_regex = r".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
             theme_regex, recipe.replace("\n", "<|>"))
@@ -178,24 +357,39 @@ class BaseAgent(Logging):
         return theme_words
 
     @classmethod
-    def get_path_tags(cls, path, prefix):
-        all_paths = glob.glob(os.path.join(path, "{}-*.npz".format(prefix)),
-                              recursive=False)
-        tags = map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
-                   map(lambda p: os.path.basename(p), all_paths))
+    def get_path_tags(cls, path: str, prefix: str) -> List[int]:
+        """
+        Get tag from a path of saved objects. E.g. actions-100.npz
+        100 will be extracted
+        Make sure the item to be extracted is saved with suffix of npz.
+        :param path:
+        :param prefix:
+        :return:
+        """
+        all_paths = glob.glob(
+            os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
+        tags = list(
+            map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
+                map(lambda p: os.path.basename(p), all_paths)))
         return tags
 
     @classmethod
-    def clip_reward(cls, reward):
+    def clip_reward(cls, reward: float) -> float:
         """clip reward into [-1, 1]"""
         return max(min(reward, 1), -1)
 
     @classmethod
-    def contain_words(cls, sentence, words):
+    def contain_words(cls, sentence: str, words: List[str]) -> bool:
+        """
+        Does sentence contain any word in words?
+        :param sentence:
+        :param words:
+        :return:
+        """
         return any(map(lambda w: w in sentence, words))
 
     @classmethod
-    def get_room_name(cls, master):
+    def get_room_name(cls, master: str) -> Optional[str]:
         """
         Extract and lower room name.
         Return None if not exist.
@@ -211,14 +405,16 @@ class BaseAgent(Logging):
         return room_name
 
     @classmethod
-    def negative_response_reward(cls, master):
+    def negative_response_reward(cls, master: str) -> float:
+        """
+        To check if the responded master say something negative or not
+        :param master:
+        :return:
+        """
         return 0
 
     @classmethod
-    def get_hash(cls, txt):
-        return hashlib.md5(txt.encode("utf-8")).hexdigest()
-
-    def select_additional_infos(self):
+    def select_additional_infos(cls) -> EnvInfos:
         """
         additional information needed when playing the game
         requested infos here are required to run the Agent
@@ -232,7 +428,7 @@ class BaseAgent(Logging):
             extras=['recipe'])
 
     @classmethod
-    def init_tokens(cls, hp):
+    def init_tokens(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
         """
         Note that BERT must use bert vocabulary.
         :param hp:
@@ -278,25 +474,9 @@ class BaseAgent(Logging):
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))
         return new_hp, tokenizer
 
-    @classmethod
-    def init_devices(cls):
-        devices = [d.name for d in device_lib.list_local_devices()
-                   if d.device_type == "GPU"]
-        if len(devices) == 0:
-            d4train, d4eval, d4target = (
-                "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
-        elif len(devices) == 1:
-            d4train, d4eval, d4target = devices[0], devices[0], devices[0]
-        elif len(devices) == 2:
-            d4train = devices[0]
-            d4eval, d4target = devices[1], devices[1]
-        else:
-            d4train = devices[0]
-            d4eval = devices[1]
-            d4target = devices[2]
-        return d4train, d4eval, d4target
-
-    def init_actions(self, hp, tokenizer, action_path, with_loading=True):
+    def init_actions(
+            self, hp: HParams, tokenizer: Tokenizer, action_path: str,
+            with_loading=True) -> ActionCollector:
         action_collector = ActionCollector(
             tokenizer,
             hp.n_actions, hp.n_tokens_per_action,
@@ -304,14 +484,13 @@ class BaseAgent(Logging):
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
-                # action_collector.extend(load_actions(hp.action_file))
             except IOError as e:
                 self.info("load actions error: \n{}".format(e))
         return action_collector
 
-    def init_trajectory(self, hp, tjs_path, with_loading=True):
-        tjs_creator = getattr(trajectory, hp.tjs_creator)
-        tjs = tjs_creator(hp, padding_val=hp.padding_val_id)
+    def init_trajectory(
+            self, hp: HParams, tjs_path: str, with_loading=True) -> Trajectory:
+        tjs = Trajectory[ActionMaster](num_turns=hp.num_turns)
         if with_loading:
             try:
                 tjs.load_tjs(tjs_path)
@@ -319,7 +498,17 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
 
-    def init_memo(self, hp, memo_path, with_loading=True):
+    def init_state_text(self, state_text_path, with_loading=True):
+        stc = Trajectory[ObsInventory](num_turns=1)
+        if with_loading:
+            try:
+                stc.load_tjs(state_text_path)
+            except IOError as e:
+                self.info("load trajectory error: \n{}".format(e))
+        return stc
+
+    def init_memo(
+            self, hp: HParams, memo_path: str, with_loading=True) -> TreeMemory:
         memory = TreeMemory(capacity=hp.replay_mem)
         if with_loading:
             try:
@@ -328,7 +517,8 @@ class BaseAgent(Logging):
                 self.info("load memory error: \n{}".format(e))
         return memory
 
-    def init_floor_plan(self, fp_path, with_loading=True):
+    def init_floor_plan(
+            self, fp_path: str, with_loading=True) -> FloorPlanCollector:
         fp = FloorPlanCollector()
         if with_loading:
             try:
@@ -337,39 +527,67 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
-    def tokenize(self, master):
-        return ' '.join(self.tokenizer.tokenize(master))
-
-    def index_string(self, tokens):
-        return self.tokenizer.convert_tokens_to_ids(tokens)
-
-    def zero_mask_bytes(self):
+    def get_cleaned_master(self, master: str) -> str:
         """
-        self.hp.n_actions should be in the format of 2**n
+        Cleaned_master is a master that are lowered, tokenized, and then
+        concatenated by space.
+        :param master:
         :return:
         """
-        bit_mask_vec = bitarray(self.hp.n_actions, endian="little")
-        bit_mask_vec[::] = False
-        bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
-        return bit_mask_vec.tobytes()
+        return " ".join(self.tokenizer.tokenize(master))
 
-    def get_an_eps_action(self, action_mask):
+    def get_a_random_action(self, action_mask: bytes) -> ActionDesc:
+        """
+        Select a random action according to action mask
+        :param action_mask:
+        :return:
+        """
+        action_mask = self.from_bytes([action_mask])[0]
+        mask_idx = np.where(action_mask == 1)[0]
+        action_idx = np.random.choice(mask_idx)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.rnd,
+            action_idx=action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
+            action=self.actor.actions[action_idx])
+        return action_desc
+
+    def get_an_eps_action(self, action_mask: bytes) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
         :param action_mask:
         """
-        raise NotImplementedError()
+        if random.random() < self.eps:
+            action_desc = self.get_a_random_action(action_mask)
+        else:
+            action_mask = self.from_bytes([action_mask])[0]
+            trajectory = self.tjs.fetch_last_state()
+            state = self.stc.fetch_last_state()[0]
+            action_desc = self.core.get_a_policy_action(
+                trajectory, state, self.actor.action_matrix,
+                self.actor.action_len, self.actor.actions, action_mask)
+        return action_desc
 
-    def train(self):
+    def train(self) -> None:
+        """
+        call train() before performing training
+        :return:
+        """
         self.is_training = True
         self._init()
 
-    def eval(self, load_best=True):
+    def eval(self, load_best=True) -> None:
+        """
+        call eval() before performing evaluation
+        :param load_best: load from best weights, or from last weights
+        :return:
+        """
         self.is_training = False
         self._init(load_best)
 
-    def reset(self, restore_from=None):
+    def reset(self, restore_from: Optional[str] = None) -> None:
         """
         reset is only used for evaluation during training
         do not use it at anywhere else.
@@ -378,80 +596,8 @@ class BaseAgent(Logging):
         self._initialized = False
         self._init(load_best=False, restore_from=restore_from)
 
-    def safe_loading(self, model, sess, saver, restore_from):
-        # Reload weights from directory if specified
-        self.info(
-            "Try to restore parameters from: {}".format(restore_from))
-        with model.graph.as_default():
-            try:
-                saver.restore(sess, restore_from)
-            except Exception as e:
-                self.debug(
-                    "Restoring from saver failed,"
-                    " try to restore from safe saver\n{}".format(e))
-                all_saved_vars = list(
-                    map(lambda v: v[0],
-                        tf.train.list_variables(restore_from)))
-                self.debug(
-                    "Try to restore with safe saver with vars:\n{}".format(
-                        "\n".join(all_saved_vars)))
-                all_vars = tf.global_variables()
-                self.debug("all vars:\n{}".format(
-                    "\n".join([v.op.name for v in all_vars])))
-                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
-                self.debug("Matched vars:\n{}".format(
-                    "\n".join([v.name for v in var_list])))
-                safe_saver = tf.train.Saver(var_list=var_list)
-                safe_saver.restore(sess, restore_from)
-            global_step = tf.train.get_or_create_global_step()
-            trained_steps = sess.run(global_step)
-        return trained_steps
-
-    def create_model(self, is_training=True, device=None):
-        if is_training:
-            device = device if device else self.d4train
-            model = self.create_model_instance(device)
-            self.info("create train model on device {}".format(device))
-        else:
-            device = device if device else self.d4eval
-            model = self.create_eval_model_instance(device)
-            self.info("create eval model on device {}".format(device))
-
-        conf = tf.ConfigProto(
-            log_device_placement=False, allow_soft_placement=True)
-        sess = tf.Session(graph=model.graph, config=conf)
-        with model.graph.as_default():
-            sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(
-                max_to_keep=self.hp.max_snapshot_to_keep,
-                save_relative_paths=True)
-        return sess, model, saver
-
-    def load_model(
-            self, sess, model, saver, restore_from=None, load_best=False):
-        if restore_from is None:
-            if load_best:
-                restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
-            else:
-                restore_from = tf.train.latest_checkpoint(self.ckpt_path)
-
-        if restore_from is not None:
-            trained_step = self.safe_loading(model, sess, saver, restore_from)
-        else:
-            self.warning('No checkpoint to load, using untrained model')
-            trained_step = 0
-        return trained_step
-
-    def create_model_instance(self, device):
-        raise NotImplementedError()
-
-    def create_eval_model_instance(self, device):
-        raise NotImplementedError()
-
-    def train_impl(self, sess, t, summary_writer, target_sess, target_model):
-        raise NotImplementedError()
-
-    def _init(self, load_best=False, restore_from=None):
+    def _init(
+            self, load_best=False, restore_from: Optional[str] = None) -> None:
         """
         load actions, trajectories, memory, model, etc.
         """
@@ -461,26 +607,26 @@ class BaseAgent(Logging):
         self._init_impl(load_best, restore_from)
         self._initialized = True
 
-    def _get_context_obj_path_w_tag(self, prefix, tag):
+    def _get_context_obj_path_w_tag(self, prefix: str, tag: int) -> str:
         return pjoin(
             self.model_dir, "{}-{}.npz".format(prefix, tag))
 
-    def _get_context_obj_path(self, prefix):
+    def _get_context_obj_path(self, prefix: str) -> str:
         return self._get_context_obj_path_w_tag(prefix, self._largest_valid_tag)
 
-    def _get_context_obj_new_path(self, prefix):
+    def _get_context_obj_new_path(self, prefix: str) -> str:
         return self._get_context_obj_path_w_tag(prefix, self.total_t)
 
-    def _load_context_objs(self):
+    def _load_context_objs(self) -> None:
         valid_tags = self.get_compatible_snapshot_tag()
         self._largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
         self.info("try to load from tag: {}".format(self._largest_valid_tag))
 
         action_path = self._get_context_obj_path(self.action_prefix)
         tjs_path = self._get_context_obj_path(self.tjs_prefix)
-        tjs_seg_path = self._get_context_obj_path(self.tjs_seg_prefix)
         memo_path = self._get_context_obj_path(self.memo_prefix)
         fp_path = self._get_context_obj_path(self.fp_prefix)
+        stc_path = self._get_context_obj_path(self.stc_prefix)
 
         # always loading actions to avoid different action index for DQN
         self.actor = self.init_actions(
@@ -488,46 +634,39 @@ class BaseAgent(Logging):
             with_loading=self.is_training)
         self.tjs = self.init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
-        self.tjs_seg = self.init_trajectory(
-            self.hp, tjs_seg_path, with_loading=self.is_training)
         self.memo = self.init_memo(
             self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self.init_floor_plan(
             fp_path, with_loading=self.is_training)
+        # load stc
+        self.stc = self.init_state_text(stc_path, with_loading=True)
 
-    def _init_impl(self, load_best=False, restore_from=None):
+    def _init_impl(
+            self, load_best=False, restore_from: Optional[str] = None) -> None:
         self._load_context_objs()
-        if self.model is None:
-            self.sess, self.model, self.saver = self.create_model(
-                self.is_training)
-        self.loaded_ckpt_step = self.load_model(
-            self.sess, self.model, self.saver, restore_from, load_best)
+        self.core.init(load_best, restore_from)
 
         if self.is_training:
-            if self.loaded_ckpt_step > 0:
-                self._create_n_load_target_model(restore_from, load_best)
-            self.eps = self.hp.init_eps
-            train_summary_dir = os.path.join(
-                self.model_dir, "summaries", "train")
-            self.train_summary_writer = tf.summary.FileWriter(
-                train_summary_dir, self.sess.graph)
             if self.hp.start_t_ignore_model_t:
                 self.total_t = min(
                     self.hp.observation_t,
                     len(self.memo) if self.memo is not None else 0)
             else:
-                self.total_t = self.loaded_ckpt_step + self.hp.observation_t
+                self.total_t = (
+                        self.core.loaded_ckpt_step + self.hp.observation_t)
         else:
             self.eps = 0
             self.total_t = 0
 
-    def _get_master_starter(self, obs, infos):
+    def _get_master_starter(
+            self, obs: List[str], infos: Dict[str, List[Any]]) -> str:
         assert INFO_KEY.desc in infos, "request description is required"
         assert INFO_KEY.inventory in infos, "request inventory is required"
         return "{}\n{}".format(
             infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0])
 
-    def _start_episode(self, obs, infos):
+    def _start_episode(
+            self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         """
         Prepare the agent for the upcoming episode.
         :param obs: initial feedback from each game
@@ -538,11 +677,12 @@ class BaseAgent(Logging):
             self._init()
         self._start_episode_impl(obs, infos)
 
-    def _start_episode_impl(self, obs, infos):
+    def _start_episode_impl(
+            self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         self.tjs.add_new_tj()
-        self.tjs_seg.add_new_tj(tid=self.tjs.get_current_tid())
+        self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(obs, infos)
-        self.game_id = self.get_hash(master_starter)
+        self.game_id = get_hash(master_starter)
         self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -551,21 +691,13 @@ class BaseAgent(Logging):
         self._prev_place = None
         self._curr_place = None
         self._cnt_action = np.zeros(self.hp.n_actions)
-        # if self.game_id not in self._action_recorder:
-        #     self._action_recorder[self.game_id] = []
-        # if self.game_id not in self._winning_recorder:
-        #     self._winning_recorder[self.game_id] = False
-        # if self.game_id not in self._actions_to_remove:
-        #     self._actions_to_remove[self.game_id] = set()
         if self.game_id not in self._theme_words:
             self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
         self.debug("infos: {}".format(infos))
-        # self._theme_words[self.game_id] = self.get_theme_words(
-        #     infos[INFO_KEY.recipe][0])
 
-    def mode(self):
+    def mode(self) -> str:
         return "train" if self.is_training else "eval"
 
     def _end_episode(
@@ -578,6 +710,7 @@ class BaseAgent(Logging):
         :param infos: additional infos of each game
         :return:
         """
+        # TODO: clear old memory
         # if len(self.memo) > 2 * self.hp.replay_mem:
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
@@ -586,19 +719,6 @@ class BaseAgent(Logging):
             " last_eps: {}".format(
                 self.mode(), obs[0], self.in_game_t, scores[0],
                 infos[INFO_KEY.won], self.eps))
-        # TODO: make clear of what need to clean before & after an episode.
-        # self._winning_recorder[self.game_id] = infos[K_HAS_WON][0]
-        # self._action_recorder[self.game_id] = self._per_game_recorder
-        # if ((not infos[K_HAS_WON][0]) and
-        #         (0 < len(self._per_game_recorder) < 100)):
-        #     if (self._per_game_recorder[-1] not in
-        #             self._per_game_recorder[:-1]):
-        #         self._actions_to_remove[self.game_id].add(
-        #             self._per_game_recorder[-1])
-        #     else:
-        #         pass  # repeat dangerous actions
-        # self.debug("actions to remove {} for game {}".format(
-        #     self._actions_to_remove[self.game_id], self.game_id))
         self._episode_has_started = False
         self._last_actions_mask = None
         self.game_id = None
@@ -607,15 +727,7 @@ class BaseAgent(Logging):
         self._prev_last_action = None
         self._prev_master = None
 
-    def save_best_model(self):
-        self.info("save the best model so far")
-        self.saver.save(
-            self.sess, self.best_ckpt_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=self.model.graph))
-        self.info("the best model saved")
-
-    def _delete_stale_context_objs(self):
+    def _delete_stale_context_objs(self) -> None:
         valid_tags = self.get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
             self._stale_tags = list(reversed(sorted(
@@ -624,29 +736,24 @@ class BaseAgent(Logging):
             for tag in self._stale_tags:
                 prm(self._get_context_obj_path_w_tag(self.memo_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.tjs_seg_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.action_prefix, tag))
                 prm(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
+                prm(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
 
-    def _save_context_objs(self):
+    def _save_context_objs(self) -> None:
         action_path = self._get_context_obj_new_path(self.action_prefix)
         tjs_path = self._get_context_obj_new_path(self.tjs_prefix)
-        tjs_seg_path = self._get_context_obj_new_path(self.tjs_seg_prefix)
         memo_path = self._get_context_obj_new_path(self.memo_prefix)
         fp_path = self._get_context_obj_new_path(self.fp_prefix)
+        stc_path = self._get_context_obj_new_path(self.stc_prefix)
 
         self.memo.save_memo(memo_path)
         self.tjs.save_tjs(tjs_path)
-        self.tjs_seg.save_tjs(tjs_seg_path)
         self.actor.save_actions(action_path)
         self.floor_plan.save_fps(fp_path)
+        self.stc.save_tjs(stc_path)
 
-    def save_snapshot(self):
-        self.info('save model')
-        self.saver.save(
-            self.sess, self.ckpt_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=self.model.graph))
+    def save_snapshot(self) -> None:
         self.info('save snapshot of the agent')
         self._save_context_objs()
         self._delete_stale_context_objs()
@@ -657,26 +764,34 @@ class BaseAgent(Logging):
             self.hp, pjoin(self.model_dir, 'hparams.json'),
             use_relative_path=True)
 
-    def get_compatible_snapshot_tag(self):
+    def get_compatible_snapshot_tag(self) -> List[int]:
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
         memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
         tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
-        tjs_seg_tags = self.get_path_tags(self.model_dir, self.tjs_seg_prefix)
         fp_tags = self.get_path_tags(self.model_dir, self.fp_prefix)
+        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
-        valid_tags.intersection_update(tjs_seg_tags)
         valid_tags.intersection_update(fp_tags)
+        valid_tags.intersection_update(stc_tags)
 
         return list(valid_tags)
 
-    def time_to_save(self):
+    def is_time_to_save(self) -> bool:
         trained_steps = self.total_t - self.hp.observation_t + 1
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
-    def contain_theme_words(self, actions):
+    def contain_theme_words(
+            self, actions: List[str]) -> Tuple[List[str], List[str]]:
+        """
+        Split actions into two sets - one with theme words; one without them.
+        If theme words is empty, all actions are saved in contained, while
+        others is empty.
+        :param actions:
+        :return: contained, others
+        """
         if not self._theme_words[self.game_id]:
             self.debug("no theme word found, use all actions")
             return actions, []
@@ -690,12 +805,8 @@ class BaseAgent(Logging):
 
         return contained, others
 
-    # def filter_admissible_actions(self, admissible_actions):
-    #     actions = list(filter(
-    #         lambda c: not c.startswith("examine"), admissible_actions))
-    #     return list(set(actions))
-
-    def filter_admissible_actions(self, admissible_actions):
+    def filter_admissible_actions(
+            self, admissible_actions: List[str]) -> List[str]:
         """
         Filter unnecessary actions.
         :param admissible_actions: raw action given by the game.
@@ -737,46 +848,21 @@ class BaseAgent(Logging):
         # self.debug("new admissible actions: {}".format(
         #     ", ".join(sorted(actions))))
         actions = list(set(actions))
-        # if not self.is_training:
-        #     if ((self._winning_recorder[self.game_id] is not None) and
-        #             (not self._winning_recorder[self.game_id])):
-        #         for a2remove in self._actions_to_remove[self.game_id]:
-        #             try:
-        #                 actions.remove(a2remove)
-        #                 self.debug(
-        #                     "action {} is removed".format(
-        #                         a2remove))
-        #             except ValueError as _:
-        #                 self.debug(
-        #                     "action {} is not found when remove".format(
-        #                         a2remove))
-        #     else:
-        #         pass
         return actions
 
-    def go_with_floor_plan(self, actions):
+    def go_with_floor_plan(self, actions: List[str]) -> List[str]:
+        """
+        Update go-cardinal actions into go-room actions, if floor plan exists
+        :param actions:
+        :return:
+        """
         local_map = self.floor_plan.get_map(self._curr_place)
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
 
-    # def rule_based_policy(self, actions, all_actions, instant_reward):
-    #     action_desc = ActionDesc(
-    #         action_type=ACT_TYPE_RULE, action_idx=None,
-    #         token_idx=None,
-    #         action_len=None,
-    #         action=None)
-    #     return action_desc
-
-    def rule_based_policy(self, actions, all_actions, instant_reward):
-        # use hard set actions in the beginning and the end of one episode
-        # if ((not self.is_training) and
-        #         (self._winning_recorder[self.game_id] is not None) and
-        #         self._winning_recorder[self.game_id]):
-        #     try:
-        #         action = self._action_recorder[self.game_id][self.in_game_t]
-        #     except IndexError as _:
-        #         self.debug("same game ID for different games error")
-        #         action = None
+    def rule_based_policy(
+            self, actions: List[str], all_actions: List[str],
+            instant_reward: float) -> ActionDesc:
         if (self._last_action is not None and
                 self._last_action.action == ACT.prepare_meal and
                 instant_reward > 0):
@@ -810,7 +896,9 @@ class BaseAgent(Logging):
             action=action)
         return action_desc
 
-    def _jitter_go_condition(self, action_desc, admissible_go_actions):
+    def _is_jitter_go(
+            self, action_desc: ActionDesc,
+            admissible_go_actions: List[str]) -> bool:
         if not (self.hp.jitter_go and
                 action_desc.action in admissible_go_actions and
                 action_desc.action_type == ACT_TYPE.policy_drrn):
@@ -822,11 +910,12 @@ class BaseAgent(Logging):
                 return np.random.random() > 1. - self.hp.jitter_eval_prob
 
     def jitter_go_action(
-            self, prev_action_desc, actions, all_actions):
+            self, prev_action_desc: ActionDesc, actions: List[str],
+            all_actions: List[str]) -> ActionDesc:
         action_desc = None
         admissible_go_actions = list(
             filter(lambda a: a.startswith("go"), actions))
-        if self._jitter_go_condition(prev_action_desc, admissible_go_actions):
+        if self._is_jitter_go(prev_action_desc, admissible_go_actions):
             jitter_go_action = np.random.choice(admissible_go_actions)
             action_idx = all_actions.index(jitter_go_action)
             action = jitter_go_action
@@ -839,7 +928,8 @@ class BaseAgent(Logging):
             pass
         return action_desc if action_desc is not None else prev_action_desc
 
-    def random_walk_for_collecting_fp(self, actions, all_actions):
+    def random_walk_for_collecting_fp(
+            self, actions: List[str], all_actions: List[str]) -> ActionDesc:
         action_idx, action = None, None
 
         if self.hp.collect_floor_plan:
@@ -856,7 +946,7 @@ class BaseAgent(Logging):
                 admissible_actions = cardinal_go + open_actions
                 self.debug("admissible actions for random walk:\n{}".format(
                     admissible_actions))
-                _, action = get_random_1Daction(admissible_actions)
+                _, action = get_random_1d_action(admissible_actions)
                 action_idx = all_actions.index(action)
             else:
                 pass
@@ -870,7 +960,8 @@ class BaseAgent(Logging):
         return action_desc
 
     def choose_action(
-            self, actions, all_actions, actions_mask, instant_reward):
+            self, actions: List[str], all_actions: List[str],
+            actions_mask: bytes, instant_reward: float) -> ActionDesc:
         """
         Choose an action by
           1) try rule-based policy;
@@ -897,7 +988,9 @@ class BaseAgent(Logging):
             pass
         return action_desc
 
-    def get_instant_reward(self, score, master, is_terminal, won):
+    def get_instant_reward(
+            self, score: float, master: str, is_terminal: bool,
+            won: bool) -> float:
         # only penalize the final score if the agent choose a bad action.
         # do not penalize if failed because of out-of-steps.
         if is_terminal and not won and "you lost" in master:
@@ -929,7 +1022,7 @@ class BaseAgent(Logging):
         self._cumulative_score = score
         return instant_reward
 
-    def collect_floor_plan(self, master, prev_place):
+    def collect_floor_plan(self, master: str, prev_place: str) -> str:
         """
         collect floor plan with latest master.
         if the current place doesn't match the previous place, and a go action
@@ -951,7 +1044,7 @@ class BaseAgent(Logging):
                   prev_place)])
         return curr_place
 
-    def train_one_batch(self):
+    def train_one_batch(self) -> None:
         """
         Train one batch of samples.
         Load target model if not exist, save current model when necessary.
@@ -960,63 +1053,70 @@ class BaseAgent(Logging):
             self.epoch_start_t = ctime()
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
-        self.train_impl(
-            self.sess, self.total_t, self.train_summary_writer,
-            self.target_sess if self.target_sess else self.sess,
-            self.target_model if self.target_model else self.model)
-        self._save_agent_n_reload_target()
+        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
 
-    def _create_n_load_target_model(self, restore_from, load_best):
-        if self.target_sess is None:
-            self.debug("create target model ...")
-            (self.target_sess, self.target_model, self.target_saver
-             ) = self.create_model(is_training=False, device=self.d4target)
-        else:
-            pass
-        trained_step = self.load_model(
-            self.target_sess, self.target_model, self.target_saver,
-            restore_from, load_best)
-        self.debug(
-            "load target model from trained step {}".format(trained_step))
+        trajectory_id = [m[0].tid for m in b_memory]
+        state_id = [m[0].sid for m in b_memory]
+        action_id = [m[0].aid for m in b_memory]
+        game_id = [m[0].gid for m in b_memory]
+        reward = [m[0].reward for m in b_memory]
+        is_terminal = [m[0].is_terminal for m in b_memory]
+        action_mask = [m[0].action_mask for m in b_memory]
+        next_action_mask = [m[0].next_action_mask for m in b_memory]
 
-    def _save_agent_n_reload_target(self):
-        if self.time_to_save():
-            epoch_end_t = ctime()
-            delta_time = epoch_end_t - self.epoch_start_t
-            self.info('current epoch end')
-            reports_time = [
-                ('epoch time', delta_time),
-                ('#batches per epoch', self.hp.save_gap_t),
-                ('avg step time',
-                 delta_time * 1.0 / self.hp.save_gap_t)]
-            self.info(self.report_status(reports_time))
+        pre_action_mask = self.from_bytes(action_mask)
+        post_action_mask = self.from_bytes(next_action_mask)
+
+        post_trajectories = self.tjs.fetch_batch_states(trajectory_id, state_id)
+        pre_trajectories = self.tjs.fetch_batch_states(
+            trajectory_id, [sid - 1 for sid in state_id])
+
+        post_states = [
+            state[0] for state in
+            self.stc.fetch_batch_states(trajectory_id, state_id)]
+        pre_states = [
+            state[0] for state in self.stc.fetch_batch_states(
+                trajectory_id, [sid - 1 for sid in state_id])]
+
+        # make sure the p_states and s_states are in the same game.
+        # otherwise, it won't make sense to use the same action matrix.
+        action_len = (
+            [self.actor.get_action_len(gid) for gid in game_id])
+        max_action_len = np.max(action_len)
+        action_matrix = (
+            [self.actor.get_action_matrix(gid)[:, :max_action_len]
+             for gid in game_id])
+
+        b_weight = self.core.train_one_batch(
+            pre_trajectories=pre_trajectories,
+            post_trajectories=post_trajectories,
+            pre_states=pre_states,
+            post_states=post_states,
+            action_matrix=action_matrix,
+            action_len=action_len,
+            pre_action_mask=pre_action_mask,
+            post_action_mask=post_action_mask,
+            dones=is_terminal,
+            rewards=reward,
+            action_idx=action_id,
+            b_weight=b_weight,
+            step=self.total_t, others=None)
+
+        self.memo.batch_update(b_idx, b_weight)
+
+        if self.is_time_to_save():
             self.save_snapshot()
-            self._create_n_load_target_model(restore_from=None, load_best=False)
-            self.snapshot_saved = True
-            self.info("snapshot saved, ready for evaluation")
-            self.epoch_start_t = ctime()
+            self.core.save_model()
+            self.core.create_or_reload_target_model()
 
-    def _clean_stale_context(self, tids):
+    def _clean_stale_context(self, tids: List[int]) -> None:
         self.debug("tjs deletes {}".format(tids))
         self.tjs.request_delete_keys(tids)
-        self.tjs_seg.request_delete_keys(tids)
+        self.stc.request_delete_keys(tids)
 
-    def feed_memory(
-            self, instant_reward, is_terminal, action_mask, next_action_mask):
-        original_data = self.memo.append(DRRNMemo(
-            tid=self.tjs.get_current_tid(), sid=self.tjs.get_last_sid(),
-            gid=self.game_id, aid=self._last_action.action_idx,
-            token_id=self._last_action.token_idx,
-            a_len=self._last_action.action_len,
-            reward=instant_reward, is_terminal=is_terminal,
-            action_mask=action_mask, next_action_mask=next_action_mask
-        ))
-        if isinstance(original_data, DRRNMemo):
-            if original_data.is_terminal:
-                self._stale_tids.append(original_data.tid)
-                # self._clean_stale_context(original_data.tid)
-
-    def update_status_impl(self, master, cleaned_obs, instant_reward, infos):
+    def update_status_impl(
+            self, master: str, cleaned_obs: str, instant_reward: float,
+            infos: Dict[str, List[Any]]) -> None:
         if self.hp.collect_floor_plan:
             self._curr_place = self.collect_floor_plan(master, self._prev_place)
         else:
@@ -1025,18 +1125,20 @@ class BaseAgent(Logging):
         if instant_reward > 0:
             self._see_cookbook = False
 
-    def get_admissible_actions(self, infos=None):
-        assert infos is not None and INFO_KEY.actions in infos
+    def get_admissible_actions(
+            self, infos: Dict[str, List[Any]]) -> List[str]:
         return [a.lower() for a in infos[INFO_KEY.actions][0]]
 
-    def update_status(self, obs, scores, dones, infos):
+    def update_status(
+            self, obs: List[str], scores: List[float], dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Tuple[str, str, float]:
         self._prev_place = self._curr_place
         master = (self._get_master_starter(obs, infos)
                   if self.in_game_t == 0 else obs[0])
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
         else:
-            cleaned_obs = self.tokenize(master)
+            cleaned_obs = self.get_cleaned_master(master)
 
         if (self._last_action is not None
                 and self._last_action.action == ACT.examine_cookbook):
@@ -1062,38 +1164,57 @@ class BaseAgent(Logging):
                     self.mode(), cleaned_obs, infos[INFO_KEY.max_score]))
         else:
             pass
-        return cleaned_obs, instant_reward
+        return master, cleaned_obs, instant_reward
 
-    def collect_new_sample(self, cleaned_obs, instant_reward, dones, infos):
-        obs_idx = self.index_string(cleaned_obs.split())
-        if self.in_game_t == 0 and self._last_action is None:
-            act_idx = []
+    def collect_new_sample(
+            self, master: str, instant_reward: float, dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Tuple[
+            List[str], List[str], bytes, float]:
+
+        self.tjs.append(ActionMaster(
+            action=self._last_action if self._last_action else "",
+            master=master))
+
+        if not dones[0]:
+            state = ObsInventory(
+                obs=infos[INFO_KEY.desc][0],
+                inventory=infos[INFO_KEY.inventory][0])
         else:
-            act_idx = list(
-                self._last_action.token_idx[:self._last_action.action_len])
-        self.tjs.append(act_idx + obs_idx)
-        self.tjs_seg.append([1] * len(act_idx) + [0] * len(obs_idx))
+            obs = (
+                "terminal and win" if infos[INFO_KEY.won]
+                else "terminal and lose")
+            state = ObsInventory(obs=obs, inventory="")
+        self.stc.append(state)
 
         actions = self.get_admissible_actions(infos)
         actions = self.filter_admissible_actions(actions)
         actions = self.go_with_floor_plan(actions)
-        # self.info("admissible actions: {}".format(", ".join(sorted(actions))))
         actions_mask = self.actor.extend(actions)
         all_actions = self.actor.actions
 
-        # make sure appending tjs first, otherwise the judgement could be wrong
-        # pass the 1st master
         if self.is_training and self.tjs.get_last_sid() > 0:
-            self.feed_memory(
-                instant_reward, dones[0],
-                self._last_actions_mask, actions_mask)
-        else:
-            pass
+            original_data = self.memo.append(DRRNMemo(
+                tid=self.tjs.get_current_tid(),
+                sid=self.tjs.get_last_sid(),
+                gid=self.game_id,
+                aid=self._last_action.action_idx,
+                token_id=self._last_action.token_idx,
+                a_len=self._last_action.action_len,
+                reward=instant_reward,
+                is_terminal=dones[0],
+                action_mask=self._last_actions_mask,
+                next_action_mask=actions_mask
+            ))
+            if isinstance(original_data, DRRNMemo):
+                if original_data.is_terminal:
+                    self._stale_tids.append(original_data.tid)
 
         return actions, all_actions, actions_mask, instant_reward
 
     def next_step_action(
-            self, actions, all_actions, actions_mask, instant_reward):
+            self, actions: List[str], all_actions: List[str],
+            actions_mask: bytes, instant_reward: float) -> str:
+
         if self.is_training:
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
         else:
@@ -1103,13 +1224,9 @@ class BaseAgent(Logging):
         action = self._last_action.action
         action_idx = self._last_action.action_idx
 
-        # self._per_game_recorder.append(action)
-
         if self._last_action.action_type == ACT_TYPE.policy_drrn:
             self._cnt_action[action_idx] += 0.1
-        else:
-            # self.debug("cnt action ignore hard_set_action")
-            pass
+
         self._last_actions_mask = actions_mask
         # revert back go actions for the game playing
         if action.startswith("go"):
@@ -1125,7 +1242,7 @@ class BaseAgent(Logging):
         :param scores: score obtained so far for each game
         :param dones: whether a game is finished
         :param infos:
-        :return:
+        :return: if all dones, return None, else return actions
 
         Notes:
             Commands returned for games marked as `done` have no effect.
@@ -1136,15 +1253,16 @@ class BaseAgent(Logging):
             self._start_episode(obs, infos)
 
         assert len(obs) == 1, "cannot handle batch game training"
-        cleaned_obs, instant_reward = self.update_status(
+        master, cleaned_obs, instant_reward = self.update_status(
             obs, scores, dones, infos)
         (actions, all_actions, actions_mask, instant_reward
-         ) = self.collect_new_sample(cleaned_obs, instant_reward, dones, infos)
+         ) = self.collect_new_sample(master, instant_reward, dones, infos)
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
         if all(dones):
             self._end_episode(obs, scores, infos)
-            return  # Nothing to return.
+            return None
+
         player_t = self.next_step_action(
             actions, all_actions, actions_mask, instant_reward)
         if self.is_training and self.total_t >= self.hp.observation_t:

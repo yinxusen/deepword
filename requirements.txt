@@ -4,7 +4,7 @@ gym==0.17.0
 TatSu==4.4.0
 
 # NN required
-tensorflow==1.14.1
+tensorflow==1.15.2
 bert-tensorflow==1.0.1
 albert-tensorflow==1.1
 sentencepiece==0.1.85

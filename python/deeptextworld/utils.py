@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import hashlib
 import os
 import logging
 import logging.config
@@ -8,6 +9,18 @@ import yaml
 import sys
 from itertools import chain
 import time
+
+from deeptextworld.models import dqn_model, drrn_model, dsqn_model
+from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent
+
+
+def get_hash(txt: str) -> str:
+    """
+    Compute hash value for a text as a label
+    :param txt:
+    :return:
+    """
+    return hashlib.md5(txt.encode("utf-8")).hexdigest()
 
 
 def eprint(*args, **kwargs):
@@ -91,3 +104,29 @@ def setup_logging(
         logging.getLogger().addHandler(rh)
     # suppress log from stanford corenlp
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+
+
+def model_name2clazz(name):
+    """
+    Find the class given the model name in this package.
+
+    :param name:
+    :return:
+    """
+    for namespace in [dqn_model, drrn_model, dsqn_model]:
+        if hasattr(namespace, name):
+            return getattr(namespace, name)
+    raise ValueError("{} not found in models".format(name))
+
+
+def agent_name2clazz(name):
+    """
+    Find the class given the model name in this package.
+
+    :param name:
+    :return:
+    """
+    for namespace in [dqn_agent, drrn_agent, dsqn_agent]:
+        if hasattr(namespace, name):
+            return getattr(namespace, name)
+    raise ValueError("{} not found in agents".format(name))
