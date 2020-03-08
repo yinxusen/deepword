@@ -22,6 +22,7 @@ class Trajectory(Generic[T]):
         self.curr_tj: Optional[List[T]] = None
         self.curr_tid: Optional[int] = None
         self.num_turns: int = num_turns
+        self.size_per_turn: int = 1
 
     def get_last_sid(self) -> int:
         """
@@ -106,3 +107,21 @@ class Trajectory(Generic[T]):
         for tid, sid in zip(b_tid, b_sid):
             batch_states.append(self.fetch_state_by_idx(tid, sid))
         return batch_states
+
+    def fetch_batch_pre_states(
+            self, b_tid: List[int], b_sid: List[int]) -> List[List[T]]:
+        batch_states = []
+        for tid, sid in zip(b_tid, b_sid):
+            batch_states.append(
+                self.fetch_state_by_idx(tid, sid - self.size_per_turn))
+        return batch_states
+
+
+class RawTextTrajectory(Trajectory[str]):
+    """
+    A specific str-type raw text trajectory, for backward compatible.
+    """
+    def __init__(self, num_turns: int) -> None:
+        super(RawTextTrajectory, self).__init__(num_turns)
+        self.size_per_turn: int = 2
+        self.num_turns: int = num_turns * self.size_per_turn + 1

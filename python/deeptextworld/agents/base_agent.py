@@ -8,7 +8,7 @@ from os.path import join as pjoin
 from typing import Any
 
 import tensorflow as tf
-import tensorflow.contrib.training.HParams as HParams
+from tensorflow.contrib.training import HParams
 from bitarray import bitarray
 from tensorflow import Session
 from tensorflow.python.client import device_lib
@@ -25,10 +25,17 @@ from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import ctime
-from deeptextworld.utils import model_name2clazz, get_hash
+from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 
 
 class BaseCore(Logging, ABC):
+    def __init__(
+            self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+        super(BaseCore, self).__init__()
+        self.hp = hp
+        self.model_dir = model_dir
+        self.tokenizer = tokenizer
+
     def get_a_policy_action(
             self,
             trajectory: List[ActionMaster],
@@ -644,6 +651,8 @@ class BaseAgent(Logging):
     def _init_impl(
             self, load_best=False, restore_from: Optional[str] = None) -> None:
         self._load_context_objs()
+        core_class = core_name2clazz(self.hp.core_clazz)
+        self.core = core_class(self.hp, self.model_dir, self.tokenizer)
         self.core.init(load_best, restore_from)
 
         if self.is_training:
@@ -658,8 +667,8 @@ class BaseAgent(Logging):
             self.eps = 0
             self.total_t = 0
 
-    def _get_master_starter(
-            self, obs: List[str], infos: Dict[str, List[Any]]) -> str:
+    @classmethod
+    def _get_master_starter(cls, infos: Dict[str, List[Any]]) -> str:
         assert INFO_KEY.desc in infos, "request description is required"
         assert INFO_KEY.inventory in infos, "request inventory is required"
         return "{}\n{}".format(
@@ -681,7 +690,7 @@ class BaseAgent(Logging):
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
-        master_starter = self._get_master_starter(obs, infos)
+        master_starter = self._get_master_starter(infos)
         self.game_id = get_hash(master_starter)
         self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
@@ -1125,16 +1134,17 @@ class BaseAgent(Logging):
         if instant_reward > 0:
             self._see_cookbook = False
 
+    @classmethod
     def get_admissible_actions(
-            self, infos: Dict[str, List[Any]]) -> List[str]:
+            cls, infos: Dict[str, List[Any]]) -> List[str]:
         return [a.lower() for a in infos[INFO_KEY.actions][0]]
 
     def update_status(
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, str, float]:
         self._prev_place = self._curr_place
-        master = (self._get_master_starter(obs, infos)
-                  if self.in_game_t == 0 else obs[0])
+        master = (
+            self._get_master_starter(infos) if self.in_game_t == 0 else obs[0])
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
         else:

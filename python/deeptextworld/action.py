@@ -79,7 +79,7 @@ class ActionCollector(Logging):
 
     def idx_tokens(self, action):
         action_idx = self.tokenizer.convert_tokens_to_ids(
-            self.tokenizer.get_cleaned_master(action))
+            self.tokenizer.tokenize(action))
         action_idx = action_idx[:min(self.n_tokens, len(action_idx))]
         n_action_tokens = len(action_idx)
         if self.pad_eos:

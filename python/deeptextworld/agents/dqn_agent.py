@@ -151,7 +151,7 @@ class TabularCore(BaseCore):
     hashed values of observation + inventory as game states
     """
     def __init__(self, hp, model_dir, tokenizer):
-        super(TabularCore, self).__init__()
+        super(TabularCore, self).__init__(hp, model_dir, tokenizer)
         self.hp = hp
         self.q_mat_prefix = "q_mat"
         # model of tabular Q-learning, map from state to q-vectors

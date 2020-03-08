@@ -7,7 +7,7 @@ from bert.tokenization import FullTokenizer as BertTok
 from albert.tokenization import FullTokenizer as AlbertTok
 
 from deeptextworld.log import Logging
-from deeptextworld.utils import load_vocab, get_token2idx
+from deeptextworld.utils import load_vocab, get_token2idx, flatten
 
 
 class DRRNMemo(namedtuple(
@@ -44,11 +44,11 @@ class ActionDesc(namedtuple(
 
 class Tokenizer(object):
     @property
-    def vocab(self) -> Dict[int, str]:
+    def vocab(self) -> Dict[str, int]:
         raise NotImplementedError()
 
     @property
-    def inv_vocab(self) -> Dict[str, int]:
+    def inv_vocab(self) -> Dict[int, str]:
         raise NotImplementedError()
 
     def tokenize(self, text: str) -> List[str]:
@@ -254,12 +254,13 @@ def dqn_input(
         trajectory: List[str], tokenizer: Tokenizer, num_tokens: int,
         padding_val_id: int) -> Tuple[List[int], int]:
     """
-    Given trajectory (a list of str), return the src and src_len as DQN input
+    Given trajectory (a list of ActionMaster),
+    return the src and src_len as DQN input
     """
     trajectory = " ".join(trajectory)
     trajectory_ids = tokenizer.convert_tokens_to_ids(
         tokenizer.tokenize(trajectory))
-    padding_size = num_tokens - len(trajectory)
+    padding_size = num_tokens - len(trajectory_ids)
     if padding_size >= 0:
         src = trajectory_ids + [padding_val_id] * padding_size
         src_len = len(trajectory_ids)
@@ -270,8 +271,9 @@ def dqn_input(
 
 
 def batch_dqn_input(
-        trajectories: List[List[str]], tokenizer: Tokenizer, num_tokens: int,
-        padding_val_id: int) -> Tuple[List[List[int]], List[int]]:
+        trajectories: List[List[str]], tokenizer: Tokenizer,
+        num_tokens: int, padding_val_id: int
+) -> Tuple[List[List[int]], List[int]]:
     batch_src = []
     batch_src_len = []
     for tj in trajectories:
@@ -422,6 +424,25 @@ def get_batch_best_1d_idx(
     actions_idx_per_slice = np.asarray([np.argmax(qs) for qs in qs_slices])
     actions_idx = np.insert(actions_slices, 0, 0) + actions_idx_per_slice
     return actions_idx
+
+
+def get_batch_best_1d_idx_w_mask(
+        q_actions: List[np.ndarray],
+        mask: np.ndarray = np.asarray([1])) -> List[int]:
+    """
+    Choose the action idx with the best q value, without choosing from
+    inadmissible actions.
+    :param q_actions: a batch of q-vectors
+    :param mask:
+    :return:
+    """
+    q_actions = np.asarray(q_actions)
+    mask = np.ones_like(q_actions) * mask
+    inv_mask = np.logical_not(mask)
+    min_q_val = np.min(q_actions, axis=-1)
+    q_actions = q_actions * mask + min_q_val[:, None] * inv_mask
+    action_idx = np.argmax(q_actions, axis=-1)
+    return list(action_idx)
 
 
 def categorical_without_replacement(logits, k=1):

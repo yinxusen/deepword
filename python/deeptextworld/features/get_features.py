@@ -14,10 +14,9 @@ import tensorflow as tf
 from deeptextworld.models import drrn_model
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
-# from deeptextworld.dsqn_model import create_eval_model
 from deeptextworld.models.drrn_model import create_eval_model
 from deeptextworld.hparams import load_hparams_for_evaluation, output_hparams
-from deeptextworld.trajectory import RawTextTrajectory
+from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import flatten, eprint, load_uniq_lines
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
@@ -150,7 +149,7 @@ def load_snapshot(
     memory = np.load(memo_path, allow_pickle=True)['data']
     memory = list(filter(lambda x: isinstance(x, DRRNMemoTeacher), memory))
 
-    tjs = RawTextTrajectory(hp)
+    tjs = Trajectory(hp.num_turns)
     tjs.load_tjs(raw_tjs_path)
 
     actions = ActionCollector(
@@ -171,11 +170,11 @@ def load_snapshot(
 
 
 def prepare_master(master_str, tokenizer):
-    return tokenizer.convert_tokens_to_ids(tokenizer.get_cleaned_master(master_str))
+    return tokenizer.convert_tokens_to_ids(tokenizer.tokenize(master_str))
 
 
 def prepare_action(action_str, tokenizer):
-    tokens = tokenizer.convert_tokens_to_ids(tokenizer.get_cleaned_master(action_str))
+    tokens = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(action_str))
     tokens = tokens[:max(10, len(tokens))]
     return tokens
 

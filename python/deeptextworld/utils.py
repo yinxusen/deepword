@@ -10,9 +10,6 @@ import sys
 from itertools import chain
 import time
 
-from deeptextworld.models import dqn_model, drrn_model, dsqn_model
-from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent
-
 
 def get_hash(txt: str) -> str:
     """
@@ -113,7 +110,11 @@ def model_name2clazz(name):
     :param name:
     :return:
     """
-    for namespace in [dqn_model, drrn_model, dsqn_model]:
+    from deeptextworld.models import dqn_model, drrn_model, dsqn_model, \
+        gen_model, commonsense_model
+
+    for namespace in [dqn_model, drrn_model, dsqn_model, gen_model,
+                      commonsense_model]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in models".format(name))
@@ -126,7 +127,15 @@ def agent_name2clazz(name):
     :param name:
     :return:
     """
-    for namespace in [dqn_agent, drrn_agent, dsqn_agent]:
+    from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent, \
+        gen_agent, commonsense_agent
+
+    for namespace in [dqn_agent, drrn_agent, dsqn_agent, gen_agent,
+                      commonsense_agent]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in agents".format(name))
+
+
+def core_name2clazz(name):
+    return agent_name2clazz(name)

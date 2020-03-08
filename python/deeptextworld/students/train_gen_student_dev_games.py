@@ -13,7 +13,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 if __name__ == "__main__":
     cmd_args = CMD(
         model_dir="",
-        model_creator="AttnEncoderDecoderDQN",
+        model_creator="TransformerGenDQN",
         vocab_file=conventions.nltk_vocab_file,
         num_tokens=256,
         num_turns=6,

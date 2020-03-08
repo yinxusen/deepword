@@ -10,13 +10,14 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.hparams import save_hparams
-from deeptextworld.models.utils import get_batch_best_1d_idx
-from deeptextworld.students.utils import get_action_idx_pair
-from deeptextworld.utils import model_name2clazz
+from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.agents.utils import bert_commonsense_input
+from deeptextworld.agents.utils import get_batch_best_1d_idx_w_mask
+from deeptextworld.hparams import save_hparams
+from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.trajectory import RawTextTrajectory
-from deeptextworld.utils import flatten, eprint
+from deeptextworld.utils import eprint
+from deeptextworld.utils import model_name2clazz
 
 
 class CMD:
@@ -25,6 +26,9 @@ class CMD:
 
     def set(self, key, val):
         self.__dict__[key] = val
+
+    def get(self, key):
+        return self.__dict__[key]
 
 
 class StudentLearner(object):
@@ -88,7 +92,7 @@ class StudentLearner(object):
         memory = np.load(memo_path, allow_pickle=True)['data']
         memory = list(filter(lambda x: isinstance(x, tuple), memory))
 
-        tjs = RawTextTrajectory(self.hp)
+        tjs = RawTextTrajectory(self.hp.num_turns)
         tjs.load_tjs(raw_tjs_path)
 
         actions = ActionCollector(
@@ -142,6 +146,7 @@ class StudentLearner(object):
         sw = tf.summary.FileWriter(sw_path, sess.graph)
 
         queue = Queue(maxsize=100)
+
         t = Thread(
             target=self.add_batch,
             args=(self.get_combined_data_path(), queue))
@@ -216,15 +221,10 @@ class StudentLearner(object):
         """
         if max_allowed_size is None:
             max_allowed_size = self.hp.num_tokens
-
-        indices = flatten([self.str2idx(s) for s in trajectory])
-        effective_size = min(len(indices), max_allowed_size)
-        if len(indices) > max_allowed_size:
-            indices = indices[len(indices) - max_allowed_size:]
-        else:
-            indices = indices + [self.hp.padding_val_id] * (
-                    max_allowed_size - len(indices))
-        return indices, effective_size
+        src, src_len = dqn_input(
+            trajectory, self.tokenizer, max_allowed_size,
+            self.hp.padding_val_id)
+        return src, src_len
 
 
 class DRRNLearner(StudentLearner):
@@ -251,7 +251,7 @@ class DRRNLearner(StudentLearner):
         expected_qs = [m.q_actions for m in b_memory]
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
-        states = tjs.fetch_batch_states(trajectory_id, state_id)
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         states_n_lens = [self.prepare_trajectory(s) for s in states]
         p_states = [x[0] for x in states_n_lens]
         p_len = [x[1] for x in states_n_lens]
@@ -271,14 +271,20 @@ class GenLearner(StudentLearner):
     def train_impl(self, data, train_step):
         (p_states, p_len, actions_in, actions_out, action_len,
          expected_qs, b_weights) = data
+        eprint(p_states[0])
+        eprint(p_len[0])
+        eprint(actions_in[0])
+        eprint(actions_out[0])
+        eprint(expected_qs[0])
         _, summaries = self.sess.run(
             [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op],
-            feed_dict={self.model.src_: p_states,
-                       self.model.src_len_: p_len,
-                       self.model.action_idx_: actions_in,
-                       self.model.action_idx_out_: actions_out,
-                       self.model.action_len_: action_len,
-                       self.model.b_weight_: b_weights})
+            feed_dict={
+                self.model.src_: p_states,
+                self.model.src_len_: p_len,
+                self.model.action_idx_: actions_in,
+                self.model.action_idx_out_: actions_out,
+                self.model.action_len_: action_len,
+                self.model.b_weight_: b_weights})
         self.sw.add_summary(summaries, train_step)
         return
 
@@ -292,13 +298,12 @@ class GenLearner(StudentLearner):
         game_id = [m[2] for m in b_memory]
         action_mask = [m[6] for m in b_memory]
         expected_qs = [m[8] for m in b_memory]
-        best_q_idx = get_batch_best_1d_idx(
+        best_q_idx = get_batch_best_1d_idx_w_mask(
             expected_qs, BaseAgent.from_bytes(action_mask))
 
-        states = tjs.fetch_batch_states(trajectory_id, state_id)
-        states_n_lens = [self.prepare_trajectory(s) for s in states]
-        p_states = [x[0] for x in states_n_lens]
-        p_len = [x[1] for x in states_n_lens]
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        p_states, p_len = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
 
         action_len = np.asarray(
             [action_collector.get_action_len(gid)[mid]
@@ -332,7 +337,7 @@ class GenPreTrainLearner(GenLearner):
             lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
             action_mask_t))
 
-        states = tjs.fetch_batch_states(trajectory_id, state_id)
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         states_n_lens = [self.prepare_trajectory(s) for s in states]
         p_states = [x[0] for x in states_n_lens]
         p_len = [x[1] for x in states_n_lens]
@@ -392,7 +397,7 @@ class BertLearner(StudentLearner):
         max_allowed_trajectory_size = (
             self.hp.num_tokens - 2 - self.hp.n_tokens_per_action)
         # fetch pre-trajectory
-        states = tjs.fetch_batch_states(trajectory_id, np.asarray(state_id) - 2)
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         states_n_lens = [self.prepare_trajectory(
             s, max_allowed_trajectory_size) for s in states]
         p_states = [x[0] for x in states_n_lens]
@@ -436,9 +441,8 @@ class DataDeliver(DRRNLearner):
         expected_qs = [m.q_actions for m in b_memory]
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
-        states_pair = tjs.fetch_batch_states_pair(trajectory_id, state_id)
-        states = states_pair[0]
-        answers = states_pair[1]
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        answers = tjs.fetch_batch_states(trajectory_id, state_id)
 
         result_data = []
 
