@@ -29,7 +29,8 @@ class BertCommonsenseModel(BaseDQN):
             "src_len": tf.placeholder(tf.int32, [None]),
             "seg_tj_action": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
-            "action_idx": tf.placeholder(tf.int32, [None])
+            "action_idx": tf.placeholder(tf.int32, [None]),
+            "swag_labels": tf.placeholder(tf.int32, [None])
         }
         self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
@@ -61,6 +62,23 @@ class BertCommonsenseModel(BaseDQN):
             assignment_map={"bert/": "bert-state-encoder/bert/"})
 
         return q_actions
+
+    def get_swag_train_op(self, q_actions):
+        """
+        q_actions: [batch_size, 1]
+        in this case, when we want to compute classification error, we need
+        the batch_size = src batch size * num classes
+        which means that number of classes for each src should be equal
+        :param q_actions:
+        :return:
+        """
+        n_classes = self.hp.n_classes
+        q_actions = tf.reshape(q_actions, [-1, n_classes])
+        losses = tf.nn.softmax_cross_entropy_with_logits(
+            logits=q_actions, labels=self.inputs["swag_labels"])
+        loss = tf.reduce_mean(losses)
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op
 
     def get_train_op(self, q_actions):
         losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
@@ -142,6 +160,7 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
             inputs = model.inputs
             q_actions = model.get_q_actions()
             loss, train_op = model.get_train_op(q_actions)
+            swag_loss, swag_train_op = model.get_swag_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
             train_summary_op = tf.summary.merge([loss_summary])
     return CommonsenseModel(
@@ -150,8 +169,11 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         src_seg_=None,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
+        swag_labels_=inputs["swag_labels"],
         loss=loss,
         train_op=train_op,
+        swag_loss=swag_loss,
+        swag_train_op=swag_train_op,
         train_summary_op=train_summary_op,
         expected_q_=inputs["expected_q_"],
         action_idx_=inputs["action_idx"],
@@ -174,8 +196,11 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
         src_seg_=None,
         src_=inputs["src"],
         src_len_=inputs["src_len"],
+        swag_labels_=None,
         loss=None,
         train_op=None,
+        swag_loss=None,
+        swag_train_op=None,
         train_summary_op=None,
         expected_q_=inputs["expected_q_"],
         action_idx_=inputs["action_idx"],

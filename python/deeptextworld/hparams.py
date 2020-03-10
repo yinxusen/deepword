@@ -189,7 +189,8 @@ HPARAMS = {
         mask_val="[MASK]",
         mask_val_id=0,
         bert_ckpt_dir="",
-        snn_train_epochs=1000),
+        n_classes=4  # for SWAG
+    ),
     "AlbertCommonsenseModel": tf.contrib.training.HParams(
         agent_clazz='DRRNAgent',
         core_clazz="BertCore",
@@ -212,7 +213,8 @@ HPARAMS = {
         mask_val_id=0,
         bert_ckpt_dir="",
         spm_model_file="",
-        snn_train_epochs=1000)
+        n_classes=4   # for SWAG
+    )
 }
 
 

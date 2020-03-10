@@ -3,13 +3,19 @@ import time
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
+from typing import Tuple, List, Union, Any
 
 import numpy as np
 import tensorflow as tf
+from tensorflow import Session
+from tensorflow.contrib.training import HParams
+from tensorflow.summary import FileWriter
+from tensorflow.train import Saver
 from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.utils import DRRNMemoTeacher
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_batch_best_1d_idx_w_mask
@@ -32,7 +38,9 @@ class CMD:
 
 
 class StudentLearner(object):
-    def __init__(self, hp, model_dir, train_data_dir, n_data):
+    def __init__(
+            self, hp: HParams, model_dir: str, train_data_dir: str,
+            n_data: int) -> None:
         self.model_dir = model_dir
         self.train_data_dir = train_data_dir
         self.n_data = n_data
@@ -44,7 +52,7 @@ class StudentLearner(object):
         (self.sess, self.model, self.saver, self.sw, self.train_steps,
          self.queue) = self.prepare_training()
 
-    def get_combined_data_path(self):
+    def get_combined_data_path(self) -> List[Tuple[str, str, str, str]]:
         tjs_prefix = "raw-trajectories"
         action_prefix = "actions"
         memo_prefix = "memo"
@@ -63,7 +71,9 @@ class StudentLearner(object):
                        "{}-{}.npz".format(hs2tj_prefix, i))))
         return combined_data_path
 
-    def prepare_model(self, device_placement):
+    def prepare_model(
+            self, device_placement: str
+    ) -> Tuple[Session, Any, Saver, int]:
         model_clazz = model_name2clazz(self.hp.model_creator)
         model = model_clazz.get_train_student_model(
             hp=self.hp,
@@ -88,7 +98,9 @@ class StudentLearner(object):
             trained_steps = 0
         return sess, model, saver, trained_steps
 
-    def load_snapshot(self, memo_path, raw_tjs_path, action_path):
+    def load_snapshot(
+            self, memo_path: str, raw_tjs_path: str, action_path: str
+    ) -> Tuple[List[Tuple], RawTextTrajectory, ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)['data']
         memory = list(filter(lambda x: isinstance(x, tuple), memory))
 
@@ -102,7 +114,9 @@ class StudentLearner(object):
         actions.load_actions(action_path)
         return memory, tjs, actions
 
-    def add_batch(self, combined_data_path, queue):
+    def add_batch(
+            self, combined_data_path: List[Tuple[str, str, str, str]],
+            queue: Queue) -> None:
         while True:
             for tp, ap, mp, hs in sorted(
                     combined_data_path, key=lambda k: random.random()):
@@ -118,7 +132,10 @@ class StudentLearner(object):
                     )
                     i += 1
 
-    def prepare_data(self, b_memory, tjs, action_collector):
+    def prepare_data(
+            self, b_memory: List[Union[Tuple, DRRNMemoTeacher]],
+            tjs: RawTextTrajectory,
+            action_collector: ActionCollector) -> Tuple:
         """
         Given a batch of memory, tjs, and action collector, create a tuple
         of data for training.
@@ -126,11 +143,13 @@ class StudentLearner(object):
         :param b_memory:
         :param tjs:
         :param action_collector:
-        :return:
+        :return: Tuple of data, the train_impl knows the details
         """
         raise NotImplementedError()
 
-    def prepare_training(self):
+    def prepare_training(
+            self
+    ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
         sess, model, saver, train_steps = self.prepare_model("/device:GPU:0")
 
         # save the very first model to verify weight has been loaded
@@ -155,7 +174,7 @@ class StudentLearner(object):
 
         return sess, model, saver, sw, train_steps, queue
 
-    def train(self, n_epochs):
+    def train(self, n_epochs: int) -> None:
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
             eprint("waiting data ... (retry times: {})".format(wait_times))
@@ -185,7 +204,7 @@ class StudentLearner(object):
                 break
         return
 
-    def train_impl(self, data, train_step):
+    def train_impl(self, data: Tuple, train_step: int) -> None:
         """
         Train the model one time given data.
 
@@ -195,39 +214,13 @@ class StudentLearner(object):
         """
         raise NotImplementedError()
 
-    def str2idx(self, sentence):
-        """
-        Convert sentence into indices.
-        :param sentence:
-        :return:
-        """
-        return self.tokenizer.convert_tokens_to_ids(
-            self.tokenizer.tokenize(sentence))
-
-    def prepare_trajectory(self, trajectory, max_allowed_size=None):
-        """
-        Convert a trajectory into indices to a specific length of hp.num_tokens.
-
-        trim the result indices from head if it contains more than that tokens,
-        or pad with padding_val_id if less than.
-
-        :param trajectory:
-          list of master-player pairs
-        :param max_allowed_size:
-          maximum length of trajectory, None means use hp.num_tokens
-        :return:
-          indices: padded or trimmed indices
-          effective_size: length of indices without padding
-        """
-        if max_allowed_size is None:
-            max_allowed_size = self.hp.num_tokens
-        src, src_len = dqn_input(
-            trajectory, self.tokenizer, max_allowed_size,
-            self.hp.padding_val_id)
-        return src, src_len
-
 
 class DRRNLearner(StudentLearner):
+    def __init__(
+            self, hp: HParams, model_dir: str, train_data_dir: str,
+            n_data: int) -> None:
+        super(DRRNLearner, self).__init__(hp, model_dir, train_data_dir, n_data)
+
     def train_impl(self, data, train_step):
         (p_states, p_len, action_matrix, action_mask_t, action_len,
          expected_qs) = data
@@ -252,9 +245,8 @@ class DRRNLearner(StudentLearner):
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        states_n_lens = [self.prepare_trajectory(s) for s in states]
-        p_states = [x[0] for x in states_n_lens]
-        p_len = [x[1] for x in states_n_lens]
+        p_states, p_len = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         max_action_len = np.max(action_len)
@@ -338,9 +330,8 @@ class GenPreTrainLearner(GenLearner):
             action_mask_t))
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        states_n_lens = [self.prepare_trajectory(s) for s in states]
-        p_states = [x[0] for x in states_n_lens]
-        p_len = [x[1] for x in states_n_lens]
+        p_states, p_len = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
 
         action_len = np.concatenate(
             [action_collector.get_action_len(gid)[mid]
@@ -398,10 +389,9 @@ class BertLearner(StudentLearner):
             self.hp.num_tokens - 2 - self.hp.n_tokens_per_action)
         # fetch pre-trajectory
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        states_n_lens = [self.prepare_trajectory(
-            s, max_allowed_trajectory_size) for s in states]
-        p_states = [x[0] for x in states_n_lens]
-        p_len = [x[1] for x in states_n_lens]
+        p_states, p_len = batch_dqn_input(
+            states, self.tokenizer, max_allowed_trajectory_size,
+            self.hp.padding_val_id)
 
         action_len = [
             action_collector.get_action_len(gid)[mid]

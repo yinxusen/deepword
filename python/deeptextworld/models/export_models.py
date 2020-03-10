@@ -48,6 +48,9 @@ class DRRNModel(DQNModel):
 @dataclass
 class CommonsenseModel(DQNModel):
     seg_tj_action_: tf.placeholder
+    swag_labels_: Optional[tf.placeholder]
+    swag_loss: Optional[tf.Tensor]
+    swag_train_op: Optional[tf.Operation]
 
 
 @dataclass
