@@ -1,9 +1,10 @@
 import numpy as np
 
 from deeptextworld.sum_tree import SumTree
+from deeptextworld.log import Logging
 
 
-class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
+class TreeMemory(Logging):  # stored as ( s, a, r, s_ ) in SumTree
     """
     This SumTree code is modified version and the original code is from:
     https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py
@@ -24,6 +25,7 @@ class TreeMemory(object):  # stored as ( s, a, r, s_ ) in SumTree
         We don't use deque because it means that at each timestep our experiences change index by one.
         We prefer to use a simple array and to overwrite when the memory is full.
         """
+        super(TreeMemory, self).__init__()
         self.tree = SumTree(capacity)
         self.used_buffer_size = 0
 

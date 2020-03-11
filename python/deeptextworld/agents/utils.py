@@ -1,5 +1,6 @@
 from collections import namedtuple
-from typing import List, Dict, Tuple, Optional
+from dataclasses import dataclass
+from typing import List, Dict, Tuple, Optional, Union
 
 import numpy as np
 from nltk import word_tokenize
@@ -24,12 +25,16 @@ class DRRNMemoTeacher(namedtuple(
     pass
 
 
-class ActionMaster(namedtuple("ActionMaster", ("action", "master"))):
-    pass
+@dataclass
+class ActionMaster:
+    action: str
+    master: str
 
 
-class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
-    pass
+@dataclass
+class ObsInventory:
+    obs: str
+    inventory: str
 
 
 class ActionDesc(namedtuple(
@@ -215,7 +220,6 @@ class LinearDecayedEPS(ScheduledEPS):
         if t < 0:
             return self.init_eps
         eps_t = max(self.init_eps - self.decay_speed * t, self.final_eps)
-        self.debug("eps: {}".format(eps_t))
         return eps_t
 
 
@@ -250,14 +254,23 @@ class ScannerDecayEPS(ScheduledEPS):
         return eps_t
 
 
+def action_master2str(trajectory: List[ActionMaster]) -> List[str]:
+    return flatten([[x.action, x.master] for x in trajectory])
+
+
 def dqn_input(
-        trajectory: List[str], tokenizer: Tokenizer, num_tokens: int,
+        trajectory: Union[List[str], List[ActionMaster]],
+        tokenizer: Tokenizer,
+        num_tokens: int,
         padding_val_id: int) -> Tuple[List[int], int]:
     """
     Given trajectory (a list of ActionMaster),
     return the src and src_len as DQN input
     """
+    if isinstance(trajectory[0], ActionMaster):
+        trajectory = action_master2str(trajectory)
     trajectory = " ".join(trajectory)
+
     trajectory_ids = tokenizer.convert_tokens_to_ids(
         tokenizer.tokenize(trajectory))
     padding_size = num_tokens - len(trajectory_ids)
@@ -271,9 +284,10 @@ def dqn_input(
 
 
 def batch_dqn_input(
-        trajectories: List[List[str]], tokenizer: Tokenizer,
-        num_tokens: int, padding_val_id: int
-) -> Tuple[List[List[int]], List[int]]:
+        trajectories: Union[List[List[str]], List[List[ActionMaster]]],
+        tokenizer: Tokenizer,
+        num_tokens: int,
+        padding_val_id: int) -> Tuple[List[List[int]], List[int]]:
     batch_src = []
     batch_src_len = []
     for tj in trajectories:

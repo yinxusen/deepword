@@ -35,6 +35,8 @@ class BaseCore(Logging, ABC):
         self.hp = hp
         self.model_dir = model_dir
         self.tokenizer = tokenizer
+        self.loaded_ckpt_step: int = 0
+        self.is_training: bool = True
 
     def get_a_policy_action(
             self,
@@ -42,13 +44,16 @@ class BaseCore(Logging, ABC):
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray, actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
         raise NotImplementedError()
 
-    def save_model(self) -> None:
+    def save_model(self, t: Optional[int]) -> None:
         raise NotImplementedError()
 
-    def init(self, load_best=False, restore_from: Optional[str] = None) -> None:
+    def init(
+            self, is_training: bool, load_best: bool = False,
+            restore_from: Optional[str] = None) -> None:
         raise NotImplementedError()
 
     def train_one_batch(
@@ -76,15 +81,13 @@ class BaseCore(Logging, ABC):
 class TFCore(BaseCore, ABC):
     def __init__(
             self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
-        super(TFCore, self).__init__()
+        super(TFCore, self).__init__(hp, model_dir, tokenizer)
         self.hp: HParams = hp
         self.model_dir: str = model_dir
         self.model: Optional[DQNModel] = None
         self.target_model: Optional[DQNModel] = None
-        self.loaded_ckpt_step: int = 0
         self.sess: Optional[Session] = None
         self.target_sess: Optional[Session] = None
-        self.is_training: bool = True
         self.train_summary_writer: Optional[FileWriter] = None
         self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
         self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
@@ -113,12 +116,11 @@ class TFCore(BaseCore, ABC):
             d4target = devices[2]
         return d4train, d4eval, d4target
 
-    def save_model(self) -> None:
+    def save_model(self, t: Optional[int]) -> None:
         self.info('save model')
-        self.saver.save(
-            self.sess, self.ckpt_prefix,
-            global_step=tf.train.get_or_create_global_step(
-                graph=self.model.graph))
+        if not t:
+            t = tf.train.get_or_create_global_step(graph=self.model.graph)
+        self.saver.save(self.sess, self.ckpt_prefix, global_step=t)
 
     def safe_loading(
             self, model: DQNModel, sess: Session, saver: Saver,
@@ -165,10 +167,14 @@ class TFCore(BaseCore, ABC):
 
     def create_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
+        self.debug(
+            "try to create train model: {}".format(self.hp.model_creator))
         return model_creator.get_train_model(self.hp, device)
 
     def create_eval_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
+        self.debug(
+            "try to create eval model: {}".format(self.hp.model_creator))
         return model_creator.get_eval_model(self.hp, device)
 
     def create_model(
@@ -213,7 +219,9 @@ class TFCore(BaseCore, ABC):
         return trained_step
 
     def init(
-            self, load_best=False, restore_from: Optional[str] = None) -> None:
+            self, is_training: bool, load_best: bool = False,
+            restore_from: Optional[str] = None) -> None:
+        self.is_training = is_training
         if self.model is None:
             self.sess, self.model, self.saver = self.create_model(
                 self.is_training)
@@ -281,9 +289,7 @@ class BaseAgent(Logging):
             ACT.ge: ACT.gw, ACT.gw: ACT.ge}
 
         self.hp, self.tokenizer = self.init_tokens(hp)
-
-        self.info(output_hparams(self.hp))
-
+        # self.info(output_hparams(self.hp))
         self.core: Optional[BaseCore] = None
 
         self.tjs: Optional[Trajectory[ActionMaster]] = None
@@ -298,11 +304,11 @@ class BaseAgent(Logging):
         self.total_t: int = 0
         self.in_game_t: int = 0
         # eps decaying test for all-tiers
-        self.eps_getter = ScannerDecayEPS(
-            decay_step=10000000, decay_range=1000000)
-        # self.eps_getter = LinearDecayedEPS(
-        #     decay_step=self.hp.annealing_eps_t,
-        #     init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
+        # self.eps_getter = ScannerDecayEPS(
+        #     decay_step=10000000, decay_range=1000000)
+        self.eps_getter = LinearDecayedEPS(
+            decay_step=self.hp.annealing_eps_t,
+            init_eps=self.hp.init_eps, final_eps=self.hp.final_eps)
         self.eps: float = 0.
         self.is_training: bool = True
         self.snapshot_saved = False
@@ -574,7 +580,8 @@ class BaseAgent(Logging):
             state = self.stc.fetch_last_state()[0]
             action_desc = self.core.get_a_policy_action(
                 trajectory, state, self.actor.action_matrix,
-                self.actor.action_len, self.actor.actions, action_mask)
+                self.actor.action_len, self.actor.actions, action_mask,
+                self._cnt_action)
         return action_desc
 
     def train(self) -> None:
@@ -653,7 +660,9 @@ class BaseAgent(Logging):
         self._load_context_objs()
         core_class = core_name2clazz(self.hp.core_clazz)
         self.core = core_class(self.hp, self.model_dir, self.tokenizer)
-        self.core.init(load_best, restore_from)
+        self.core.init(
+            is_training=self.is_training, load_best=load_best,
+            restore_from=restore_from)
 
         if self.is_training:
             if self.hp.start_t_ignore_model_t:
@@ -661,8 +670,9 @@ class BaseAgent(Logging):
                     self.hp.observation_t,
                     len(self.memo) if self.memo is not None else 0)
             else:
-                self.total_t = (
-                        self.core.loaded_ckpt_step + self.hp.observation_t)
+                self.total_t = min(
+                    self.hp.observation_t + self.core.loaded_ckpt_step,
+                    len(self.memo) if self.memo is not None else 0)
         else:
             self.eps = 0
             self.total_t = 0
@@ -692,6 +702,7 @@ class BaseAgent(Logging):
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         master_starter = self._get_master_starter(infos)
         self.game_id = get_hash(master_starter)
+        self.info("game id: {}".format(self.game_id))
         self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
@@ -704,7 +715,6 @@ class BaseAgent(Logging):
             self._theme_words[self.game_id] = []
         self._per_game_recorder = []
         self._see_cookbook = False
-        self.debug("infos: {}".format(infos))
 
     def mode(self) -> str:
         return "train" if self.is_training else "eval"
@@ -724,9 +734,9 @@ class BaseAgent(Logging):
         #     to_delete_tj_id = self.memo.clear_old_memory()
         #     self.tjs.request_delete_key(to_delete_tj_id)
         self.info(
-            "mode: {}, obs: {}, #step: {}, score: {}, won: {},"
+            "mode: {}, #step: {}, score: {}, won: {},"
             " last_eps: {}".format(
-                self.mode(), obs[0], self.in_game_t, scores[0],
+                self.mode(), self.in_game_t, scores[0],
                 infos[INFO_KEY.won], self.eps))
         self._episode_has_started = False
         self._last_actions_mask = None
@@ -802,7 +812,6 @@ class BaseAgent(Logging):
         :return: contained, others
         """
         if not self._theme_words[self.game_id]:
-            self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
         others = []
@@ -1091,10 +1100,8 @@ class BaseAgent(Logging):
         # otherwise, it won't make sense to use the same action matrix.
         action_len = (
             [self.actor.get_action_len(gid) for gid in game_id])
-        max_action_len = np.max(action_len)
         action_matrix = (
-            [self.actor.get_action_matrix(gid)[:, :max_action_len]
-             for gid in game_id])
+            [self.actor.get_action_matrix(gid) for gid in game_id])
 
         b_weight = self.core.train_one_batch(
             pre_trajectories=pre_trajectories,
@@ -1109,30 +1116,20 @@ class BaseAgent(Logging):
             rewards=reward,
             action_idx=action_id,
             b_weight=b_weight,
-            step=self.total_t, others=None)
+            step=self.total_t,
+            others=None)
 
         self.memo.batch_update(b_idx, b_weight)
 
         if self.is_time_to_save():
             self.save_snapshot()
-            self.core.save_model()
+            self.core.save_model(self.total_t)
             self.core.create_or_reload_target_model()
 
     def _clean_stale_context(self, tids: List[int]) -> None:
         self.debug("tjs deletes {}".format(tids))
         self.tjs.request_delete_keys(tids)
         self.stc.request_delete_keys(tids)
-
-    def update_status_impl(
-            self, master: str, cleaned_obs: str, instant_reward: float,
-            infos: Dict[str, List[Any]]) -> None:
-        if self.hp.collect_floor_plan:
-            self._curr_place = self.collect_floor_plan(master, self._prev_place)
-        else:
-            self._curr_place = None
-        # use see cookbook again if gain one reward
-        if instant_reward > 0:
-            self._see_cookbook = False
 
     @classmethod
     def get_admissible_actions(
@@ -1150,30 +1147,35 @@ class BaseAgent(Logging):
         else:
             cleaned_obs = self.get_cleaned_master(master)
 
-        if (self._last_action is not None
+        if (self._theme_words[self.game_id] is None
+                and self._last_action is not None
                 and self._last_action.action == ACT.examine_cookbook):
             self._theme_words[self.game_id] = self.get_theme_words(master)
-            self.debug(
-                "get theme words: {}".format(self._theme_words[self.game_id]))
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos[INFO_KEY.won][0])
 
-        self.update_status_impl(master, cleaned_obs, instant_reward, infos)
-
-        if 0 < self.in_game_t:  # pass the 1st master
-            self.debug(
-                "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
-                " reward: {}, raw_score: {}, is_terminal: {}".format(
-                    self.mode(), self.total_t,
-                    self.in_game_t, self.eps, self._last_action,
-                    cleaned_obs, instant_reward, scores[0], dones[0]))
-        elif self.in_game_t == 0:
-            self.info(
-                "mode: {}, master: {}, max_score: {}".format(
-                    self.mode(), cleaned_obs, infos[INFO_KEY.max_score]))
+        if self.hp.collect_floor_plan:
+            self._curr_place = self.collect_floor_plan(master, self._prev_place)
         else:
-            pass
+            self._curr_place = None
+        # use see cookbook again if gain one reward
+        if instant_reward > 0:
+            self._see_cookbook = False
+
+        # if 0 < self.in_game_t:  # pass the 1st master
+        #     self.debug(
+        #         "mode: {}, t: {}, in_game_t: {}, eps: {}, {}, master: {},"
+        #         " reward: {}, raw_score: {}, is_terminal: {}".format(
+        #             self.mode(), self.total_t,
+        #             self.in_game_t, self.eps, self._last_action,
+        #             cleaned_obs, instant_reward, scores[0], dones[0]))
+        # elif self.in_game_t == 0:
+        #     self.info(
+        #         "mode: {}, master: {}, max_score: {}".format(
+        #             self.mode(), cleaned_obs, infos[INFO_KEY.max_score]))
+        # else:
+        #     pass
         return master, cleaned_obs, instant_reward
 
     def collect_new_sample(
@@ -1182,7 +1184,7 @@ class BaseAgent(Logging):
             List[str], List[str], bytes, float]:
 
         self.tjs.append(ActionMaster(
-            action=self._last_action if self._last_action else "",
+            action=self._last_action.action if self._last_action else "",
             master=master))
 
         if not dones[0]:

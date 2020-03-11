@@ -115,7 +115,8 @@ class GenDQNCore(TFCore):
             state: Optional[ObsInventory],
             action_matrix: np.ndarray, action_len: np.ndarray,
             actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
 
         src, src_len = dqn_input(
             trajectory, self.tokenizer, self.hp.num_tokens,

@@ -111,10 +111,10 @@ def model_name2clazz(name):
     :return:
     """
     from deeptextworld.models import dqn_model, drrn_model, dsqn_model, \
-        gen_model, commonsense_model
+        gen_model, commonsense_model, legacy_models
 
     for namespace in [dqn_model, drrn_model, dsqn_model, gen_model,
-                      commonsense_model]:
+                      commonsense_model, legacy_models]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in models".format(name))

@@ -90,7 +90,17 @@ HPARAMS = {
         num_tokens=1000,
         num_conv_filters=32),
     "CnnDRRN": tf.contrib.training.HParams(
-        agent_clazz='DRRNAgent',
+        agent_clazz='BaseAgent',
+        core_clazz="DRRNCore",
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        num_turns=11,
+        num_tokens=1000,
+        num_conv_filters=32),
+    "LegacyCnnDRRN": tf.contrib.training.HParams(
+        agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
         save_gap_t=1000,
@@ -100,7 +110,7 @@ HPARAMS = {
         num_tokens=1000,
         num_conv_filters=32),
     "TransformerDRRN": tf.contrib.training.HParams(
-        agent_clazz='DRRNAgent',
+        agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
         save_gap_t=1000,
@@ -110,7 +120,7 @@ HPARAMS = {
         num_tokens=1000,
         num_conv_filters=32),
     "BertDRRN": tf.contrib.training.HParams(
-        agent_clazz='DRRNAgent',
+        agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
         save_gap_t=1000,
@@ -173,7 +183,7 @@ HPARAMS = {
         tokenizer_type="NLTK",
         pad_eos=True),
     "BertCommonsenseModel": tf.contrib.training.HParams(
-        agent_clazz='DRRNAgent',
+        agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,
         save_gap_t=1000,
@@ -192,7 +202,7 @@ HPARAMS = {
         n_classes=4  # for SWAG
     ),
     "AlbertCommonsenseModel": tf.contrib.training.HParams(
-        agent_clazz='DRRNAgent',
+        agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,
         save_gap_t=1000,

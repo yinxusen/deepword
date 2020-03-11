@@ -10,16 +10,13 @@ import textworld.gym
 from textworld import EnvInfos
 
 from deeptextworld.agents import drrn_agent
-from deeptextworld.utils import ctime
+from deeptextworld.utils import ctime, agent_name2clazz, eprint
 
 # List of additional information available during evaluation.
 AVAILABLE_INFORMATION = EnvInfos(
     description=True, inventory=True,
     max_score=True, objective=True, entities=True, verbs=True,
-    command_templates=True, admissible_commands=True,
-    won=True, has_lost=True,
-    extras=["recipe"]
-)
+    command_templates=True, admissible_commands=True, won=True)
 
 
 def validate_requested_infos(infos: EnvInfos):
@@ -80,15 +77,14 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
     """
     logger = logging.getLogger("eval")
     eval_results = dict()
-    requested_infos = agent.select_additional_infos()
+    requested_infos = AVAILABLE_INFORMATION
     validate_requested_infos(requested_infos)
     for game_no, game_file in enumerate(game_files):
         game_name = os.path.basename(game_file)
         env_id = textworld.gym.register_games(
-            [game_file], requested_infos,
+            [game_file], requested_infos, batch_size=1,
             max_episode_steps=max_episode_steps,
             name="eval")
-        env_id = textworld.gym.make_batch(env_id, batch_size=1, parallel=False)
         game_env = gym.make(env_id)
 
         for episode_no in range(nb_episodes):
@@ -116,6 +112,8 @@ def run_agent_eval(agent, game_files, nb_episodes, max_episode_steps):
                 eval_results[game_name].append(
                     (scores[0], infos["max_score"][0], steps[0],
                      infos["won"][0]))
+        game_env.close()
+
     return eval_results
 
 
@@ -123,21 +121,23 @@ def train(hp, cv, model_dir, game_files, nb_epochs=sys.maxsize, batch_size=1):
     logger = logging.getLogger('train')
     logger.info("load {} game files".format(len(game_files)))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.train()
 
-    requested_infos = agent.select_additional_infos()
+    requested_infos = AVAILABLE_INFORMATION
     validate_requested_infos(requested_infos)
 
     env_id = textworld.gym.register_games(
-        game_files, requested_infos,
+        game_files, requested_infos, batch_size=batch_size,
         max_episode_steps=hp.game_episode_terminal_t,
         name="training")
-    env_id = textworld.gym.make_batch(
-        env_id, batch_size=batch_size, parallel=False)
     env = gym.make(env_id)
-    run_agent(cv, agent, env, len(game_files), nb_epochs)
+    try:
+        run_agent(cv, agent, env, len(game_files), nb_epochs)
+    except Exception as e:
+        eprint("error: {}".format(e))
+    env.close()
 
 
 def evaluation(hp, cv, model_dir, game_files, nb_episodes):
@@ -154,9 +154,9 @@ def evaluation(hp, cv, model_dir, game_files, nb_episodes):
     logger.info('evaluation worker started ...')
     logger.info("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
-    logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
+    # logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     # for eval during training, set load_best=False
     agent.eval(load_best=False)
@@ -350,7 +350,7 @@ def agg_results(eval_results):
         all_scores += agg_max_score
         all_episodes += len(res)
         agg_step = sum(map(lambda r: r[2], res))
-        agg_nb_won = len(list(filter(lambda r: r[3] , res)))
+        agg_nb_won = len(list(filter(lambda r: r[3], res)))
         all_won += agg_nb_won
         ret_val[game_id] = (agg_score, agg_max_score, agg_step, agg_nb_won)
         total_scores += agg_score

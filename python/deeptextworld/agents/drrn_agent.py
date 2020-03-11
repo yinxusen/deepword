@@ -26,7 +26,8 @@ class DRRNCore(TFCore):
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray, actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
@@ -34,6 +35,7 @@ class DRRNCore(TFCore):
         mask_idx = np.where(action_mask == 1)[0]
         admissible_action_matrix = action_matrix[mask_idx, :]
         admissible_action_len = action_len[mask_idx]
+        actions_repeats = [len(mask_idx)]
 
         src, src_len = dqn_input(
             trajectory, self.tokenizer, self.hp.num_tokens,
@@ -42,10 +44,10 @@ class DRRNCore(TFCore):
             self.model.src_: [src],
             self.model.src_len_: [src_len],
             self.model.actions_: admissible_action_matrix,
-            self.model.actions_len_: admissible_action_len
+            self.model.actions_len_: admissible_action_len,
+            self.model.actions_repeats_: actions_repeats
         })[0]
-        action_idx, q_val = get_best_1d_q(
-            q_actions_t - self._cnt_action[mask_idx])
+        action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action[mask_idx])
         real_action_idx = mask_idx[action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn,
@@ -71,14 +73,21 @@ class DRRNCore(TFCore):
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
-        post_qs_target = self.target_sess.run(
-            self.target_model.q_actions,
+        if self.target_model is None:
+            target_model = self.model
+            target_sess = self.sess
+        else:
+            target_model = self.target_model
+            target_sess = self.target_sess
+
+        post_qs_target = target_sess.run(
+            target_model.q_actions,
             feed_dict={
-                self.target_model.src_: post_src,
-                self.target_model.src_len_: post_src_len,
-                self.target_model.actions_: actions,
-                self.target_model.actions_len_: actions_lens,
-                self.target_model.actions_repeats_: actions_repeats})
+                target_model.src_: post_src,
+                target_model.src_len_: post_src_len,
+                target_model.actions_: actions,
+                target_model.actions_len_: actions_lens,
+                target_model.actions_repeats_: actions_repeats})
 
         post_qs_dqn = self.sess.run(
             self.model.q_actions,

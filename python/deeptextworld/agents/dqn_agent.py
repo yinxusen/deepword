@@ -1,10 +1,11 @@
 from copy import deepcopy
+from os.path import join as pjoin
 from typing import Dict, Optional, List, Any
 
 import numpy as np
 from textworld import EnvInfos
 
-from deeptextworld.agents.base_agent import BaseCore
+from deeptextworld.agents.base_agent import BaseCore, BaseAgent
 from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
 from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import ObsInventory
@@ -39,7 +40,8 @@ class DQNCore(TFCore):
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray, actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
@@ -160,6 +162,8 @@ class TabularCore(BaseCore):
         self.state2hash: Dict[ObsInventory, str] = dict()
         self.tokenizer = tokenizer
         self.model_dir = model_dir
+        self.ckpt_prefix = "after-epoch"
+        self.ckpt_path = pjoin(self.model_dir, self.q_mat_prefix)
 
     def train_one_batch(
             self,
@@ -201,7 +205,8 @@ class TabularCore(BaseCore):
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
 
         mask_idx = np.where(action_mask == 1)[0]
         hs = self.get_state_hash(state)
@@ -221,10 +226,22 @@ class TabularCore(BaseCore):
             self, restore_from: Optional[str] = None) -> None:
         self.target_q_mat = deepcopy(self.q_mat)
 
-    def init(self, load_best=False, restore_from: Optional[str] = None) -> None:
-        q_mat_path = self._get_context_obj_path(self.q_mat_prefix)
+    def init(
+            self, is_training: bool, load_best: bool = False,
+            restore_from: Optional[str] = None) -> None:
+        self.is_training = is_training
         try:
-            npz_q_mat = np.load(q_mat_path, allow_pickle=True)
+            if not restore_from:
+                tags = BaseAgent.get_path_tags(
+                    self.ckpt_path, self.ckpt_prefix)
+                self.loaded_ckpt_step = max(tags)
+                restore_from = pjoin(
+                    self.ckpt_path, "{}-{}.npz".format(
+                        self.ckpt_prefix, self.loaded_ckpt_step))
+            else:
+                # TODO: fetch loaded ckpt step
+                pass
+            npz_q_mat = np.load(restore_from, allow_pickle=True)
             q_mat_key = npz_q_mat["q_mat_key"]
             q_mat_val = npz_q_mat["q_mat_val"]
             self.q_mat = dict(zip(q_mat_key, q_mat_val))
@@ -235,15 +252,13 @@ class TabularCore(BaseCore):
             self.debug("load q_mat error:\n{}".format(e))
         pass
 
-    def save_model(self) -> None:
-        q_mat_path = "{}/{}/step-{}.npz".format(
-            self.model_dir, "tbl-model", self.total_t)
+    def save_model(self, t: Optional[int]) -> None:
+        q_mat_path = pjoin(
+            self.ckpt_path, "{}-{}.npz".format(self.ckpt_prefix, t))
         np.savez(
             q_mat_path,
             q_mat_key=list(self.q_mat.keys()),
             q_mat_val=list(self.q_mat.values()))
-        self.target_q_mat = deepcopy(self.q_mat)
-        self.debug("target q_mat is updated with q_mat")
 
     def get_state_hash(self, state: ObsInventory) -> str:
         if state in self.state2hash:
@@ -260,8 +275,7 @@ class TabularCore(BaseCore):
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
 
-        post_hash_states = [
-            self.get_state_hash(state[0]) for state in states]
+        post_hash_states = [self.get_state_hash(state) for state in states]
 
         post_qs_target = np.asarray(
             [self.target_q_mat.get(s, np.zeros(self.hp.n_actions))

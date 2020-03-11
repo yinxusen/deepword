@@ -41,7 +41,8 @@ class BertCore(TFCore):
             state: Optional[ObsInventory],
             action_matrix: np.ndarray, action_len: np.ndarray,
             actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
         mask_idx = np.where(action_mask == 1)[0]
         action_matrix = action_matrix[mask_idx, :]
         action_len = action_len[mask_idx]

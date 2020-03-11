@@ -60,6 +60,14 @@ class CnnDRRN(CnnDQN):
             tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
         return q_actions
 
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        return create_train_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        return create_eval_model(cls, hp, device_placement)
+
 
 class TransformerDRRN(CnnDRRN):
     def __init__(self, hp, is_infer=False):
@@ -169,15 +177,16 @@ class BertDRRN(BaseDQN):
         return loss, train_op, abs_loss
 
 
-def create_train_model(model_creator, hp):
+def create_train_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp)
-        inputs = model.inputs
-        q_actions = model.get_q_actions()
-        loss, train_op, abs_loss = model.get_train_op(q_actions)
-        loss_summary = tf.summary.scalar("loss", loss)
-        train_summary_op = tf.summary.merge([loss_summary])
+        with tf.device(device_placement):
+            model = model_creator(hp)
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
+            loss_summary = tf.summary.scalar("loss", loss)
+            train_summary_op = tf.summary.merge([loss_summary])
     return DRRNModel(
         graph=graph, q_actions=q_actions,
         src_=inputs["src"],
@@ -194,12 +203,13 @@ def create_train_model(model_creator, hp):
         h_state=None)
 
 
-def create_eval_model(model_creator, hp):
+def create_eval_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
-        model = model_creator(hp, is_infer=True)
-        inputs = model.inputs
-        q_actions = model.get_q_actions()
+        with tf.device(device_placement):
+            model = model_creator(hp, is_infer=True)
+            inputs = model.inputs
+            q_actions = model.get_q_actions()
     return DRRNModel(
         graph=graph, q_actions=q_actions,
         src_=inputs["src"],

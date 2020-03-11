@@ -30,10 +30,10 @@ fi
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-drrn \
-    --game-path /Users/xusenyin/git-store/textworld-competition-games/train-1 \
+    --game-path /Users/xusenyin/git-store/textworld-competition-games/train \
     --vocab-file $VOCAB_FILE \
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
-    --model-creator CNNEncoderDRRN
+    --model-creator LegacyCnnDRRN
 popd
