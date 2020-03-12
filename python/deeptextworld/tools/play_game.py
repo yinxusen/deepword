@@ -47,6 +47,8 @@ class HumanAgent(CollectorAgent):
         print(infos[INFO_KEY.templates][0])
         print("----------------------")
         print(infos[INFO_KEY.entities][0])
+        print("----------------------")
+        print(infos[INFO_KEY.recipe])
         action = input("> ")
         return action
 

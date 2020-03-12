@@ -4,12 +4,13 @@ import sys
 import time
 
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.hparams import load_hparams_for_training
 from deeptextworld.utils import setup_logging
+
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
 parser = argparse.ArgumentParser(argument_default=None)
@@ -59,6 +60,7 @@ parser.add_argument('--n-actions', type=int)
 parser.add_argument('--drop-w-theme-words', action='store_true')
 parser.add_argument('--use-step-wise-reward', action='store_true')
 parser.add_argument('--snn-train-epochs', type=int)
+parser.add_argument("--tokenizer-type", type=str, help="[BERT|Albert|NLTK]")
 
 
 def setup_train_log(model_dir):
@@ -87,8 +89,7 @@ def get_eval_log_filename(func_name, model_dir, game_path, f_games):
     return os.path.join(os.getcwd(), fn)
 
 
-if __name__ == '__main__':
-    args = parser.parse_args()
+def main(args):
     config_file = args.config_file
     model_dir = args.model_dir
     game_path = args.game_path
@@ -157,3 +158,7 @@ if __name__ == '__main__':
             eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))
+
+
+if __name__ == '__main__':
+    main(parser.parse_args())

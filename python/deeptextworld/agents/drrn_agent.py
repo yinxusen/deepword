@@ -1,13 +1,16 @@
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 
 import numpy as np
 
 from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
-from deeptextworld.agents.utils import dqn_input, \
-    batch_dqn_input, batch_drrn_action_input, get_batch_best_1d_idx, \
-    convert_real_id_to_group_id, ActionMaster, ObsInventory
+from deeptextworld.agents.utils import batch_drrn_action_input
+from deeptextworld.agents.utils import get_batch_best_1d_idx
+from deeptextworld.agents.utils import convert_real_id_to_group_id
+from deeptextworld.agents.utils import action_master2str
+from deeptextworld.agents.utils import ActionMaster, ObsInventory
 from deeptextworld.agents.utils import get_best_1d_q
 from deeptextworld.models.export_models import DRRNModel
+from deeptextworld.utils import flatten
 
 
 class DRRNCore(TFCore):
@@ -37,16 +40,20 @@ class DRRNCore(TFCore):
         admissible_action_len = action_len[mask_idx]
         actions_repeats = [len(mask_idx)]
 
-        src, src_len = dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        src, src_len = self.trajectory2input(trajectory)
+        self.debug("trajectory: {}".format(trajectory))
+        self.debug("src: {}".format(src))
+        self.debug("src_len: {}".format(src_len))
+        self.debug("action_matrix: {}".format(action_matrix))
+        self.debug("admissible_action_matrix: {}".format(admissible_action_matrix))
         q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len],
             self.model.actions_: admissible_action_matrix,
             self.model.actions_len_: admissible_action_len,
             self.model.actions_repeats_: actions_repeats
-        })[0]
+        })
+        self.debug("q_actions_t {}".format(q_actions_t))
         action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action[mask_idx])
         real_action_idx = mask_idx[action_idx]
         action_desc = ActionDesc(
@@ -66,10 +73,7 @@ class DRRNCore(TFCore):
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
 
-        post_src, post_src_len = batch_dqn_input(
-            trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
-
+        post_src, post_src_len = self.batch_trajectory2input(trajectories)
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
@@ -121,9 +125,7 @@ class DRRNCore(TFCore):
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
 
-        pre_src, pre_src_len = batch_dqn_input(
-            pre_trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, group_inv_valid_idx
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
@@ -144,3 +146,30 @@ class DRRNCore(TFCore):
                 self.model.actions_repeats_: actions_repeats})
 
         return abs_loss
+
+
+class LegacyDRRNCore(DRRNCore):
+    def pad_action(self, action_tokens: List[str]) -> List[str]:
+        if 0 < len(action_tokens) < self.hp.n_tokens_per_action:
+            return (action_tokens + [self.hp.padding_val]
+                    * (self.hp.n_tokens_per_action - len(action_tokens)))
+        else:
+            return action_tokens
+
+    def trajectory2input(
+            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
+        tokens = []
+        for am in trajectory:
+            tokens += self.pad_action(
+                self.tokenizer.tokenize(am.action))
+            tokens += self.tokenizer.tokenize(am.master)
+
+        trajectory_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        padding_size = self.hp.num_tokens - len(trajectory_ids)
+        if padding_size >= 0:
+            src = trajectory_ids + [self.hp.padding_val_id] * padding_size
+            src_len = len(trajectory_ids)
+        else:
+            src = trajectory_ids[-padding_size:]
+            src_len = self.hp.num_tokens
+        return src, src_len

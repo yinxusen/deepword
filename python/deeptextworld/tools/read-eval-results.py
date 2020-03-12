@@ -8,7 +8,7 @@ from deeptextworld.stats import mean_confidence_interval
 
 def summary_from_keys(keys, eval_results):
     total_steps, total_max_scores, total_win = 0, 0, 0
-    total_scores = np.zeros(10, dtype=np.float)
+    total_scores = np.zeros(2, dtype=np.float)
     for game_name in keys:
         game_res = eval_results[game_name]
         max_scores = game_res["max_scores"]
@@ -19,7 +19,7 @@ def summary_from_keys(keys, eval_results):
         total_scores += earned_scores
         total_steps += used_steps
         total_max_scores += max_scores
-    total_max_steps = len(keys) * 10 * 100
+    total_max_steps = len(keys) * 2 * 100
     if total_max_steps == 0:
         return 0, 0
     sample_mean, confidence_interval = mean_confidence_interval(
@@ -27,22 +27,26 @@ def summary_from_keys(keys, eval_results):
     return (sample_mean,
             confidence_interval,
             total_steps * 1. / total_max_steps,
-            total_win * 1. / (len(keys) * 10))
+            total_win * 1. / (len(keys) * 2))
 
 
-def merge_eval_results(j_res1, j_res2):
+def merge_eval_results(j_res1, j_res2=None):
     eval_res = dict()
     eval_res.update(j_res1['games'])
-    eval_res.update(j_res2['games'])
+    if j_res2:
+        eval_res.update(j_res2['games'])
     return eval_res
 
 
-def main(f_result, f_result2):
+def main(f_result, f_result2=None):
     with open(f_result, "r") as f:
         j_result = json.load(f)
 
-    with open(f_result2, 'r') as f:
-        j_result2 = json.load(f)
+    if f_result2:
+        with open(f_result2, 'r') as f:
+            j_result2 = json.load(f)
+    else:
+        j_result2 = None
 
     eval_results = merge_eval_results(j_result, j_result2)
 
@@ -88,4 +92,4 @@ def main(f_result, f_result2):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], None)

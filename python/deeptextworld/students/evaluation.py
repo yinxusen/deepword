@@ -48,9 +48,9 @@ def eval_agent(
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     if gpu_device is not None:
-        agent.set_d4eval(gpu_device)
+        agent.core.set_d4eval(gpu_device)
     if load_best:  # load from best_weights for evaluation
-        agent.eval()
+        agent.eval(load_best=load_best)
     else:  # load from last_weights for dev test
         agent.reset(restore_from)
 
@@ -87,7 +87,7 @@ def eval_agent(
             eval_results[game_name].append(
                 (scores[0], infos[INFO_KEY.max_score][0], steps[0],
                  infos[INFO_KEY.won][0], action_list))
-    return eval_results, agent.loaded_ckpt_step
+    return eval_results, agent.core.loaded_ckpt_step
 
 
 class MultiGPUsEvalPlayer(Logging):
@@ -181,19 +181,20 @@ class MultiGPUsEvalPlayer(Logging):
         tiers2scores = scores_of_tiers(agg_res)
         self.info("scores per tiers:\n{}".format(tiers2scores))
 
-        if self.has_better_model(total_scores, total_steps):
-            self.info(
-                "found better agent, save model after-epoch-{}".format(
-                    loaded_steps[0]))
-            self.prev_best_scores = total_scores
-            self.prev_best_steps = total_steps
-            # copy best model so far
-            try:
-                self.save_best_model(loaded_steps[0])
-            except Exception as e:
-                self.warning("save best model error:\n{}".format(e))
-        else:
-            self.info("no better model, pass ...")
+        if not self.load_best:
+            if self.has_better_model(total_scores, total_steps):
+                self.info(
+                    "found better agent, save model after-epoch-{}".format(
+                        loaded_steps[0]))
+                self.prev_best_scores = total_scores
+                self.prev_best_steps = total_steps
+                # copy best model so far
+                try:
+                    self.save_best_model(loaded_steps[0])
+                except Exception as e:
+                    self.warning("save best model error:\n{}".format(e))
+            else:
+                self.info("no better model, pass ...")
 
     def save_best_model(self, loaded_ckpt_step):
         ckpt_path = pjoin(self.model_dir, "last_weights")

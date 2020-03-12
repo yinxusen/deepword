@@ -101,7 +101,8 @@ HPARAMS = {
         num_conv_filters=32),
     "LegacyCnnDRRN": tf.contrib.training.HParams(
         agent_clazz='BaseAgent',
-        core_clazz="DRRNCore",
+        core_clazz="LegacyDRRNCore",
+        tokenizer_type="NLTK",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,

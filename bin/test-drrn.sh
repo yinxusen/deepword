@@ -15,9 +15,7 @@ else
 fi
 
 MODELHOME="$PDIR/../experiments-drrn/agent-drrn-test"
-
-BERT_CKPT_DIR="$HOME/local/opt/bert-models/bert-model"
-VOCAB_FILE="$BERT_CKPT_DIR/vocab.txt"
+VOCAB_FILE="$PDIR/resources/vocab.txt"
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
@@ -30,10 +28,10 @@ fi
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/main.py \
     -m $MODELHOME --mode train-drrn \
-    --game-path /Users/xusenyin/git-store/textworld-competition-games/train \
     --vocab-file $VOCAB_FILE \
+    --game-path /Users/xusenyin/git-store/textworld-competition-games/train \
     --annealing-eps-t 300 --annealing-gamma-t 10 --observation-t 50 --replay-mem 100 \
     --eval-episode 1 --embedding-size 64 \
     --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 20 \
-    --model-creator LegacyCnnDRRN
+    --model-creator LegacyCnnDRRN --tokenizer-type NLTK
 popd

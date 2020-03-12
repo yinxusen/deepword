@@ -218,6 +218,23 @@ class TFCore(BaseCore, ABC):
             trained_step = 0
         return trained_step
 
+    def trajectory2input(
+            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
+        return dqn_input(
+            trajectory, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id)
+
+    def batch_trajectory2input(
+            self, trajectories: List[List[ActionMaster]]
+    ) -> Tuple[List[List[int]], List[int]]:
+        batch_src = []
+        batch_src_len = []
+        for tj in trajectories:
+            src, src_len = self.trajectory2input(tj)
+            batch_src.append(src)
+            batch_src_len.append(src_len)
+        return batch_src, batch_src_len
+
     def init(
             self, is_training: bool, load_best: bool = False,
             restore_from: Optional[str] = None) -> None:
@@ -289,8 +306,11 @@ class BaseAgent(Logging):
             ACT.ge: ACT.gw, ACT.gw: ACT.ge}
 
         self.hp, self.tokenizer = self.init_tokens(hp)
-        # self.info(output_hparams(self.hp))
-        self.core: Optional[BaseCore] = None
+        self.info(output_hparams(self.hp))
+
+        core_class = core_name2clazz(self.hp.core_clazz)
+        self.core: BaseCore = core_class(
+            self.hp, self.model_dir, self.tokenizer)
 
         self.tjs: Optional[Trajectory[ActionMaster]] = None
         self.memo: Optional[TreeMemory] = None
@@ -658,8 +678,6 @@ class BaseAgent(Logging):
     def _init_impl(
             self, load_best=False, restore_from: Optional[str] = None) -> None:
         self._load_context_objs()
-        core_class = core_name2clazz(self.hp.core_clazz)
-        self.core = core_class(self.hp, self.model_dir, self.tokenizer)
         self.core.init(
             is_training=self.is_training, load_best=load_best,
             restore_from=restore_from)
@@ -678,11 +696,12 @@ class BaseAgent(Logging):
             self.total_t = 0
 
     @classmethod
-    def _get_master_starter(cls, infos: Dict[str, List[Any]]) -> str:
+    def _compute_game_id(cls, infos: Dict[str, List[Any]]) -> str:
         assert INFO_KEY.desc in infos, "request description is required"
         assert INFO_KEY.inventory in infos, "request inventory is required"
-        return "{}\n{}".format(
+        starter = "{}\n{}".format(
             infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0])
+        return get_hash(starter)
 
     def _start_episode(
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
@@ -700,8 +719,7 @@ class BaseAgent(Logging):
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
-        master_starter = self._get_master_starter(infos)
-        self.game_id = get_hash(master_starter)
+        self.game_id = self._compute_game_id(infos)
         self.info("game id: {}".format(self.game_id))
         self.actor.add_new_episode(eid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
@@ -962,7 +980,7 @@ class BaseAgent(Logging):
                 open_actions = list(
                     filter(lambda a: a.startswith("open"), actions))
                 admissible_actions = cardinal_go + open_actions
-                self.debug("admissible actions for random walk:\n{}".format(
+                self.debug("admissible actions for random walk: {}".format(
                     admissible_actions))
                 _, action = get_random_1d_action(admissible_actions)
                 action_idx = all_actions.index(action)
@@ -1140,17 +1158,20 @@ class BaseAgent(Logging):
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, str, float]:
         self._prev_place = self._curr_place
-        master = (
-            self._get_master_starter(infos) if self.in_game_t == 0 else obs[0])
+        master = infos[INFO_KEY.desc][0] if self.in_game_t == 0 else obs[0]
         if self.hp.apply_dependency_parser:
             cleaned_obs = self.dp.reorder(master)
         else:
             cleaned_obs = self.get_cleaned_master(master)
 
-        if (self._theme_words[self.game_id] is None
+        self.debug("cleaned_obs: {}".format(cleaned_obs))
+
+        if (not self._theme_words[self.game_id]
                 and self._last_action is not None
                 and self._last_action.action == ACT.examine_cookbook):
             self._theme_words[self.game_id] = self.get_theme_words(master)
+            self.debug("get theme words for {}: {}".format(
+                self.game_id, self._theme_words[self.game_id]))
 
         instant_reward = self.get_instant_reward(
             scores[0], cleaned_obs, dones[0], infos[INFO_KEY.won][0])
@@ -1204,6 +1225,8 @@ class BaseAgent(Logging):
         actions_mask = self.actor.extend(actions)
         all_actions = self.actor.actions
 
+        self.debug("admissible actions: {}".format(actions))
+
         if self.is_training and self.tjs.get_last_sid() > 0:
             original_data = self.memo.append(DRRNMemo(
                 tid=self.tjs.get_current_tid(),
@@ -1235,6 +1258,8 @@ class BaseAgent(Logging):
             actions, all_actions, actions_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
+
+        self.debug("action: {}".format(self._last_action))
 
         if self._last_action.action_type == ACT_TYPE.policy_drrn:
             self._cnt_action[action_idx] += 0.1

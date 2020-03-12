@@ -312,7 +312,7 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    agent_clazz = getattr(drrn_agent, hp.agent_clazz)
+    agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
     if eval_randomness is not None:
