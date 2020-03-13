@@ -6,8 +6,8 @@ from deeptextworld.hparams import load_hparams_for_training, \
     load_hparams_for_evaluation
 from deeptextworld.students.evaluation import LoopDogEvalPlayer, \
     MultiGPUsEvalPlayer, FullDirEvalPlayer
-from deeptextworld.students.utils import setup_train_log, setup_eval_log, \
-    load_and_split, load_game_files
+from deeptextworld.students.utils import setup_train_log, setup_eval_log
+from deeptextworld.utils import load_and_split, load_game_files
 
 
 class Conventions(namedtuple(

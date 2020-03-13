@@ -19,7 +19,7 @@ from watchdog.observers import Observer
 from deeptextworld.agents.utils import INFO_KEY
 from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.log import Logging
-from deeptextworld.students.utils import agg_results, scores_of_tiers
+from deeptextworld.utils import agg_results, scores_of_tiers
 from deeptextworld.utils import agent_name2clazz
 from deeptextworld.utils import eprint
 

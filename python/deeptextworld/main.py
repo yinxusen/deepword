@@ -156,6 +156,15 @@ def main(args):
         run_eval(
             hp, model_dir, game_path=game_path, f_games=args.f_games,
             eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
+    elif args.mode == "gen-teacher-data":
+        setup_eval_log(get_eval_log_filename(
+            "gen-teacher-data", model_dir, game_path, args.f_games))
+        from deeptextworld.get_teacher_data import run_eval
+        pre_config_file = os.path.join(model_dir, 'hparams.json')
+        hp = load_hparams_for_evaluation(pre_config_file, args)
+        run_eval(
+            hp, model_dir, game_path=game_path, f_games=args.f_games,
+            eval_randomness=args.eval_randomness, eval_mode=args.eval_mode)
     else:
         raise ValueError('Unknown mode: {}'.format(args.mode))
 

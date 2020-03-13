@@ -3,14 +3,12 @@ from typing import Optional, List, Any, Tuple
 import numpy as np
 
 from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
-from deeptextworld.agents.utils import batch_drrn_action_input
-from deeptextworld.agents.utils import get_batch_best_1d_idx
-from deeptextworld.agents.utils import convert_real_id_to_group_id
-from deeptextworld.agents.utils import action_master2str
 from deeptextworld.agents.utils import ActionMaster, ObsInventory
+from deeptextworld.agents.utils import batch_drrn_action_input
+from deeptextworld.agents.utils import convert_real_id_to_group_id
+from deeptextworld.agents.utils import get_batch_best_1d_idx
 from deeptextworld.agents.utils import get_best_1d_q
 from deeptextworld.models.export_models import DRRNModel
-from deeptextworld.utils import flatten
 
 
 class DRRNCore(TFCore):
@@ -45,7 +43,8 @@ class DRRNCore(TFCore):
         self.debug("src: {}".format(src))
         self.debug("src_len: {}".format(src_len))
         self.debug("action_matrix: {}".format(action_matrix))
-        self.debug("admissible_action_matrix: {}".format(admissible_action_matrix))
+        self.debug("admissible_action_matrix: {}".format(
+            admissible_action_matrix))
         q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len],
@@ -62,7 +61,8 @@ class DRRNCore(TFCore):
             action_idx=real_action_idx,
             token_idx=action_matrix[real_action_idx],
             action_len=action_len[real_action_idx],
-            action=actions[real_action_idx])
+            action=actions[real_action_idx],
+            q_actions=q_actions_t)
         return action_desc
 
     def _compute_expected_q(

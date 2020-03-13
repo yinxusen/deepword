@@ -8,9 +8,9 @@ from os.path import join as pjoin
 from typing import Any
 
 import tensorflow as tf
-from tensorflow.contrib.training import HParams
 from bitarray import bitarray
 from tensorflow import Session
+from tensorflow.contrib.training import HParams
 from tensorflow.python.client import device_lib
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
@@ -336,7 +336,8 @@ class BaseAgent(Logging):
 
         self._stale_tids: List[int] = []
 
-        self._last_actions_mask: Optional[bytes] = None
+        self._last_action_mask: Optional[bytes] = None
+        self._last_sys_action_mask: Optional[bytes] = None
         self._last_action: Optional[ActionDesc] = None
 
         self._cumulative_score = 0
@@ -569,13 +570,12 @@ class BaseAgent(Logging):
         """
         return " ".join(self.tokenizer.tokenize(master))
 
-    def get_a_random_action(self, action_mask: bytes) -> ActionDesc:
+    def get_a_random_action(self, action_mask: np.ndarray) -> ActionDesc:
         """
         Select a random action according to action mask
         :param action_mask:
         :return:
         """
-        action_mask = self.from_bytes([action_mask])[0]
         mask_idx = np.where(action_mask == 1)[0]
         action_idx = np.random.choice(mask_idx)
         action_desc = ActionDesc(
@@ -583,25 +583,8 @@ class BaseAgent(Logging):
             action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
-            action=self.actor.actions[action_idx])
-        return action_desc
-
-    def get_an_eps_action(self, action_mask: bytes) -> ActionDesc:
-        """
-        get either an random action index with action string
-        or the best predicted action index with action string.
-        :param action_mask:
-        """
-        if random.random() < self.eps:
-            action_desc = self.get_a_random_action(action_mask)
-        else:
-            action_mask = self.from_bytes([action_mask])[0]
-            trajectory = self.tjs.fetch_last_state()
-            state = self.stc.fetch_last_state()[0]
-            action_desc = self.core.get_a_policy_action(
-                trajectory, state, self.actor.action_matrix,
-                self.actor.action_len, self.actor.actions, action_mask,
-                self._cnt_action)
+            action=self.actor.actions[action_idx],
+            q_actions=None)
         return action_desc
 
     def train(self) -> None:
@@ -757,7 +740,8 @@ class BaseAgent(Logging):
                 self.mode(), self.in_game_t, scores[0],
                 infos[INFO_KEY.won], self.eps))
         self._episode_has_started = False
-        self._last_actions_mask = None
+        self._last_action_mask = None
+        self._last_sys_action_mask = None
         self.game_id = None
         self._last_action = None
         self._cumulative_penalty = -0.1
@@ -904,10 +888,12 @@ class BaseAgent(Logging):
             self, actions: List[str], all_actions: List[str],
             instant_reward: float) -> ActionDesc:
         action_desc = ActionDesc(
-            action_type=ACT_TYPE.rule, action_idx=None,
+            action_type=ACT_TYPE.rule,
+            action_idx=None,
             token_idx=None,
             action_len=None,
-            action=None)
+            action=None,
+            q_actions=None)
         return action_desc
 
     def rule_based_policy(
@@ -943,7 +929,7 @@ class BaseAgent(Logging):
             action_type=ACT_TYPE.rule, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
-            action=action)
+            action=action, q_actions=None)
         return action_desc
 
     def _is_jitter_go(
@@ -973,7 +959,7 @@ class BaseAgent(Logging):
                 action_type=ACT_TYPE.jitter, action_idx=action_idx,
                 token_idx=self.actor.action_matrix[action_idx],
                 action_len=self.actor.action_len[action_idx],
-                action=action)
+                action=action, q_actions=prev_action_desc.q_actions)
         else:
             pass
         return action_desc if action_desc is not None else prev_action_desc
@@ -1006,12 +992,12 @@ class BaseAgent(Logging):
             action_type=ACT_TYPE.rnd_walk, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
-            action=action)
+            action=action, q_actions=None)
         return action_desc
 
     def choose_action(
             self, actions: List[str], all_actions: List[str],
-            actions_mask: bytes, instant_reward: float) -> ActionDesc:
+            action_mask: bytes, instant_reward: float) -> ActionDesc:
         """
         Choose an action by
           1) try rule-based policy;
@@ -1019,24 +1005,42 @@ class BaseAgent(Logging):
           3) jitter go
         :param actions:
         :param all_actions:
-        :param actions_mask:
+        :param action_mask:
         :param instant_reward:
         :return:
         """
+        action_mask = self.from_bytes([action_mask])[0]
+        trajectory = self.tjs.fetch_last_state()
+        state = self.stc.fetch_last_state()[0]
+        policy_action_desc = self.core.get_a_policy_action(
+            trajectory, state, self.actor.action_matrix,
+            self.actor.action_len, self.actor.actions, action_mask,
+            self._cnt_action)
+
         action_desc = self.rule_based_policy(
             actions, all_actions, instant_reward)
         if action_desc.action_idx is None:
             action_desc = self.random_walk_for_collecting_fp(
                 actions, all_actions)
             if action_desc.action_idx is None:
-                action_desc = self.get_an_eps_action(actions_mask)
+                if random.random() < self.eps:
+                    action_desc = self.get_a_random_action(action_mask)
+                else:
+                    action_desc = policy_action_desc
                 action_desc = self.jitter_go_action(
                     action_desc, actions, all_actions)
             else:
                 pass
         else:
             pass
-        return action_desc
+        final_action_desc = ActionDesc(
+            action_type=action_desc.action_type,
+            action_idx=action_desc.action_idx,
+            action_len=action_desc.action_len,
+            token_idx=action_desc.token_idx,
+            action=action_desc.action,
+            q_actions=policy_action_desc.q_actions)
+        return final_action_desc
 
     def get_instant_reward(
             self, score: float, master: str, is_terminal: bool,
@@ -1216,7 +1220,7 @@ class BaseAgent(Logging):
     def collect_new_sample(
             self, master: str, instant_reward: float, dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[
-            List[str], List[str], bytes, float]:
+            List[str], List[str], bytes, bytes, float]:
 
         self.tjs.append(ActionMaster(
             action=self._last_action.action if self._last_action else "",
@@ -1233,18 +1237,18 @@ class BaseAgent(Logging):
             state = ObsInventory(obs=obs, inventory="")
         self.stc.append(state)
 
-        actions = self.get_admissible_actions(infos)
-        actions = self.filter_admissible_actions(actions)
-        actions = self.go_with_floor_plan(actions)
-        actions_mask = self.actor.extend(actions)
+        admissible_actions = self.get_admissible_actions(infos)
+        sys_action_mask = self.actor.extend(admissible_actions)
+        filtered_actions = self.filter_admissible_actions(admissible_actions)
+        effective_actions = self.go_with_floor_plan(filtered_actions)
+        action_mask = self.actor.extend(effective_actions)
         all_actions = self.actor.actions
         # TODO: use all actions instead of using admissible actions
-        # actions_mask = self.actor.extend(all_actions)
+        # action_mask = self.actor.extend(all_actions)
+        self.debug("effective actions: {}".format(effective_actions))
 
-        self.debug("admissible actions: {}".format(actions))
-
-        if self.is_training and self.tjs.get_last_sid() > 0:
-            original_data = self.memo.append(DRRNMemo(
+        if self.tjs.get_last_sid() > 0:
+            original_data = self.memo.append(Memolet(
                 tid=self.tjs.get_current_tid(),
                 sid=self.tjs.get_last_sid(),
                 gid=self.game_id,
@@ -1253,25 +1257,30 @@ class BaseAgent(Logging):
                 a_len=self._last_action.action_len,
                 reward=instant_reward,
                 is_terminal=dones[0],
-                action_mask=self._last_actions_mask,
-                next_action_mask=actions_mask
+                action_mask=self._last_action_mask,
+                sys_action_mask=self._last_sys_action_mask,
+                next_action_mask=action_mask,
+                next_sys_action_mask=sys_action_mask,
+                q_actions=self._last_action.q_actions
             ))
-            if isinstance(original_data, DRRNMemo):
+            if isinstance(original_data, Memolet):
                 if original_data.is_terminal:
                     self._stale_tids.append(original_data.tid)
 
-        return actions, all_actions, actions_mask, instant_reward
+        return (effective_actions, all_actions, action_mask, sys_action_mask,
+                instant_reward)
 
     def next_step_action(
             self, actions: List[str], all_actions: List[str],
-            actions_mask: bytes, instant_reward: float) -> str:
+            action_mask: bytes, sys_action_mask: bytes,
+            instant_reward: float) -> str:
 
         if self.is_training:
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
         else:
             pass
         self._last_action = self.choose_action(
-            actions, all_actions, actions_mask, instant_reward)
+            actions, all_actions, action_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
 
@@ -1280,7 +1289,8 @@ class BaseAgent(Logging):
         if self._last_action.action_type == ACT_TYPE.policy_drrn:
             self._cnt_action[action_idx] += 0.1
 
-        self._last_actions_mask = actions_mask
+        self._last_action_mask = action_mask
+        self._last_sys_action_mask = sys_action_mask
         # revert back go actions for the game playing
         if action.startswith("go"):
             action = " ".join(action.split()[:2])
@@ -1308,7 +1318,7 @@ class BaseAgent(Logging):
         assert len(obs) == 1, "cannot handle batch game training"
         master, cleaned_obs, instant_reward = self.update_status(
             obs, scores, dones, infos)
-        (actions, all_actions, actions_mask, instant_reward
+        (actions, all_actions, action_mask, sys_action_mask, instant_reward
          ) = self.collect_new_sample(master, instant_reward, dones, infos)
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
@@ -1317,7 +1327,8 @@ class BaseAgent(Logging):
             return None
 
         player_t = self.next_step_action(
-            actions, all_actions, actions_mask, instant_reward)
+            actions, all_actions, action_mask, sys_action_mask,
+            instant_reward)
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
         self.total_t += 1

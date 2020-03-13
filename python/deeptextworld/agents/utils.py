@@ -11,40 +11,43 @@ from deeptextworld.log import Logging
 from deeptextworld.utils import load_vocab, get_token2idx, flatten
 
 
-class DRRNMemo(namedtuple(
-    "DRRNMemo",
-    ("tid", "sid", "gid", "aid", "token_id", "a_len", "reward", "is_terminal",
-     "action_mask", "next_action_mask"))):
-    pass
+@dataclass(frozen=True)
+class Memolet:
+    tid: int
+    sid: int
+    gid: str
+    aid: int
+    token_id: np.ndarray
+    a_len: int
+    reward: float
+    is_terminal: bool
+    action_mask: bytes
+    sys_action_mask: bytes
+    next_action_mask: bytes
+    next_sys_action_mask: bytes
+    q_actions: Optional[np.ndarray]
 
 
-class DRRNMemoTeacher(namedtuple(
-    "DRRNMemoTeacher",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask", "q_actions"))):
-    pass
-
-
-@dataclass
+@dataclass(frozen=True)
 class ActionMaster:
     action: str
     master: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ObsInventory:
     obs: str
     inventory: str
 
 
-class ActionDesc(namedtuple(
-    "ActionDesc",
-    ("action_type", "action_idx", "token_idx",
-     "action_len", "action"))):
-    def __repr__(self):
-        return "{}/{}/{}/{}/{}".format(
-            self.action_type, self.action_idx, self.token_idx, self.action_len,
-            self.action)
+@dataclass(frozen=True)
+class ActionDesc:
+    action_type: str
+    action_idx: Optional[int]
+    token_idx: Optional[np.ndarray]
+    action_len: Optional[int]
+    action: Optional[str]
+    q_actions: Optional[np.ndarray]
 
 
 class Tokenizer(object):

@@ -15,7 +15,7 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.agents.utils import DRRNMemoTeacher
+from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_batch_best_1d_idx_w_mask
@@ -133,7 +133,7 @@ class StudentLearner(object):
                     i += 1
 
     def prepare_data(
-            self, b_memory: List[Union[Tuple, DRRNMemoTeacher]],
+            self, b_memory: List[Union[Tuple, Memolet]],
             tjs: RawTextTrajectory,
             action_collector: ActionCollector) -> Tuple:
         """
@@ -241,6 +241,7 @@ class DRRNLearner(StudentLearner):
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
+        # TODO: fix this
         expected_qs = [m.q_actions for m in b_memory]
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
@@ -285,11 +286,12 @@ class GenLearner(StudentLearner):
         ("tid", "sid", "gid", "aid", "reward", "is_terminal",
          "action_mask", "next_action_mask", "q_actions")
         """
-        trajectory_id = [m[0] for m in b_memory]
-        state_id = [m[1] for m in b_memory]
-        game_id = [m[2] for m in b_memory]
-        action_mask = [m[6] for m in b_memory]
-        expected_qs = [m[8] for m in b_memory]
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = [m.q_actions for m in b_memory]
+        # TODO: fix gen learner
         best_q_idx = get_batch_best_1d_idx_w_mask(
             expected_qs, BaseAgent.from_bytes(action_mask))
 
@@ -318,11 +320,12 @@ class GenPreTrainLearner(GenLearner):
             ("tid", "sid", "gid", "aid", "reward", "is_terminal",
              "action_mask", "next_action_mask", "q_actions")
             """
-        trajectory_id = [m[0] for m in b_memory]
-        state_id = [m[1] for m in b_memory]
-        game_id = [m[2] for m in b_memory]
-        action_mask = [m[6] for m in b_memory]
-        expected_qs = [m[8] for m in b_memory]
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        # TODO: fix gen pre train learner
+        expected_qs = [m.q_actions for m in b_memory]
         action_mask_t = list(BaseAgent.from_bytes(action_mask))
         # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
         selected_mask_idx = list(map(
@@ -373,11 +376,12 @@ class BertLearner(StudentLearner):
         ("tid", "sid", "gid", "aid", "reward", "is_terminal",
          "action_mask", "next_action_mask", "q_actions")
         """
-        trajectory_id = [m[0] for m in b_memory]
-        state_id = [m[1] for m in b_memory]
-        game_id = [m[2] for m in b_memory]
-        action_mask = [m[6] for m in b_memory]
-        expected_qs = [m[8] for m in b_memory]
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        # TODO: fix this
+        expected_qs = [m.q_actions for m in b_memory]
         action_mask_t = list(BaseAgent.from_bytes(action_mask))
         # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
         selected_mask_idx = list(map(
