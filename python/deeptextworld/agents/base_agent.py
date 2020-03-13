@@ -841,6 +841,10 @@ class BaseAgent(Logging):
 
         return contained, others
 
+    def filter_admissible_actions_v2(
+            self, admissible_actions: List[str]) -> List[str]:
+        return admissible_actions
+
     def filter_admissible_actions(
             self, admissible_actions: List[str]) -> List[str]:
         """
@@ -895,6 +899,16 @@ class BaseAgent(Logging):
         local_map = self.floor_plan.get_map(self._curr_place)
         return (["{} to {}".format(a, local_map.get(a))
                  if a in local_map else a for a in actions])
+
+    def rule_based_policy_v2(
+            self, actions: List[str], all_actions: List[str],
+            instant_reward: float) -> ActionDesc:
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.rule, action_idx=None,
+            token_idx=None,
+            action_len=None,
+            action=None)
+        return action_desc
 
     def rule_based_policy(
             self, actions: List[str], all_actions: List[str],
@@ -1224,6 +1238,8 @@ class BaseAgent(Logging):
         actions = self.go_with_floor_plan(actions)
         actions_mask = self.actor.extend(actions)
         all_actions = self.actor.actions
+        # TODO: use all actions instead of using admissible actions
+        # actions_mask = self.actor.extend(all_actions)
 
         self.debug("admissible actions: {}".format(actions))
 

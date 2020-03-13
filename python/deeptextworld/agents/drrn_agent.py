@@ -55,6 +55,7 @@ class DRRNCore(TFCore):
         })
         self.debug("q_actions_t {}".format(q_actions_t))
         action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action[mask_idx])
+        # action_idx, q_val = get_best_1d_q(q_actions_t)
         real_action_idx = mask_idx[action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn,
