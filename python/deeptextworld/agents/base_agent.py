@@ -25,6 +25,7 @@ from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
+from deeptextworld.utils import eprint
 
 
 class BaseCore(Logging, ABC):
@@ -99,8 +100,13 @@ class TFCore(BaseCore, ABC):
 
     @classmethod
     def init_devices(cls):
-        devices = [d.name for d in device_lib.list_local_devices()
-                   if d.device_type == "GPU"]
+        all_devices = device_lib.list_local_devices()
+        eprint("number of all devices: {}".format(len(all_devices)))
+        eprint(all_devices)
+        devices = [d.name for d in all_devices if d.device_type == "GPU"]
+        eprint("list of GPU devices:")
+        eprint(devices)
+        eprint("number of gpu devices: {}".format(len(devices)))
         if len(devices) == 0:
             d4train, d4eval, d4target = (
                 "/device:CPU:0", "/device:CPU:0", "/device:CPU:0")
