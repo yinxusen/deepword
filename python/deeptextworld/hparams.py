@@ -322,7 +322,8 @@ def load_hparams(file_args=None, cmd_args=None):
      unless arg in allowed_to_change set.
     """
     allowed_to_change = [
-        'model_dir', 'eval_episode', 'game_episode_terminal_t', "n_actions"]
+        'model_dir', 'eval_episode', 'game_episode_terminal_t', "n_actions",
+        "batch_size", "learning_rate"]
     hp = get_model_hparams("default")
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
