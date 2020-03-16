@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.floor_plan import FloorPlanCollector
-from deeptextworld.students.utils import load_game_files
+from deeptextworld.utils import load_game_files
 from deeptextworld.agents.utils import INFO_KEY
 
 
@@ -140,6 +140,7 @@ def run_games(agent, game_files, nb_episodes, max_steps):
             while not all(dones):
                 action = agent.act(obs, scores, dones, infos)
                 obs, scores, dones, infos = env.step([action])
+            agent.act(obs, scores, dones, infos)
         env.close()
 
 

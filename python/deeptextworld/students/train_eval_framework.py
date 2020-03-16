@@ -1,5 +1,4 @@
 import os
-from collections import namedtuple
 from os.path import join as pjoin
 
 from deeptextworld.hparams import load_hparams_for_training, \
@@ -8,35 +7,6 @@ from deeptextworld.students.evaluation import LoopDogEvalPlayer, \
     MultiGPUsEvalPlayer, FullDirEvalPlayer
 from deeptextworld.students.utils import setup_train_log, setup_eval_log
 from deeptextworld.utils import load_and_split, load_game_files
-
-
-class Conventions(namedtuple(
-        "Conventions",
-        ("bert_ckpt_dir", "bert_vocab_file", "nltk_vocab_file",
-         "glove_vocab_file", "glove_emb_file",
-         "albert_ckpt_dir", "albert_vocab_file", "albert_spm_path"
-         ))):
-    pass
-
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
-home_dir = os.path.expanduser("~")
-project_path = pjoin(dir_path, "../../..")
-conventions = Conventions(
-    bert_ckpt_dir=pjoin(home_dir, "local/opt/bert-models/bert-model"),
-    bert_vocab_file=pjoin(
-        home_dir, "local/opt/bert-models/bert-model/vocab.txt"),
-    albert_ckpt_dir=pjoin(home_dir, "local/opt/bert-models/albert-model"),
-    albert_vocab_file=pjoin(
-        home_dir, "local/opt/bert-models/albert-model/30k-clean.vocab"),
-    albert_spm_path=pjoin(
-        home_dir, "local/opt/bert-models/albert-model/30k-clean.model"),
-    nltk_vocab_file=pjoin(project_path, "resources/vocab.txt"),
-    glove_vocab_file=pjoin(
-        home_dir, "local/opt/glove-models/glove.6B/vocab.glove.6B.4more.txt"),
-    glove_emb_file=pjoin(
-        home_dir, "local/opt/glove-models/glove.6B/glove.6B.50d.4more.txt")
-)
 
 
 class TrainEval(object):

@@ -16,6 +16,7 @@ class HumanAgent(CollectorAgent):
         request_infos.command_templates = True
         request_infos.max_score = True
         request_infos.won = True
+        request_infos.lost = True
         request_infos.extras = ["recipe"]
         request_infos.admissible_commands = True
         return request_infos
@@ -41,6 +42,7 @@ class HumanAgent(CollectorAgent):
         print(infos.keys())
         print("----------------------")
         print("won: {}".format(infos[INFO_KEY.won][0]))
+        print("lost: {}".format(infos[INFO_KEY.lost][0]))
         print("----------------------")
         print(infos[INFO_KEY.verbs][0])
         print("----------------------")

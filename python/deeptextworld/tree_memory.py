@@ -103,9 +103,7 @@ class TreeMemory(Logging):  # stored as ( s, a, r, s_ ) in SumTree
                 -self.PER_b) / max_weight
             b_idx[i] = index
 
-            experience = [data]
-
-            memory_b.append(experience)
+            memory_b.append(data)
 
         return b_idx, memory_b, b_ISWeights
 
