@@ -35,7 +35,7 @@ def run_agent_eval(agent, game_files, max_episode_steps, memory_size):
                 obs, infos = game_env.reset()
                 scores = [0] * len(obs)
                 dones = [False] * len(obs)
-                agent.eps = np.random.random() / 2
+                agent.eps = np.random.random()
                 logger.info("new randomness: {}".format(agent.eps))
         agent.save_snapshot()
         logger.info("save snapshot epoch: {}".format(epoch_t))
