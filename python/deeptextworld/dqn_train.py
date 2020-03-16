@@ -4,6 +4,7 @@ import os
 import sys
 
 import gym
+import tensorflow as tf
 import textworld.gym
 from tqdm import trange
 
@@ -12,6 +13,7 @@ from deeptextworld.utils import agent_name2clazz
 from deeptextworld.utils import load_and_split
 from deeptextworld.utils import setup_logging
 
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 

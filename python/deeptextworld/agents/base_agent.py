@@ -5,7 +5,7 @@ import re
 from abc import ABC
 from os import remove as prm
 from os.path import join as pjoin
-from typing import Any
+from typing import Any, Optional
 
 import tensorflow as tf
 from bitarray import bitarray
