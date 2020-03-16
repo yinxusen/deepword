@@ -19,12 +19,11 @@ from textworld import EnvInfos
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.utils import *
 from deeptextworld.floor_plan import FloorPlanCollector
-from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.hparams import conventions
+from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import ctime
 from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 
 
@@ -48,7 +47,7 @@ class BaseCore(Logging, ABC):
             cnt_action: Optional[np.ndarray]) -> ActionDesc:
         raise NotImplementedError()
 
-    def save_model(self, t: Optional[int]) -> None:
+    def save_model(self, t: Optional[int] = None) -> None:
         raise NotImplementedError()
 
     def init(
@@ -116,9 +115,9 @@ class TFCore(BaseCore, ABC):
             d4target = devices[2]
         return d4train, d4eval, d4target
 
-    def save_model(self, t: Optional[int]) -> None:
+    def save_model(self, t: Optional[int] = None) -> None:
         self.info('save model')
-        if not t:
+        if t is None:
             t = tf.train.get_or_create_global_step(graph=self.model.graph)
         self.saver.save(self.sess, self.ckpt_prefix, global_step=t)
 
@@ -989,7 +988,7 @@ class BaseAgent(Logging):
 
         if self.is_time_to_save():
             self.save_snapshot()
-            self.core.save_model(self.total_t)
+            self.core.save_model()
             self.core.create_or_reload_target_model()
 
     def _clean_stale_context(self, tids: List[int]) -> None:

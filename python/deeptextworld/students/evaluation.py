@@ -17,7 +17,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from deeptextworld.agents.utils import INFO_KEY
-from deeptextworld.hparams import load_hparams_for_evaluation
+from deeptextworld.hparams import load_hparams
 from deeptextworld.log import Logging
 from deeptextworld.utils import agg_results, scores_of_tiers
 from deeptextworld.utils import agent_name2clazz
@@ -223,7 +223,7 @@ class NewModelHandler(FileSystemEventHandler):
     def run_eval_player(self, restore_from=None):
         if self.eval_player is None:
             config_file = pjoin(self.model_dir, "hparams.json")
-            hp = load_hparams_for_evaluation(config_file, self.cmd_args)
+            hp = load_hparams(config_file, self.cmd_args)
             self.eval_player = MultiGPUsEvalPlayer(
                 hp, self.model_dir, self.game_files, self.n_gpus,
                 load_best=False)

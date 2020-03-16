@@ -15,7 +15,7 @@ from deeptextworld.models import drrn_model
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
 from deeptextworld.models.drrn_model import create_eval_model
-from deeptextworld.hparams import load_hparams_for_evaluation, output_hparams
+from deeptextworld.hparams import load_hparams, output_hparams
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import flatten, eprint, load_uniq_lines
 
@@ -255,7 +255,7 @@ def split_train_dev(game_files):
 
 def fetch(cmd_args, combined_data_path, model_path, selected_hs_keys_path):
     config_file = pjoin(model_path, "hparams.json")
-    hp = load_hparams_for_evaluation(config_file, cmd_args)
+    hp = load_hparams(config_file, cmd_args)
     hp, tokenizer = BaseAgent.init_tokens(hp)
     eprint(output_hparams(hp))
     selected_hs_keys = load_uniq_lines(selected_hs_keys_path)

@@ -1,8 +1,7 @@
 import os
 from os.path import join as pjoin
 
-from deeptextworld.hparams import load_hparams_for_training, \
-    load_hparams_for_evaluation
+from deeptextworld.hparams import load_hparams
 from deeptextworld.students.evaluation import LoopDogEvalPlayer, \
     MultiGPUsEvalPlayer, FullDirEvalPlayer
 from deeptextworld.students.utils import setup_train_log, setup_eval_log
@@ -27,7 +26,7 @@ class TrainEval(object):
             os.mkdir(model_path)
         setup_train_log(model_path)
 
-        hp = load_hparams_for_training(None, self.cmd_args)
+        hp = load_hparams(None, self.cmd_args)
         learner = self.learner_clazz(hp, model_path, data_path, n_data)
         learner.train(n_epochs=1000)
 
@@ -65,7 +64,7 @@ class TrainEval(object):
             os.mkdir(model_path)
         setup_eval_log(log_filename="/tmp/eval-logging.txt")
         config_file = pjoin(model_path, "hparams.json")
-        hp = load_hparams_for_evaluation(config_file, self.cmd_args)
+        hp = load_hparams(config_file, self.cmd_args)
         game_files = load_game_files(game_path, f_games)
         eval_player = MultiGPUsEvalPlayer(
             hp, model_path, game_files, n_gpus, load_best=True)

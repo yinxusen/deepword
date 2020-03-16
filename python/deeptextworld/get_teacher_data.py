@@ -7,7 +7,7 @@ import numpy as np
 import textworld.gym
 from tqdm import trange
 
-from deeptextworld.hparams import load_hparams_for_evaluation
+from deeptextworld.hparams import load_hparams
 from deeptextworld.utils import load_and_split, agent_name2clazz
 
 EPOCH_LIMIT = 5
@@ -81,7 +81,7 @@ def run_eval(
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
     pre_config_file = os.path.join(model_dir, 'hparams.json')
-    hp = load_hparams_for_evaluation(pre_config_file, cmd_args=None)
+    hp = load_hparams(pre_config_file, cmd_args=None)
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)

@@ -5,9 +5,10 @@ import sys
 
 import gym
 import textworld.gym
+from tqdm import trange
 
-from deeptextworld.hparams import load_hparams_for_training
-from deeptextworld.utils import agent_name2clazz, eprint
+from deeptextworld.hparams import load_hparams
+from deeptextworld.utils import agent_name2clazz
 from deeptextworld.utils import load_and_split
 from deeptextworld.utils import setup_logging
 
@@ -18,8 +19,9 @@ parser = argparse.ArgumentParser(argument_default=None)
 parser.add_argument('-m', '--model-dir', type=str, required=True)
 parser.add_argument(
     '--game-path', type=str, help='[a dir|a game file]', required=True)
-parser.add_argument('--model-creator', type=str, default="CnnDRRN")
 parser.add_argument('--f-games', type=str)
+parser.add_argument('--model-creator', type=str, default="CnnDRRN")
+parser.add_argument('--config-file', type=str)
 parser.add_argument('--init-eps', type=float)
 parser.add_argument('--final-eps', type=float)
 parser.add_argument('--annealing-eps-t', type=int)
@@ -55,8 +57,8 @@ def run_agent(agent, game_env, nb_games, nb_epochs):
     :return:
     """
     logger = logging.getLogger("train")
-    for epoch_no in range(nb_epochs):
-        for game_no in range(nb_games):
+    for epoch_no in trange(nb_epochs):
+        for game_no in trange(nb_games):
             logger.info("playing game epoch_no/game_no: {}/{}".format(
                 epoch_no, game_no))
 
@@ -95,18 +97,23 @@ def train(hp, model_dir, game_dir, f_games=None):
     try:
         run_agent(agent, env, len(train_games), nb_epochs)
     except Exception as e:
-        eprint("error: {}".format(e))
+        logger.error("error: {}".format(e))
     env.close()
 
 
 def main(args):
     model_dir = args.model_dir
     game_path = args.game_path
+    config_file = args.config_file
     if model_dir:
         model_dir = model_dir.rstrip('/')
+        if not config_file:
+            f_hparams = os.path.join(model_dir, "hparams.json")
+            if os.path.isfile(f_hparams):
+                config_file = f_hparams
 
     setup_train_log(model_dir)
-    hp = load_hparams_for_training(file_args=None, cmd_args=args)
+    hp = load_hparams(file_args=config_file, cmd_args=args)
     train(hp, model_dir, game_dir=game_path, f_games=args.f_games)
 
 

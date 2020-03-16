@@ -113,15 +113,9 @@ HPARAMS = {
         mask_val_id=None,
         model_creator='',
         max_snapshot_to_keep=5,
-        jitter_go=False,
-        jitter_eval_prob=1.,
-        jitter_train_prob=0.5,
         collect_floor_plan=True,
         start_t_ignore_model_t=False,
-        apply_dependency_parser=False,
-        use_padding_over_lines=False,
-        drop_w_theme_words=False,
-        use_step_wise_reward=False,
+        use_step_wise_reward=True,
         tokenizer_type="BERT",
         pad_eos=False,
         use_glove_emb=False,
@@ -321,22 +315,7 @@ def copy_hparams(hp):
     return hp2
 
 
-def load_hparams_for_training(file_args=None, cmd_args=None):
-    """
-    load hparams for training.
-    priority(cmd_args) > priority(file_args)
-    """
-    hp = get_model_hparams("default")
-    model_hp = get_model_hparams(cmd_args.model_creator)
-    hp = update_hparams_from_hparams(hp, model_hp)
-    if file_args is not None:
-        hp = update_hparams_from_file(hp, file_args)
-    if cmd_args is not None:
-        hp = update_hparams_from_cmd(hp, cmd_args)
-    return hp
-
-
-def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
+def load_hparams(file_args=None, cmd_args=None):
     """
     load hparams for evaluation.
     priority(file_args) > priority(cmd_args)
@@ -347,11 +326,18 @@ def load_hparams_for_evaluation(pre_config_file, cmd_args=None):
     hp = get_model_hparams("default")
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
-    hp = update_hparams_from_file(hp, pre_config_file)
-    model_hp = get_model_hparams(hp.model_creator)
+    if file_args is not None:
+        hp = update_hparams_from_file(hp, file_args)
+        model_creator = hp.model_creator
+    else:
+        model_creator = cmd_args.model_creator
+
+    model_hp = get_model_hparams(model_creator)
     hp = update_hparams_from_hparams(hp, model_hp)
+
     # second load hp from file to change params back
-    hp = update_hparams_from_file(hp, pre_config_file)
+    if file_args is not None:
+        hp = update_hparams_from_file(hp, file_args)
 
     if cmd_args is not None:
         dict_cmd_args = vars(cmd_args)

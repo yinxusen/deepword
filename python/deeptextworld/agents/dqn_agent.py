@@ -251,7 +251,7 @@ class TabularCore(BaseCore):
             self.debug("load q_mat error:\n{}".format(e))
         pass
 
-    def save_model(self, t: Optional[int]) -> None:
+    def save_model(self, t: Optional[int] = None) -> None:
         q_mat_path = pjoin(
             self.ckpt_path, "{}-{}.npz".format(self.ckpt_prefix, t))
         np.savez(
