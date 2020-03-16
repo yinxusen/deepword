@@ -1,8 +1,9 @@
 import tensorflow as tf
 
+import deeptextworld.models.utils as dqn
 from deeptextworld.models.drrn_model import CnnDRRN
-from deeptextworld.models.export_models import DSQNModel
 from deeptextworld.models.encoders import TxEncoder
+from deeptextworld.models.export_models import DSQNModel
 
 
 class CnnDSQN(CnnDRRN):
@@ -112,8 +113,7 @@ class TransformerDSQN(CnnDSQN):
         _, pooled = self.enc_tj(
             self.inputs["src"], training=(not self.is_infer))
         h_state = self.wt(pooled)
-        h_state_expanded = tf.repeat(
-            h_state, self.inputs["actions_repeats"], axis=0)
+        h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         _, h_actions = self.enc_actions(self.inputs["actions"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
@@ -147,8 +147,8 @@ class TransformerDSQNWithFactor(TransformerDSQN):
         h_state_var = self.wt_var(pooled)
         h_state_sum = h_state + h_state_var
         _, h_actions = self.enc_actions(self.inputs["actions"])
-        h_state_expanded = tf.repeat(
-            h_state_sum, self.inputs["actions_repeats"], axis=0)
+        h_state_expanded = dqn.repeat(
+            h_state_sum, self.inputs["actions_repeats"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
         return q_actions

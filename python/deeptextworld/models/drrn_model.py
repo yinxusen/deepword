@@ -54,8 +54,7 @@ class CnnDRRN(CnnDQN):
         _, pooled = self.enc_tj(self.inputs["src"])
         h_state = self.wt(pooled)
         _, h_actions = self.enc_actions(self.inputs["actions"])
-        h_state_expanded = tf.repeat(
-            h_state, self.inputs["actions_repeats"], axis=0)
+        h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
         return q_actions
@@ -98,8 +97,7 @@ class TransformerDRRN(CnnDRRN):
         _, pooled = self.enc_tj(
             self.inputs["src"], training=(not self.is_infer))
         h_state = self.wt(pooled)
-        h_state_expanded = tf.repeat(
-            h_state, self.inputs["actions_repeats"], axis=0)
+        h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         h_actions = self.enc_actions(self.inputs["actions"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions), axis=-1)
@@ -163,8 +161,7 @@ class BertDRRN(BaseDQN):
             assignment_map={"bert/": "tj-bert-encoder/bert/"})
         h_state = self.wt(bert_model.pooled_output)
         h_actions = self.enc_actions(self.inputs["actions"])
-        h_state_expanded = tf.repeat(
-            h_state, self.inputs["actions_repeats"], axis=0)
+        h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions

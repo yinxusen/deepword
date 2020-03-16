@@ -227,8 +227,7 @@ class LegacyCnnDRRN(BaseDQN):
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
             new_h = decoder_dense_classification(h_state, 32)
-            h_state_expanded = tf.repeat(
-                new_h, self.inputs["actions_repeats"], axis=0)
+            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 h_actions = encoder_lstm(
