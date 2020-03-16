@@ -16,7 +16,7 @@ if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
     source $HOME/local/etc/init_tensorflow.sh
 fi
 
-./bin/run.sh python/deeptextworld/main.py \
+./bin/run.sh python/deeptextworld/dqn_train.py \
     --game-path $DATAHOME -m $MODELHOME --f-games $F_GAMES \
     --mode eval-gen-dqn --eval-episode 1 --eval-randomness 0.1 --eval-mode all \
     --game-episode-terminal-t 100

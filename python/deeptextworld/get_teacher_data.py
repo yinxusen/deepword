@@ -1,11 +1,13 @@
 import logging
 import os
 
+import fire
 import gym
 import numpy as np
 import textworld.gym
 from tqdm import trange
 
+from deeptextworld.hparams import load_hparams_for_evaluation
 from deeptextworld.utils import load_and_split, agent_name2clazz
 
 EPOCH_LIMIT = 5
@@ -24,7 +26,7 @@ def run_agent_eval(agent, game_files, max_episode_steps, memory_size):
     scores = [0] * len(obs)
     dones = [False] * len(obs)
     for epoch_t in trange(EPOCH_LIMIT):
-        for total_t in trange(memory_size // 1000):
+        for total_t in trange(memory_size):
             if not all(dones):
                 commands = agent.act(obs, scores, dones, infos)
                 obs, scores, dones, infos = game_env.step(commands)
@@ -37,14 +39,14 @@ def run_agent_eval(agent, game_files, max_episode_steps, memory_size):
                 logger.info("new randomness: {}".format(agent.eps))
         agent.save_snapshot()
         logger.info("save snapshot epoch: {}".format(epoch_t))
+    game_env.close()
 
 
 def run_eval(
-        hp, model_dir, game_path, f_games=None, eval_randomness=None,
+        model_dir, game_path, eval_randomness=0., f_games=None,
         eval_mode="all"):
     """
     Evaluation an agent.
-    :param hp:
     :param model_dir:
     :param game_path:
     :param f_games:
@@ -78,6 +80,9 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
+    pre_config_file = os.path.join(model_dir, 'hparams.json')
+    hp = load_hparams_for_evaluation(pre_config_file, cmd_args=None)
+
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
     agent.eval(load_best=True)
@@ -86,3 +91,7 @@ def run_eval(
     logger.info("evaluation randomness: {}".format(agent.eps))
     run_agent_eval(
         agent, game_files, hp.game_episode_terminal_t, hp.replay_mem)
+
+
+if __name__ == "__main__":
+    fire.Fire(run_eval)

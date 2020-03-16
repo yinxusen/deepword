@@ -104,8 +104,7 @@ class DQNCore(TFCore):
                 action_idx, _ = get_best_1d_q(qs_dqn[i, mask_idx])
                 real_action_idx = mask_idx[action_idx]
                 expected_q[i] += (
-                        self.hp.final_gamma
-                        * qs_target[i, real_action_idx])
+                        self.hp.gamma * qs_target[i, real_action_idx])
         return expected_q
 
     def train_one_batch(
@@ -292,6 +291,5 @@ class TabularCore(BaseCore):
                 action_idx, _ = get_best_1d_q(post_qs_dqn[i, mask_idx])
                 real_action_idx = mask_idx[action_idx]
                 expected_q[i] += (
-                        self.hp.final_gamma
-                        * post_qs_target[i, real_action_idx])
+                        self.hp.gamma * post_qs_target[i, real_action_idx])
         return expected_q

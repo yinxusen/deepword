@@ -40,7 +40,7 @@ if [[ ! -d $MODELHOME ]]; then
 fi
 
 pushd $PDIR
-./bin/run.sh python/deeptextworld/main.py \
+./bin/run.sh python/deeptextworld/dqn_train.py \
     -m $MODELHOME --mode train-drrn \
     --game-path $GAME_DIR \
     --vocab-file $VOCAB_FILE \

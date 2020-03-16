@@ -107,7 +107,7 @@ class DRRNCore(TFCore):
         best_qs = post_qs_target[best_actions_idx]
         expected_q = (
                 np.asarray(rewards) +
-                np.asarray(dones) * self.hp.final_gamma * best_qs)
+                np.asarray(dones) * self.hp.gamma * best_qs)
         return expected_q
 
     def train_one_batch(

@@ -11,6 +11,7 @@ import random
 import sys
 import time
 from itertools import chain
+from typing import List, Tuple
 
 import numpy as np
 import yaml
@@ -281,7 +282,7 @@ def load_game_files(game_dir, f_games=None):
     return game_files
 
 
-def load_and_split(game_path, f_games):
+def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     """
     Load games and split train dev set
     :param game_path:

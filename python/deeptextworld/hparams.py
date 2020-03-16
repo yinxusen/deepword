@@ -11,7 +11,7 @@ from deeptextworld.utils import eprint
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 home_dir = os.path.expanduser("~")
-project_path = pjoin(dir_path, "../../..")
+project_path = pjoin(dir_path, "../..")
 
 
 @dataclass(frozen=True)
@@ -88,9 +88,7 @@ HPARAMS = {
         init_eps=1.,
         final_eps=1e-4,
         annealing_eps_t=5000,
-        init_gamma=0.,
-        final_gamma=0.7,
-        annealing_gamma_t=5000,
+        gamma=0.7,
         replay_mem=100000,
         observation_t=2000,
         total_t=sys.maxsize,

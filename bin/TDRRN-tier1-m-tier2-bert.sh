@@ -52,7 +52,7 @@ if [[ ! -d $MODELHOME ]]; then
 fi
 
 pushd $PDIR
-./bin/run.sh python/deeptextworld/main.py \
+./bin/run.sh python/deeptextworld/dqn_train.py \
     -m $MODELHOME --mode train-drrn --game-path $GAME_DIR --f-games $F_GAMES --vocab-file $VOCAB_FILE \
     --annealing-eps-t 4000000 --annealing-gamma-t 2000 --observation-t 10000 --replay-mem 500000 \
     --save-gap-t 10000 --batch-size 32 \

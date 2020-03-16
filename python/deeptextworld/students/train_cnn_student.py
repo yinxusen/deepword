@@ -3,8 +3,9 @@ import os
 import fire
 import tensorflow as tf
 
+from deeptextworld.hparams import conventions
 from deeptextworld.students.student_learner import DRRNLearner, CMD
-from deeptextworld.students.train_eval_framework import TrainEval, conventions
+from deeptextworld.students.train_eval_framework import TrainEval
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL

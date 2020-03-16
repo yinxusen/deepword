@@ -47,8 +47,7 @@ class StudentLearner(object):
         self.load_from = pjoin(self.model_dir, "last_weights")
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
-        save_hparams(
-            hp, pjoin(model_dir, "hparams.json"), use_relative_path=True)
+        save_hparams(hp, pjoin(model_dir, "hparams.json"))
         (self.sess, self.model, self.saver, self.sw, self.train_steps,
          self.queue) = self.prepare_training()
 

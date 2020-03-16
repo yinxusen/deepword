@@ -52,7 +52,7 @@ class GenDQNCore(TFCore):
             if not dones[i]:
                 s_argmax_q, _, valid_len = get_best_2d_q(
                     qs_dqn[i, :, :], self.hp.eos_id)
-                expected_q[i] += self.hp.final_gamma * np.mean(
+                expected_q[i] += self.hp.gamma * np.mean(
                     qs_target[i, range(valid_len), s_argmax_q[:valid_len]])
 
         return expected_q

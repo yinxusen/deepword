@@ -2,8 +2,9 @@ import os
 
 import fire
 
+from deeptextworld.hparams import conventions
 from deeptextworld.students.student_learner import DataDeliver, CMD
-from deeptextworld.students.train_eval_framework import TrainEval, conventions
+from deeptextworld.students.train_eval_framework import TrainEval
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
