@@ -1,53 +1,50 @@
 from collections import namedtuple
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Union
 
 import numpy as np
-from nltk import word_tokenize
-from bert.tokenization import FullTokenizer as BertTok
 from albert.tokenization import FullTokenizer as AlbertTok
+from bert.tokenization import FullTokenizer as BertTok
+from nltk import word_tokenize
 
 from deeptextworld.log import Logging
 from deeptextworld.utils import load_vocab, get_token2idx, flatten
 
 
-@dataclass(frozen=True)
-class Memolet:
-    tid: int
-    sid: int
-    gid: str
-    aid: int
-    token_id: np.ndarray
-    a_len: int
-    reward: float
-    is_terminal: bool
-    action_mask: bytes
-    sys_action_mask: bytes
-    next_action_mask: bytes
-    next_sys_action_mask: bytes
-    q_actions: Optional[np.ndarray]
+class Memolet(namedtuple(
+    "Memolet", (
+        "tid",
+        "sid",
+        "gid",
+        "aid",
+        "token_id",
+        "a_len",
+        "reward",
+        "is_terminal",
+        "action_mask",
+        "sys_action_mask",
+        "next_action_mask",
+        "next_sys_action_mask",
+        "q_actions"))):
+    pass
 
 
-@dataclass(frozen=True)
-class ActionMaster:
-    action: str
-    master: str
+class ActionMaster(namedtuple("ActionMaster", ("action", "master"))):
+    pass
 
 
-@dataclass(frozen=True)
-class ObsInventory:
-    obs: str
-    inventory: str
+class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
+    pass
 
 
-@dataclass(frozen=True)
-class ActionDesc:
-    action_type: str
-    action_idx: Optional[int]
-    token_idx: Optional[np.ndarray]
-    action_len: Optional[int]
-    action: Optional[str]
-    q_actions: Optional[np.ndarray]
+class ActionDesc(namedtuple(
+    "ActionDesc", (
+        "action_type",
+        "action_idx",
+        "token_idx",
+        "action_len",
+        "action",
+        "q_actions"))):
+    pass
 
 
 class Tokenizer(object):

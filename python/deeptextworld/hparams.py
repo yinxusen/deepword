@@ -1,9 +1,8 @@
 import json
 import os
 import sys
-from dataclasses import dataclass
+from collections import namedtuple
 from os.path import join as pjoin
-from typing import Optional
 
 import tensorflow as tf
 
@@ -14,30 +13,31 @@ home_dir = os.path.expanduser("~")
 project_path = pjoin(dir_path, "../..")
 
 
-@dataclass(frozen=True)
-class Conventions:
-    bert_ckpt_dir: Optional[str]
-    bert_vocab_file: Optional[str]
-    nltk_vocab_file: Optional[str]
-    glove_vocab_file: Optional[str]
-    glove_emb_file: Optional[str]
-    albert_ckpt_dir: Optional[str]
-    albert_vocab_file: Optional[str]
-    albert_spm_path: Optional[str]
-    bert_cls_token: Optional[str]
-    bert_unk_token: Optional[str]
-    bert_padding_token: Optional[str]
-    bert_sep_token: Optional[str]
-    bert_mask_token: Optional[str]
-    albert_cls_token: Optional[str]
-    albert_unk_token: Optional[str]
-    albert_padding_token: Optional[str]
-    albert_sep_token: Optional[str]
-    albert_mask_token: Optional[str]
-    nltk_unk_token: Optional[str]
-    nltk_padding_token: Optional[str]
-    nltk_sos_token: Optional[str]
-    nltk_eos_token: Optional[str]
+class Conventions(namedtuple(
+    "Conventions", (
+        "bert_ckpt_dir",
+        "bert_vocab_file",
+        "nltk_vocab_file",
+        "glove_vocab_file",
+        "glove_emb_file",
+        "albert_ckpt_dir",
+        "albert_vocab_file",
+        "albert_spm_path",
+        "bert_cls_token",
+        "bert_unk_token",
+        "bert_padding_token",
+        "bert_sep_token",
+        "bert_mask_token",
+        "albert_cls_token",
+        "albert_unk_token",
+        "albert_padding_token",
+        "albert_sep_token",
+        "albert_mask_token",
+        "nltk_unk_token",
+        "nltk_padding_token",
+        "nltk_sos_token",
+        "nltk_eos_token"))):
+    pass
 
 
 conventions = Conventions(
