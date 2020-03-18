@@ -14,6 +14,7 @@ class TransformerGenDQN(BaseDQN):
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
+            "src_seg": tf.placeholder(tf.int32, [None, None]),
             "action_idx": tf.placeholder(tf.int32, [None, None]),
             "action_idx_out": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
@@ -47,6 +48,7 @@ class TransformerGenDQN(BaseDQN):
             max_tar_len=self.hp.n_tokens_per_action,
             sos_id=self.hp.sos_id,
             eos_id=self.hp.eos_id,
+            tj_master_mask=self.inputs["src_seg"],
             use_greedy=self.inputs["use_greedy"],
             beam_size=self.inputs["beam_size"],
             temperature=self.inputs["temperature"])
@@ -56,7 +58,7 @@ class TransformerGenDQN(BaseDQN):
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
-            training=True)
+            training=True, tj_master_mask=self.inputs["src_seg"])
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):
@@ -163,7 +165,7 @@ def create_train_gen_model(model_creator, hp, device_placement):
         use_greedy_=inputs["use_greedy"],
         col_eos_idx=col_eos_idx,
         decoded_logits_infer=decoded_logits,
-        src_seg_=None, h_state=None)
+        src_seg_=inputs["src_seg"], h_state=None)
 
 
 def create_eval_gen_model(model_creator, hp, device_placement):
@@ -196,4 +198,4 @@ def create_eval_gen_model(model_creator, hp, device_placement):
         use_greedy_=inputs["use_greedy"],
         col_eos_idx=col_eos_idx,
         decoded_logits_infer=decoded_logits,
-        src_seg_=None, h_state=None)
+        src_seg_=inputs["src_seg"], h_state=None)

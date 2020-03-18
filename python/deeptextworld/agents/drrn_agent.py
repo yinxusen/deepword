@@ -8,6 +8,7 @@ from deeptextworld.agents.utils import batch_drrn_action_input
 from deeptextworld.agents.utils import convert_real_id_to_group_id
 from deeptextworld.agents.utils import get_batch_best_1d_idx
 from deeptextworld.agents.utils import get_best_1d_q
+from deeptextworld.agents.utils import dqn_input
 from deeptextworld.models.export_models import DRRNModel
 
 
@@ -38,7 +39,7 @@ class DRRNCore(TFCore):
         admissible_action_len = action_len[mask_idx]
         actions_repeats = [len(mask_idx)]
 
-        src, src_len = self.trajectory2input(trajectory)
+        src, src_len, _ = self.trajectory2input(trajectory)
         self.debug("trajectory: {}".format(trajectory))
         self.debug("src: {}".format(src))
         self.debug("src_len: {}".format(src_len))
@@ -74,17 +75,11 @@ class DRRNCore(TFCore):
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
 
-        post_src, post_src_len = self.batch_trajectory2input(trajectories)
+        post_src, post_src_len, _ = self.batch_trajectory2input(trajectories)
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
-        if self.target_model is None:
-            target_model = self.model
-            target_sess = self.sess
-        else:
-            target_model = self.target_model
-            target_sess = self.target_sess
-
+        target_model, target_sess = self.get_target_model()
         post_qs_target = target_sess.run(
             target_model.q_actions,
             feed_dict={
@@ -126,7 +121,7 @@ class DRRNCore(TFCore):
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
 
-        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, group_inv_valid_idx
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
@@ -150,27 +145,10 @@ class DRRNCore(TFCore):
 
 
 class LegacyDRRNCore(DRRNCore):
-    def pad_action(self, action_tokens: List[str]) -> List[str]:
-        if 0 < len(action_tokens) < self.hp.n_tokens_per_action:
-            return (action_tokens + [self.hp.padding_val]
-                    * (self.hp.n_tokens_per_action - len(action_tokens)))
-        else:
-            return action_tokens
-
     def trajectory2input(
-            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
-        tokens = []
-        for am in trajectory:
-            tokens += self.pad_action(
-                self.tokenizer.tokenize(am.action))
-            tokens += self.tokenizer.tokenize(am.master)
-
-        trajectory_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        padding_size = self.hp.num_tokens - len(trajectory_ids)
-        if padding_size >= 0:
-            src = trajectory_ids + [self.hp.padding_val_id] * padding_size
-            src_len = len(trajectory_ids)
-        else:
-            src = trajectory_ids[-padding_size:]
-            src_len = self.hp.num_tokens
-        return src, src_len
+            self, trajectory: List[ActionMaster]
+    ) -> Tuple[List[int], int, List[int]]:
+        return dqn_input(
+            trajectory, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id, with_action_padding=True,
+            max_action_size=self.hp.n_tokens_per_action)

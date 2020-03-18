@@ -112,8 +112,6 @@ class TxEncoder(tf.keras.layers.Layer):
             num_layers, d_model, num_heads, dff, input_vocab_size, rate)
 
     def call(self, x, x_seg=None, training=None):
-        enc_padding_mask = create_padding_mask(x)
-        x = self.encoder(
-            x, x_seg=x_seg, training=training, mask=enc_padding_mask)
+        x = self.encoder(x, x_seg=x_seg, training=training)
         pooled = tf.reduce_max(x, axis=1)
         return x, pooled

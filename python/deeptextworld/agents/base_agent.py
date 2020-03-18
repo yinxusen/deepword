@@ -127,6 +127,15 @@ class TFCore(BaseCore, ABC):
             t = tf.train.get_or_create_global_step(graph=self.model.graph)
         self.saver.save(self.sess, self.ckpt_prefix, global_step=t)
 
+    def get_target_model(self) -> Tuple[Any, Session]:
+        if self.target_model is None:
+            target_model = self.model
+            target_sess = self.sess
+        else:
+            target_model = self.target_model
+            target_sess = self.target_sess
+        return target_model, target_sess
+
     def safe_loading(
             self, model: DQNModel, sess: Session, saver: Saver,
             restore_from: str) -> int:
@@ -224,21 +233,24 @@ class TFCore(BaseCore, ABC):
         return trained_step
 
     def trajectory2input(
-            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
+            self, trajectory: List[ActionMaster]
+    ) -> Tuple[List[int], int, List[int]]:
         return dqn_input(
             trajectory, self.tokenizer, self.hp.num_tokens,
             self.hp.padding_val_id)
 
     def batch_trajectory2input(
             self, trajectories: List[List[ActionMaster]]
-    ) -> Tuple[List[List[int]], List[int]]:
+    ) -> Tuple[List[List[int]], List[int], List[List[int]]]:
         batch_src = []
         batch_src_len = []
+        batch_mask = []
         for tj in trajectories:
-            src, src_len = self.trajectory2input(tj)
+            src, src_len, master_mask = self.trajectory2input(tj)
             batch_src.append(src)
             batch_src_len.append(src_len)
-        return batch_src, batch_src_len
+            batch_mask.append(master_mask)
+        return batch_src, batch_src_len, batch_mask
 
     def init(
             self, is_training: bool, load_best: bool = False,

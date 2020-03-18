@@ -255,47 +255,84 @@ class ScannerDecayEPS(ScheduledEPS):
         return eps_t
 
 
-def action_master2str(trajectory: List[ActionMaster]) -> List[str]:
-    return flatten([[x.action, x.master] for x in trajectory])
+def pad_action(
+        action_ids: List[int],
+        max_size: int,
+        padding_val_id: int) -> List[int]:
+    if 0 < len(action_ids) < max_size:
+        return action_ids + [padding_val_id] * (max_size - len(action_ids))
+    else:
+        return action_ids
+
+
+def tj2ids(
+        trajectory: List[ActionMaster],
+        tokenizer: Tokenizer,
+        with_action_padding: bool = False,
+        max_action_size: int = 10,
+        padding_val_id: int = 0) -> Tuple[List[int], List[int]]:
+    ids = []
+    master_mask = []
+    for am in trajectory:
+        action_ids = tokenizer.convert_tokens_to_ids(
+            tokenizer.tokenize(am.action))
+        if with_action_padding:
+            action_ids = pad_action(action_ids, max_action_size, padding_val_id)
+        master_ids = tokenizer.convert_tokens_to_ids(
+            tokenizer.tokenize(am.master))
+        ids += action_ids
+        ids += master_ids
+        master_mask += [0] * len(action_ids)
+        master_mask += [1] * len(master_ids)
+    return ids, master_mask
 
 
 def dqn_input(
-        trajectory: Union[List[str], List[ActionMaster]],
+        trajectory: List[ActionMaster],
         tokenizer: Tokenizer,
         num_tokens: int,
-        padding_val_id: int) -> Tuple[List[int], int]:
+        padding_val_id: int,
+        with_action_padding: bool = False,
+        max_action_size: int = 10
+) -> Tuple[List[int], int, List[int]]:
     """
     Given trajectory (a list of ActionMaster),
     return the src and src_len as DQN input
     """
-    if isinstance(trajectory[0], ActionMaster):
-        trajectory = action_master2str(trajectory)
-    trajectory = " ".join(trajectory)
-
-    trajectory_ids = tokenizer.convert_tokens_to_ids(
-        tokenizer.tokenize(trajectory))
+    trajectory_ids, raw_master_mask = tj2ids(
+        trajectory, tokenizer,
+        with_action_padding, max_action_size, padding_val_id)
     padding_size = num_tokens - len(trajectory_ids)
     if padding_size >= 0:
         src = trajectory_ids + [padding_val_id] * padding_size
+        master_mask = raw_master_mask + [0] * padding_size
         src_len = len(trajectory_ids)
     else:
         src = trajectory_ids[-padding_size:]
+        master_mask = raw_master_mask[-padding_size:]
         src_len = num_tokens
-    return src, src_len
+    return src, src_len, master_mask
 
 
 def batch_dqn_input(
-        trajectories: Union[List[List[str]], List[List[ActionMaster]]],
+        trajectories: List[List[ActionMaster]],
         tokenizer: Tokenizer,
         num_tokens: int,
-        padding_val_id: int) -> Tuple[List[List[int]], List[int]]:
+        padding_val_id: int,
+        with_action_padding: bool = False,
+        max_action_size: int = 10
+) -> Tuple[List[List[int]], List[int], List[List[int]]]:
     batch_src = []
     batch_src_len = []
+    batch_mask = []
     for tj in trajectories:
-        src, src_len = dqn_input(tj, tokenizer, num_tokens, padding_val_id)
+        src, src_len, master_mask = dqn_input(
+            tj, tokenizer, num_tokens, padding_val_id,
+            with_action_padding, max_action_size)
         batch_src.append(src)
         batch_src_len.append(src_len)
-    return batch_src, batch_src_len
+        batch_mask.append(master_mask)
+    return batch_src, batch_src_len, batch_mask
 
 
 def drrn_action_input(

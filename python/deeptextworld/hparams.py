@@ -277,10 +277,11 @@ def output_hparams(hp):
     return "\n".join(out_str)
 
 
-def update_hparams_from_cmd(hp, cmd_args):
+def update_hparams_from_cmd(hp, cmd_args, allowed_to_change=None):
     dict_cmd_args = vars(cmd_args)
     for hp_key in dict_cmd_args:
-        if hp_key in hp and dict_cmd_args[hp_key] is not None:
+        if (hp_key in hp and dict_cmd_args[hp_key] is not None and
+                (hp_key in allowed_to_change if allowed_to_change else True)):
             hp.set_hparam(hp_key, dict_cmd_args[hp_key])
     return hp
 
@@ -339,17 +340,12 @@ def load_hparams(file_args=None, cmd_args=None):
     # second load hp from file to change params back
     if file_args is not None:
         hp = update_hparams_from_file(hp, file_args)
-
-    if cmd_args is not None:
-        dict_cmd_args = vars(cmd_args)
-        for hp_key in dict_cmd_args:
-            if (dict_cmd_args[hp_key] is not None
-                    and hp_key in hp and hp_key in allowed_to_change):
-                eprint("changing hparam {} ({} -> {})".format(
-                    hp_key, hp.get(hp_key), dict_cmd_args[hp_key]))
-                hp.set_hparam(hp_key, dict_cmd_args[hp_key])
-            else:
-                pass
+        if cmd_args is not None:
+            hp = update_hparams_from_cmd(hp, cmd_args, allowed_to_change)
+    elif cmd_args is not None:
+        hp = update_hparams_from_cmd(hp, cmd_args)
+    else:
+        raise ValueError("file_args and cmd_args are both None")
     return hp
 
 

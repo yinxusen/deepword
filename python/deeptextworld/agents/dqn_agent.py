@@ -9,7 +9,6 @@ from deeptextworld.agents.base_agent import BaseCore, BaseAgent
 from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
 from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import ObsInventory
-from deeptextworld.agents.utils import dqn_input, batch_dqn_input
 from deeptextworld.agents.utils import get_best_1d_q
 from deeptextworld.utils import get_hash
 
@@ -47,9 +46,7 @@ class DQNCore(TFCore):
         or the best predicted action index with action string.
         """
         mask_idx = np.where(action_mask == 1)[0]
-        src, src_len = dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        src, src_len, _ = self.trajectory2input(trajectory)
         q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len]
@@ -78,16 +75,14 @@ class DQNCore(TFCore):
         while dones, rewards belong to pre game states.
         """
 
-        src, src_len = batch_dqn_input(
-            trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
-
+        src, src_len, _ = self.batch_trajectory2input(trajectories)
+        target_model, target_sess = self.get_target_model()
         # target network provides the value used as expected q-values
-        qs_target = self.target_sess.run(
-            self.target_model.q_actions,
+        qs_target = target_sess.run(
+            target_model.q_actions,
             feed_dict={
-                self.target_model.src_: src,
-                self.target_model.src_len_: src_len})
+                target_model.src_: src,
+                target_model.src_len_: src_len})
 
         # current network decides which action provides best q-value
         qs_dqn = self.sess.run(
@@ -127,9 +122,7 @@ class DQNCore(TFCore):
             action_mask=post_action_mask, trajectories=post_trajectories,
             dones=dones, rewards=rewards)
 
-        pre_src, pre_src_len = batch_dqn_input(
-            pre_trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],

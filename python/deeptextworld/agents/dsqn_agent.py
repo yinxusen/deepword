@@ -9,10 +9,9 @@ from numpy.random import choice as npc
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.drrn_agent import DRRNCore
 from deeptextworld.agents.utils import ActionMaster, ObsInventory
-from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
+from deeptextworld.agents.utils import batch_drrn_action_input
 from deeptextworld.agents.utils import convert_real_id_to_group_id
 from deeptextworld.models.export_models import DSQNModel
-from deeptextworld.utils import ctime
 
 
 class DSQNCore(DRRNCore):
@@ -38,9 +37,7 @@ class DSQNCore(DRRNCore):
             dones, rewards)
 
         src, src_len, src2, src2_len, labels = others.get()
-        pre_src, pre_src_len = batch_dqn_input(
-            pre_trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, group_inv_valid_idx
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
@@ -68,6 +65,7 @@ class DSQNCore(DRRNCore):
 
         return abs_loss
 
+    # TODO: refine the code
     def eval_snn(
             self,
             snn_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
@@ -82,8 +80,6 @@ class DSQNCore(DRRNCore):
         total_samples = 0
         for i in range(n_iter):
             self.debug("eval snn iter {} total {}".format(i, n_iter))
-            src, src_len, src2, src2_len, labels = self.get_snn_pairs(
-                batch_size)
             non_empty_src = list(filter(
                 lambda x: x[1][0] != 0 and x[1][1] != 0,
                 enumerate(zip(src_len, src2_len))))
@@ -180,8 +176,8 @@ class DSQNAgent(BaseAgent):
 
     def collect_new_sample(
             self, master, instant_reward, dones, infos):
-        actions, all_actions, actions_mask, instant_reward = super(
-            DSQNAgent, self).collect_new_sample(
+        (actions, all_actions, actions_mask, sys_actions_mask, instant_reward
+         ) = super(DSQNAgent, self).collect_new_sample(
             master, instant_reward, dones, infos)
 
         if not dones[0]:
@@ -194,7 +190,9 @@ class DSQNAgent(BaseAgent):
         else:
             pass  # final states are not considered
 
-        return actions, all_actions, actions_mask, instant_reward
+        return (
+            actions, all_actions, actions_mask, sys_actions_mask,
+            instant_reward)
 
     def get_snn_pairs(
             self, batch_size: int) -> Tuple[
@@ -263,8 +261,6 @@ class DSQNAgent(BaseAgent):
         Train one batch of samples.
         Load target model if not exist, save current model when necessary.
         """
-        if self.total_t == self.hp.observation_t:
-            self.epoch_start_t = ctime()
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
 

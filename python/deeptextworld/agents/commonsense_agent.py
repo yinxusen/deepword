@@ -1,5 +1,5 @@
 import math
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 
 import numpy as np
 
@@ -36,6 +36,14 @@ class BertCore(TFCore):
             others: Any) -> np.ndarray:
         pass
 
+    def trajectory2input(
+            self, trajectory: List[ActionMaster]
+    ) -> Tuple[List[int], int, List[int]]:
+        # remove the length for [CLS] and two [SEP]s.
+        return dqn_input(
+            trajectory, self.tokenizer, self.hp.num_tokens - 3,
+            self.hp.padding_val_id)
+
     def get_a_policy_action(
             self, trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
@@ -48,10 +56,7 @@ class BertCore(TFCore):
         action_len = action_len[mask_idx]
         actions = np.asarray(actions)[mask_idx]
 
-        # request less two tokens for [SEP]
-        src, src_len = dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens - 2,
-            self.hp.padding_val_id)
+        src, src_len, _ = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_commonsense_input(
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.num_tokens)

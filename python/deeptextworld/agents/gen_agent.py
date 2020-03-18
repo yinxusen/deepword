@@ -2,12 +2,10 @@ from typing import List, Optional, Any
 
 import numpy as np
 
-from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE, BaseAgent, \
-    TFCore
-from deeptextworld.agents.utils import get_best_2d_q, ActionMaster, \
-    ObsInventory, dqn_input, batch_dqn_input
+from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
+from deeptextworld.agents.base_agent import BaseAgent, TFCore
+from deeptextworld.agents.utils import get_best_2d_q, ActionMaster, ObsInventory
 from deeptextworld.models.export_models import GenDQNModel
-from deeptextworld.utils import ctime
 
 
 class GenDQNCore(TFCore):
@@ -28,23 +26,23 @@ class GenDQNCore(TFCore):
         while dones, rewards belong to pre game states.
         """
 
-        src, src_len = batch_dqn_input(
-            trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
-
+        src, src_len, master_mask = self.batch_trajectory2input(trajectories)
+        target_model, target_sess = self.get_target_model()
         # target network provides the value used as expected q-values
-        qs_target = self.target_sess.run(
-            self.target_model.q_actions,
+        qs_target = target_sess.run(
+            target_model.q_actions,
             feed_dict={
-                self.target_model.src_: src,
-                self.target_model.src_len_: src_len})
+                target_model.src_: src,
+                target_model.src_len_: src_len,
+                target_model.src_seg_: master_mask})
 
         # current network decides which action provides best q-value
         qs_dqn = self.sess.run(
             self.model.q_actions,
             feed_dict={
                 self.model.src_: src,
-                self.model.src_len_: src_len})
+                self.model.src_len_: src_len,
+                self.model.src_seg_: master_mask})
 
         expected_q = np.zeros_like(rewards)
         for i in range(len(expected_q)):
@@ -73,9 +71,8 @@ class GenDQNCore(TFCore):
         expected_q = self._compute_expected_q(
             trajectories=post_trajectories, dones=dones, rewards=rewards)
 
-        src, src_len = batch_dqn_input(
-            pre_trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        src, src_len, master_mask = self.batch_trajectory2input(
+            pre_trajectories)
 
         action_token_ids = others
         at_id_wo_eos = np.asarray(action_token_ids)
@@ -102,6 +99,7 @@ class GenDQNCore(TFCore):
             feed_dict={
                 self.model.src_: src,
                 self.model.src_len_: src_len,
+                self.model.src_seg_: master_mask,
                 self.model.b_weight_: b_weight,
                 self.model.action_idx_: at_id_in,
                 self.model.action_idx_out_: action_token_ids,
@@ -117,10 +115,11 @@ class GenDQNCore(TFCore):
             actions: List[str],
             action_mask: np.ndarray,
             cnt_action: Optional[np.ndarray]) -> ActionDesc:
-
-        src, src_len = dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+        self.debug("trajectory: {}".format(trajectory))
+        src, src_len, master_mask = self.trajectory2input(trajectory)
+        self.debug("src: {}".format(src))
+        self.debug("src_len: {}".format(src_len))
+        self.debug("master_mask: {}".format(master_mask))
         beam_size = 1
         temperature = 1
         self.debug("temperature: {}".format(temperature))
@@ -132,6 +131,7 @@ class GenDQNCore(TFCore):
             feed_dict={
                 self.model.src_: [src],
                 self.model.src_len_: [src_len],
+                self.model.src_seg_: [master_mask],
                 self.model.temperature_: temperature,
                 self.model.beam_size_: beam_size,
                 self.model.use_greedy_: False
@@ -139,8 +139,8 @@ class GenDQNCore(TFCore):
         action_idx = res[0]
         col_eos_idx = res[1]
         decoded_logits = res[2]
-        # self.debug("decoded logits: {}".format(decoded_logits))
         p_gen = res[3]
+        self.debug("decoded logits: {}".format(decoded_logits))
 
         res_summary = []
         special_tokens = {self.hp.padding_val, self.hp.eos}
@@ -161,7 +161,7 @@ class GenDQNCore(TFCore):
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_gen, action_idx=None,
             token_idx=top_action[0], action_len=top_action[1],
-            action=top_action[2])
+            action=top_action[2], q_actions=None)
 
         self.debug("generated actions:\n{}".format(
             "\n".join(
@@ -181,8 +181,6 @@ class GenDQNAgent(BaseAgent):
         Train one batch of samples.
         Load target model if not exist, save current model when necessary.
         """
-        if self.total_t == self.hp.observation_t:
-            self.epoch_start_t = ctime()
         # if there is not a well-trained model, it is unreasonable
         # to use target model.
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
