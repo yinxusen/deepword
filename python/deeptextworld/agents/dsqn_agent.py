@@ -269,14 +269,14 @@ class DSQNAgent(BaseAgent):
 
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
 
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        action_id = [m[0].aid for m in b_memory]
-        game_id = [m[0].gid for m in b_memory]
-        reward = [m[0].reward for m in b_memory]
-        is_terminal = [m[0].is_terminal for m in b_memory]
-        action_mask = [m[0].action_mask for m in b_memory]
-        next_action_mask = [m[0].next_action_mask for m in b_memory]
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        action_id = [m.aid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        reward = [m.reward for m in b_memory]
+        is_terminal = [m.is_terminal for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        next_action_mask = [m.next_action_mask for m in b_memory]
 
         pre_action_mask = self.from_bytes(action_mask)
         post_action_mask = self.from_bytes(next_action_mask)
