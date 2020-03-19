@@ -446,7 +446,10 @@ class Transformer(tf.keras.Model):
             inc_tar, inc_continue, inc_logits, inc_valid_len, inc_p_gen):
 
         combined_mask = create_decode_masks(inc_tar)
-        decoded_logits, p_gen, _, _ = self.decoder(
+        # decoded_logits:
+        # (batch_size * beam_size, target_seq_len, tgt_vocab_size)
+        # p_gen: (batch_size * beam_size, target_seq_len, 1)
+        decoded_logits, p_gen, _, _ = self.decoder.call(
             inc_tar, enc_x, enc_output, training, combined_mask,
             dec_padding_mask, tj_master_mask=tj_master_mask)
         masking = tf.map_fn(
@@ -457,7 +460,7 @@ class Transformer(tf.keras.Model):
             tf.squeeze(inc_continue, axis=-1), dtype=tf.float32)
         # (batch_size * beam_size, tgt_vocab_size)
         curr_logits = decoded_logits[:, -1, :]
-        curr_p_gen = p_gen[:, -1]
+        curr_p_gen = p_gen[:, -1, :]
         # mask current logits according to stop seq decoding or not
         masked_logits = tf.reshape(
             tf.where(tf.squeeze(inc_continue, axis=-1), curr_logits, masking),
@@ -479,37 +482,31 @@ class Transformer(tf.keras.Model):
 
         # (batch_size, beam_size)
         beam_id = predicted_id // tgt_vocab_size
+        # (batch_size * beam_size, 1)
         token_id = tf.reshape(
             predicted_id % tgt_vocab_size, (batch_size * beam_size, 1))
-        # (batch_size * beam_size, 1)
+        # (batch_size * beam_size, )
         gather_beam_idx = tf.reshape(
             tf.range(batch_size)[:, None] * beam_size + beam_id,
-            (batch_size * beam_size, -1))
+            (batch_size * beam_size, ))
         # create inc tensors according to which beam to choose
-        inc_tar_beam = tf.gather_nd(inc_tar, gather_beam_idx)
+        inc_tar_beam = tf.gather(inc_tar, gather_beam_idx)
         inc_tar = tf.concat([inc_tar_beam, token_id], axis=-1)
-        inc_continue_beam = tf.gather_nd(inc_continue, gather_beam_idx)
-        curr_continue = tf.math.not_equal(token_id, eos_id)
-        inc_continue = tf.concat([inc_continue_beam, curr_continue], axis=-1)
-        inc_continue = tf.reduce_all(inc_continue, axis=-1, keepdims=True)
-        inc_valid_len_beam = tf.gather_nd(inc_valid_len, gather_beam_idx)
-        inc_valid_len = tf.concat(
-            [inc_valid_len_beam,
-             tf.dtypes.cast(inc_continue, dtype=tf.int32)], axis=-1)
-        inc_valid_len = tf.reduce_sum(inc_valid_len, axis=-1, keepdims=True)
-        inc_p_gen_beam = tf.gather(inc_p_gen, tf.squeeze(gather_beam_idx, axis=-1))
+        inc_continue_beam = tf.gather(inc_continue, gather_beam_idx)
+        inc_continue = tf.math.logical_and(
+            tf.math.not_equal(token_id, eos_id), inc_continue_beam)
+        inc_valid_len_beam = tf.gather(inc_valid_len, gather_beam_idx)
+        inc_valid_len = inc_valid_len_beam + tf.dtypes.cast(
+            inc_continue, dtype=tf.int32)
+        inc_p_gen_beam = tf.gather(inc_p_gen, gather_beam_idx)
         inc_p_gen = tf.concat([inc_p_gen_beam, curr_p_gen], axis=-1)
-        print(inc_p_gen.shape)
         # (batch_size * beam_size, 2)
-        gather_token_idx = tf.concat([gather_beam_idx, token_id], axis=-1)
-        print(gather_token_idx.shape)
+        gather_token_idx = tf.concat(
+            [gather_beam_idx[:, None], token_id], axis=-1)
         selected_logits = tf.gather_nd(
             curr_logits, gather_token_idx)[:, None]
-        print(selected_logits.shape)
-        inc_logits_beam = tf.gather(inc_logits, tf.squeeze(gather_beam_idx, axis=-1))
-        print(inc_logits_beam.shape)
+        inc_logits_beam = tf.gather(inc_logits, gather_beam_idx)
         inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
-        print(inc_logits.shape)
         return (
             time + 1, inc_tar, inc_continue, inc_logits, inc_valid_len,
             inc_p_gen)
@@ -617,6 +614,4 @@ if __name__ == '__main__':
         print(res2_t)
         print(res_logits2_t)
         print(np.sum(res_logits2_t, axis=-1))
-
-
     test()
