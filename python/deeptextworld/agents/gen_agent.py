@@ -185,14 +185,15 @@ class GenDQNAgent(BaseAgent):
         # to use target model.
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
 
-        trajectory_id = [m[0].tid for m in b_memory]
-        state_id = [m[0].sid for m in b_memory]
-        action_id = [m[0].aid for m in b_memory]
-        game_id = [m[0].gid for m in b_memory]
-        reward = [m[0].reward for m in b_memory]
-        is_terminal = [m[0].is_terminal for m in b_memory]
-        action_mask = [m[0].action_mask for m in b_memory]
-        next_action_mask = [m[0].next_action_mask for m in b_memory]
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        action_id = [m.aid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        reward = [m.reward for m in b_memory]
+        is_terminal = [m.is_terminal for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        next_action_mask = [m.next_action_mask for m in b_memory]
+        action_token_ids = [m.token_id for m in b_memory]
 
         pre_action_mask = self.from_bytes(action_mask)
         post_action_mask = self.from_bytes(next_action_mask)
@@ -216,8 +217,6 @@ class GenDQNAgent(BaseAgent):
         action_matrix = (
             [self.actor.get_action_matrix(gid)[:, :max_action_len]
              for gid in game_id])
-
-        action_token_ids = [m[0].token_id for m in b_memory]
 
         b_weight = self.core.train_one_batch(
             pre_trajectories=pre_trajectories,

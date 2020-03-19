@@ -851,23 +851,35 @@ class BaseAgent(Logging):
             action=action, q_actions=None)
         return action_desc
 
-    def choose_action(
-            self, actions: List[str], all_actions: List[str],
-            action_mask: bytes) -> ActionDesc:
-        action_mask = self.from_bytes([action_mask])[0]
+    def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
         state = self.stc.fetch_last_state()[0]
         policy_action_desc = self.core.get_a_policy_action(
             trajectory, state, self.actor.action_matrix,
             self.actor.action_len, self.actor.actions, action_mask,
             self._cnt_action)
+        return policy_action_desc
+
+    def choose_action(
+            self, actions: List[str], all_actions: List[str],
+            action_mask: bytes) -> ActionDesc:
+        action_mask = self.from_bytes([action_mask])[0]
+
+        # when q_actions is required to get, this should be True
+        if self.hp.compute_policy_action_every_step:
+            policy_action_desc = self.get_policy_action(action_mask)
+        else:
+            policy_action_desc = None
 
         action_desc = self.random_walk_for_collecting_fp(actions, all_actions)
         if action_desc.action_idx is None:
             if random.random() < self.eps:
                 action_desc = self.get_a_random_action(action_mask)
             else:
-                action_desc = policy_action_desc
+                if policy_action_desc:
+                    action_desc = policy_action_desc
+                else:
+                    action_desc = self.get_policy_action(action_mask)
 
         final_action_desc = ActionDesc(
             action_type=action_desc.action_type,
@@ -875,7 +887,8 @@ class BaseAgent(Logging):
             action_len=action_desc.action_len,
             token_idx=action_desc.token_idx,
             action=action_desc.action,
-            q_actions=policy_action_desc.q_actions)
+            q_actions=(
+                policy_action_desc.q_actions if policy_action_desc else None))
         return final_action_desc
 
     def get_raw_instant_reward(self, score: float) -> float:

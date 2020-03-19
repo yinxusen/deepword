@@ -40,7 +40,6 @@ PDIR="."
 
 MODELHOME="$PDIR/../experiments-drrn/gen-agent-dqn-test"
 
-VOCAB_FILE="$PDIR/resources/vocab.txt"
 GAMEPATH=${1:-"$PDIR/../textworld-competition-games/train"}
 F_GAMES=${2:-"$PDIR/../textworld-competition-games/train-tier6-go12.games.txt-diff"}
 
@@ -50,12 +49,12 @@ fi
 
 pushd $PDIR
 ./bin/run.sh python/deeptextworld/dqn_train.py \
-    -m $MODELHOME --mode train-gen-dqn \
-    --game-path $GAMEPATH --f-games $F_GAMES \
-    --vocab-file $VOCAB_FILE \
-    --annealing-eps-t 1000 --annealing-gamma-t 100 --observation-t 100 --replay-mem 1000 \
-    --init-eps 0.1 --final-eps 0.05 \
-    --eval-episode 1 --embedding-size 64 \
-    --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 30 \
-    --model-creator AttnEncoderDecoderDQN --start-t-ignore-model-t
+    -m $MODELHOME \
+    --game-path $GAMEPATH \
+    --f-games $F_GAMES \
+    --model-creator TransformerGenDQN \
+    --annealing-eps-t 1000 --observation-t 100 \
+    --replay-mem 1000 \
+    --init-eps 0.5 --final-eps 0.05 \
+    --save-gap-t 50 --batch-size 32 --game-episode-terminal-t 30
 popd

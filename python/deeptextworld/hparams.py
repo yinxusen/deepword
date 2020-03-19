@@ -120,7 +120,8 @@ HPARAMS = {
         pad_eos=False,
         use_glove_emb=False,
         glove_emb_path="",
-        glove_trainable=False),
+        glove_trainable=False,
+        compute_policy_action_every_step=False),
     "LstmDQN": tf.contrib.training.HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",

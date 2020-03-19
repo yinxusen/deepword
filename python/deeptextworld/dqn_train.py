@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+import traceback
 
 import gym
 import tensorflow as tf
@@ -100,7 +101,10 @@ def train(hp, model_dir, game_dir, f_games=None):
     try:
         run_agent(agent, env, len(train_games), nb_epochs)
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
         logger.error("error: {}".format(e))
+        traceback.print_exception(
+            exc_type, exc_value, exc_traceback, limit=None, file=sys.stdout)
     env.close()
 
 
