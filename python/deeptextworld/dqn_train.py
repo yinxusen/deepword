@@ -105,15 +105,15 @@ def train(hp, model_dir, game_dir, f_games=None):
 
 
 def main(args):
-    model_dir = args.model_dir
+    model_dir = args.model_dir.rstrip('/')
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
     game_path = args.game_path
     config_file = args.config_file
-    if model_dir:
-        model_dir = model_dir.rstrip('/')
-        if not config_file:
-            f_hparams = os.path.join(model_dir, "hparams.json")
-            if os.path.isfile(f_hparams):
-                config_file = f_hparams
+    if not config_file:
+        f_hparams = os.path.join(model_dir, "hparams.json")
+        if os.path.isfile(f_hparams):
+            config_file = f_hparams
 
     setup_train_log(model_dir)
     hp = load_hparams(file_args=config_file, cmd_args=args)

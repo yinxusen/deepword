@@ -437,55 +437,112 @@ class Transformer(tf.keras.Model):
     def categorical_with_replacement(cls, logits, k):
         return tf.random.categorical(logits, num_samples=k, dtype=tf.int32)
 
+    def dec_step(
+            self, time,
+            enc_x, enc_output, training, tj_master_mask,
+            dec_padding_mask, continue_masking, halt_masking,
+            batch_size, max_tar_len, tgt_vocab_size, eos_id,
+            beam_size, use_greedy, temperature,
+            inc_tar, inc_continue, inc_logits, inc_valid_len, inc_p_gen):
+
+        combined_mask = create_decode_masks(inc_tar)
+        decoded_logits, p_gen, _, _ = self.decoder(
+            inc_tar, enc_x, enc_output, training, combined_mask,
+            dec_padding_mask, tj_master_mask=tj_master_mask)
+        masking = tf.map_fn(
+            lambda c: tf.cond(
+                c,
+                true_fn=lambda: continue_masking,
+                false_fn=lambda: halt_masking),
+            tf.squeeze(inc_continue, axis=-1), dtype=tf.float32)
+        # (batch_size * beam_size, tgt_vocab_size)
+        curr_logits = decoded_logits[:, -1, :]
+        curr_p_gen = p_gen[:, -1]
+        # mask current logits according to stop seq decoding or not
+        masked_logits = tf.reshape(
+            tf.where(tf.squeeze(inc_continue, axis=-1), curr_logits, masking),
+            (batch_size, -1))
+        # for the first token decoding, the beam size is 1.
+        beam_tgt_len = tgt_vocab_size * (1 if time == 1 else beam_size)
+
+        # notice that when use greedy, choose the tokens that maximizes
+        # \sum p(t_i), while for not using greedy, choose the tokens ~ p(t)
+        # predicted_id: (batch_size, beam_size)
+        predicted_id = tf.cond(
+            use_greedy,
+            true_fn=lambda: tf.math.top_k(
+                input=masked_logits[:, :beam_tgt_len],
+                k=beam_size)[1],
+            false_fn=lambda: self.categorical_without_replacement(
+                logits=masked_logits[:, :beam_tgt_len] / temperature,
+                k=beam_size))
+
+        # (batch_size, beam_size)
+        beam_id = predicted_id // tgt_vocab_size
+        token_id = tf.reshape(
+            predicted_id % tgt_vocab_size, (batch_size * beam_size, 1))
+        # (batch_size * beam_size, 1)
+        gather_beam_idx = tf.reshape(
+            tf.range(batch_size)[:, None] * beam_size + beam_id,
+            (batch_size * beam_size, -1))
+        # create inc tensors according to which beam to choose
+        inc_tar_beam = tf.gather_nd(inc_tar, gather_beam_idx)
+        inc_tar = tf.concat([inc_tar_beam, token_id], axis=-1)
+        inc_continue_beam = tf.gather_nd(inc_continue, gather_beam_idx)
+        curr_continue = tf.math.not_equal(token_id, eos_id)
+        inc_continue = tf.concat([inc_continue_beam, curr_continue], axis=-1)
+        inc_continue = tf.reduce_all(inc_continue, axis=-1, keepdims=True)
+        inc_valid_len_beam = tf.gather_nd(inc_valid_len, gather_beam_idx)
+        inc_valid_len = tf.concat(
+            [inc_valid_len_beam,
+             tf.dtypes.cast(inc_continue, dtype=tf.int32)], axis=-1)
+        inc_valid_len = tf.reduce_sum(inc_valid_len, axis=-1, keepdims=True)
+        inc_p_gen_beam = tf.gather(inc_p_gen, tf.squeeze(gather_beam_idx, axis=-1))
+        inc_p_gen = tf.concat([inc_p_gen_beam, curr_p_gen], axis=-1)
+        print(inc_p_gen.shape)
+        # (batch_size * beam_size, 2)
+        gather_token_idx = tf.concat([gather_beam_idx, token_id], axis=-1)
+        print(gather_token_idx.shape)
+        selected_logits = tf.gather_nd(
+            curr_logits, gather_token_idx)[:, None]
+        print(selected_logits.shape)
+        inc_logits_beam = tf.gather(inc_logits, tf.squeeze(gather_beam_idx, axis=-1))
+        print(inc_logits_beam.shape)
+        inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
+        print(inc_logits.shape)
+        return (
+            time + 1, inc_tar, inc_continue, inc_logits, inc_valid_len,
+            inc_p_gen)
+
     def decode(
-            self, inp, training, max_tar_len, sos_id, eos_id,
+            self, enc_x, training, max_tar_len, sos_id, eos_id,
             tj_master_mask=None, use_greedy=True,
             beam_size=1, temperature=1.):
-        """
-        decode indexes given input sentences.
-        :param inp: input sentence (batch_size, seq_len) for the encoder
-        :param training: bool, training or inference
-        :param max_tar_len: maximum target length, int32
-        :param sos_id: <S> id
-        :param eos_id: </S> id
-        :param tj_master_mask:
-        :param use_greedy: tf.bool, use greedy or sampling to decode per token
-        :param beam_size: tf.int, for beam search
-        :param temperature: tf.float, to control sampling randomness
-        :return:
-          decoded indexes, (batch_size * beam_size, max_tar_len) int32
-          decoded logits, (batch_size * beam_size, max_tar_len) float32
-          probability of generation (copy otherwise),
-            (batch_size * beam_size, max_tar_len) float32
-        """
         # ======= encoding input sentences =======
-        enc_padding_mask = create_padding_mask(inp)
+        enc_padding_mask = create_padding_mask(enc_x)
         # (batch_size, inp_seq_len, d_model)
-        enc_output = self.encoder(inp, training, enc_padding_mask, x_seg=None)
+        enc_output = self.encoder(enc_x, training, enc_padding_mask, x_seg=None)
         # ======= end of encoding ======
 
-        # ======== decoding output sentences ========
+        batch_size = tf.shape(enc_x)[0]
+        src_seq_len = tf.shape(enc_x)[1]
         tgt_vocab_size = self.decoder.tgt_vocab_size
-        batch_size = tf.shape(inp)[0]
-        inp_seq_len = tf.shape(inp)[1]
-
-        # recurring tensors for
-        # target sequence, target logits, continue generation or not,
-        # and valid length for each output, based on the position of </S>.
+        init_time = tf.constant(1)
         inc_tar = tf.fill([batch_size * beam_size, 1], sos_id)
-        inc_logits = tf.fill([batch_size * beam_size, 1], 0.)
         inc_continue = tf.fill([batch_size * beam_size, 1], True)
+        inc_logits = tf.fill([batch_size * beam_size, 1], 0.)
         inc_valid_len = tf.fill([batch_size * beam_size, 1], 1)
+        inc_p_gen = tf.fill([batch_size * beam_size, 1], 0.)
 
         # repeat enc_output and inp w.r.t. beam size
         # (batch_size * beam_size, inp_seq_len, d_model)
         enc_output = tf.reshape(
             tf.tile(enc_output[:, None, :, :], (1, beam_size, 1, 1)),
-            (batch_size * beam_size, inp_seq_len, -1))
-        inp = tf.reshape(
-            tf.tile(inp[:, None, :], (1, beam_size, 1)),
+            (batch_size * beam_size, src_seq_len, -1))
+        enc_x = tf.reshape(
+            tf.tile(enc_x[:, None, :], (1, beam_size, 1)),
             (batch_size * beam_size, -1))
-        dec_padding_mask = create_padding_mask(inp)
+        dec_padding_mask = create_padding_mask(enc_x)
 
         # whenever a decoded seq reaches to </S>, stop fan-out the paths with
         # new target tokens by making the 0th token 0, and others -inf.
@@ -495,71 +552,43 @@ class Transformer(tf.keras.Model):
             axis=0)
         continue_masking = tf.ones_like(halt_masking)
 
-        p_gen = []
-        for i in range(1, max_tar_len+1):
-            combined_mask = create_decode_masks(inc_tar)
-            final_prob, p_gen_latest, _, _ = self.decoder(
-                inc_tar, inp, enc_output, training, combined_mask,
-                dec_padding_mask, tj_master_mask=tj_master_mask)
-            masking = tf.map_fn(
-                lambda c: tf.cond(
-                    c,
-                    true_fn=lambda: continue_masking,
-                    false_fn=lambda: halt_masking),
-                tf.squeeze(inc_continue, axis=-1), dtype=tf.float32)
-            # (batch_size * beam_size, tgt_vocab_size)
-            curr_logits = final_prob[:, -1, :]
-            # mask current logits according to stop seq decoding or not
-            masked_logits = tf.reshape(tf.where(
-                tf.squeeze(inc_continue, axis=-1), curr_logits, masking),
-                (batch_size, -1))
-            # How to remove the same w/ same weights?
-            p_gen.append(p_gen_latest[:, -1])
-            # for the first token decoding, the beam size is 1.
-            beam_tgt_len = tgt_vocab_size * (1 if i == 1 else beam_size)
-            # notice that when use greedy, choose the tokens that maximizes
-            # \sum p(t_i), while for not using greedy, choose the tokens ~ p(t)
-            # predicted_id: (batch_size, beam_size)
-            predicted_id = tf.cond(
-                use_greedy,
-                true_fn=lambda: tf.math.top_k(
-                    input=masked_logits[:, :beam_tgt_len],
-                    k=beam_size)[1],
-                false_fn=lambda: self.categorical_without_replacement(
-                    logits=masked_logits[:, :beam_tgt_len] / temperature,
-                    k=beam_size))
+        def dec_step_with(
+                time, target_seq, is_continue, logits, valid_len, p_gen):
+            return self.dec_step(
+                time,
+                enc_x, enc_output, training, tj_master_mask,
+                dec_padding_mask, continue_masking, halt_masking,
+                batch_size, max_tar_len, tgt_vocab_size, eos_id,
+                beam_size, use_greedy, temperature,
+                target_seq, is_continue, logits, valid_len, p_gen)
 
-            # (batch_size, beam_size)
-            beam_id = predicted_id // tgt_vocab_size
-            token_id = tf.reshape(
-                predicted_id % tgt_vocab_size,
-                (batch_size * beam_size, -1))
-            # (batch_size * beam_size, 1)
-            gather_beam_idx = tf.reshape(
-                tf.range(batch_size)[:, None] * beam_size + beam_id,
-                (batch_size * beam_size, -1))
-            # create inc tensors according to which beam to choose
-            inc_tar_beam = tf.gather_nd(inc_tar, gather_beam_idx)
-            inc_tar = tf.concat([inc_tar_beam, token_id], axis=-1)
-            inc_continue_beam = tf.gather_nd(inc_continue, gather_beam_idx)
-            inc_continue = tf.math.logical_and(
-                tf.math.not_equal(token_id, eos_id), inc_continue_beam)
-            inc_valid_len_beam = tf.gather_nd(inc_valid_len, gather_beam_idx)
-            inc_valid_len = inc_valid_len_beam + tf.dtypes.cast(
-                inc_continue, dtype=tf.int32)
+        def dec_cond(time, target_seq, is_continue, logits, valid_len, p_gen):
+            return tf.logical_and(
+                time <= max_tar_len, tf.reduce_any(is_continue))
 
-            # (batch_size * beam_size, 2)
-            gather_token_idx = tf.concat([gather_beam_idx, token_id], axis=-1)
-            selected_logits = tf.gather_nd(
-                curr_logits, gather_token_idx)[:, None]
-            inc_logits_beam = tf.gather_nd(inc_logits, gather_beam_idx)
-            inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
-            # end for
-        # ======= end of decoding ======
-        p_gen = tf.concat(p_gen, axis=1)
-        decoded_idx = inc_tar[:, 1:]
-        decoded_logits = inc_logits[:, 1:]
-        return decoded_idx, decoded_logits, p_gen, inc_valid_len
+        results = tf.while_loop(
+            cond=dec_cond,
+            body=dec_step_with,
+            loop_vars=(
+                init_time,
+                inc_tar,
+                inc_continue,
+                inc_logits,
+                inc_valid_len,
+                inc_p_gen),
+            shape_invariants=(
+                init_time.get_shape(),
+                tf.TensorShape([None, None]),
+                tf.TensorShape([None, 1]),
+                tf.TensorShape([None, None]),
+                tf.TensorShape([None, 1]),
+                tf.TensorShape([None, None])))
+
+        decoded_idx = results[1][:, 1:]
+        decoded_logits = results[3][:, 1:]
+        decoded_valid_len = results[4]
+        decoded_p_gen = results[5][:, 1:]
+        return decoded_idx, decoded_logits, decoded_p_gen, decoded_valid_len
 
 
 if __name__ == '__main__':
@@ -588,4 +617,6 @@ if __name__ == '__main__':
         print(res2_t)
         print(res_logits2_t)
         print(np.sum(res_logits2_t, axis=-1))
+
+
     test()
