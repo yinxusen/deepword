@@ -8,6 +8,7 @@ from nltk import word_tokenize
 
 from deeptextworld.log import Logging
 from deeptextworld.utils import load_vocab, get_token2idx, flatten
+from deeptextworld.hparams import conventions
 
 
 class Memolet(namedtuple(
@@ -59,6 +60,9 @@ class Tokenizer(object):
     def tokenize(self, text: str) -> List[str]:
         raise NotImplementedError()
 
+    def de_tokenize(self, ids: List[int]) -> str:
+        raise NotImplementedError()
+
     def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
         raise NotImplementedError()
 
@@ -72,17 +76,25 @@ class NLTKTokenizer(Tokenizer):
     """
 
     def __init__(self, vocab_file, do_lower_case):
-        self._special_chars = ["[UNK]", "[PAD]", "<S>", "</S>"]
+        self._special_tokens = [
+            conventions.nltk_unk_token,
+            conventions.nltk_padding_token,
+            conventions.nltk_sos_token,
+            conventions.nltk_eos_token]
         self._inv_vocab = load_vocab(vocab_file)
         if do_lower_case:
             self._inv_vocab = [
-                w.lower() if w not in self._special_chars else w
+                w.lower() if w not in self._special_tokens else w
                 for w in self._inv_vocab]
         self._do_lower_case = do_lower_case
         self._vocab = get_token2idx(self._inv_vocab)
         self._inv_vocab = dict([(v, k) for k, v in self._vocab.items()])
-        self._unk_val_id = self._vocab["[UNK]"]
-        self._s2c = {"[UNK]": "U", "[PAD]": "O", "<S>": "S", "</S>": "E"}
+        self._unk_val_id = self._vocab[conventions.nltk_unk_token]
+        self._s2c = {
+            conventions.nltk_unk_token: "U",
+            conventions.nltk_padding_token: "O",
+            conventions.nltk_sos_token: "S",
+            conventions.nltk_eos_token: "E"}
         self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
 
     @property
@@ -102,9 +114,9 @@ class NLTKTokenizer(Tokenizer):
         return tokens
 
     def tokenize(self, text):
-        if any([sc in text for sc in self._special_chars]):
+        if any([sc in text for sc in self._special_tokens]):
             new_txt = text
-            for sc in self._special_chars:
+            for sc in self._special_tokens:
                 new_txt = new_txt.replace(sc, self._s2c[sc])
             tokens = word_tokenize(new_txt)
             tokens = [self._c2s[t] if t in self._c2s else t for t in tokens]
@@ -113,15 +125,27 @@ class NLTKTokenizer(Tokenizer):
 
         if self._do_lower_case:
             return [
-                t.lower() if t not in self._special_chars else t
+                t.lower() if t not in self._special_tokens else t
                 for t in tokens]
         else:
             return tokens
+
+    def de_tokenize(self, ids: List[int]) -> str:
+        res = " ".join(
+            filter(lambda t: t not in self._special_tokens,
+                   self.convert_ids_to_tokens(ids)))
+        return res
 
 
 class BertTokenizer(Tokenizer):
     def __init__(self, vocab_file, do_lower_case):
         self.tokenizer = BertTok(vocab_file, do_lower_case)
+        self._special_tokens = [
+            conventions.bert_unk_token,
+            conventions.bert_padding_token,
+            conventions.bert_cls_token,
+            conventions.bert_sep_token,
+            conventions.bert_mask_token]
 
     @property
     def vocab(self):
@@ -137,6 +161,13 @@ class BertTokenizer(Tokenizer):
     def convert_ids_to_tokens(self, ids):
         return self.tokenizer.convert_ids_to_tokens(ids)
 
+    def de_tokenize(self, ids):
+        res = " ".join(
+            filter(lambda t: t not in self._special_tokens,
+                   self.convert_ids_to_tokens(ids)))
+        res = res.replace(" ##", "")
+        return res
+
     def tokenize(self, text):
         return self.tokenizer.tokenize(text)
 
@@ -145,6 +176,19 @@ class AlbertTokenizer(BertTokenizer):
     def __init__(self, vocab_file, do_lower_case, spm_model_file):
         super(BertTokenizer, self).__init__(vocab_file, do_lower_case)
         self.tokenizer = AlbertTok(vocab_file, do_lower_case, spm_model_file)
+        self._special_tokens = [
+            conventions.albert_unk_token,
+            conventions.albert_padding_token,
+            conventions.albert_cls_token,
+            conventions.albert_sep_token,
+            conventions.albert_mask_token]
+
+    def de_tokenize(self, ids):
+        res = " ".join(
+            filter(lambda t: t not in self._special_tokens,
+                   self.convert_ids_to_tokens(ids)))
+        res = res.replace(u"\u2581", " ")
+        return res
 
 
 class CommonActs(namedtuple(
@@ -546,28 +590,3 @@ def get_sampled_1d_action(q_actions_t, actions, mask, temperature=1):
     q_val = q_actions_t[action_idx]
     action = actions[action_idx]
     return action_idx, q_val, action
-
-
-def get_best_2d_q(q_actions_t, eos_id) -> (list, float):
-    """
-    </S> also counts for an action, which is the empty action
-    the last token should be </S>
-    if it's not </S> according to the argmax, then force set it to be </S>.
-    Q val for a whole action is the average of all Q val of valid tokens.
-    :param q_actions_t: a q-matrix of a state computed from TF at step t
-    :param eos_id: end-of-sentence
-    """
-    action_idx = np.argmax(q_actions_t, axis=1)
-    valid_len = 0
-    for a in action_idx:
-        valid_len += 1
-        if a == eos_id:
-            break
-    padded_action_idx = np.zeros_like(action_idx)
-    padded_action_idx[:valid_len] = action_idx[:valid_len]
-    # make sure the last token is eos no matter what
-    padded_action_idx[valid_len-1] = eos_id
-    q_val = np.mean(
-        q_actions_t[range(valid_len), padded_action_idx[:valid_len]])
-    return padded_action_idx, q_val, valid_len
-

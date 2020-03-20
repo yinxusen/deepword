@@ -440,31 +440,62 @@ class Transformer(tf.keras.Model):
     def dec_step(
             self, time,
             enc_x, enc_output, training, tj_master_mask,
-            dec_padding_mask, continue_masking, halt_masking,
+            dec_padding_mask, padding_logit_mask, eos_logit_mask,
             batch_size, max_tar_len, tgt_vocab_size, eos_id,
             beam_size, use_greedy, temperature,
             inc_tar, inc_continue, inc_logits, inc_valid_len, inc_p_gen):
+        """
+        decode one step with beam search
+        given inc_tar as the current decoded target sequence
+        (batch_size * beam_size), first decode one step with decoder to get
+        decoded_logits.
+        then mask the decoded_logits:
+          1) if continue to decode (i.e. eos never reached) and current time
+             reach the max_tar_len, then only EOS is allowed to choose;
+          2) if not continue to decode, only PAD is allowed to choose;
+          3) default, we don't mask the decoded_logits.
+        After get predicted_id, either by sampling method or greedy method,
+        we compute 1) beam_id and 2) token_id from predicted_id.
+        beam_id indicates which beam to choose, token_id indicates under that
+        beam, which token to choose.
+
+        for loop variables, inc_tar, inc_continue, inc_logits, inc_valid_len,
+        and inc_p_gen, we first select rows according to beam_id, then pad
+        the token_id related info to the end. e.g. given beam_size = 2,
+        batch_size = 2, we have inc_tar:
+
+        [[[1, 2, 3],
+          [2, 3, 4]],  # --> this beam row will be deleted
+         [[9, 8, 7],
+          [8, 7, 6]]]
+        if beam_id = [[0, 0], [0, 1]], then we choose [1, 2, 3] twice, and
+        [9, 8, 7] once, and [8, 7, 6] once, then make the inc_tar to be
+        [[[1, 2, 3],
+          [1, 2, 3]],
+         [[9, 8, 7],
+          [8, 7, 6]]]
+        then pad new token_id to the end.
+        """
 
         combined_mask = create_decode_masks(inc_tar)
         # decoded_logits:
         # (batch_size * beam_size, target_seq_len, tgt_vocab_size)
         # p_gen: (batch_size * beam_size, target_seq_len, 1)
-        decoded_logits, p_gen, _, _ = self.decoder.call(
+        decoded_logits, p_gen, _, _ = self.decoder(
             inc_tar, enc_x, enc_output, training, combined_mask,
             dec_padding_mask, tj_master_mask=tj_master_mask)
-        masking = tf.map_fn(
-            lambda c: tf.cond(
-                c,
-                true_fn=lambda: continue_masking,
-                false_fn=lambda: halt_masking),
+        logit_mask = tf.map_fn(
+            lambda c: tf.case(
+                [(tf.logical_and(c, tf.equal(time, max_tar_len)),
+                  lambda: eos_logit_mask),
+                 (tf.logical_not(c), lambda: padding_logit_mask)],
+                default=lambda: tf.zeros_like(padding_logit_mask),
+                exclusive=True),
             tf.squeeze(inc_continue, axis=-1), dtype=tf.float32)
         # (batch_size * beam_size, tgt_vocab_size)
         curr_logits = decoded_logits[:, -1, :]
         curr_p_gen = p_gen[:, -1, :]
-        # mask current logits according to stop seq decoding or not
-        masked_logits = tf.reshape(
-            tf.where(tf.squeeze(inc_continue, axis=-1), curr_logits, masking),
-            (batch_size, -1))
+        masked_logits = tf.reshape(curr_logits + logit_mask, (batch_size, -1))
         # for the first token decoding, the beam size is 1.
         beam_tgt_len = tgt_vocab_size * (1 if time == 1 else beam_size)
 
@@ -500,16 +531,28 @@ class Transformer(tf.keras.Model):
             inc_continue, dtype=tf.int32)
         inc_p_gen_beam = tf.gather(inc_p_gen, gather_beam_idx)
         inc_p_gen = tf.concat([inc_p_gen_beam, curr_p_gen], axis=-1)
-        # (batch_size * beam_size, 2)
-        gather_token_idx = tf.concat(
-            [gather_beam_idx[:, None], token_id], axis=-1)
-        selected_logits = tf.gather_nd(
-            curr_logits, gather_token_idx)[:, None]
         inc_logits_beam = tf.gather(inc_logits, gather_beam_idx)
-        inc_logits = tf.concat([inc_logits_beam, selected_logits], axis=-1)
+        inc_logits = tf.concat(
+            [inc_logits_beam, curr_logits[:, None, :]], axis=1)
         return (
             time + 1, inc_tar, inc_continue, inc_logits, inc_valid_len,
             inc_p_gen)
+
+    @classmethod
+    def token_logit_masking(cls, token_id, vocab_size):
+        """
+        Generate logits to choose the token_id. e.g. with vocab_size = 10,
+        token_id = 0, we have
+        [  0., -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf]
+        plus this mask with normal logits, only token_id=0 can be chose
+        """
+        assert 0 <= token_id < vocab_size
+        mask = tf.concat(
+            [tf.fill([token_id], -np.inf),
+             tf.constant([0.], dtype=tf.float32),
+             tf.fill([vocab_size - 1 - token_id], -np.inf)],
+            axis=0)
+        return mask
 
     def decode(
             self, enc_x, training, max_tar_len, sos_id, eos_id,
@@ -527,7 +570,7 @@ class Transformer(tf.keras.Model):
         init_time = tf.constant(1)
         inc_tar = tf.fill([batch_size * beam_size, 1], sos_id)
         inc_continue = tf.fill([batch_size * beam_size, 1], True)
-        inc_logits = tf.fill([batch_size * beam_size, 1], 0.)
+        inc_logits = tf.fill([batch_size * beam_size, 1, tgt_vocab_size], 0.)
         inc_valid_len = tf.fill([batch_size * beam_size, 1], 1)
         inc_p_gen = tf.fill([batch_size * beam_size, 1], 0.)
 
@@ -543,25 +586,24 @@ class Transformer(tf.keras.Model):
 
         # whenever a decoded seq reaches to </S>, stop fan-out the paths with
         # new target tokens by making the 0th token 0, and others -inf.
-        halt_masking = tf.concat(
-            [tf.constant([0.], dtype=tf.float32),
-             tf.fill([tgt_vocab_size - 1], -np.inf)],
-            axis=0)
-        continue_masking = tf.ones_like(halt_masking)
+        padding_logit_mask = self.token_logit_masking(
+            token_id=0, vocab_size=tgt_vocab_size)
+        eos_logit_mask = self.token_logit_masking(
+            token_id=eos_id, vocab_size=tgt_vocab_size)
 
         def dec_step_with(
                 time, target_seq, is_continue, logits, valid_len, p_gen):
             return self.dec_step(
                 time,
                 enc_x, enc_output, training, tj_master_mask,
-                dec_padding_mask, continue_masking, halt_masking,
+                dec_padding_mask, padding_logit_mask, eos_logit_mask,
                 batch_size, max_tar_len, tgt_vocab_size, eos_id,
                 beam_size, use_greedy, temperature,
                 target_seq, is_continue, logits, valid_len, p_gen)
 
         def dec_cond(time, target_seq, is_continue, logits, valid_len, p_gen):
             return tf.logical_and(
-                time <= max_tar_len, tf.reduce_any(is_continue))
+                tf.less_equal(time, max_tar_len), tf.reduce_any(is_continue))
 
         results = tf.while_loop(
             cond=dec_cond,
@@ -577,12 +619,13 @@ class Transformer(tf.keras.Model):
                 init_time.get_shape(),
                 tf.TensorShape([None, None]),
                 tf.TensorShape([None, 1]),
-                tf.TensorShape([None, None]),
+                tf.TensorShape([None, None, None]),
                 tf.TensorShape([None, 1]),
                 tf.TensorShape([None, None])))
 
         decoded_idx = results[1][:, 1:]
         decoded_logits = results[3][:, 1:]
+        # valid_len includes the final EOS
         decoded_valid_len = results[4]
         decoded_p_gen = results[5][:, 1:]
         return decoded_idx, decoded_logits, decoded_p_gen, decoded_valid_len
@@ -609,9 +652,11 @@ if __name__ == '__main__':
             [res, res_logits, p_gen, inc_valid_len,
              res2, res_logits2, p_gen2, inc_valid_len2])
         print(res_t)
-        print(res_logits_t)
+        print(inc_valid_len_t)
+        # print(res_logits_t)
         print(np.sum(res_logits_t, axis=-1))
         print(res2_t)
-        print(res_logits2_t)
+        print(inc_valid_len2_t)
+        # print(res_logits2_t)
         print(np.sum(res_logits2_t, axis=-1))
     test()

@@ -4,7 +4,7 @@ import numpy as np
 
 from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
 from deeptextworld.agents.base_agent import BaseAgent, TFCore
-from deeptextworld.agents.utils import get_best_2d_q, ActionMaster, ObsInventory
+from deeptextworld.agents.utils import ActionMaster, ObsInventory
 from deeptextworld.models.export_models import GenDQNModel
 
 
@@ -13,6 +13,66 @@ class GenDQNCore(TFCore):
         super(GenDQNCore, self).__init__(hp, model_dir, tokenizer)
         self.model: Optional[GenDQNModel] = None
         self.target_model: Optional[GenDQNModel] = None
+
+    def get_a_policy_action(
+            self, trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            actions: List[str],
+            action_mask: np.ndarray,
+            cnt_action: Optional[np.ndarray]) -> ActionDesc:
+        self.debug("trajectory: {}".format(trajectory))
+        src, src_len, master_mask = self.trajectory2input(trajectory)
+        self.debug("src: {}".format(src))
+        self.debug("src_len: {}".format(src_len))
+        self.debug("master_mask: {}".format(master_mask))
+        beam_size = 1
+        temperature = 1
+        self.debug("temperature: {}".format(temperature))
+        res = self.sess.run(
+            [self.model.decoded_idx_infer,
+             self.model.col_eos_idx,
+             self.model.decoded_logits_infer,
+             self.model.p_gen_infer],
+            feed_dict={
+                self.model.src_: [src],
+                self.model.src_len_: [src_len],
+                self.model.src_seg_: [master_mask],
+                self.model.temperature_: temperature,
+                self.model.beam_size_: beam_size,
+                self.model.use_greedy_: False
+            })
+        action_idx = res[0]
+        col_eos_idx = res[1]
+        decoded_logits = res[2]
+        p_gen = res[3]
+
+        res_summary = []
+        for bid in range(beam_size):
+            action = self.tokenizer.de_tokenize(
+                list(action_idx[bid, :col_eos_idx[bid]]))
+            res_summary.append(
+                (action_idx[bid], col_eos_idx[bid],
+                 action, p_gen[bid],
+                 np.sum(decoded_logits[bid, :col_eos_idx[bid], action_idx[bid]])
+                 / col_eos_idx[bid]))
+
+        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
+        top_action = res_summary[0]
+
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.policy_gen, action_idx=None,
+            token_idx=top_action[0], action_len=top_action[1],
+            action=top_action[2], q_actions=None)
+
+        self.debug("generated actions:\n{}".format(
+            "\n".join(
+                [" ".join(
+                    map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
+                        zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
+                 for ac in res_summary])))
+        return action_desc
 
     def _compute_expected_q(
             self,
@@ -30,28 +90,34 @@ class GenDQNCore(TFCore):
         target_model, target_sess = self.get_target_model()
         # target network provides the value used as expected q-values
         qs_target = target_sess.run(
-            target_model.q_actions,
+            target_model.decoded_logits_infer,
             feed_dict={
                 target_model.src_: src,
                 target_model.src_len_: src_len,
-                target_model.src_seg_: master_mask})
+                target_model.src_seg_: master_mask,
+                target_model.beam_size_: 1,
+                target_model.use_greedy_: True,
+                target_model.temperature_: 1.
+            })
 
         # current network decides which action provides best q-value
-        qs_dqn = self.sess.run(
-            self.model.q_actions,
+        s_argmax_q, valid_len = self.sess.run(
+            [self.model.decoded_idx_infer, self.model.col_eos_idx],
             feed_dict={
                 self.model.src_: src,
                 self.model.src_len_: src_len,
-                self.model.src_seg_: master_mask})
+                self.model.src_seg_: master_mask,
+                self.model.beam_size_: 1,
+                self.model.use_greedy_: True,
+                self.model.temperature_: 1.})
 
         expected_q = np.zeros_like(rewards)
         for i in range(len(expected_q)):
             expected_q[i] = rewards[i]
             if not dones[i]:
-                s_argmax_q, _, valid_len = get_best_2d_q(
-                    qs_dqn[i, :, :], self.hp.eos_id)
                 expected_q[i] += self.hp.gamma * np.mean(
-                    qs_target[i, range(valid_len), s_argmax_q[:valid_len]])
+                    qs_target[i, range(valid_len[i]),
+                              s_argmax_q[i, :valid_len[i]]])
 
         return expected_q
 
@@ -108,69 +174,6 @@ class GenDQNCore(TFCore):
 
         return abs_loss
 
-    def get_a_policy_action(
-            self, trajectory: List[ActionMaster],
-            state: Optional[ObsInventory],
-            action_matrix: np.ndarray, action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
-        self.debug("trajectory: {}".format(trajectory))
-        src, src_len, master_mask = self.trajectory2input(trajectory)
-        self.debug("src: {}".format(src))
-        self.debug("src_len: {}".format(src_len))
-        self.debug("master_mask: {}".format(master_mask))
-        beam_size = 1
-        temperature = 1
-        self.debug("temperature: {}".format(temperature))
-        res = self.sess.run(
-            [self.model.decoded_idx_infer,
-             self.model.col_eos_idx,
-             self.model.decoded_logits_infer,
-             self.model.p_gen_infer],
-            feed_dict={
-                self.model.src_: [src],
-                self.model.src_len_: [src_len],
-                self.model.src_seg_: [master_mask],
-                self.model.temperature_: temperature,
-                self.model.beam_size_: beam_size,
-                self.model.use_greedy_: False
-            })
-        action_idx = res[0]
-        col_eos_idx = res[1]
-        decoded_logits = res[2]
-        p_gen = res[3]
-        self.debug("decoded logits: {}".format(decoded_logits))
-
-        res_summary = []
-        special_tokens = {self.hp.padding_val, self.hp.eos}
-        for bid in range(beam_size):
-            action = " ".join(
-                filter(lambda t: t not in special_tokens,
-                       self.tokenizer.convert_ids_to_tokens(
-                           action_idx[bid, :col_eos_idx[bid]])))
-            res_summary.append(
-                (action_idx[bid], col_eos_idx[bid],
-                 action, p_gen[bid],
-                 np.sum(decoded_logits[bid, :col_eos_idx[bid]])
-                 / col_eos_idx[bid]))
-
-        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
-        top_action = res_summary[0]
-
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_gen, action_idx=None,
-            token_idx=top_action[0], action_len=top_action[1],
-            action=top_action[2], q_actions=None)
-
-        self.debug("generated actions:\n{}".format(
-            "\n".join(
-                [" ".join(
-                    map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
-                        zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
-                 for ac in res_summary])))
-        return action_desc
-
 
 class GenDQNAgent(BaseAgent):
     def __init__(self, hp, model_dir):
@@ -187,8 +190,7 @@ class GenDQNAgent(BaseAgent):
 
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
-        action_id = [m.aid for m in b_memory]
-        game_id = [m.gid for m in b_memory]
+        action_len = [m.a_len for m in b_memory]
         reward = [m.reward for m in b_memory]
         is_terminal = [m.is_terminal for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
@@ -209,27 +211,18 @@ class GenDQNAgent(BaseAgent):
             state[0] for state in self.stc.fetch_batch_states(
                 trajectory_id, [sid - 1 for sid in state_id])]
 
-        # make sure the p_states and s_states are in the same game.
-        # otherwise, it won't make sense to use the same action matrix.
-        action_len = (
-            [self.actor.get_action_len(gid) for gid in game_id])
-        max_action_len = np.max(action_len)
-        action_matrix = (
-            [self.actor.get_action_matrix(gid)[:, :max_action_len]
-             for gid in game_id])
-
         b_weight = self.core.train_one_batch(
             pre_trajectories=pre_trajectories,
             post_trajectories=post_trajectories,
             pre_states=pre_states,
             post_states=post_states,
-            action_matrix=action_matrix,
+            action_matrix=[np.asarray([0])],  # dummy
             action_len=action_len,
             pre_action_mask=pre_action_mask,
             post_action_mask=post_action_mask,
             dones=is_terminal,
             rewards=reward,
-            action_idx=action_id,
+            action_idx=[0],  # dummy
             b_weight=b_weight,
             step=self.total_t,
             others=action_token_ids)
