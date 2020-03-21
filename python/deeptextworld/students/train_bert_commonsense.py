@@ -15,11 +15,9 @@ if __name__ == '__main__':
     cmd_args = CMD(
         model_dir="",
         model_creator="BertCommonsenseModel",
-        vocab_file=conventions.bert_vocab_file,
-        bert_ckpt_dir=conventions.bert_ckpt_dir,
         num_tokens=300,
         num_turns=6,
-        batch_size=10,
+        batch_size=5,
         save_gap_t=5000,
         embedding_size=64,
         learning_rate=5e-5,

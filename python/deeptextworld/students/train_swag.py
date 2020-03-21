@@ -18,7 +18,6 @@ from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.utils import DRRNMemoTeacher
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.agents.utils import bert_commonsense_input
-from deeptextworld.agents.utils import get_batch_best_1d_idx_w_mask
 from deeptextworld.hparams import save_hparams
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.trajectory import RawTextTrajectory

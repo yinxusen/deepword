@@ -59,7 +59,7 @@ class BertCore(TFCore):
         src, src_len, _ = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_commonsense_input(
             action_matrix, action_len, src, src_len,
-            self.hp.sep_val_id, self.hp.num_tokens)
+            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
         n_actions = inp.shape[0]
         self.debug("number of actions: {}".format(n_actions))
         # TODO: better allowed batch

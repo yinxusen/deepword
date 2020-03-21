@@ -156,7 +156,10 @@ class MultiGPUsEvalPlayer(Logging):
                 except Exception as e:
                     self.error(
                         "evaluation error with {}\n{}".format(restore_from, e))
-                    traceback.print_tb(e.__traceback__)
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    traceback.print_exception(
+                        exc_type, exc_value, exc_traceback, limit=None,
+                        file=sys.stdout)
                     pool.terminate()
                     self.debug("multi-process pool terminated.")
                     return

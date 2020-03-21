@@ -378,6 +378,7 @@ class BaseAgent(Logging):
         for mask in byte_action_masks:
             bit_mask = bitarray(endian='little')
             bit_mask.frombytes(mask)
+            # reset last bit (True for avoiding tail trimming of bytes)
             bit_mask[-1] = False
             vec_action_masks.append(bit_mask.tolist())
         return np.asarray(vec_action_masks, dtype=np.int32)

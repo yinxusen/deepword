@@ -1,14 +1,14 @@
 from collections import namedtuple
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple
 
 import numpy as np
 from albert.tokenization import FullTokenizer as AlbertTok
 from bert.tokenization import FullTokenizer as BertTok
 from nltk import word_tokenize
 
-from deeptextworld.log import Logging
-from deeptextworld.utils import load_vocab, get_token2idx, flatten
 from deeptextworld.hparams import conventions
+from deeptextworld.log import Logging
+from deeptextworld.utils import load_vocab, get_token2idx, eprint
 
 
 class Memolet(namedtuple(
@@ -306,7 +306,7 @@ def pad_action(
     if 0 < len(action_ids) < max_size:
         return action_ids + [padding_val_id] * (max_size - len(action_ids))
     else:
-        return action_ids
+        return action_ids[:max_size]
 
 
 def tj2ids(
@@ -427,7 +427,7 @@ def convert_real_id_to_group_id(
 def bert_commonsense_input(
         action_matrix: np.ndarray, action_len: np.ndarray,
         trajectory: List[int], trajectory_len: int,
-        sep_val_id: int,
+        sep_val_id: int, cls_val_id: int,
         num_tokens: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Given one trajectory and its admissible actions, create a training
@@ -436,40 +436,42 @@ def bert_commonsense_input(
     E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
     suppose we need length to be 10.
     output:
-      [[1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],
-       [1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
-       [1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]
+      [[CLS, 1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],
+       [CLS, 1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
+       [CLS, 1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]
     segment of trajectory and actions:
-    [[0, 0, 0, 0, 1, 1, 1],
-     [0, 0, 0, 0, 1, 1, 0],
-     [0, 0, 0, 0, 1, 1, 0]]
+    [[0, 0, 0, 0, 0, 1, 1, 1],
+     [0, 0, 0, 0, 0, 1, 1, 0],
+     [0, 0, 0, 0, 0, 1, 1, 0]]
     input size:
-    [7, 6, 6]
-    :param action_matrix:
-    :param action_len:
-    :param trajectory:
-    :param trajectory_len:
-    :param sep_val_id:
-    :param num_tokens:
+    [8, 7, 7]
     :return: trajectory + action; segmentation ids; sizes
     """
-    inp = np.concatenate([
-        trajectory[:trajectory_len],
+
+    assert action_matrix.ndim == 2, "action_matrix: {}".format(action_matrix)
+
+    tj = np.concatenate([
+        np.asarray([cls_val_id]), trajectory[:trajectory_len],
         np.asarray([sep_val_id])])
-    n_actions = len(action_matrix)
+
+    n_rows, n_cols = action_matrix.shape
+    tj = np.repeat(tj[None, :], n_rows, axis=0)
+    seg_tj = np.zeros_like(tj, dtype=np.int)
+
+    # make action_matrix n_cols = n_cols + k to fill in [SEP] safer
     action_matrix = np.concatenate(
-        [action_matrix, np.zeros([n_actions, 1])], axis=-1)
-    action_matrix[
-        range(n_actions), action_len] = sep_val_id
-    inp = np.repeat(inp[None, :], n_actions, axis=0)
-    inp = np.concatenate([inp, action_matrix], axis=-1)
-    n_rows, n_cols = inp.shape
-    inp = np.concatenate(
-        [inp, np.zeros([n_rows, num_tokens - n_cols])], axis=-1)
-    inp_size = trajectory_len + action_len + 2
-    seg_tj_action = np.zeros_like(inp)
-    seg_tj_action[:, trajectory_len + 1:] = 1
-    return inp, seg_tj_action, inp_size
+        [action_matrix,
+         np.zeros([n_rows, num_tokens - n_cols - trajectory_len - 2])],
+        axis=-1)
+    action_matrix[range(n_rows), action_len] = sep_val_id
+    seg_action = np.ones_like(action_matrix, dtype=np.int)
+
+    inp = np.concatenate([tj, action_matrix], axis=-1)
+    seg_tj_action = np.concatenate([seg_tj, seg_action], axis=-1)
+
+    # valid length plus 3 for [CLS] [SEP] and [SEP]
+    inp_size = trajectory_len + action_len + 3
+    return inp.astype(np.int), seg_tj_action, inp_size
 
 
 def get_best_1d_action(q_actions_t, actions, mask=1):
@@ -522,23 +524,40 @@ def get_batch_best_1d_idx(
     return actions_idx
 
 
-def get_batch_best_1d_idx_w_mask(
-        q_actions: List[np.ndarray],
-        mask: np.ndarray = np.asarray([1])) -> List[int]:
+def sample_batch_1d_idx(
+        q_actions: np.ndarray, actions_repeats: List[int], k: int) -> List[int]:
     """
-    Choose the action idx with the best q value, without choosing from
-    inadmissible actions.
-    :param q_actions: a batch of q-vectors
-    :param mask:
-    :return:
+    get a batch of sampled action index of q-values
+    actions_repeats indicates how many elements are in the same group.
+    e.g. q_actions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    actions_repeats = [3, 4, 3]
+    then q_actions can be split into three groups:
+    [1, 2, 3], [4, 5, 6, 7], [8, 9, 10];
+
+    we sample from the indexes, we get the best idx in each group as the first
+    one in that group, then sample another k - 1 elements for each group.
+    If the number of elements in that group smaller than k - 1, we choose sample
+    with replacement.
     """
-    q_actions = np.asarray(q_actions)
-    mask = np.ones_like(q_actions) * mask
-    inv_mask = np.logical_not(mask)
-    min_q_val = np.min(q_actions, axis=-1)
-    q_actions = q_actions * mask + min_q_val[:, None] * inv_mask
-    action_idx = np.argmax(q_actions, axis=-1)
-    return list(action_idx)
+    assert np.all(np.greater(actions_repeats, 1)), \
+        "actions_repeats should greater than one"
+    batch_size = len(actions_repeats)
+    actions_slices = np.cumsum(actions_repeats)[:-1]
+    qs_slices = np.split(q_actions, actions_slices)
+    action_idx_blocks_per_slice = []
+    for blk_i in range(batch_size):
+        curr_best = int(np.argmax(qs_slices[blk_i]))
+        remains = (list(range(curr_best)) +
+                   list(range(curr_best + 1, len(qs_slices[blk_i]))))
+        if len(remains) >= k - 1:
+            companion = list(np.random.choice(remains, size=k-1, replace=False))
+        else:
+            companion = list(np.random.choice(remains, size=k-1, replace=True))
+        action_idx_blocks_per_slice.append([curr_best] + companion)
+    actions_idx = (
+            np.insert(actions_slices, 0, 0)[:, np.newaxis] +
+            np.asarray(action_idx_blocks_per_slice)).reshape((batch_size * k))
+    return actions_idx
 
 
 def categorical_without_replacement(logits, k=1):

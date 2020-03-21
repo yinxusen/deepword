@@ -2,6 +2,7 @@ import bert.modeling as b_model
 import tensorflow as tf
 
 import deeptextworld.models.utils as dqn
+from deeptextworld.hparams import conventions
 from deeptextworld.models.dqn_model import BaseDQN, CnnDQN
 from deeptextworld.models.encoders import LstmEncoder, TxEncoder
 from deeptextworld.models.export_models import DRRNModel
@@ -39,8 +40,10 @@ class CnnDRRN(CnnDQN):
             "actions_len": tf.placeholder(tf.float32, [None])
         }
         self.enc_actions = LstmEncoder(
-            self.hp.h_state_size, self.hp.lstm_num_layers,
-            self.hp.vocab_size, self.hp.embedding_size)
+            num_units=self.h_state_size,
+            num_layers=self.hp.lstm_num_layers,
+            input_vocab_size=self.hp.vocab_size,
+            embedding_size=self.hp.embedding_size)
         self.wt = tf.layers.Dense(
             units=self.h_state_size, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
@@ -66,6 +69,14 @@ class CnnDRRN(CnnDQN):
     @classmethod
     def get_eval_model(cls, hp, device_placement):
         return create_eval_model(cls, hp, device_placement)
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return cls.get_train_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return cls.get_eval_model(hp, device_placement)
 
 
 class TransformerDRRN(CnnDRRN):
@@ -120,7 +131,7 @@ class BertDRRN(BaseDQN):
         :param is_infer:
         """
         super(BertDRRN, self).__init__(hp, is_infer)
-        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(

@@ -6,8 +6,6 @@ from os.path import join as pjoin
 
 import tensorflow as tf
 
-from deeptextworld.utils import eprint
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
 home_dir = os.path.expanduser("~")
 project_path = pjoin(dir_path, "../..")
@@ -140,6 +138,7 @@ HPARAMS = {
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
@@ -150,6 +149,7 @@ HPARAMS = {
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
@@ -230,7 +230,7 @@ HPARAMS = {
         learning_rate=1e-5,
         num_turns=6,
         num_tokens=1000,
-        max_action_len=10,
+        max_decoding_size=10,
         tokenizer_type="NLTK",
         pad_eos=True),
     "BertCommonsenseModel": tf.contrib.training.HParams(
@@ -245,8 +245,7 @@ HPARAMS = {
         embedding_size=64,
         cls_val_id=0,
         sep_val_id=0,
-        mask_val_id=0,
-        n_classes=4  # for SWAG
+        mask_val_id=0
     ),
     "AlbertCommonsenseModel": tf.contrib.training.HParams(
         agent_clazz='BaseAgent',
@@ -262,8 +261,7 @@ HPARAMS = {
         unk_val_id=0,
         cls_val_id=0,
         sep_val_id=0,
-        mask_val_id=0,
-        n_classes=4   # for SWAG
+        mask_val_id=0
     )
 }
 
@@ -325,7 +323,7 @@ def load_hparams(file_args=None, cmd_args=None):
     """
     allowed_to_change = [
         'model_dir', 'eval_episode', 'game_episode_terminal_t', "n_actions",
-        "batch_size", "learning_rate"]
+        "batch_size", "learning_rate", "compute_policy_action_every_step"]
     hp = get_model_hparams("default")
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.

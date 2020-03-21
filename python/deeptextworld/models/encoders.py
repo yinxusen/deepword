@@ -4,13 +4,13 @@ from deeptextworld.models.transformer import Encoder, create_padding_mask
 
 
 class CnnEncoderLayer(tf.keras.layers.Layer):
-    def __init__(self, filter_sizes, num_filters, rate=0.4):
+    def __init__(self, filter_sizes, num_filters, dropout_rate=0.4):
         super(CnnEncoderLayer, self).__init__()
         self.filter_sizes = filter_sizes
         self.num_filters = num_filters
         self.d_model = len(filter_sizes) * num_filters
 
-        self.dropout = tf.keras.layers.Dropout(rate)
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
         self.conv_filters = []
         for i, fs in enumerate(self.filter_sizes):
@@ -21,7 +21,7 @@ class CnnEncoderLayer(tf.keras.layers.Layer):
                 strides=[1, 1],
                 activation=tf.tanh,
                 use_bias=True,
-                data_format="channel_last")
+                data_format="channels_last")
             self.conv_filters.append(conv)
 
     def call(self, x, training=None):
@@ -40,7 +40,7 @@ class CnnEncoderLayer(tf.keras.layers.Layer):
 class CnnEncoder(tf.keras.layers.Layer):
     def __init__(
             self, filter_sizes, num_filters, num_layers, input_vocab_size,
-            rate=0.4):
+            dropout_rate=0.4):
         super(CnnEncoder, self).__init__()
 
         self.d_model = len(filter_sizes) * num_filters
@@ -54,10 +54,10 @@ class CnnEncoder(tf.keras.layers.Layer):
         self.seg_embeddings = tf.stack(
             [tf.zeros(self.d_model), tf.ones(self.d_model)],
             name="seg_embeddings")
-
         self.enc_layers = [
-            CnnEncoderLayer(filter_sizes, num_filters, rate)
+            CnnEncoderLayer(filter_sizes, num_filters, dropout_rate)
             for _ in range(num_layers)]
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
     def call(self, x, x_seg=None, training=None):
         seq_len = tf.shape(x)[1]
@@ -68,6 +68,7 @@ class CnnEncoder(tf.keras.layers.Layer):
         if x_seg is not None:
             x += tf.nn.embedding_lookup(self.seg_embeddings, x_seg)
         x = self.dropout(x, training=training)
+        x = tf.expand_dims(x, axis=-1)  # add last channel dimension
         for i in range(self.num_layers):
             x = self.enc_layers[i](x, training)
         pooled = tf.reduce_max(x, axis=1)
@@ -75,14 +76,14 @@ class CnnEncoder(tf.keras.layers.Layer):
 
 
 class LstmEncoder(tf.keras.layers.Layer):
-    def __init__(self, num_units, num_layers, input_vocab_size, d_model):
+    def __init__(self, num_units, num_layers, input_vocab_size, embedding_size):
         super(LstmEncoder, self).__init__()
 
-        self.d_model = d_model
+        self.embedding_size = embedding_size
         self.num_layers = num_layers
 
         self.embedding = tf.keras.layers.Embedding(
-            input_vocab_size, self.d_model)
+            input_vocab_size, self.embedding_size)
 
         self.enc_layers = [
             tf.keras.layers.LSTM(
@@ -105,11 +106,11 @@ class LstmEncoder(tf.keras.layers.Layer):
 class TxEncoder(tf.keras.layers.Layer):
     def __init__(
             self, num_layers, d_model, num_heads, dff, input_vocab_size,
-            rate=0.1):
+            dropout_rate=0.1):
         super(TxEncoder, self).__init__()
 
         self.encoder = Encoder(
-            num_layers, d_model, num_heads, dff, input_vocab_size, rate)
+            num_layers, d_model, num_heads, dff, input_vocab_size, dropout_rate)
 
     def call(self, x, x_seg=None, training=None):
         x = self.encoder(x, x_seg=x_seg, training=training)

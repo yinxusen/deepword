@@ -1,9 +1,11 @@
+import sys
 import random
 import time
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
 from typing import Tuple, List, Union, Any
+import traceback
 
 import numpy as np
 import tensorflow as tf
@@ -15,15 +17,17 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.agents.utils import Memolet
-from deeptextworld.agents.utils import batch_dqn_input
+from deeptextworld.agents.utils import Memolet, pad_action
+from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
-from deeptextworld.agents.utils import get_batch_best_1d_idx_w_mask
+from deeptextworld.agents.utils import get_batch_best_1d_idx
+from deeptextworld.agents.utils import sample_batch_1d_idx
 from deeptextworld.hparams import save_hparams
 from deeptextworld.students.utils import get_action_idx_pair
-from deeptextworld.trajectory import RawTextTrajectory
-from deeptextworld.utils import eprint
+from deeptextworld.trajectory import Trajectory
+from deeptextworld.utils import eprint, flatten
 from deeptextworld.utils import model_name2clazz
+from deeptextworld.agents.utils import ActionMaster
 
 
 class CMD:
@@ -39,11 +43,14 @@ class CMD:
 
 class StudentLearner(object):
     def __init__(
-            self, hp: HParams, model_dir: str, train_data_dir: str,
-            n_data: int) -> None:
+            self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
+        # prefix should match BaseAgent
+        self.tjs_prefix = "trajectories"
+        self.action_prefix = "actions"
+        self.memo_prefix = "memo"
+
         self.model_dir = model_dir
         self.train_data_dir = train_data_dir
-        self.n_data = n_data
         self.load_from = pjoin(self.model_dir, "last_weights")
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
@@ -51,23 +58,32 @@ class StudentLearner(object):
         (self.sess, self.model, self.saver, self.sw, self.train_steps,
          self.queue) = self.prepare_training()
 
-    def get_combined_data_path(self) -> List[Tuple[str, str, str, str]]:
-        tjs_prefix = "raw-trajectories"
-        action_prefix = "actions"
-        memo_prefix = "memo"
-        hs2tj_prefix = "hs2tj"
+    def get_compatible_snapshot_tag(self) -> List[int]:
 
+        action_tags = BaseAgent.get_path_tags(
+            self.train_data_dir, self.action_prefix)
+        memo_tags = BaseAgent.get_path_tags(
+            self.train_data_dir, self.memo_prefix)
+        tjs_tags = BaseAgent.get_path_tags(
+            self.train_data_dir, self.tjs_prefix)
+
+        valid_tags = set(action_tags)
+        valid_tags.intersection_update(memo_tags)
+        valid_tags.intersection_update(tjs_tags)
+
+        return list(valid_tags)
+
+    def get_combined_data_path(self) -> List[Tuple[str, str, str]]:
+        valid_tags = self.get_compatible_snapshot_tag()
         combined_data_path = []
-        for i in sorted(range(self.n_data), key=lambda k: random.random()):
+        for tag in sorted(valid_tags, key=lambda k: random.random()):
             combined_data_path.append(
                 (pjoin(self.train_data_dir,
-                       "{}-{}.npz".format(tjs_prefix, i)),
+                       "{}-{}.npz".format(self.tjs_prefix, tag)),
                  pjoin(self.train_data_dir,
-                       "{}-{}.npz".format(action_prefix, i)),
+                       "{}-{}.npz".format(self.action_prefix, tag)),
                  pjoin(self.train_data_dir,
-                       "{}-{}.npz".format(memo_prefix, i)),
-                 pjoin(self.train_data_dir,
-                       "{}-{}.npz".format(hs2tj_prefix, i))))
+                       "{}-{}.npz".format(self.memo_prefix, tag))))
         return combined_data_path
 
     def prepare_model(
@@ -98,13 +114,13 @@ class StudentLearner(object):
         return sess, model, saver, trained_steps
 
     def load_snapshot(
-            self, memo_path: str, raw_tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], RawTextTrajectory, ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)['data']
-        memory = list(filter(lambda x: isinstance(x, tuple), memory))
+        memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
-        tjs = RawTextTrajectory(self.hp.num_turns)
-        tjs.load_tjs(raw_tjs_path)
+        tjs = Trajectory[ActionMaster](self.hp.num_turns)
+        tjs.load_tjs(tjs_path)
 
         actions = ActionCollector(
             self.tokenizer, self.hp.n_actions, self.hp.n_tokens_per_action,
@@ -114,10 +130,10 @@ class StudentLearner(object):
         return memory, tjs, actions
 
     def add_batch(
-            self, combined_data_path: List[Tuple[str, str, str, str]],
+            self, combined_data_path: List[Tuple[str, str, str]],
             queue: Queue) -> None:
         while True:
-            for tp, ap, mp, hs in sorted(
+            for tp, ap, mp, in sorted(
                     combined_data_path, key=lambda k: random.random()):
                 memory, tjs, action_collector = self.load_snapshot(mp, tp, ap)
                 random.shuffle(memory)
@@ -126,14 +142,19 @@ class StudentLearner(object):
                     ss = i * self.hp.batch_size
                     ee = min((i + 1) * self.hp.batch_size, len(memory))
                     batch_memory = memory[ss:ee]
-                    queue.put(self.prepare_data(
-                        batch_memory, tjs, action_collector),
-                    )
+                    try:
+                        queue.put(self.prepare_data(
+                            batch_memory, tjs, action_collector),
+                        )
+                    except Exception as e:
+                        eprint("add_batch error: {}".format(e))
+                        traceback.print_tb(e.__traceback__)
                     i += 1
 
     def prepare_data(
-            self, b_memory: List[Union[Tuple, Memolet]],
-            tjs: RawTextTrajectory,
+            self,
+            b_memory: List[Union[Tuple, Memolet]],
+            tjs: Trajectory[ActionMaster],
             action_collector: ActionCollector) -> Tuple:
         """
         Given a batch of memory, tjs, and action collector, create a tuple
@@ -193,6 +214,10 @@ class StudentLearner(object):
                 except Exception as e:
                     data_in_queue = False
                     eprint("no more data: {}".format(e))
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    traceback.print_exception(
+                        exc_type, exc_value, exc_traceback, limit=None,
+                        file=sys.stdout)
                     break
             self.saver.save(
                 self.sess, self.ckpt_prefix,
@@ -216,69 +241,61 @@ class StudentLearner(object):
 
 class DRRNLearner(StudentLearner):
     def __init__(
-            self, hp: HParams, model_dir: str, train_data_dir: str,
-            n_data: int) -> None:
-        super(DRRNLearner, self).__init__(hp, model_dir, train_data_dir, n_data)
+            self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
+        super(DRRNLearner, self).__init__(hp, model_dir, train_data_dir)
 
     def train_impl(self, data, train_step):
-        (p_states, p_len, action_matrix, action_mask_t, action_len,
-         expected_qs) = data
+        (p_states, p_len, actions, action_len, actions_repeats, expected_qs
+         ) = data
         _, summaries = self.sess.run(
             [self.model.train_op, self.model.train_summary_op],
             feed_dict={
                 self.model.src_: p_states,
                 self.model.src_len_: p_len,
-                self.model.actions_mask_: action_mask_t,
-                self.model.actions_: action_matrix,
+                self.model.actions_: actions,
                 self.model.actions_len_: action_len,
-                self.model.expected_qs_: expected_qs})
+                self.model.actions_repeats_: actions_repeats,
+                self.model.action_idx_: np.arange(len(expected_qs)),
+                self.model.expected_q_: expected_qs,
+                self.model.b_weight_: [1.]})
         self.sw.add_summary(summaries, train_step)
-        return
 
     def prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
-        # TODO: fix this
-        expected_qs = [m.q_actions for m in b_memory]
+        expected_qs = flatten([list(m.q_actions) for m in b_memory])
         action_mask_t = BaseAgent.from_bytes(action_mask)
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        p_states, p_len = batch_dqn_input(
+        p_states, p_len, _ = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
-        max_action_len = np.max(action_len)
         action_matrix = (
-            [action_collector.get_action_matrix(gid)[:, :max_action_len]
-             for gid in game_id])
-
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask_t)
         return (
-            p_states, p_len, action_matrix, action_mask_t, action_len,
-            expected_qs)
+            p_states, p_len, actions, action_len, actions_repeats, expected_qs)
 
 
 class GenLearner(StudentLearner):
     def train_impl(self, data, train_step):
-        (p_states, p_len, actions_in, actions_out, action_len,
-         expected_qs, b_weights) = data
-        eprint(p_states[0])
-        eprint(p_len[0])
-        eprint(actions_in[0])
-        eprint(actions_out[0])
-        eprint(expected_qs[0])
+        (p_states, p_len, master_mask, actions_in, actions_out, action_len
+         ) = data
         _, summaries = self.sess.run(
             [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op],
             feed_dict={
                 self.model.src_: p_states,
                 self.model.src_len_: p_len,
+                self.model.src_seg_: master_mask,
                 self.model.action_idx_: actions_in,
                 self.model.action_idx_out_: actions_out,
                 self.model.action_len_: action_len,
-                self.model.b_weight_: b_weights})
+                self.model.b_weight_: [1.]})
         self.sw.add_summary(summaries, train_step)
-        return
 
     def prepare_data(self, b_memory, tjs, action_collector):
         """
@@ -289,31 +306,25 @@ class GenLearner(StudentLearner):
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
-        expected_qs = [m.q_actions for m in b_memory]
-        # TODO: fix gen learner
-        best_q_idx = get_batch_best_1d_idx_w_mask(
-            expected_qs, BaseAgent.from_bytes(action_mask))
-
+        expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
+        action_mask_t = BaseAgent.from_bytes(action_mask)
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        p_states, p_len = batch_dqn_input(
+        p_states, p_len, master_mask = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
-
-        action_len = np.asarray(
-            [action_collector.get_action_len(gid)[mid]
-             for gid, mid in zip(game_id, best_q_idx)])
-        actions = np.asarray(
-            [action_collector.get_action_matrix(gid)[mid, :]
-             for gid, mid in zip(game_id, best_q_idx)])
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        action_matrix = (
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask_t)
+        best_q_idx = get_batch_best_1d_idx(expected_qs, actions_repeats)
         actions_in, actions_out, action_len = get_action_idx_pair(
-            actions, action_len, self.tokenizer.vocab["<S>"],
-            self.tokenizer.vocab["</S>"])
-        b_weights = np.ones_like(action_len, dtype="float32")
-        return (
-            p_states, p_len,
-            actions_in, actions_out, action_len, expected_qs, b_weights)
+            actions[best_q_idx], action_len[best_q_idx],
+            self.hp.sos_id, self.hp.eos_id)
+        return p_states, p_len, master_mask, actions_in, actions_out, action_len
 
 
-class GenPreTrainLearner(GenLearner):
+class GenConcatActionsLearner(GenLearner):
     def prepare_data(self, b_memory, tjs, action_collector):
         """
             ("tid", "sid", "gid", "aid", "reward", "is_terminal",
@@ -322,101 +333,101 @@ class GenPreTrainLearner(GenLearner):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        # TODO: fix gen pre train learner
-        expected_qs = [m.q_actions for m in b_memory]
+        action_mask = [m.sys_action_mask for m in b_memory]
         action_mask_t = list(BaseAgent.from_bytes(action_mask))
-        # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
-        selected_mask_idx = list(map(
-            lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
-            action_mask_t))
+        mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        p_states, p_len = batch_dqn_input(
+        p_states, p_len, master_mask = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
 
-        action_len = np.concatenate(
-            [action_collector.get_action_len(gid)[mid]
-             for gid, mid in zip(game_id, selected_mask_idx)], axis=0)
-        actions = np.concatenate(
-            [action_collector.get_action_matrix(gid)[mid, :]
-             for gid, mid in zip(game_id, selected_mask_idx)], axis=0)
+        actions = [
+            " ; ".join(sorted(list(
+                np.asarray(action_collector.get_actions(gid))[mid])))
+            for gid, mid in zip(game_id, mask_idx)]
+        action_idx = [
+            self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.tokenize(concat_actions))
+            for concat_actions in actions]
+        action_len = np.asarray([len(x) for x in action_idx])
+        max_concat_action_len = np.max(action_len)
+        action_matrix = np.asarray(
+            [pad_action(x, max_concat_action_len, self.hp.padding_val_id)
+             for x in action_idx])
+
         actions_in, actions_out, action_len = get_action_idx_pair(
-            actions, action_len, self.tokenizer.vocab["<S>"],
-            self.tokenizer.vocab["</S>"])
-        # repeats = np.sum(action_mask_t, axis=1)
-        repeats = 2
-        repeated_p_states = np.repeat(p_states, repeats, axis=0)
-        repeated_p_len = np.repeat(p_len, repeats, axis=0)
-        expected_qs = np.concatenate(
-            [qs[mid] for qs, mid in zip(expected_qs, selected_mask_idx)],
-            axis=0)
-        b_weights = np.ones_like(action_len, dtype="float32")
+            action_matrix, action_len, self.hp.sos_id, self.hp.eos_id)
         return (
-            repeated_p_states, repeated_p_len,
-            actions_in, actions_out, action_len, expected_qs, b_weights)
+            p_states, p_len, master_mask, actions_in, actions_out, action_len)
 
 
 class BertLearner(StudentLearner):
     def train_impl(self, data, train_step):
-        inp, seg_tj_action, inp_len, expected_q = data
+        inp, seg_tj_action, inp_len, swag_labels = data
+        eprint(inp)
+        eprint(seg_tj_action)
+        eprint(inp_len)
+        eprint(swag_labels)
         _, summaries = self.sess.run(
-            [self.model.train_op, self.model.train_summary_op],
+            [self.model.swag_train_op, self.model.swag_train_summary_op],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
                 self.model.seg_tj_action_: seg_tj_action,
-                self.model.expected_q_: expected_q})
+                self.model.swag_labels_: swag_labels
+                })
         self.sw.add_summary(summaries, train_step)
-        return
 
     def prepare_data(self, b_memory, tjs, action_collector):
         """
         ("tid", "sid", "gid", "aid", "reward", "is_terminal",
          "action_mask", "next_action_mask", "q_actions")
         """
+        n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
-        # TODO: fix this
-        expected_qs = [m.q_actions for m in b_memory]
-        action_mask_t = list(BaseAgent.from_bytes(action_mask))
-        # mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
-        selected_mask_idx = list(map(
-            lambda m: np.random.choice(np.where(m == 1)[0], size=[2, ]),
-            action_mask_t))
+        expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
+        action_mask_t = BaseAgent.from_bytes(action_mask)
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        p_states, p_len, _ = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        action_matrix = (
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask_t)
+        batch_q_idx = sample_batch_1d_idx(
+            expected_qs, actions_repeats, k=n_classes)
 
-        # [trajectory] + [SEP] + [action] + [SEP] = final sentence for Bert
+        # [CLS] + [trajectory] + [SEP] + [action] + [SEP]
         max_allowed_trajectory_size = (
-            self.hp.num_tokens - 2 - self.hp.n_tokens_per_action)
+            self.hp.num_tokens - 3 - self.hp.n_tokens_per_action)
         # fetch pre-trajectory
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        p_states, p_len = batch_dqn_input(
+        p_states, p_len, _ = batch_dqn_input(
             states, self.tokenizer, max_allowed_trajectory_size,
             self.hp.padding_val_id)
+        batch_size = len(p_states)
 
-        action_len = [
-            action_collector.get_action_len(gid)[mid]
-            for gid, mid in zip(game_id, selected_mask_idx)]
-        actions = [
-            action_collector.get_action_matrix(gid)[mid, :]
-            for gid, mid in zip(game_id, selected_mask_idx)]
+        action_len = action_len[batch_q_idx].reshape((batch_size, n_classes))
+        actions = actions[batch_q_idx].reshape((batch_size, n_classes, -1))
+        swag_labels = np.zeros((len(actions), ), dtype=np.int)
 
         processed_input = [
             bert_commonsense_input(
-                am, al, tj, tj_len, self.hp.sep_val_id, self.hp.num_tokens)
+                am, al, tj, tj_len, self.hp.sep_val_id, self.hp.cls_val_id,
+                self.hp.num_tokens)
             for am, al, tj, tj_len
-            in zip(actions, action_len, p_states, p_len)]
+            in zip(list(actions), list(action_len), p_states, p_len)]
 
         inp = np.concatenate([a[0] for a in processed_input], axis=0)
         seg_tj_action = np.concatenate([a[1] for a in processed_input], axis=0)
         inp_len = np.concatenate([a[2] for a in processed_input], axis=0)
-        expected_q = np.concatenate(
-            [qs[mid] for qs, mid in zip(expected_qs, selected_mask_idx)],
-            axis=0)
 
-        return inp, seg_tj_action, inp_len, expected_q
+        return inp, seg_tj_action, inp_len, swag_labels
 
 
 class DataDeliver(DRRNLearner):

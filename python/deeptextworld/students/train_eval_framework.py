@@ -13,11 +13,10 @@ class TrainEval(object):
         self.cmd_args = cmd_args
         self.learner_clazz = learner_clazz
 
-    def train(self, data_path, n_data, model_path):
+    def train(self, data_path, model_path):
         """
         Train an agent with supervised dataset
         :param data_path:
-        :param n_data:
         :param model_path:
         :return:
         """
@@ -27,7 +26,7 @@ class TrainEval(object):
         setup_train_log(model_path)
 
         hp = load_hparams(None, self.cmd_args)
-        learner = self.learner_clazz(hp, model_path, data_path, n_data)
+        learner = self.learner_clazz(hp, model_path, data_path)
         learner.train(n_epochs=1000)
 
     def dev_eval(self, model_path, game_path, f_games=None, n_gpus=1):

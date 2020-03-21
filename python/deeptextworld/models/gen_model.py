@@ -45,7 +45,7 @@ class TransformerGenDQN(BaseDQN):
     def get_decoded_idx_infer(self):
         decoded_idx, decoded_logits, p_gen, valid_len = self.transformer.decode(
             self.inputs["src"], training=False,
-            max_tar_len=self.hp.n_tokens_per_action,
+            max_tar_len=self.hp.max_decoding_size,
             sos_id=self.hp.sos_id,
             eos_id=self.hp.eos_id,
             tj_master_mask=self.inputs["src_seg"],
@@ -65,7 +65,7 @@ class TransformerGenDQN(BaseDQN):
         loss, abs_loss = l2_loss_2d_action(
             q_actions, self.inputs["action_idx_out"], self.inputs["expected_q"],
             self.hp.vocab_size, self.inputs["action_len"],
-            self.hp.max_action_len, self.inputs["b_weight"])
+            self.hp.n_tokens_per_action, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
 

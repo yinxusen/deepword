@@ -14,8 +14,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 if __name__ == "__main__":
     cmd_args = CMD(
         model_dir="",
-        model_creator="CNNEncoderDSQN",
-        vocab_file=conventions.bert_vocab_file,
+        model_creator="CnnDRRN",
         bert_ckpt_dir=conventions.bert_ckpt_dir,
         num_tokens=256,
         num_turns=6,
@@ -25,12 +24,6 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         num_conv_filters=32,
         bert_num_hidden_layers=1,
-        cls_val="[CLS]",
-        cls_val_id=0,
-        sep_val="[SEP]",
-        sep_val_id=0,
-        mask_val="[MASK]",
-        mask_val_id=0,
         tokenizer_type="BERT",
         max_snapshot_to_keep=100,
         eval_episode=5,

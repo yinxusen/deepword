@@ -2,6 +2,7 @@ import albert.modeling as ab_model
 import bert.modeling as b_model
 import tensorflow as tf
 
+from deeptextworld.hparams import conventions
 from deeptextworld.models.dqn_model import BaseDQN
 from deeptextworld.models.export_models import CommonsenseModel
 
@@ -32,7 +33,7 @@ class BertCommonsenseModel(BaseDQN):
             "action_idx": tf.placeholder(tf.int32, [None]),
             "swag_labels": tf.placeholder(tf.int32, [None])
         }
-        self.bert_init_ckpt_dir = self.hp.bert_ckpt_dir
+        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
@@ -72,9 +73,9 @@ class BertCommonsenseModel(BaseDQN):
         :param q_actions:
         :return:
         """
-        n_classes = self.hp.n_classes
-        q_actions = tf.reshape(q_actions, [-1, n_classes])
-        losses = tf.nn.softmax_cross_entropy_with_logits(
+        swag_batch_size = tf.shape(self.inputs["swag_labels"])[0]
+        q_actions = tf.reshape(q_actions, [swag_batch_size, -1])
+        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=q_actions, labels=self.inputs["swag_labels"])
         loss = tf.reduce_mean(losses)
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
@@ -120,6 +121,7 @@ class AlbertCommonsenseModel(BertCommonsenseModel):
         :param is_infer:
         """
         super(AlbertCommonsenseModel, self).__init__(hp, is_infer)
+        self.bert_init_ckpt_dir = conventions.albert_ckpt_dir
         self.bert_config_file = "{}/albert_config.json".format(
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/model.ckpt-best".format(
@@ -162,7 +164,9 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
             loss, train_op = model.get_train_op(q_actions)
             swag_loss, swag_train_op = model.get_swag_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
+            swag_loss_summary = tf.summary.scalar("swag_loss", swag_loss)
             train_summary_op = tf.summary.merge([loss_summary])
+            swag_train_summary_op = tf.summary.merge([swag_loss_summary])
     return CommonsenseModel(
         graph=graph,
         q_actions=q_actions,
@@ -175,6 +179,7 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         swag_loss=swag_loss,
         swag_train_op=swag_train_op,
         train_summary_op=train_summary_op,
+        swag_train_summary_op=swag_train_summary_op,
         expected_q_=inputs["expected_q"],
         action_idx_=inputs["action_idx"],
         abs_loss=None,
@@ -202,6 +207,7 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
         swag_loss=None,
         swag_train_op=None,
         train_summary_op=None,
+        swag_train_summary_op=None,
         expected_q_=inputs["expected_q"],
         action_idx_=inputs["action_idx"],
         abs_loss=None,

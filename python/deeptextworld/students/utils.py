@@ -1,4 +1,5 @@
 import os
+from typing import Tuple
 
 import numpy as np
 
@@ -21,7 +22,9 @@ def setup_eval_log(log_filename):
         local_log_filename=log_filename)
 
 
-def get_action_idx_pair(action_matrix, action_len, sos_id, eos_id):
+def get_action_idx_pair(
+        action_matrix: np.ndarray, action_len: np.ndarray, sos_id: int,
+        eos_id: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create action index pair for seq2seq training.
     Given action index, e.g. [1, 2, 3, 4, pad, pad, pad, pad],

@@ -143,6 +143,7 @@ class CommonsenseModel(DQNModel):
             expected_q_: Optional[tf.placeholder],
             b_weight_: Optional[tf.placeholder],
             train_summary_op: Optional[tf.Operation],
+            swag_train_summary_op: Optional[tf.Operation],
             abs_loss: Optional[tf.Tensor],
             src_seg_: Optional[tf.placeholder],
             h_state: Optional[tf.Tensor],
@@ -168,6 +169,7 @@ class CommonsenseModel(DQNModel):
         self.swag_labels_ = swag_labels_
         self.swag_loss = swag_loss
         self.swag_train_op = swag_train_op
+        self.swag_train_summary_op = swag_train_summary_op
 
 
 class DSQNModel(DRRNModel):

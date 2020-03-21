@@ -75,8 +75,11 @@ class Trajectory(Generic[T]):
         tids = list(self.trajectories.keys())
         vals = list(self.trajectories.values())
         np.savez(
-            path, tids=tids, vals=vals,
-            curr_tid=[self.curr_tid], curr_tj=[self.curr_tj])
+            path,
+            tids=tids,
+            vals=vals + [[None]],
+            curr_tid=[self.curr_tid],
+            curr_tj=[self.curr_tj] + [[None]])
 
     def load_tjs(self, path: str) -> None:
         tjs = np.load(path, allow_pickle=True)
@@ -84,6 +87,8 @@ class Trajectory(Generic[T]):
         self.curr_tj = list(tjs["curr_tj"][0])
         tids = tjs["tids"]
         vals = tjs["vals"]
+        if len(tids) + 1 == len(vals):
+            vals = vals[:-1]
         assert len(tids) == len(vals), "incompatible trajectory ids and values"
         for i in range(len(tids)):
             self.trajectories[tids[i]] = list(vals[i])
@@ -115,13 +120,3 @@ class Trajectory(Generic[T]):
             batch_states.append(
                 self.fetch_state_by_idx(tid, sid - self.size_per_turn))
         return batch_states
-
-
-class RawTextTrajectory(Trajectory[str]):
-    """
-    A specific str-type raw text trajectory, for backward compatible.
-    """
-    def __init__(self, num_turns: int) -> None:
-        super(RawTextTrajectory, self).__init__(num_turns)
-        self.size_per_turn: int = 2
-        self.num_turns: int = num_turns * self.size_per_turn + 1
