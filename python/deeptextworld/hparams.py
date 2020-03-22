@@ -323,12 +323,14 @@ def copy_hparams(hp):
 def load_hparams(file_args=None, cmd_args=None):
     """
     load hparams for evaluation.
-    priority(file_args) > priority(cmd_args)
-     unless arg in allowed_to_change set.
+    priority(file_args) > priority(cmd_args) unless arg in allowed_to_change
     """
     allowed_to_change = [
-        'model_dir', 'eval_episode', 'game_episode_terminal_t', "n_actions",
-        "batch_size", "learning_rate", "compute_policy_action_every_step"]
+        "model_dir", "eval_episode", "game_episode_terminal_t",
+        "batch_size", "learning_rate", "compute_policy_action_every_step",
+        "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
+        "collect_floor_plan", "init_eps", "final_eps", "save_gap_t"
+    ]
     hp = get_model_hparams("default")
     # first load hp from file for choosing model_hp
     # notice that only hparams in hp can be updated.
