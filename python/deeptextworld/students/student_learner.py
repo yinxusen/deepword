@@ -1,11 +1,11 @@
-import sys
 import random
+import sys
 import time
+import traceback
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
 from typing import Tuple, List, Union, Any
-import traceback
 
 import numpy as np
 import tensorflow as tf
@@ -17,17 +17,17 @@ from tqdm import trange
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import Memolet, pad_action
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
-from deeptextworld.agents.utils import get_batch_best_1d_idx
-from deeptextworld.agents.utils import sample_batch_1d_idx
+from deeptextworld.agents.utils import get_best_batch_ids
+from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams
 from deeptextworld.students.utils import get_action_idx_pair
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten
 from deeptextworld.utils import model_name2clazz
-from deeptextworld.agents.utils import ActionMaster
 
 
 class CMD:
@@ -116,16 +116,19 @@ class StudentLearner(object):
     def load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
-        memory = np.load(memo_path, allow_pickle=True)['data']
+        memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
         tjs = Trajectory[ActionMaster](self.hp.num_turns)
         tjs.load_tjs(tjs_path)
 
         actions = ActionCollector(
-            self.tokenizer, self.hp.n_actions, self.hp.n_tokens_per_action,
+            tokenizer=self.tokenizer,
+            n_tokens=self.hp.n_tokens_per_action,
             unk_val_id=self.hp.unk_val_id,
-            padding_val_id=self.hp.padding_val_id)
+            padding_val_id=self.hp.padding_val_id,
+            pad_eos=False,
+            eos_id=self.hp.eos_id)
         actions.load_actions(action_path)
         return memory, tjs, actions
 
@@ -149,6 +152,7 @@ class StudentLearner(object):
                     except Exception as e:
                         eprint("add_batch error: {}".format(e))
                         traceback.print_tb(e.__traceback__)
+                        raise RuntimeError()
                     i += 1
 
     def prepare_data(
@@ -266,7 +270,6 @@ class DRRNLearner(StudentLearner):
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
         expected_qs = flatten([list(m.q_actions) for m in b_memory])
-        action_mask_t = BaseAgent.from_bytes(action_mask)
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, _ = batch_dqn_input(
@@ -276,7 +279,7 @@ class DRRNLearner(StudentLearner):
         action_matrix = (
             [action_collector.get_action_matrix(gid) for gid in game_id])
         actions, action_len, actions_repeats, _ = batch_drrn_action_input(
-            action_matrix, action_len, action_mask_t)
+            action_matrix, action_len, action_mask)
         return (
             p_states, p_len, actions, action_len, actions_repeats, expected_qs)
 
@@ -298,16 +301,11 @@ class GenLearner(StudentLearner):
         self.sw.add_summary(summaries, train_step)
 
     def prepare_data(self, b_memory, tjs, action_collector):
-        """
-        ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-         "action_mask", "next_action_mask", "q_actions")
-        """
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
         expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
-        action_mask_t = BaseAgent.from_bytes(action_mask)
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
@@ -316,8 +314,8 @@ class GenLearner(StudentLearner):
         action_matrix = (
             [action_collector.get_action_matrix(gid) for gid in game_id])
         actions, action_len, actions_repeats, _ = batch_drrn_action_input(
-            action_matrix, action_len, action_mask_t)
-        best_q_idx = get_batch_best_1d_idx(expected_qs, actions_repeats)
+            action_matrix, action_len, action_mask)
+        best_q_idx = get_best_batch_ids(expected_qs, actions_repeats)
         actions_in, actions_out, action_len = get_action_idx_pair(
             actions[best_q_idx], action_len[best_q_idx],
             self.hp.sos_id, self.hp.eos_id)
@@ -326,16 +324,10 @@ class GenLearner(StudentLearner):
 
 class GenConcatActionsLearner(GenLearner):
     def prepare_data(self, b_memory, tjs, action_collector):
-        """
-            ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-             "action_mask", "next_action_mask", "q_actions")
-            """
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
-        action_mask = [m.sys_action_mask for m in b_memory]
-        action_mask_t = list(BaseAgent.from_bytes(action_mask))
-        mask_idx = list(map(lambda m: np.where(m == 1)[0], action_mask_t))
+        admissible_action_mask = [m.sys_action_mask for m in b_memory]
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
@@ -344,7 +336,7 @@ class GenConcatActionsLearner(GenLearner):
         actions = [
             " ; ".join(sorted(list(
                 np.asarray(action_collector.get_actions(gid))[mid])))
-            for gid, mid in zip(game_id, mask_idx)]
+            for gid, mid in zip(game_id, admissible_action_mask)]
         action_idx = [
             self.tokenizer.convert_tokens_to_ids(
                 self.tokenizer.tokenize(concat_actions))
@@ -379,17 +371,12 @@ class BertLearner(StudentLearner):
         self.sw.add_summary(summaries, train_step)
 
     def prepare_data(self, b_memory, tjs, action_collector):
-        """
-        ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-         "action_mask", "next_action_mask", "q_actions")
-        """
         n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
         expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
-        action_mask_t = BaseAgent.from_bytes(action_mask)
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, _ = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
@@ -398,8 +385,8 @@ class BertLearner(StudentLearner):
         action_matrix = (
             [action_collector.get_action_matrix(gid) for gid in game_id])
         actions, action_len, actions_repeats, _ = batch_drrn_action_input(
-            action_matrix, action_len, action_mask_t)
-        batch_q_idx = sample_batch_1d_idx(
+            action_matrix, action_len, action_mask)
+        batch_q_idx = sample_batch_ids(
             expected_qs, actions_repeats, k=n_classes)
 
         # [CLS] + [trajectory] + [SEP] + [action] + [SEP]
@@ -428,41 +415,3 @@ class BertLearner(StudentLearner):
         inp_len = np.concatenate([a[2] for a in processed_input], axis=0)
 
         return inp, seg_tj_action, inp_len, swag_labels
-
-
-class DataDeliver(DRRNLearner):
-    def train_impl(self, data, train_step):
-        for state, answer, actions in data:
-            print([s.replace("\n", " ") for s in state])
-            print([s.replace("\n", " ") for s in answer])
-            print(actions)
-
-    def prepare_data(self, b_memory, tjs, action_collector):
-        trajectory_id = [m.tid for m in b_memory]
-        state_id = [m.sid for m in b_memory]
-        game_id = [m.gid for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        expected_qs = [m.q_actions for m in b_memory]
-        action_mask_t = BaseAgent.from_bytes(action_mask)
-
-        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        answers = tjs.fetch_batch_states(trajectory_id, state_id)
-
-        result_data = []
-
-        for i in range(len(game_id)):
-            # mask_idx = np.where(action_mask_t[i] == 1)[0]
-            gid = game_id[i]
-            q_actions = expected_qs[i]
-            actions = action_collector.get_actions(gid)
-            actions_n_scores = []
-            for j in range(len(actions)):
-                if actions[j] == "":
-                    break
-                actions_n_scores.append(
-                    (actions[j], q_actions[j], action_mask_t[i][j]))
-            result_data.append(
-                (states[i], answers[i],
-                 sorted(actions_n_scores, key=lambda x: -x[1])))
-
-        return result_data

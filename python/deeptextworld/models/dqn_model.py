@@ -65,6 +65,9 @@ class CnnDQN(BaseDQN):
         self.enc_tj = CnnEncoder(
             filter_sizes=filter_sizes, num_filters=num_filters,
             num_layers=1, input_vocab_size=self.hp.vocab_size)
+        # this enc_actions will map hidden game states to actions
+        # that's why units = n_actions.
+        # for real action encoder, choose the real hidden action size
         self.enc_actions = tf.layers.Dense(
             units=self.hp.n_actions, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))

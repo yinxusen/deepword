@@ -5,59 +5,11 @@ These models are not longer valid for code after v3.0, but sometimes we need
 to load the old models to play games, either for comparison, or for teacher
 model forcing.
 """
-
-import numpy as np
 import tensorflow as tf
 
 import deeptextworld.models.utils as dqn
 from deeptextworld.models.dqn_model import BaseDQN
 from deeptextworld.models.export_models import DRRNModel
-
-
-def get_best_1D_q(q_actions_t, mask=None):
-    if mask is not None:
-        inv_mask = np.logical_not(mask)
-        min_q_val = np.min(q_actions_t)
-        q_actions_t = q_actions_t * mask + inv_mask * min_q_val
-    action_idx = np.argmax(q_actions_t)
-    q_val = q_actions_t[action_idx]
-    return action_idx, q_val
-
-
-def get_best_1Daction(q_actions_t, actions, mask=None):
-    action_idx, q_val = get_best_1D_q(q_actions_t, mask)
-    action = actions[action_idx]
-    return action_idx, q_val, action
-
-
-def l2_loss_1Daction(q_actions, action_idx, expected_q, n_actions, b_weight):
-    """
-    l2 loss for 1D action space.
-    e.g. "go east" would be one whole action.
-    :param q_actions: Q-vector of a state for all actions
-    :param action_idx: placeholder, the action chose for the state,
-           in a format of (tf.int32, [None])
-    :param expected_q: placeholder, the expected reward gained from the step,
-           in a format of (tf.float32, [None])
-    :param n_actions: number of total actions
-    :param b_weight:
-    """
-    actions_mask = tf.one_hot(indices=action_idx, depth=n_actions)
-    predicted_q = tf.reduce_sum(
-        tf.multiply(q_actions, actions_mask), axis=1)
-    loss = tf.reduce_mean(b_weight * tf.square(expected_q - predicted_q))
-    abs_loss = tf.abs(expected_q - predicted_q)
-    return loss, abs_loss
-
-
-def decoder_dense_classification(inner_states, n_actions):
-    """
-    :param inner_states:
-    :param n_actions:
-    :return:
-    """
-    q_actions = tf.layers.dense(inner_states, units=n_actions, use_bias=True)
-    return q_actions
 
 
 def encoder_lstm(src, src_len, src_embeddings, num_units, num_layers):
@@ -193,8 +145,6 @@ class LegacyCnnDRRN(BaseDQN):
             name="pos_embeddings", dtype=tf.float32,
             shape=[self.num_tokens, self.hp.embedding_size])
 
-        self.n_actions = self.hp.n_actions
-        self.n_tokens_per_action = self.hp.n_tokens_per_action
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
@@ -202,31 +152,18 @@ class LegacyCnnDRRN(BaseDQN):
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
             "actions": tf.placeholder(
-                tf.int32, [None, self.n_tokens_per_action]),
+                tf.int32, [None, self.hp.n_tokens_per_action]),
             "actions_repeats": tf.placeholder(tf.int32, [None]),
             "actions_len": tf.placeholder(tf.float32, [None])
         }
 
     def get_q_actions(self):
-        """
-        compute the Q-vector from the relevance of
-         hidden state and hidden actions
-        h_state: (batch_size, n_hidden_state)
-        h_state_expanded: (batch_size, 1, n_hidden_state)
-        h_actions_expanded: (batch_size, n_actions, n_hidden_state)
-        q_actions: (batch_size, n_actions)
-        **q_actions = sum_k h_state_expanded_{ijk} * h_actions_expanded_{ijk}**
-        i: batch_size
-        j: n_actions
-        k: n_hidden_state
-        :return:
-        """
         with tf.variable_scope("drrn-encoder", reuse=False):
             h_state = encoder_cnn(
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = decoder_dense_classification(h_state, 32)
+            new_h = tf.layers.dense(h_state, units=32, use_bias=True)
             h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):

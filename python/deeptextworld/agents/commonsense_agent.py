@@ -1,5 +1,5 @@
 import math
-from typing import Optional, List, Any, Tuple
+from typing import Optional, List, Any, Tuple, Dict
 
 import numpy as np
 
@@ -23,16 +23,20 @@ class BertCore(TFCore):
         self.target_model: Optional[CommonsenseModel] = None
 
     def train_one_batch(
-            self, pre_trajectories: List[List[ActionMaster]],
+            self,
+            pre_trajectories: List[List[ActionMaster]],
             post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray, dones: List[bool],
-            rewards: List[float], action_idx: List[int],
-            b_weight: np.ndarray, step: int,
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int,
             others: Any) -> np.ndarray:
         pass
 
@@ -50,11 +54,10 @@ class BertCore(TFCore):
             action_matrix: np.ndarray, action_len: np.ndarray,
             actions: List[str],
             action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
-        mask_idx = np.where(action_mask == 1)[0]
-        action_matrix = action_matrix[mask_idx, :]
-        action_len = action_len[mask_idx]
-        actions = np.asarray(actions)[mask_idx]
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+        action_matrix = action_matrix[action_mask, :]
+        action_len = action_len[action_mask]
+        actions = np.asarray(actions)[action_mask]
 
         src, src_len, _ = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_commonsense_input(
@@ -85,7 +88,7 @@ class BertCore(TFCore):
 
         action_idx = np.argmax(q_actions_t)
         action = actions[action_idx]
-        true_action_idx = mask_idx[action_idx]
+        true_action_idx = action_mask[action_idx]
 
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn, action_idx=true_action_idx,

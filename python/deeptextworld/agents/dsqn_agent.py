@@ -8,9 +8,9 @@ from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.drrn_agent import DRRNCore
-from deeptextworld.agents.utils import ActionMaster, ObsInventory
+from deeptextworld.agents.utils import ActionMaster, ObsInventory, Memolet
 from deeptextworld.agents.utils import batch_drrn_action_input
-from deeptextworld.agents.utils import convert_real_id_to_group_id
+from deeptextworld.agents.utils import id_real2batch
 from deeptextworld.models.export_models import DSQNModel
 
 
@@ -21,16 +21,21 @@ class DSQNCore(DRRNCore):
         self.target_model: Optional[DSQNModel] = None
 
     def train_one_batch(
-            self, pre_trajectories: List[List[ActionMaster]],
+            self,
+            pre_trajectories: List[List[ActionMaster]],
             post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray, dones: List[bool],
-            rewards: List[float], action_idx: List[int],
-            b_weight: np.ndarray, step: int, others: Any) -> np.ndarray:
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int,
+            others: Any) -> np.ndarray:
 
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
@@ -38,11 +43,11 @@ class DSQNCore(DRRNCore):
 
         src, src_len, src2, src2_len, labels = others.get()
         pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
-        (actions, actions_lens, actions_repeats, group_inv_valid_idx
+        (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
-        group_action_id = convert_real_id_to_group_id(
-            action_idx, group_inv_valid_idx, actions_repeats)
+        action_batch_ids = id_real2batch(
+            action_idx, id_real2mask, actions_repeats)
 
         _, summaries, weighted_loss, abs_loss = self.sess.run(
             [self.model.merged_train_op, self.model.weighted_train_summary_op,
@@ -51,7 +56,7 @@ class DSQNCore(DRRNCore):
                 self.model.src_: pre_src,
                 self.model.src_len_: pre_src_len,
                 self.model.b_weight_: b_weight,
-                self.model.action_idx_: group_action_id,
+                self.model.action_idx_: action_batch_ids,
                 self.model.actions_mask_: pre_action_mask,
                 self.model.expected_q_: expected_q,
                 self.model.actions_: actions,
@@ -62,7 +67,8 @@ class DSQNCore(DRRNCore):
                 self.model.snn_src2_: src2,
                 self.model.snn_src2_len_: src2_len,
                 self.model.labels_: labels})
-
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
         return abs_loss
 
     # TODO: refine the code
@@ -256,70 +262,7 @@ class DSQNAgent(BaseAgent):
             src=src_str, src2=src2_str, src_len=src_len, src2_len=src2_len,
             labels=labels)
 
-    def train_one_batch(self) -> None:
-        """
-        Train one batch of samples.
-        Load target model if not exist, save current model when necessary.
-        """
-        # if there is not a well-trained model, it is unreasonable
-        # to use target model.
-
+    def _prepare_other_train_data(self, b_memory: List[Memolet]) -> Any:
         async_snn_data = self.pool_train.apply_async(
             self.get_snn_pairs, args=(self.hp.batch_size,))
-
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
-
-        trajectory_id = [m.tid for m in b_memory]
-        state_id = [m.sid for m in b_memory]
-        action_id = [m.aid for m in b_memory]
-        game_id = [m.gid for m in b_memory]
-        reward = [m.reward for m in b_memory]
-        is_terminal = [m.is_terminal for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        next_action_mask = [m.next_action_mask for m in b_memory]
-
-        pre_action_mask = self.from_bytes(action_mask)
-        post_action_mask = self.from_bytes(next_action_mask)
-
-        post_trajectories = self.tjs.fetch_batch_states(trajectory_id, state_id)
-        pre_trajectories = self.tjs.fetch_batch_states(
-            trajectory_id, [sid - 1 for sid in state_id])
-
-        post_states = [
-            state[0] for state in
-            self.stc.fetch_batch_states(trajectory_id, state_id)]
-        pre_states = [
-            state[0] for state in self.stc.fetch_batch_states(
-                trajectory_id, [sid - 1 for sid in state_id])]
-
-        # make sure the p_states and s_states are in the same game.
-        # otherwise, it won't make sense to use the same action matrix.
-        action_len = (
-            [self.actor.get_action_len(gid) for gid in game_id])
-        max_action_len = np.max(action_len)
-        action_matrix = (
-            [self.actor.get_action_matrix(gid)[:, :max_action_len]
-             for gid in game_id])
-
-        b_weight = self.core.train_one_batch(
-            pre_trajectories=pre_trajectories,
-            post_trajectories=post_trajectories,
-            pre_states=pre_states,
-            post_states=post_states,
-            action_matrix=action_matrix,
-            action_len=action_len,
-            pre_action_mask=pre_action_mask,
-            post_action_mask=post_action_mask,
-            dones=is_terminal,
-            rewards=reward,
-            action_idx=action_id,
-            b_weight=b_weight,
-            step=self.total_t,
-            others=async_snn_data)
-
-        self.memo.batch_update(b_idx, b_weight)
-
-        if self.is_time_to_save():
-            self.save_snapshot()
-            self.core.save_model()
-            self.core.create_or_reload_target_model()
+        return async_snn_data

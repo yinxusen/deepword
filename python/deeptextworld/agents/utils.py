@@ -8,7 +8,7 @@ from nltk import word_tokenize
 
 from deeptextworld.hparams import conventions
 from deeptextworld.log import Logging
-from deeptextworld.utils import load_vocab, get_token2idx, eprint
+from deeptextworld.utils import load_vocab, get_token2idx
 
 
 class Memolet(namedtuple(
@@ -300,9 +300,10 @@ class ScannerDecayEPS(ScheduledEPS):
 
 
 def pad_action(
-        action_ids: List[int],
-        max_size: int,
-        padding_val_id: int) -> List[int]:
+        action_ids: List[int], max_size: int, padding_val_id: int) -> List[int]:
+    """
+    pad action index up to max_size, or trim action in the end if too large
+    """
     if 0 < len(action_ids) < max_size:
         return action_ids + [padding_val_id] * (max_size - len(action_ids))
     else:
@@ -315,6 +316,11 @@ def tj2ids(
         with_action_padding: bool = False,
         max_action_size: int = 10,
         padding_val_id: int = 0) -> Tuple[List[int], List[int]]:
+    """
+    Convert a trajectory (list of ActionMaster) into ids
+    Compute segmentation ids for masters (1) and actions (0)
+    pad actions if required.
+    """
     ids = []
     master_mask = []
     for am in trajectory:
@@ -340,8 +346,10 @@ def dqn_input(
         max_action_size: int = 10
 ) -> Tuple[List[int], int, List[int]]:
     """
-    Given trajectory (a list of ActionMaster),
-    return the src and src_len as DQN input
+    Given a trajectory (a list of ActionMaster), get trajectory indexes, length
+    and master mask (master marked as 1 while action marked as 0).
+    Pad the trajectory to num_tokens.
+    Pad actions if required.
     """
     trajectory_ids, raw_master_mask = tj2ids(
         trajectory, tokenizer,
@@ -380,48 +388,37 @@ def batch_dqn_input(
 
 
 def drrn_action_input(
-        action_matrix: np.ndarray, action_len: np.ndarray,
+        action_matrix: np.ndarray,
+        action_len: np.ndarray,
         action_mask: np.ndarray
-        ) -> Tuple[np.ndarray, np.ndarray, int, Dict[int, int]]:
-    valid_idx = np.where(action_mask)[0]
-    inv_valid_idx = dict([(mid, i) for i, mid in enumerate(valid_idx)])
-    admissible_action_matrix = action_matrix[valid_idx, :]
-    admissible_action_len = action_len[valid_idx]
-    return (
-        admissible_action_matrix, admissible_action_len, len(valid_idx),
-        inv_valid_idx)
+) -> Tuple[np.ndarray, np.ndarray, int, Dict[int, int]]:
+    id_real2mask = dict([(mid, i) for i, mid in enumerate(action_mask)])
+    action_matrix = action_matrix[action_mask, :]
+    action_len = action_len[action_mask]
+    return action_matrix, action_len, len(action_mask), id_real2mask
 
 
 def batch_drrn_action_input(
-        action_matrices: List[np.ndarray], action_lens: List[np.ndarray],
-        action_masks: np.ndarray
-        ) -> Tuple[np.ndarray, np.ndarray, List[int], List[Dict[int, int]]]:
-    admissible_action_matrices = []
-    admissible_action_lens = []
-    actions_repeats = []
-    group_inv_valid_idx = []
-    for i in range(len(action_masks)):
-        a_matrix, a_len, size, inv_valid_idx = drrn_action_input(
-            action_matrices[i], action_lens[i], action_masks[i])
-        admissible_action_matrices.append(a_matrix)
-        admissible_action_lens.append(a_len)
-        actions_repeats.append(size)
-        group_inv_valid_idx.append(inv_valid_idx)
-    return (
-        np.concatenate(np.asarray(admissible_action_matrices), axis=0),
-        np.concatenate(np.asarray(admissible_action_lens), axis=0),
-        actions_repeats,
-        group_inv_valid_idx)
+        action_matrices: List[np.ndarray],
+        action_lens: List[np.ndarray],
+        action_masks: List[np.ndarray]
+) -> Tuple[np.ndarray, np.ndarray, List[int], List[Dict[int, int]]]:
+    inp = [
+        drrn_action_input(mat, l, mask) for mat, l, mask
+        in zip(action_matrices, action_lens, action_masks)]
+    inp_matrix = np.concatenate([x[0] for x in inp], axis=0)
+    inp_len = np.concatenate([x[1] for x in inp], axis=0)
+    actions_repeats = [x[2] for x in inp]
+    id_real2mask = [x[3] for x in inp]
+    return inp_matrix, inp_len, actions_repeats, id_real2mask
 
 
-def convert_real_id_to_group_id(
-        real_id: List[int], group_inv_valid_idx: List[Dict[int, int]],
+def id_real2batch(
+        real_id: List[int], id_real2mask: List[Dict[int, int]],
         actions_repeats: List[int]) -> List[int]:
-    actions_slices = np.insert(np.cumsum(actions_repeats)[:-1], 0, 0)
-    masked_id = [
-        inv_idx[rid] for rid, inv_idx in zip(real_id, group_inv_valid_idx)]
-    group_id = masked_id + actions_slices
-    return group_id
+    batch_id = [0] + list(np.cumsum(actions_repeats)[:-1])
+    return [inv_id[rid] + bid for rid, inv_id, bid
+            in zip(real_id, id_real2mask, batch_id)]
 
 
 def bert_commonsense_input(
@@ -461,7 +458,7 @@ def bert_commonsense_input(
     # make action_matrix n_cols = n_cols + k to fill in [SEP] safer
     action_matrix = np.concatenate(
         [action_matrix,
-         np.zeros([n_rows, num_tokens - n_cols - trajectory_len - 2])],
+         np.zeros([n_rows, num_tokens - n_cols - trajectory_len - 3])],
         axis=-1)
     action_matrix[range(n_rows), action_len] = sep_val_id
     seg_action = np.ones_like(action_matrix, dtype=np.int)
@@ -474,38 +471,13 @@ def bert_commonsense_input(
     return inp.astype(np.int), seg_tj_action, inp_size
 
 
-def get_best_1d_action(q_actions_t, actions, mask=1):
-    """
-    :param q_actions_t: a q-vector of a state computed from TF at step t
-    :param actions: action list
-    :param mask:
-    """
-    action_idx, q_val = get_best_1d_q(q_actions_t, mask)
-    action = actions[action_idx]
-    return action_idx, q_val, action
-
-
-def get_best_1d_q(q_actions_t, mask=1):
-    """
-    choose the action with the best q value, without choosing from inadmissible
-    actions.
-    Notice that it is possible q values of all admissible actions are smaller
-    than zero.
-    :param q_actions_t: q vector
-    :param mask: integer 1 means all actions are admissible. otherwise a np
-    array will be given, and each 1 means admissible while 0 not.
-    :return:
-    """
-    mask = np.ones_like(q_actions_t) * mask
-    inv_mask = np.logical_not(mask)
-    min_q_val = np.min(q_actions_t)
-    q_actions_t = q_actions_t * mask + min_q_val * inv_mask
-    action_idx = np.argmax(q_actions_t)
-    q_val = q_actions_t[action_idx]
+def get_best_1d_q(q_actions: np.ndarray) -> Tuple[int, float]:
+    action_idx = int(np.argmax(q_actions))
+    q_val = q_actions[action_idx]
     return action_idx, q_val
 
 
-def get_batch_best_1d_idx(
+def get_best_batch_ids(
         q_actions: np.ndarray, actions_repeats: List[int]) -> List[int]:
     """
     get a batch of best action index of q-values
@@ -524,7 +496,7 @@ def get_batch_best_1d_idx(
     return actions_idx
 
 
-def sample_batch_1d_idx(
+def sample_batch_ids(
         q_actions: np.ndarray, actions_repeats: List[int], k: int) -> List[int]:
     """
     get a batch of sampled action index of q-values
@@ -579,33 +551,3 @@ def categorical_without_replacement(logits, k=1):
     """
     z = -np.log(-np.log(np.random.uniform(0, 1, logits.shape)))
     return np.argsort(logits + z)[:k] if k > 1 else np.argmax(logits + z)
-
-
-def get_random_1d_action(actions, mask=1):
-    """
-    Random sample an action but avoid choosing where mask == 0
-    :param actions: action list
-    :param mask: mask for the action list. 1 means OK to choose, 0 means NO.
-           could be either an integer, or a numpy array the same size with
-           actions.
-    """
-    mask = np.ones_like(actions, dtype=np.int) * mask
-    action_idx = np.random.choice(np.where(mask == 1)[0])
-    action = actions[action_idx]
-    return action_idx, action
-
-
-def get_sampled_1d_action(q_actions_t, actions, mask, temperature=1):
-    """
-    Choose an action w.r.t q_actions_t as logits and avoid choosing
-    where mask == 0. Use temperature to control randomness.
-    :param q_actions_t: logits
-    :param actions: action list
-    :param mask: array of mask, mask == 0 means inadmissible actions.
-    :param temperature: use to control randomness, the higher the more random
-    """
-    q_actions_t[np.where(mask == 0)] = -np.inf
-    action_idx = categorical_without_replacement(q_actions_t * temperature)
-    q_val = q_actions_t[action_idx]
-    action = actions[action_idx]
-    return action_idx, q_val, action

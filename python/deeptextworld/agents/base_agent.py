@@ -8,7 +8,6 @@ from os.path import join as pjoin
 from typing import Any, Optional
 
 import tensorflow as tf
-from bitarray import bitarray
 from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.python.client import device_lib
@@ -24,8 +23,8 @@ from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 from deeptextworld.utils import eprint
+from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 
 
 class BaseCore(Logging, ABC):
@@ -45,7 +44,7 @@ class BaseCore(Logging, ABC):
             action_matrix: np.ndarray,
             action_len: np.ndarray, actions: List[str],
             action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
         raise NotImplementedError()
 
     def save_model(self, t: Optional[int] = None) -> None:
@@ -64,8 +63,8 @@ class BaseCore(Logging, ABC):
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray,
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
             dones: List[bool],
             rewards: List[float],
             action_idx: List[int],
@@ -348,8 +347,8 @@ class BaseAgent(Logging):
         self.eps: float = 0.
         self.is_training: bool = True
         self._stale_tids: List[int] = []
-        self._last_action_mask: Optional[bytes] = None
-        self._last_sys_action_mask: Optional[bytes] = None
+        self._last_action_mask: Optional[np.ndarray] = None
+        self._last_sys_action_mask: Optional[np.ndarray] = None
         self._last_action: Optional[ActionDesc] = None
         self._cumulative_score = 0
         self._cumulative_penalty = 0
@@ -358,7 +357,7 @@ class BaseAgent(Logging):
         self._prev_place: Optional[str] = None
         self._curr_place: Optional[str] = None
         self.game_id: Optional[str] = None
-        self._cnt_action: Optional[np.ndarray] = None
+        self._cnt_action: Optional[Dict[int, float]] = None
         self._largest_valid_tag = 0
         self._stale_tags: Optional[List[int]] = None
 
@@ -366,22 +365,6 @@ class BaseAgent(Logging):
     def report_status(cls, lst_of_status: List[Tuple[str, object]]) -> str:
         return ', '.join(
             map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
-
-    @classmethod
-    def from_bytes(cls, byte_action_masks: List[bytes]) -> np.ndarray:
-        """
-        Convert a list of byte-array masks to a list of np-array masks.
-        :param byte_action_masks:
-        :return:
-        """
-        vec_action_masks = []
-        for mask in byte_action_masks:
-            bit_mask = bitarray(endian='little')
-            bit_mask.frombytes(mask)
-            # reset last bit (True for avoiding tail trimming of bytes)
-            bit_mask[-1] = False
-            vec_action_masks.append(bit_mask.tolist())
-        return np.asarray(vec_action_masks, dtype=np.int32)
 
     @classmethod
     def get_path_tags(cls, path: str, prefix: str) -> List[int]:
@@ -447,6 +430,8 @@ class BaseAgent(Logging):
         new_hp.set_hparam("cls_val", conventions.bert_cls_token)
         new_hp.set_hparam("sep_val", conventions.bert_sep_token)
         new_hp.set_hparam("mask_val", conventions.bert_mask_token)
+        new_hp.set_hparam("sos", conventions.bert_sos_token)
+        new_hp.set_hparam("eos", conventions.bert_eos_token)
 
         # set special token ids
         new_hp.set_hparam(
@@ -461,6 +446,10 @@ class BaseAgent(Logging):
             'sep_val_id', tokenizer.vocab[conventions.bert_sep_token])
         new_hp.set_hparam(
             'mask_val_id', tokenizer.vocab[conventions.bert_mask_token])
+        new_hp.set_hparam(
+            "sos_id", tokenizer.vocab[conventions.bert_sos_token])
+        new_hp.set_hparam(
+            "eos_id", tokenizer.vocab[conventions.bert_eos_token])
         return new_hp, tokenizer
 
     @classmethod
@@ -546,9 +535,12 @@ class BaseAgent(Logging):
             self, hp: HParams, tokenizer: Tokenizer, action_path: str,
             with_loading=True) -> ActionCollector:
         action_collector = ActionCollector(
-            tokenizer,
-            hp.n_actions, hp.n_tokens_per_action,
-            hp.unk_val_id, hp.padding_val_id, hp.eos_id, hp.pad_eos)
+            tokenizer=tokenizer,
+            n_tokens=hp.n_tokens_per_action,
+            unk_val_id=hp.unk_val_id,
+            padding_val_id=hp.padding_val_id,
+            eos_id=hp.eos_id,
+            pad_eos=hp.pad_eos)
         if with_loading:
             try:
                 action_collector.load_actions(action_path)
@@ -601,8 +593,7 @@ class BaseAgent(Logging):
         :param action_mask:
         :return:
         """
-        mask_idx = np.where(action_mask == 1)[0]
-        action_idx = np.random.choice(mask_idx)
+        action_idx = np.random.choice(action_mask)
         action_desc = ActionDesc(
             action_type=ACT_TYPE.rnd,
             action_idx=action_idx,
@@ -721,14 +712,14 @@ class BaseAgent(Logging):
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         self.game_id = self._compute_game_id(infos)
         self.info("game id: {}".format(self.game_id))
-        self.actor.add_new_episode(eid=self.game_id)
+        self.actor.add_new_episode(gid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
         self.in_game_t = 0
         self._cumulative_score = 0
         self._episode_has_started = True
         self._prev_place = None
         self._curr_place = None
-        self._cnt_action = np.zeros(self.hp.n_actions)
+        self._cnt_action = dict()
 
     def _end_episode(
             self, obs: List[str], scores: List[int],
@@ -839,7 +830,7 @@ class BaseAgent(Logging):
                 admissible_actions = cardinal_go + open_actions
                 self.debug("admissible actions for random walk: {}".format(
                     admissible_actions))
-                _, action = get_random_1d_action(admissible_actions)
+                action = np.random.choice(admissible_actions)
                 action_idx = all_actions.index(action)
             else:
                 pass
@@ -863,9 +854,7 @@ class BaseAgent(Logging):
 
     def choose_action(
             self, actions: List[str], all_actions: List[str],
-            action_mask: bytes) -> ActionDesc:
-        action_mask = self.from_bytes([action_mask])[0]
-
+            action_mask: np.ndarray) -> ActionDesc:
         # when q_actions is required to get, this should be True
         if self.hp.compute_policy_action_every_step:
             policy_action_desc = self.get_policy_action(action_mask)
@@ -961,14 +950,18 @@ class BaseAgent(Logging):
                   prev_place)])
         return curr_place
 
+    def _prepare_other_train_data(self, b_memory: List[Memolet]) -> Any:
+        return None
+
     def train_one_batch(self) -> None:
         """
         Train one batch of samples.
         Load target model if not exist, save current model when necessary.
         """
-        # if there is not a well-trained model, it is unreasonable
-        # to use target model.
+        # prepare other data
+        # put it as the first, in case of using multi-threading
         b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
+        other_train_data = self._prepare_other_train_data(b_memory)
 
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
@@ -976,25 +969,20 @@ class BaseAgent(Logging):
         game_id = [m.gid for m in b_memory]
         reward = [m.reward for m in b_memory]
         is_terminal = [m.is_terminal for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        next_action_mask = [m.next_action_mask for m in b_memory]
-
-        pre_action_mask = self.from_bytes(action_mask)
-        post_action_mask = self.from_bytes(next_action_mask)
+        pre_action_mask = [m.action_mask for m in b_memory]
+        post_action_mask = [m.next_action_mask for m in b_memory]
 
         post_trajectories = self.tjs.fetch_batch_states(trajectory_id, state_id)
-        pre_trajectories = self.tjs.fetch_batch_states(
-            trajectory_id, [sid - 1 for sid in state_id])
+        pre_trajectories = self.tjs.fetch_batch_pre_states(
+            trajectory_id, state_id)
 
         post_states = [
             state[0] for state in
             self.stc.fetch_batch_states(trajectory_id, state_id)]
         pre_states = [
-            state[0] for state in self.stc.fetch_batch_states(
-                trajectory_id, [sid - 1 for sid in state_id])]
+            state[0] for state in
+            self.stc.fetch_batch_pre_states(trajectory_id, state_id)]
 
-        # make sure the p_states and s_states are in the same game.
-        # otherwise, it won't make sense to use the same action matrix.
         action_len = (
             [self.actor.get_action_len(gid) for gid in game_id])
         action_matrix = (
@@ -1014,7 +1002,7 @@ class BaseAgent(Logging):
             action_idx=action_id,
             b_weight=b_weight,
             step=self.total_t,
-            others=None)
+            others=other_train_data)
 
         self.memo.batch_update(b_idx, b_weight)
 
@@ -1047,7 +1035,7 @@ class BaseAgent(Logging):
     def collect_new_sample(
             self, master: str, instant_reward: float, dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[
-            List[str], List[str], bytes, bytes, float]:
+            List[str], List[str], np.ndarray, np.ndarray, float]:
 
         self.tjs.append(ActionMaster(
             action=self._last_action.action if self._last_action else "",
@@ -1098,7 +1086,7 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions: List[str], all_actions: List[str],
-            action_mask: bytes, sys_action_mask: bytes) -> str:
+            action_mask: np.ndarray, sys_action_mask: np.ndarray) -> str:
 
         if self.is_training:
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
@@ -1112,6 +1100,8 @@ class BaseAgent(Logging):
         self.debug("action: {}".format(self._last_action))
 
         if self._last_action.action_type == ACT_TYPE.policy_drrn:
+            if action_idx not in self._cnt_action:
+                self._cnt_action[action_idx] = 0.
             self._cnt_action[action_idx] += 0.1
 
         self._last_action_mask = action_mask

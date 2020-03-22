@@ -24,7 +24,6 @@ class CnnDRRN(CnnDQN):
         :param is_infer:
         """
         super(CnnDRRN, self).__init__(hp, is_infer)
-        self.n_actions = self.hp.n_actions
         self.n_tokens_per_action = self.hp.n_tokens_per_action
         self.h_state_size = self.hp.hidden_state_size
         self.inputs = {
@@ -136,10 +135,9 @@ class BertDRRN(BaseDQN):
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
-
         self.h_state_size = self.hp.hidden_state_size
         self.enc_actions = tf.layers.Dense(
-            units=self.hp.n_actions, activation=tf.tanh,
+            units=self.h_state_size, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
         self.wt = tf.layers.Dense(
             units=self.h_state_size, activation=tf.tanh,

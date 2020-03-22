@@ -1,198 +1,149 @@
-import time
+from typing import List, Dict, Optional, Tuple
 
 import numpy as np
-from bitarray import bitarray
 
+from deeptextworld.agents.utils import Tokenizer
 from deeptextworld.log import Logging
 
 
 class ActionCollector(Logging):
     def __init__(
-            self, tokenizer, n_actions=200, n_tokens=10,
-            unk_val_id=None, padding_val_id=None, eos_id=None, pad_eos=False):
+            self, tokenizer: Tokenizer, n_tokens: int, unk_val_id: int,
+            padding_val_id: int, eos_id: int, pad_eos: bool = False) -> None:
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
-        self.actions_base = {}
-        self.action_matrix_base = {}
-        self.action_len_base = {}
+        self._actions_base: Dict[str, List[str]] = dict()
+        self._action_matrix_base: Dict[str, List[np.ndarray]] = dict()
+        self._action_len_base: Dict[str, List[int]] = dict()
 
         # metadata of the action collector
-        self.n_actions = n_actions
-        self.n_tokens = n_tokens
-        self.unk_val_id = unk_val_id
-        self.padding_val_id = padding_val_id
-        self.eos_id = eos_id
+        self._n_tokens: int = n_tokens
+        self._unk_val_id: int = unk_val_id
+        self._padding_val_id: int = padding_val_id
+        self._eos_id: int = eos_id
+        self._pad_eos: bool = pad_eos
+        self._tokenizer: Tokenizer = tokenizer
 
         # current episode actions
         self._action2idx = None
         self._actions = None
         self._curr_aid = 0
-        self._curr_eid = None
+        self._curr_gid = None
         self._action_matrix = None
         self._action_len = None
 
-        self.tokenizer = tokenizer
-        self.pad_eos = pad_eos
+    def _reset_episode_vars(self) -> None:
+        self._action2idx: Dict[str, int] = {}
+        self._actions: List[str] = []
+        # aid always points to the next future action
+        self._curr_aid: int = 0
+        self._curr_gid: Optional[str] = None
+        self._action_matrix: List[np.ndarray] = []
+        self._action_len: List[int] = []
 
-    def init(self):
-        self._action2idx = {}
-        self._actions = [""] * self.n_actions
-        self._curr_aid = 0
-        self._curr_eid = None
-        self._action_matrix = np.full(
-            (self.n_actions, self.n_tokens),
-            fill_value=self.padding_val_id, dtype=np.int32)
-        self._action_len = np.zeros(self.n_actions, dtype=np.int32)
-
-    @classmethod
-    def _ctime(cls):
-        return int(round(time.time() * 1000))
-
-    def add_new_episode(self, eid=None):
-        if eid is None:
-            eid = self._ctime()
-
-        if eid == self._curr_eid:
-            # self.info("continue current episode: {}".format(eid))
+    def add_new_episode(self, gid: str) -> None:
+        if gid == self._curr_gid:
             return
 
-        # self.info("add new episode in actions: {}".format(eid))
+        if self._size != 0 and self._curr_gid is not None:
+            self._actions_base[self._curr_gid] = self._actions
+            self._action_matrix_base[self._curr_gid] = self._action_matrix
+            self._action_len_base[self._curr_gid] = self._action_len
 
-        if self.size() != 0 and self._curr_eid is not None:
-            self.actions_base[self._curr_eid] = self._actions[:self.size()]
-            self.action_matrix_base[self._curr_eid] = self._action_matrix
-            self.action_len_base[self._curr_eid] = self._action_len
+        self._reset_episode_vars()
+        self._curr_gid = gid
+        if self._curr_gid in self._actions_base:
+            self.info("found existing episode: {}".format(self._curr_gid))
+            self._curr_aid = len(self._actions_base[self._curr_gid])
+            self._actions = self._actions_base[self._curr_gid]
+            self._action_matrix = self._action_matrix_base[self._curr_gid]
+            self._action_len = self._action_len_base[self._curr_gid]
+            self._action2idx = dict(
+                [(a, i) for (i, a) in enumerate(self._actions)])
+            self.info("{} actions loaded".format(self._size))
 
-        self.init()
-        self._curr_eid = eid
-        if self._curr_eid in self.actions_base:
-            self.info("found existing episode: {}".format(self._curr_eid))
-            self._curr_aid = len(self.actions_base[self._curr_eid])
-            self._actions[:self.size()] = self.actions_base[self._curr_eid]
-            self._action_matrix = self.action_matrix_base[self._curr_eid]
-            self._action_len = self.action_len_base[self._curr_eid]
-            self._action2idx = dict([(a, i) for (i, a) in
-                                     enumerate(self._actions)])
-            self.info("{} actions loaded".format(self.size()))
-        else:
-            pass
-
-    def idx_tokens(self, action):
-        action_idx = self.tokenizer.convert_tokens_to_ids(
-            self.tokenizer.tokenize(action))
-        action_idx = action_idx[:min(self.n_tokens, len(action_idx))]
-        n_action_tokens = len(action_idx)
-        if self.pad_eos:
-            if n_action_tokens == self.n_tokens:
-                action_idx[-1] = self.eos_id
+    def _convert_action_to_ids(self, action: str) -> Tuple[np.ndarray, int]:
+        token_ids = self._tokenizer.convert_tokens_to_ids(
+            self._tokenizer.tokenize(action))
+        action_len = min(self._n_tokens, len(token_ids))
+        if self._pad_eos:
+            if action_len == self._n_tokens:
+                token_ids[action_len - 1] = self._eos_id
             else:
-                action_idx.append(self.eos_id)
-                n_action_tokens = len(action_idx)
+                token_ids.append(self._eos_id)
+                action_len += 1
         else:
             pass
-        return action_idx, n_action_tokens
+        action_idx = np.zeros(self._n_tokens)
+        action_idx[:action_len] = token_ids[:action_len]
+        return action_idx, action_len
 
-    def extend(self, actions):
+    def extend(self, actions: List[str]) -> np.ndarray:
         """
         Extend actions into ActionCollector.
-        Fail if #actions larger than hp.n_actions - 1.
-        :param actions:
-        :return:
         """
-        bit_mask_vec = bitarray(self.n_actions, endian="little")
-        bit_mask_vec[::] = False
-        bit_mask_vec[-1] = True  # to avoid tail trimming for bytes
+        mask_idx = []
         for a in actions:
             if a not in self._action2idx:
-                assert self._curr_aid < self.n_actions - 1, \
-                    "n_actions too small"
                 self._action2idx[a] = self._curr_aid
-                action_idx, n_action_tokens = self.idx_tokens(a)
-                self._action_len[self._curr_aid] = n_action_tokens
-                self._action_matrix[self._curr_aid][:n_action_tokens] =\
-                    action_idx[:n_action_tokens]
-                self._actions[self._curr_aid] = a
+                action_idx, action_len = self._convert_action_to_ids(a)
+                self._action_len.append(action_len)
+                self._action_matrix.append(action_idx)
+                self._actions.append(a)
                 self._curr_aid += 1
-            bit_mask_vec[self._action2idx[a]] = True
-        return bit_mask_vec.tobytes()
+            mask_idx.append(self._action2idx[a])
+        return np.asarray(mask_idx)
 
-    def get_action_matrix(self, eid=None):
-        if eid is None or eid == self._curr_eid:
-            return self._action_matrix
+    def get_action_matrix(self, gid: Optional[str] = None) -> np.ndarray:
+        if gid is None or gid == self._curr_gid:
+            return self.action_matrix
         else:
-            return self.action_matrix_base[eid]
+            return np.asarray(self._action_matrix_base[gid])
 
     @property
-    def action_matrix(self):
-        return self._action_matrix
+    def action_matrix(self) -> np.ndarray:
+        return np.asarray(self._action_matrix)
 
-    def get_action_len(self, eid=None):
-        if eid is None or eid == self._curr_eid:
-            return self._action_len
+    def get_action_len(self, gid: Optional[str] = None) -> np.ndarray:
+        if gid is None or gid == self._curr_gid:
+            return self.action_len
         else:
-            return self.action_len_base[eid]
+            return np.asarray(self._action_len_base[gid])
 
     @property
-    def action_len(self):
-        return self._action_len
+    def action_len(self) -> np.ndarray:
+        return np.asarray(self._action_len)
 
-    def get_actions(self, eid=None):
-        if eid is None or eid == self._curr_eid:
+    def get_actions(self, gid: str = None) -> List[str]:
+        if gid is None or gid == self._curr_gid:
             return self._actions
         else:
-            return self.actions_base[eid]
+            return self._actions_base[gid]
 
     @property
-    def actions(self):
+    def actions(self) -> List[str]:
         return self._actions
 
-    def get_action2idx(self, eid=None):
-        if eid is None or eid == self._curr_eid:
-            return self._action2idx
-        else:
-            action2idx = dict(
-                [(a, i) for (i, a) in enumerate(self.actions_base[eid])])
-            return action2idx
-
     @property
-    def action2idx(self):
-        return self._action2idx
-
-    def size(self):
+    def _size(self) -> int:
         return self._curr_aid
 
-    def save_actions(self, path):
-        metadata = ([self.n_actions, self.n_tokens, self.unk_val_id,
-                     self.padding_val_id])
-        if self.size() != 0 and self._curr_eid is not None:
-            self.actions_base[self._curr_eid] = self._actions[:self.size()]
-        actions_base_keys = list(self.actions_base.keys())
-        actions_base_vals = list(self.actions_base.values())
-        np.savez(path, metadata=metadata,
-                 actions_base_keys=actions_base_keys,
-                 actions_base_vals=actions_base_vals,
-                 action_matrix=[self.action_matrix_base])
+    def save_actions(self, path: str) -> None:
+        if self._size != 0 and self._curr_gid is not None:
+            self._actions_base[self._curr_gid] = self._actions
+        actions_base_keys = list(self._actions_base.keys())
+        actions_base_vals = list(self._actions_base.values())
+        np.savez(
+            path,
+            actions_base_keys=actions_base_keys,
+            actions_base_vals=actions_base_vals,
+            action_matrix=[self._action_matrix_base])
 
-    def load_actions(self, path):
+    def load_actions(self, path: str) -> None:
         saved = np.load(path, allow_pickle=True)
-        metadata = saved["metadata"]
-        assert len(metadata) == 4, "wrong saved actions format"
-        (n_actions, n_tokens, unk_val_id, padding_val_id) = tuple(metadata)
-        if self.n_actions < n_actions:
-            self.warning("new/loaded #actions: {}/{}".format(
-                self.n_actions, n_actions))
-        if self.n_tokens < n_tokens:
-            self.warning("new/loaded #tokens: {}/{}".format(
-                self.n_tokens, n_tokens))
-        if self.unk_val_id != unk_val_id:
-            self.warning("new/loaded unknown val id: {}/{}".format(
-                self.unk_val_id, unk_val_id))
-        if self.padding_val_id != padding_val_id:
-            self.warning("new/loaded padding val id: {}/{}".format(
-                self.padding_val_id, padding_val_id))
-
-        actions_base = dict(zip(list(saved["actions_base_keys"]),
-                                list(saved["actions_base_vals"])))
-        for eid in actions_base:
-            self.add_new_episode(eid)
-            self.extend(actions_base[eid])
+        actions_base = dict(
+            zip(list(saved["actions_base_keys"]),
+                list(saved["actions_base_vals"])))
+        for gid in actions_base:
+            self.add_new_episode(gid)
+            self.extend(actions_base[gid])

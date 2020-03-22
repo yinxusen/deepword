@@ -1,10 +1,10 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 import numpy as np
 
 from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
 from deeptextworld.agents.base_agent import BaseAgent, TFCore
-from deeptextworld.agents.utils import ActionMaster, ObsInventory
+from deeptextworld.agents.utils import ActionMaster, ObsInventory, Memolet
 from deeptextworld.models.export_models import GenDQNModel
 
 
@@ -21,7 +21,7 @@ class GenDQNCore(TFCore):
             action_len: np.ndarray,
             actions: List[str],
             action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
         self.debug("trajectory: {}".format(trajectory))
         src, src_len, master_mask = self.trajectory2input(trajectory)
         self.debug("src: {}".format(src))
@@ -81,9 +81,6 @@ class GenDQNCore(TFCore):
             rewards: List[float]) -> np.ndarray:
         """
         Compute expected q values given post trajectories and post actions
-
-        notice that action_mask, tids, sids should belong to post game states,
-        while dones, rewards belong to pre game states.
         """
 
         src, src_len, master_mask = self.batch_trajectory2input(trajectories)
@@ -122,16 +119,20 @@ class GenDQNCore(TFCore):
         return expected_q
 
     def train_one_batch(
-            self, pre_trajectories: List[List[ActionMaster]],
+            self,
+            pre_trajectories: List[List[ActionMaster]],
             post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray, dones: List[bool],
-            rewards: List[float], action_idx: List[int],
-            b_weight: np.ndarray, step: int,
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int,
             others: Any) -> np.ndarray:
 
         expected_q = self._compute_expected_q(
@@ -139,7 +140,6 @@ class GenDQNCore(TFCore):
 
         src, src_len, master_mask = self.batch_trajectory2input(
             pre_trajectories)
-
         action_token_ids = others
         at_id_wo_eos = np.asarray(action_token_ids)
         at_id_wo_eos[
@@ -151,11 +151,9 @@ class GenDQNCore(TFCore):
         action_token_ids = np.asarray(action_token_ids)
         self.debug("action in/out example:\n{} -- {}\n{} -- {}".format(
             at_id_in[0, :],
-            self.tokenizer.convert_ids_to_tokens(
-                at_id_in[0, :action_len[0]]),
+            self.tokenizer.de_tokenize(at_id_in[0, :]),
             action_token_ids[0, :],
-            self.tokenizer.convert_ids_to_tokens(
-                action_token_ids[0, :action_len[0]])))
+            self.tokenizer.de_tokenize(action_token_ids[0, :])))
 
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op,
@@ -171,7 +169,8 @@ class GenDQNCore(TFCore):
                 self.model.action_idx_out_: action_token_ids,
                 self.model.action_len_: action_len,
                 self.model.expected_q_: expected_q})
-
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
         return abs_loss
 
 
@@ -179,57 +178,6 @@ class GenDQNAgent(BaseAgent):
     def __init__(self, hp, model_dir):
         super(GenDQNAgent, self).__init__(hp, model_dir)
 
-    def train_one_batch(self) -> None:
-        """
-        Train one batch of samples.
-        Load target model if not exist, save current model when necessary.
-        """
-        # if there is not a well-trained model, it is unreasonable
-        # to use target model.
-        b_idx, b_memory, b_weight = self.memo.sample_batch(self.hp.batch_size)
-
-        trajectory_id = [m.tid for m in b_memory]
-        state_id = [m.sid for m in b_memory]
-        action_len = [m.a_len for m in b_memory]
-        reward = [m.reward for m in b_memory]
-        is_terminal = [m.is_terminal for m in b_memory]
-        action_mask = [m.action_mask for m in b_memory]
-        next_action_mask = [m.next_action_mask for m in b_memory]
+    def _prepare_other_train_data(self, b_memory: List[Memolet]) -> Any:
         action_token_ids = [m.token_id for m in b_memory]
-
-        pre_action_mask = self.from_bytes(action_mask)
-        post_action_mask = self.from_bytes(next_action_mask)
-
-        post_trajectories = self.tjs.fetch_batch_states(trajectory_id, state_id)
-        pre_trajectories = self.tjs.fetch_batch_states(
-            trajectory_id, [sid - 1 for sid in state_id])
-
-        post_states = [
-            state[0] for state in
-            self.stc.fetch_batch_states(trajectory_id, state_id)]
-        pre_states = [
-            state[0] for state in self.stc.fetch_batch_states(
-                trajectory_id, [sid - 1 for sid in state_id])]
-
-        b_weight = self.core.train_one_batch(
-            pre_trajectories=pre_trajectories,
-            post_trajectories=post_trajectories,
-            pre_states=pre_states,
-            post_states=post_states,
-            action_matrix=[np.asarray([0])],  # dummy
-            action_len=action_len,
-            pre_action_mask=pre_action_mask,
-            post_action_mask=post_action_mask,
-            dones=is_terminal,
-            rewards=reward,
-            action_idx=[0],  # dummy
-            b_weight=b_weight,
-            step=self.total_t,
-            others=action_token_ids)
-
-        self.memo.batch_update(b_idx, b_weight)
-
-        if self.is_time_to_save():
-            self.save_snapshot()
-            self.core.save_model()
-            self.core.create_or_reload_target_model()
+        return action_token_ids

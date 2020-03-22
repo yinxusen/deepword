@@ -22,7 +22,6 @@ class CnnDSQN(CnnDRRN):
         :param is_infer:
         """
         super(CnnDSQN, self).__init__(hp, is_infer)
-        self.n_actions = self.hp.n_actions
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_seg": tf.placeholder(tf.int32, [None, None]),

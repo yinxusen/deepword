@@ -3,7 +3,6 @@ from os.path import join as pjoin
 from typing import Dict, Optional, List, Any
 
 import numpy as np
-from textworld import EnvInfos
 
 from deeptextworld.agents.base_agent import BaseCore, BaseAgent
 from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
@@ -21,39 +20,27 @@ class DQNCore(TFCore):
     def __init__(self, hp, model_dir, tokenizer):
         super(DQNCore, self).__init__(hp, model_dir, tokenizer)
 
-    @classmethod
-    def select_additional_infos(cls):
-        """
-        additional information needed when playing the game
-        """
-        return EnvInfos(
-            description=True,
-            inventory=True,
-            max_score=True,
-            won=True,
-            admissible_commands=True)
-
     def get_a_policy_action(
             self,
             trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
-            action_len: np.ndarray, actions: List[str],
+            action_len: np.ndarray,
+            actions: List[str],
             action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
         """
-        mask_idx = np.where(action_mask == 1)[0]
         src, src_len, _ = self.trajectory2input(trajectory)
         q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len]
         })[0]
-        admissible_q_actions = q_actions[mask_idx]
+        admissible_q_actions = q_actions[action_mask]
         action_idx, q_val = get_best_1d_q(admissible_q_actions)
-        real_action_idx = mask_idx[action_idx]
+        real_action_idx = action_mask[action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn,
             action_idx=real_action_idx,
@@ -64,7 +51,7 @@ class DQNCore(TFCore):
 
     def _compute_expected_q(
             self,
-            action_mask: np.ndarray,
+            action_mask: List[np.ndarray],
             trajectories: List[List[ActionMaster]],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
@@ -95,9 +82,8 @@ class DQNCore(TFCore):
         for i in range(len(expected_q)):
             expected_q[i] = rewards[i]
             if not dones[i]:
-                mask_idx = np.where(action_mask[i] == 1)[0]
-                action_idx, _ = get_best_1d_q(qs_dqn[i, mask_idx])
-                real_action_idx = mask_idx[action_idx]
+                action_idx, _ = get_best_1d_q(qs_dqn[i, action_mask[i]])
+                real_action_idx = action_mask[i][action_idx]
                 expected_q[i] += (
                         self.hp.gamma * qs_target[i, real_action_idx])
         return expected_q
@@ -110,8 +96,8 @@ class DQNCore(TFCore):
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray,
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
             dones: List[bool],
             rewards: List[float],
             action_idx: List[int],
@@ -165,8 +151,8 @@ class TabularCore(BaseCore):
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
             action_len: List[np.ndarray],
-            pre_action_mask: np.ndarray,
-            post_action_mask: np.ndarray,
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
             dones: List[bool],
             rewards: List[float],
             action_idx: List[int],
@@ -198,14 +184,13 @@ class TabularCore(BaseCore):
             action_len: np.ndarray,
             actions: List[str],
             action_mask: np.ndarray,
-            cnt_action: Optional[np.ndarray]) -> ActionDesc:
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
 
-        mask_idx = np.where(action_mask == 1)[0]
         hs = self.get_state_hash(state)
         q_actions = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
-        admissible_q_actions = q_actions[mask_idx]
+        admissible_q_actions = q_actions[action_mask]
         action_idx, q_val = get_best_1d_q(admissible_q_actions)
-        real_action_idx = mask_idx[action_idx]
+        real_action_idx = action_mask[action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_tbl,
             action_idx=real_action_idx,
@@ -262,13 +247,11 @@ class TabularCore(BaseCore):
 
     def _compute_expected_q(
             self,
-            action_mask: np.ndarray,
+            action_mask: List[np.ndarray],
             states: List[ObsInventory],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
-
         post_hash_states = [self.get_state_hash(state) for state in states]
-
         post_qs_target = np.asarray(
             [self.target_q_mat.get(s, np.zeros(self.hp.n_actions))
              for s in post_hash_states])
@@ -280,9 +263,8 @@ class TabularCore(BaseCore):
         for i in range(len(expected_q)):
             expected_q[i] = rewards[i]
             if not dones[i]:
-                mask_idx = np.where(action_mask[i] == 1)[0]
-                action_idx, _ = get_best_1d_q(post_qs_dqn[i, mask_idx])
-                real_action_idx = mask_idx[action_idx]
+                action_idx, _ = get_best_1d_q(post_qs_dqn[i, action_mask[i]])
+                real_action_idx = action_mask[i][action_idx]
                 expected_q[i] += (
                         self.hp.gamma * post_qs_target[i, real_action_idx])
         return expected_q
