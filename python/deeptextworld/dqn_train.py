@@ -40,7 +40,9 @@ parser.add_argument('--collect-floor-plan', action='store_true')
 parser.add_argument('--start-t-ignore-model-t', action='store_true')
 parser.add_argument('--n-actions', type=int)
 parser.add_argument('--use-step-wise-reward', action='store_true')
+parser.add_argument('--compute-policy-action-every-step', action='store_true')
 parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
+parser.add_argument("--max-snapshot-to-keep", type=int)
 
 
 def setup_train_log(model_dir):
