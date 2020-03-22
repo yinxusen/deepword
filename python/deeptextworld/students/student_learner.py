@@ -342,7 +342,8 @@ class GenConcatActionsLearner(GenLearner):
                 self.tokenizer.tokenize(concat_actions))
             for concat_actions in actions]
         action_len = np.asarray([len(x) for x in action_idx])
-        max_concat_action_len = np.max(action_len)
+        max_concat_action_len = min(
+            np.max(action_len), self.hp.max_decoding_size)
         action_matrix = np.asarray(
             [pad_action(x, max_concat_action_len, self.hp.padding_val_id)
              for x in action_idx])

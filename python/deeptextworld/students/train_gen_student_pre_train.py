@@ -16,7 +16,7 @@ if __name__ == "__main__":
         model_creator="TransformerGenDQN",
         num_tokens=500,
         num_turns=6,
-        max_decoding_size=500,  # decode concat actions
+        max_decoding_size=300,  # decode concat actions
         batch_size=32,
         save_gap_t=10000,
         embedding_size=64,
