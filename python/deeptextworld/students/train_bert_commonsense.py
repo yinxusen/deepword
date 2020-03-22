@@ -3,7 +3,6 @@ import os
 import fire
 import tensorflow as tf
 
-from deeptextworld.hparams import conventions
 from deeptextworld.students.student_learner import BertLearner, CMD
 from deeptextworld.students.train_eval_framework import TrainEval
 
@@ -26,7 +25,7 @@ if __name__ == '__main__':
         max_snapshot_to_keep=100,
         eval_episode=5,
         game_episode_terminal_t=100,
-        replay_mem=500000,
+        replay_mem=100000,
         collect_floor_plan=True
     )
     train_eval = TrainEval(cmd_args, BertLearner)

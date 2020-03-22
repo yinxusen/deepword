@@ -3,7 +3,6 @@ import os
 import fire
 import tensorflow as tf
 
-from deeptextworld.hparams import conventions
 from deeptextworld.students.student_learner import GenLearner, CMD
 from deeptextworld.students.train_eval_framework import TrainEval
 
@@ -15,10 +14,10 @@ if __name__ == "__main__":
     cmd_args = CMD(
         model_dir="",
         model_creator="TransformerGenDQN",
-        num_tokens=256,
+        num_tokens=500,
         num_turns=6,
         batch_size=32,
-        save_gap_t=50000,
+        save_gap_t=10000,
         embedding_size=64,
         learning_rate=5e-5,
         tokenizer_type="Bert",
@@ -26,7 +25,7 @@ if __name__ == "__main__":
         max_snapshot_to_keep=100,
         eval_episode=5,
         game_episode_terminal_t=100,
-        replay_mem=500000,
+        replay_mem=100000,
         collect_floor_plan=True
     )
     train_eval = TrainEval(cmd_args, GenLearner)
