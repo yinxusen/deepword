@@ -453,7 +453,7 @@ def bert_commonsense_input(
 
     n_rows, n_cols = action_matrix.shape
     tj = np.repeat(tj[None, :], n_rows, axis=0)
-    seg_tj = np.zeros_like(tj, dtype=np.int)
+    seg_tj = np.zeros_like(tj, dtype=np.int32)
 
     # make action_matrix n_cols = n_cols + k to fill in [SEP] safer
     action_matrix = np.concatenate(
@@ -461,14 +461,14 @@ def bert_commonsense_input(
          np.zeros([n_rows, num_tokens - n_cols - trajectory_len - 3])],
         axis=-1)
     action_matrix[range(n_rows), action_len] = sep_val_id
-    seg_action = np.ones_like(action_matrix, dtype=np.int)
+    seg_action = np.ones_like(action_matrix, dtype=np.int32)
 
     inp = np.concatenate([tj, action_matrix], axis=-1)
     seg_tj_action = np.concatenate([seg_tj, seg_action], axis=-1)
 
     # valid length plus 3 for [CLS] [SEP] and [SEP]
     inp_size = trajectory_len + action_len + 3
-    return inp.astype(np.int), seg_tj_action, inp_size
+    return inp.astype(np.int32), seg_tj_action, inp_size
 
 
 def get_best_1d_q(q_actions: np.ndarray) -> Tuple[int, float]:

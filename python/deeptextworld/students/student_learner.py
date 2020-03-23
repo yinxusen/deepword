@@ -402,7 +402,7 @@ class BertLearner(StudentLearner):
 
         action_len = action_len[batch_q_idx].reshape((batch_size, n_classes))
         actions = actions[batch_q_idx].reshape((batch_size, n_classes, -1))
-        swag_labels = np.zeros((len(actions), ), dtype=np.int)
+        swag_labels = np.zeros((len(actions), ), dtype=np.int32)
 
         processed_input = [
             bert_commonsense_input(

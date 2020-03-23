@@ -74,7 +74,7 @@ class ActionCollector(Logging):
                 action_len += 1
         else:
             pass
-        action_idx = np.zeros(self._n_tokens)
+        action_idx = np.zeros(self._n_tokens, dtype=np.int32)
         action_idx[:action_len] = token_ids[:action_len]
         return action_idx, action_len
 
