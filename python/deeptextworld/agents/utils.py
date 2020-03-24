@@ -299,7 +299,7 @@ class ScannerDecayEPS(ScheduledEPS):
         return eps_t
 
 
-def pad_action(
+def pad_str_ids(
         action_ids: List[int], max_size: int, padding_val_id: int) -> List[int]:
     """
     pad action index up to max_size, or trim action in the end if too large
@@ -327,7 +327,8 @@ def tj2ids(
         action_ids = tokenizer.convert_tokens_to_ids(
             tokenizer.tokenize(am.action))
         if with_action_padding:
-            action_ids = pad_action(action_ids, max_action_size, padding_val_id)
+            action_ids = pad_str_ids(
+                action_ids, max_action_size, padding_val_id)
         master_ids = tokenizer.convert_tokens_to_ids(
             tokenizer.tokenize(am.master))
         ids += action_ids
@@ -455,11 +456,12 @@ def bert_commonsense_input(
     tj = np.repeat(tj[None, :], n_rows, axis=0)
     seg_tj = np.zeros_like(tj, dtype=np.int32)
 
-    # make action_matrix n_cols = n_cols + k to fill in [SEP] safer
+    n_cols_tj = tj.shape[1]
+    n_cols_action = num_tokens - n_cols_tj
+    n_cols_padding = n_cols_action - n_cols
+
     action_matrix = np.concatenate(
-        [action_matrix,
-         np.zeros([n_rows, num_tokens - n_cols - trajectory_len - 3])],
-        axis=-1)
+        [action_matrix, np.zeros([n_rows, n_cols_padding])], axis=-1)
     action_matrix[range(n_rows), action_len] = sep_val_id
     seg_action = np.ones_like(action_matrix, dtype=np.int32)
 

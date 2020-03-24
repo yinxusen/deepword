@@ -18,7 +18,7 @@ from tqdm import trange
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.utils import ActionMaster
-from deeptextworld.agents.utils import Memolet, pad_action
+from deeptextworld.agents.utils import Memolet, pad_str_ids
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_best_batch_ids
@@ -55,8 +55,12 @@ class StudentLearner(object):
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
         save_hparams(hp, pjoin(model_dir, "hparams.json"))
-        (self.sess, self.model, self.saver, self.sw, self.train_steps,
-         self.queue) = self.prepare_training()
+        self.sess = None
+        self.model = None
+        self.saver = None
+        self.sw = None
+        self.train_steps = None
+        self.queue = None
 
     def get_compatible_snapshot_tag(self) -> List[int]:
 
@@ -199,6 +203,10 @@ class StudentLearner(object):
         return sess, model, saver, sw, train_steps, queue
 
     def train(self, n_epochs: int) -> None:
+        if self.sess is None:
+            (self.sess, self.model, self.saver, self.sw, self.train_steps,
+             self.queue) = self.prepare_training()
+
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
             eprint("waiting data ... (retry times: {})".format(wait_times))
@@ -345,7 +353,7 @@ class GenConcatActionsLearner(GenLearner):
         max_concat_action_len = min(
             np.max(action_len), self.hp.max_decoding_size)
         action_matrix = np.asarray(
-            [pad_action(x, max_concat_action_len, self.hp.padding_val_id)
+            [pad_str_ids(x, max_concat_action_len, self.hp.padding_val_id)
              for x in action_idx])
 
         actions_in, actions_out, action_len = get_action_idx_pair(
