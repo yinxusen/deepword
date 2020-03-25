@@ -128,6 +128,15 @@ def model_name2clazz(name):
     raise ValueError("{} not found in models".format(name))
 
 
+def learner_name2clazz(name):
+    from deeptextworld.students import student_learner, bert_swag
+
+    for namespace in [student_learner, bert_swag]:
+        if hasattr(namespace, name):
+            return getattr(namespace, name)
+    raise ValueError("{} not found in student learners".format(name))
+
+
 def agent_name2clazz(name):
     """
     Find the class given the model name in this package.

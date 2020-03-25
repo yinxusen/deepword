@@ -1,8 +1,8 @@
-import argparse
 import logging
 import os
 import sys
 import traceback
+from argparse import ArgumentParser
 
 import gym
 import tensorflow as tf
@@ -10,7 +10,7 @@ import textworld.gym
 from tqdm import trange
 
 from deeptextworld.hparams import load_hparams
-from deeptextworld.utils import agent_name2clazz
+from deeptextworld.utils import agent_name2clazz, learner_name2clazz
 from deeptextworld.utils import load_and_split
 from deeptextworld.utils import setup_logging
 
@@ -18,31 +18,54 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
-parser = argparse.ArgumentParser(argument_default=None)
-parser.add_argument('-m', '--model-dir', type=str, required=True)
-parser.add_argument(
-    '--game-path', type=str, help='[a dir|a game file]', required=True)
-parser.add_argument('--f-games', type=str)
-parser.add_argument('--model-creator', type=str, default="CnnDRRN")
-parser.add_argument('--config-file', type=str)
-parser.add_argument('--init-eps', type=float)
-parser.add_argument('--final-eps', type=float)
-parser.add_argument('--annealing-eps-t', type=int)
-parser.add_argument('--gamma', type=int)
-parser.add_argument('--batch-size', type=int)
-parser.add_argument('--learning-rate', type=float)
-parser.add_argument('--save-gap-t', type=int)
-parser.add_argument('--replay-mem', type=int)
-parser.add_argument('--observation-t', type=int)
-parser.add_argument('--total-t', default=sys.maxsize, type=int)
-parser.add_argument('--game-episode-terminal-t', type=int)
-parser.add_argument('--collect-floor-plan', action='store_true')
-parser.add_argument('--start-t-ignore-model-t', action='store_true')
-parser.add_argument('--n-actions', type=int)
-parser.add_argument('--use-step-wise-reward', action='store_true')
-parser.add_argument('--compute-policy-action-every-step', action='store_true')
-parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
-parser.add_argument("--max-snapshot-to-keep", type=int)
+def hp_parser() -> ArgumentParser:
+    parser = ArgumentParser(argument_default=None)
+    parser.add_argument('--model-creator', type=str, default="CnnDRRN")
+    parser.add_argument('--config-file', type=str)
+    parser.add_argument('--init-eps', type=float)
+    parser.add_argument('--final-eps', type=float)
+    parser.add_argument('--annealing-eps-t', type=int)
+    parser.add_argument('--gamma', type=int)
+    parser.add_argument('--batch-size', type=int)
+    parser.add_argument('--learning-rate', type=float)
+    parser.add_argument('--save-gap-t', type=int)
+    parser.add_argument('--replay-mem', type=int)
+    parser.add_argument('--observation-t', type=int)
+    parser.add_argument('--total-t', default=sys.maxsize, type=int)
+    parser.add_argument('--game-episode-terminal-t', type=int)
+    parser.add_argument('--collect-floor-plan', action='store_true')
+    parser.add_argument('--start-t-ignore-model-t', action='store_true')
+    parser.add_argument('--n-actions', type=int)
+    parser.add_argument('--use-step-wise-reward', action='store_true')
+    parser.add_argument(
+        '--compute-policy-action-every-step', action='store_true')
+    parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
+    parser.add_argument("--max-snapshot-to-keep", type=int)
+    return parser
+
+
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(
+        argument_default=None, parents=[hp_parser()],
+        conflict_handler='resolve')
+    parser.add_argument('--model-dir', type=str, required=True)
+
+    subparsers = parser.add_subparsers(dest='mode')
+
+    teacher_parser = subparsers.add_parser('train-dqn')
+    teacher_parser.add_argument(
+        '--game-path', type=str, help='[a dir|a game file]', required=True)
+    teacher_parser.add_argument('--f-games', type=str)
+
+    student_parser = subparsers.add_parser('train-student')
+    student_parser.add_argument('--data-path', type=str, required=True)
+    student_parser.add_argument('--learner-clazz', type=str, required=True)
+    student_parser.add_argument('--n-epochs', type=int, default=1000)
+
+    student_eval_parser = subparsers.add_parser('eval-student')
+    student_eval_parser.add_argument('--data-path', type=str, required=True)
+    student_eval_parser.add_argument('--learner-clazz', type=str, required=True)
+    return parser
 
 
 def setup_train_log(model_dir):
@@ -114,7 +137,6 @@ def main(args):
     model_dir = args.model_dir.rstrip('/')
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
-    game_path = args.game_path
     config_file = args.config_file
     if not config_file:
         f_hparams = os.path.join(model_dir, "hparams.json")
@@ -123,8 +145,22 @@ def main(args):
 
     setup_train_log(model_dir)
     hp = load_hparams(file_args=config_file, cmd_args=args)
-    train(hp, model_dir, game_dir=game_path, f_games=args.f_games)
+    if args.mode == "train-dqn":
+        train(hp, model_dir, game_dir=args.game_path, f_games=args.f_games)
+    elif args.mode == "train-student":
+        learner_clazz = learner_name2clazz(args.learner_clazz)
+        learner = learner_clazz(hp, args.model_dir, args.data_path)
+        learner.train(n_epochs=args.n_epochs)
+    elif args.mode == "eval-student":
+        assert args.learner_clazz == "SwagLearner"
+        learner_clazz = learner_name2clazz(args.learner_clazz)
+        learner = learner_clazz(
+            hp, args.model_dir, train_data_dir=None,
+            eval_data_path=args.data_path)
+        learner.test()
+    else:
+        raise ValueError()
 
 
 if __name__ == '__main__':
-    main(parser.parse_args())
+    main(get_parser().parse_args())

@@ -1,5 +1,6 @@
 import os
 import random
+import time
 import traceback
 from csv import reader
 from os.path import join as pjoin
@@ -7,7 +8,6 @@ from queue import Queue
 from threading import Thread
 from typing import Tuple, List, Any
 
-import fire
 import numpy as np
 import tensorflow as tf
 from tensorflow import Session
@@ -17,8 +17,7 @@ from tensorflow.train import Saver
 from deeptextworld.agents.utils import Tokenizer
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import pad_str_ids
-from deeptextworld.students.student_learner import BertLearner, CMD
-from deeptextworld.students.train_eval_framework import TrainEval
+from deeptextworld.students.student_learner import BertLearner
 from deeptextworld.utils import eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
@@ -87,10 +86,10 @@ def get_bert_input(
 
 
 class SwagLearner(BertLearner):
-    def prepare_training(
+    def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
-        sess, model, saver, train_steps = self.prepare_model("/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
 
         # save the very first model to verify weight has been loaded
         if train_steps == 0:
@@ -106,18 +105,69 @@ class SwagLearner(BertLearner):
 
         queue = Queue(maxsize=100)
         t = Thread(
-            target=self.add_batch,
+            target=self._add_batch,
             args=("{}/data/train.csv".format(self.train_data_dir), queue))
         t.setDaemon(True)
         t.start()
 
         return sess, model, saver, sw, train_steps, queue
 
-    def add_batch(self, swag_path: str, queue: Queue) -> None:
+    def _prepare_test(
+            self, device_placement: str = "/device:GPU:0"
+    ) -> Tuple[Session, Any, Saver, int, Queue]:
+        sess, model, saver, train_steps = self._prepare_model(device_placement)
+        queue = Queue(maxsize=100)
+        t = Thread(
+            target=self._add_batch,
+            args=(self.eval_data_path, queue, False))
+        t.setDaemon(True)
+        t.start()
+        return sess, model, saver, train_steps, queue
+
+    def test(self, device_placement: str = "/device:GPU:0") -> Tuple[int, int]:
+        if self.sess is None:
+            (self.sess, self.model, self.saver, self.train_steps, self.queue
+             ) = self._prepare_test(device_placement)
+
+        wait_times = 10
+        while wait_times > 0 and self.queue.empty():
+            eprint("waiting data ... (retry times: {})".format(wait_times))
+            time.sleep(10)
+            wait_times -= 1
+
+        acc = 0
+        total = 0
+        eprint("start test")
+        i = 0
+        for data in iter(self.queue.get, None):
+            inp, seg_tj_action, inp_len, swag_labels = data
+
+            if i % 100 == 0:
+                print("process a batch of {} .. {}".format(len(inp), i))
+                print("partial acc.: {}".format(
+                    acc * 1. / total if total else "Nan"))
+
+            q_actions_t = self.sess.run(
+                self.model.q_actions,
+                feed_dict={
+                    self.model.src_: inp,
+                    self.model.src_len_: inp_len,
+                    self.model.seg_tj_action_: seg_tj_action
+                })
+            q_actions_t = q_actions_t.reshape((len(swag_labels), -1))
+            predicted_swag_labels = np.argmax(q_actions_t, axis=-1)
+            acc += np.count_nonzero(predicted_swag_labels == swag_labels)
+            total += len(swag_labels)
+            i += 1
+        return acc, total
+
+    def _add_batch(
+            self, swag_path: str, queue: Queue, training: bool = True) -> None:
         start_str, ending_str, labels = load_swag_data(swag_path)
         data = list(zip(start_str, ending_str, labels))
         while True:
-            random.shuffle(data)
+            if training:
+                random.shuffle(data)
             i = 0
             while i < len(data) // self.hp.batch_size:
                 ss = i * self.hp.batch_size
@@ -139,17 +189,6 @@ class SwagLearner(BertLearner):
                     raise RuntimeError()
                 i += 1
 
-
-if __name__ == "__main__":
-    cmd_args = CMD(
-        model_dir="",
-        model_creator="BertCommonsenseModel",
-        num_tokens=500,
-        batch_size=8,
-        save_gap_t=5000,
-        learning_rate=5e-5,
-        tokenizer_type="BERT",
-        max_snapshot_to_keep=100
-    )
-    train_eval = TrainEval(cmd_args, SwagLearner)
-    fire.Fire(train_eval)
+            if not training:
+                self.queue.put(None)
+                break

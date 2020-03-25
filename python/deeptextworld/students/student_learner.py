@@ -5,7 +5,7 @@ import traceback
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
-from typing import Tuple, List, Union, Any
+from typing import Tuple, List, Union, Any, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -43,7 +43,8 @@ class CMD:
 
 class StudentLearner(object):
     def __init__(
-            self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
+            self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
+            eval_data_path: Optional[str] = None) -> None:
         # prefix should match BaseAgent
         self.tjs_prefix = "trajectories"
         self.action_prefix = "actions"
@@ -51,10 +52,13 @@ class StudentLearner(object):
 
         self.model_dir = model_dir
         self.train_data_dir = train_data_dir
+        self.eval_data_path = eval_data_path
+
         self.load_from = pjoin(self.model_dir, "last_weights")
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
-        save_hparams(hp, pjoin(model_dir, "hparams.json"))
+        save_hparams(self.hp, pjoin(model_dir, "hparams.json"))
+
         self.sess = None
         self.model = None
         self.saver = None
@@ -62,7 +66,7 @@ class StudentLearner(object):
         self.train_steps = None
         self.queue = None
 
-    def get_compatible_snapshot_tag(self) -> List[int]:
+    def _get_compatible_snapshot_tag(self) -> List[int]:
 
         action_tags = BaseAgent.get_path_tags(
             self.train_data_dir, self.action_prefix)
@@ -77,20 +81,21 @@ class StudentLearner(object):
 
         return list(valid_tags)
 
-    def get_combined_data_path(self) -> List[Tuple[str, str, str]]:
-        valid_tags = self.get_compatible_snapshot_tag()
+    def _get_combined_data_path(
+            self, data_dir: str) -> List[Tuple[str, str, str]]:
+        valid_tags = self._get_compatible_snapshot_tag()
         combined_data_path = []
         for tag in sorted(valid_tags, key=lambda k: random.random()):
             combined_data_path.append(
-                (pjoin(self.train_data_dir,
+                (pjoin(data_dir,
                        "{}-{}.npz".format(self.tjs_prefix, tag)),
-                 pjoin(self.train_data_dir,
+                 pjoin(data_dir,
                        "{}-{}.npz".format(self.action_prefix, tag)),
-                 pjoin(self.train_data_dir,
+                 pjoin(data_dir,
                        "{}-{}.npz".format(self.memo_prefix, tag))))
         return combined_data_path
 
-    def prepare_model(
+    def _prepare_model(
             self, device_placement: str
     ) -> Tuple[Session, Any, Saver, int]:
         model_clazz = model_name2clazz(self.hp.model_creator)
@@ -117,7 +122,7 @@ class StudentLearner(object):
             trained_steps = 0
         return sess, model, saver, trained_steps
 
-    def load_snapshot(
+    def _load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
@@ -136,13 +141,13 @@ class StudentLearner(object):
         actions.load_actions(action_path)
         return memory, tjs, actions
 
-    def add_batch(
+    def _add_batch(
             self, combined_data_path: List[Tuple[str, str, str]],
-            queue: Queue) -> None:
+            queue: Queue, training: bool = True) -> None:
         while True:
             for tp, ap, mp, in sorted(
                     combined_data_path, key=lambda k: random.random()):
-                memory, tjs, action_collector = self.load_snapshot(mp, tp, ap)
+                memory, tjs, action_collector = self._load_snapshot(mp, tp, ap)
                 random.shuffle(memory)
                 i = 0
                 while i < len(memory) // self.hp.batch_size:
@@ -150,7 +155,7 @@ class StudentLearner(object):
                     ee = min((i + 1) * self.hp.batch_size, len(memory))
                     batch_memory = memory[ss:ee]
                     try:
-                        queue.put(self.prepare_data(
+                        queue.put(self._prepare_data(
                             batch_memory, tjs, action_collector),
                         )
                     except Exception as e:
@@ -159,7 +164,7 @@ class StudentLearner(object):
                         raise RuntimeError()
                     i += 1
 
-    def prepare_data(
+    def _prepare_data(
             self,
             b_memory: List[Union[Tuple, Memolet]],
             tjs: Trajectory[ActionMaster],
@@ -175,10 +180,10 @@ class StudentLearner(object):
         """
         raise NotImplementedError()
 
-    def prepare_training(
+    def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
-        sess, model, saver, train_steps = self.prepare_model("/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
 
         # save the very first model to verify weight has been loaded
         if train_steps == 0:
@@ -195,8 +200,8 @@ class StudentLearner(object):
         queue = Queue(maxsize=100)
 
         t = Thread(
-            target=self.add_batch,
-            args=(self.get_combined_data_path(), queue))
+            target=self._add_batch,
+            args=(self._get_combined_data_path(self.train_data_dir), queue))
         t.setDaemon(True)
         t.start()
 
@@ -205,7 +210,7 @@ class StudentLearner(object):
     def train(self, n_epochs: int) -> None:
         if self.sess is None:
             (self.sess, self.model, self.saver, self.sw, self.train_steps,
-             self.queue) = self.prepare_training()
+             self.queue) = self._prepare_training()
 
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
@@ -221,7 +226,7 @@ class StudentLearner(object):
             for it in trange(epoch_size, ascii=True, desc="step"):
                 try:
                     data = self.queue.get(timeout=100)
-                    self.train_impl(
+                    self._train_impl(
                         data, self.train_steps + et * epoch_size + it)
                 except Exception as e:
                     data_in_queue = False
@@ -240,7 +245,7 @@ class StudentLearner(object):
                 break
         return
 
-    def train_impl(self, data: Tuple, train_step: int) -> None:
+    def _train_impl(self, data: Tuple, train_step: int) -> None:
         """
         Train the model one time given data.
 
@@ -250,13 +255,27 @@ class StudentLearner(object):
         """
         raise NotImplementedError()
 
+    def _prepare_test(self) -> Tuple[Session, Any, Saver, int, Queue]:
+        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
+        queue = Queue(maxsize=100)
+        t = Thread(
+            target=self._add_batch,
+            args=(self._get_combined_data_path(self.eval_data_path),
+                  queue, False))
+        t.setDaemon(True)
+        t.start()
+        return sess, model, saver, train_steps, queue
+
+    def test(self) -> None:
+        pass
+
 
 class DRRNLearner(StudentLearner):
     def __init__(
             self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
         super(DRRNLearner, self).__init__(hp, model_dir, train_data_dir)
 
-    def train_impl(self, data, train_step):
+    def _train_impl(self, data, train_step):
         (p_states, p_len, actions, action_len, actions_repeats, expected_qs
          ) = data
         _, summaries = self.sess.run(
@@ -272,7 +291,7 @@ class DRRNLearner(StudentLearner):
                 self.model.b_weight_: [1.]})
         self.sw.add_summary(summaries, train_step)
 
-    def prepare_data(self, b_memory, tjs, action_collector):
+    def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
@@ -293,7 +312,7 @@ class DRRNLearner(StudentLearner):
 
 
 class GenLearner(StudentLearner):
-    def train_impl(self, data, train_step):
+    def _train_impl(self, data, train_step):
         (p_states, p_len, master_mask, actions_in, actions_out, action_len
          ) = data
         _, summaries = self.sess.run(
@@ -308,7 +327,7 @@ class GenLearner(StudentLearner):
                 self.model.b_weight_: [1.]})
         self.sw.add_summary(summaries, train_step)
 
-    def prepare_data(self, b_memory, tjs, action_collector):
+    def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
@@ -331,7 +350,7 @@ class GenLearner(StudentLearner):
 
 
 class GenConcatActionsLearner(GenLearner):
-    def prepare_data(self, b_memory, tjs, action_collector):
+    def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
@@ -363,7 +382,7 @@ class GenConcatActionsLearner(GenLearner):
 
 
 class BertLearner(StudentLearner):
-    def train_impl(self, data, train_step):
+    def _train_impl(self, data, train_step):
         inp, seg_tj_action, inp_len, swag_labels = data
         eprint(inp)
         eprint(seg_tj_action)
@@ -379,7 +398,7 @@ class BertLearner(StudentLearner):
                 })
         self.sw.add_summary(summaries, train_step)
 
-    def prepare_data(self, b_memory, tjs, action_collector):
+    def _prepare_data(self, b_memory, tjs, action_collector):
         n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
