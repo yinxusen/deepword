@@ -301,3 +301,19 @@ def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     game_files = load_game_files(game_path, f_games)
     train_games, dev_games = split_train_dev(game_files)
     return train_games, dev_games
+
+
+def setup_train_log(model_dir):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    log_config_file = '{}/../../../conf/logging.yaml'.format(current_dir)
+    setup_logging(
+        default_path=log_config_file,
+        local_log_filename=os.path.join(model_dir, 'game_script.log'))
+
+
+def setup_eval_log(log_filename):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    log_config_file = '{}/../../../conf/logging-eval.yaml'.format(current_dir)
+    setup_logging(
+        default_path=log_config_file,
+        local_log_filename=log_filename)

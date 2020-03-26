@@ -17,10 +17,9 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from deeptextworld.agents.utils import INFO_KEY
-from deeptextworld.hparams import load_hparams
 from deeptextworld.log import Logging
-from deeptextworld.utils import agg_results, scores_of_tiers
 from deeptextworld.utils import agent_name2clazz
+from deeptextworld.utils import agg_results, scores_of_tiers
 from deeptextworld.utils import eprint
 
 
@@ -64,7 +63,7 @@ def eval_agent(
             name="eval")
         game_env = gym.make(env_id)
         eprint("eval game: {}".format(game_name))
-
+        assert hp.eval_episode > 0, "no enough episode to eval"
         for episode_no in range(hp.eval_episode):
             action_list = []
             obs, infos = game_env.reset()
@@ -214,8 +213,8 @@ class MultiGPUsEvalPlayer(Logging):
 
 
 class NewModelHandler(FileSystemEventHandler):
-    def __init__(self, cmd_args, model_dir, game_files, n_gpus):
-        self.cmd_args = cmd_args
+    def __init__(self, hp, model_dir, game_files, n_gpus):
+        self.hp = hp
         self.model_dir = model_dir
         self.game_files = game_files
         self.n_gpus = n_gpus
@@ -223,15 +222,11 @@ class NewModelHandler(FileSystemEventHandler):
         self.lock = Lock()
         self.watched_file = "checkpoint"
 
-    def run_eval_player(self, restore_from=None):
+    def run_eval_player(self, restore_from=None, load_best=False):
         if self.eval_player is None:
-            config_file = pjoin(self.model_dir, "hparams.json")
-            hp = load_hparams(config_file, self.cmd_args)
             self.eval_player = MultiGPUsEvalPlayer(
-                hp, self.model_dir, self.game_files, self.n_gpus,
-                load_best=False)
-        else:
-            pass
+                self.hp, self.model_dir, self.game_files, self.n_gpus,
+                load_best=load_best)
         time.sleep(10)  # wait until all files of a model has been saved
         if self.lock.locked():
             eprint("Give up evaluation since model is running.")
@@ -261,8 +256,8 @@ class WatchDogEvalPlayer(Logging):
     def __init__(self):
         super(WatchDogEvalPlayer, self).__init__()
 
-    def start(self, cmd_args, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
+    def start(self, hp, model_dir, game_files, n_gpus):
+        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
         watched_dir = pjoin(model_dir, "last_weights")
         if not os.path.exists(watched_dir):
             os.mkdir(watched_dir)
@@ -284,8 +279,8 @@ class LoopDogEvalPlayer(Logging):
         super(LoopDogEvalPlayer, self).__init__()
         self.file_content = hash("")
 
-    def start(self, cmd_args, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
+    def start(self, hp, model_dir, game_files, n_gpus):
+        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
         watched_file = pjoin(model_dir, "last_weights", "checkpoint")
         self.debug("watch on {}".format(watched_file))
         try:
@@ -314,13 +309,12 @@ class FullDirEvalPlayer(Logging):
     def __init__(self):
         super(FullDirEvalPlayer, self).__init__()
 
-    def start(self, cmd_args, model_dir, game_files, n_gpus):
+    def start(self, hp, model_dir, game_files, n_gpus):
         watched_files = pjoin(model_dir, "last_weights", "after-epoch-*.index")
         files = glob.glob(watched_files)
         if len(files) == 0:
             return
-        event_handler = NewModelHandler(cmd_args, model_dir, game_files, n_gpus)
+        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
         for f in files:
             restore_from = os.path.splitext(f)[0]
             event_handler.run_eval_player(restore_from)
-

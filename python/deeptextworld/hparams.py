@@ -118,7 +118,6 @@ HPARAMS = {
         start_t_ignore_model_t=False,
         use_step_wise_reward=True,
         tokenizer_type="BERT",
-        pad_eos=False,
         use_glove_emb=False,
         glove_emb_path="",
         glove_trainable=False,
@@ -236,8 +235,7 @@ HPARAMS = {
         num_turns=6,
         num_tokens=1000,
         max_decoding_size=10,
-        tokenizer_type="NLTK",
-        pad_eos=True),
+        tokenizer_type="NLTK"),
     "BertCommonsenseModel": tf.contrib.training.HParams(
         agent_clazz='BaseAgent',
         core_clazz="BertCore",

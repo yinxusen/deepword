@@ -553,3 +553,35 @@ def categorical_without_replacement(logits, k=1):
     """
     z = -np.log(-np.log(np.random.uniform(0, 1, logits.shape)))
     return np.argsort(logits + z)[:k] if k > 1 else np.argmax(logits + z)
+
+
+def get_action_idx_pair(
+        action_matrix: np.ndarray, action_len: np.ndarray, sos_id: int,
+        eos_id: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Create action index pair for seq2seq training.
+    Given action index, e.g. [1, 2, 3, 4, pad, pad, pad, pad],
+    with 0 as sos_id, and -1 as eos_id,
+    we create training pair: [0, 1, 2, 3, 4, pad, pad, pad]
+    as the input sentence, and [1, 2, 3, 4, -1, pad, pad, pad]
+    as the output sentence.
+
+    Notice that we remove the final pad to keep the action length unchanged.
+    Notice 2. pad should be indexed as 0.
+
+    :param action_matrix: np array of action index of N * K, there are N
+    actions, and each of them has a length of K (with paddings).
+    :param action_len: length of each action (remove paddings).
+    :param sos_id:
+    :param eos_id:
+    :return: action index as input, action index as output, new action len
+    """
+    n_rows, max_col_size = action_matrix.shape
+    action_id_in = np.concatenate(
+        [np.full((n_rows, 1), sos_id), action_matrix[:, :-1]], axis=1)
+    # make sure original action_matrix is untouched.
+    action_id_out = np.copy(action_matrix)
+    new_action_len = np.min(
+        [action_len + 1, np.zeros_like(action_len) + max_col_size], axis=0)
+    action_id_out[list(range(n_rows)), new_action_len-1] = eos_id
+    return action_id_in, action_id_out, new_action_len

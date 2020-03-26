@@ -94,5 +94,5 @@ class BertCore(TFCore):
             action_type=ACT_TYPE.policy_drrn, action_idx=true_action_idx,
             token_idx=action_matrix[action_idx],
             action_len=action_len[action_idx],
-            action=action)
+            action=action, q_actions=q_actions_t)
         return action_desc

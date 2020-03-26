@@ -9,10 +9,12 @@ import tensorflow as tf
 import textworld.gym
 from tqdm import trange
 
+from deeptextworld.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
+    FullDirEvalPlayer
 from deeptextworld.hparams import load_hparams
 from deeptextworld.utils import agent_name2clazz, learner_name2clazz
-from deeptextworld.utils import load_and_split
-from deeptextworld.utils import setup_logging
+from deeptextworld.utils import load_and_split, load_game_files
+from deeptextworld.utils import setup_train_log, setup_eval_log
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -26,6 +28,7 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument('--final-eps', type=float)
     parser.add_argument('--annealing-eps-t', type=int)
     parser.add_argument('--gamma', type=int)
+    parser.add_argument('--eval-episode', type=int)
     parser.add_argument('--batch-size', type=int)
     parser.add_argument('--learning-rate', type=float)
     parser.add_argument('--save-gap-t', type=int)
@@ -57,6 +60,17 @@ def get_parser() -> ArgumentParser:
         '--game-path', type=str, help='[a dir|a game file]', required=True)
     teacher_parser.add_argument('--f-games', type=str)
 
+    eval_parser = subparsers.add_parser('eval-dqn')
+    eval_parser.add_argument(
+        '--eval-mode', type=str, default='eval',
+        help='[eval|dev-eval|full-eval]')
+    eval_parser.add_argument('--game-path', type=str, required=True)
+    eval_parser.add_argument('--f-games', type=str)
+    eval_parser.add_argument('--n-gpus', type=int, default=1)
+    eval_parser.add_argument('--debug', action='store_true')
+    eval_parser.add_argument('--load-best', action='store_true')
+    eval_parser.add_argument('--restore-from', type=str)
+
     student_parser = subparsers.add_parser('train-student')
     student_parser.add_argument('--data-path', type=str, required=True)
     student_parser.add_argument('--learner-clazz', type=str, required=True)
@@ -66,14 +80,6 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str, required=True)
     return parser
-
-
-def setup_train_log(model_dir):
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    log_config_file = '{}/../../conf/logging.yaml'.format(current_dir)
-    setup_logging(
-        default_path=log_config_file,
-        local_log_filename=os.path.join(model_dir, 'game_script.log'))
 
 
 def run_agent(agent, game_env, nb_games, nb_epochs):
@@ -133,33 +139,73 @@ def train(hp, model_dir, game_dir, f_games=None):
     env.close()
 
 
-def main(args):
-    model_dir = args.model_dir.rstrip('/')
-    if not os.path.isdir(model_dir):
-        os.mkdir(model_dir)
+def process_hp(args):
     config_file = args.config_file
     if not config_file:
-        f_hparams = os.path.join(model_dir, "hparams.json")
+        f_hparams = os.path.join(args.model_dir, "hparams.json")
         if os.path.isfile(f_hparams):
             config_file = f_hparams
-
-    setup_train_log(model_dir)
     hp = load_hparams(file_args=config_file, cmd_args=args)
-    if args.mode == "train-dqn":
-        train(hp, model_dir, game_dir=args.game_path, f_games=args.f_games)
-    elif args.mode == "train-student":
-        learner_clazz = learner_name2clazz(args.learner_clazz)
-        learner = learner_clazz(hp, args.model_dir, args.data_path)
-        learner.train(n_epochs=args.n_epochs)
-    elif args.mode == "eval-student":
-        assert args.learner_clazz == "SwagLearner"
-        learner_clazz = learner_name2clazz(args.learner_clazz)
-        learner = learner_clazz(
-            hp, args.model_dir, train_data_dir=None,
-            eval_data_path=args.data_path)
-        learner.test()
+    return hp
+
+
+def process_train_dqn(args):
+    hp = process_hp(args)
+    setup_train_log(args.model_dir)
+    train(hp, args.model_dir, game_dir=args.game_path, f_games=args.f_games)
+
+
+def process_train_student(args):
+    hp = process_hp(args)
+    setup_train_log(args.model_dir)
+    learner_clazz = learner_name2clazz(args.learner_clazz)
+    learner = learner_clazz(hp, args.model_dir, args.data_path)
+    learner.train(n_epochs=args.n_epochs)
+
+
+def process_eval_student(args):
+    hp = process_hp(args)
+    assert args.learner_clazz == "SwagLearner"
+    learner_clazz = learner_name2clazz(args.learner_clazz)
+    learner = learner_clazz(
+        hp, args.model_dir, train_data_dir=None, eval_data_path=args.data_path)
+    learner.test()
+
+
+def process_eval_dqn(args):
+    hp = process_hp(args)
+    setup_eval_log(log_filename="/tmp/eval-logging.txt")
+    if args.eval_mode == "eval":
+        game_files = load_game_files(args.game_path, args.f_games)
+        eval_player = MultiGPUsEvalPlayer(
+            hp, args.model_dir, game_files, args.n_gpus, args.load_best)
+        eval_player.evaluate(
+            restore_from=args.restore_from, debug=args.debug)
+    elif args.eval_mode == "dev-eval":
+        _, eval_games = load_and_split(args.game_path, args.f_games)
+        eval_player = LoopDogEvalPlayer()
+        eval_player.start(hp, args.model_dir, eval_games, args.n_gpus)
+    elif args.eval_mode == "full-eval":
+        _, eval_games = load_and_split(args.game_path, args.f_games)
+        eval_player = FullDirEvalPlayer()
+        eval_player.start(hp, args.model_dir, eval_games, args.n_gpus)
     else:
         raise ValueError()
+
+
+def main(args):
+    args.model_dir = args.model_dir.rstrip('/')
+    if not os.path.isdir(args.model_dir):
+        os.mkdir(args.model_dir)
+
+    if args.mode == "train-dqn":
+        process_train_dqn(args)
+    elif args.mode == "train-student":
+        process_train_student(args)
+    elif args.mode == "eval-student":
+        process_eval_student(args)
+    elif args.mode == "eval-dqn":
+        process_eval_dqn(args)
 
 
 if __name__ == '__main__':

@@ -538,9 +538,7 @@ class BaseAgent(Logging):
             tokenizer=tokenizer,
             n_tokens=hp.n_tokens_per_action,
             unk_val_id=hp.unk_val_id,
-            padding_val_id=hp.padding_val_id,
-            eos_id=hp.eos_id,
-            pad_eos=hp.pad_eos)
+            padding_val_id=hp.padding_val_id)
         if with_loading:
             try:
                 action_collector.load_actions(action_path)

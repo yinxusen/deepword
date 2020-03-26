@@ -24,7 +24,7 @@ from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_best_batch_ids
 from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams
-from deeptextworld.students.utils import get_action_idx_pair
+from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten
 from deeptextworld.utils import model_name2clazz
@@ -135,9 +135,7 @@ class StudentLearner(object):
             tokenizer=self.tokenizer,
             n_tokens=self.hp.n_tokens_per_action,
             unk_val_id=self.hp.unk_val_id,
-            padding_val_id=self.hp.padding_val_id,
-            pad_eos=False,
-            eos_id=self.hp.eos_id)
+            padding_val_id=self.hp.padding_val_id)
         actions.load_actions(action_path)
         return memory, tjs, actions
 

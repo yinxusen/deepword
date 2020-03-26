@@ -9,7 +9,7 @@ from deeptextworld.log import Logging
 class ActionCollector(Logging):
     def __init__(
             self, tokenizer: Tokenizer, n_tokens: int, unk_val_id: int,
-            padding_val_id: int, eos_id: int, pad_eos: bool = False) -> None:
+            padding_val_id: int) -> None:
         super(ActionCollector, self).__init__()
         # collections of all actions and its indexed vectors
         self._actions_base: Dict[str, List[str]] = dict()
@@ -20,8 +20,6 @@ class ActionCollector(Logging):
         self._n_tokens: int = n_tokens
         self._unk_val_id: int = unk_val_id
         self._padding_val_id: int = padding_val_id
-        self._eos_id: int = eos_id
-        self._pad_eos: bool = pad_eos
         self._tokenizer: Tokenizer = tokenizer
 
         # current episode actions
@@ -66,14 +64,6 @@ class ActionCollector(Logging):
         token_ids = self._tokenizer.convert_tokens_to_ids(
             self._tokenizer.tokenize(action))
         action_len = min(self._n_tokens, len(token_ids))
-        if self._pad_eos:
-            if action_len == self._n_tokens:
-                token_ids[action_len - 1] = self._eos_id
-            else:
-                token_ids.append(self._eos_id)
-                action_len += 1
-        else:
-            pass
         action_idx = np.zeros(self._n_tokens, dtype=np.int32)
         action_idx[:action_len] = token_ids[:action_len]
         return action_idx, action_len

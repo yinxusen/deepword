@@ -5,6 +5,7 @@ import numpy as np
 from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
 from deeptextworld.agents.base_agent import BaseAgent, TFCore
 from deeptextworld.agents.utils import ActionMaster, ObsInventory, Memolet
+from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.models.export_models import GenDQNModel
 
 
@@ -141,19 +142,14 @@ class GenDQNCore(TFCore):
         src, src_len, master_mask = self.batch_trajectory2input(
             pre_trajectories)
         action_token_ids = others
-        at_id_wo_eos = np.asarray(action_token_ids)
-        at_id_wo_eos[
-            range(len(action_token_ids)), np.asarray(action_len) - 1] = 0
-        at_id_in = np.concatenate(
-            [np.asarray([[self.hp.sos_id]] * len(action_len)),
-             at_id_wo_eos[:, :-1]], axis=1)
-
-        action_token_ids = np.asarray(action_token_ids)
+        action_id_in, action_id_out, new_action_len = get_action_idx_pair(
+            np.asarray(action_token_ids), np.asarray(action_len),
+            self.hp.sos_id, self.hp.eos_id)
         self.debug("action in/out example:\n{} -- {}\n{} -- {}".format(
-            at_id_in[0, :],
-            self.tokenizer.de_tokenize(at_id_in[0, :]),
-            action_token_ids[0, :],
-            self.tokenizer.de_tokenize(action_token_ids[0, :])))
+            action_id_in[0, :],
+            self.tokenizer.de_tokenize(action_id_in[0, :]),
+            action_id_out[0, :],
+            self.tokenizer.de_tokenize(action_id_out[0, :])))
 
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op,
@@ -165,9 +161,9 @@ class GenDQNCore(TFCore):
                 self.model.src_len_: src_len,
                 self.model.src_seg_: master_mask,
                 self.model.b_weight_: b_weight,
-                self.model.action_idx_: at_id_in,
-                self.model.action_idx_out_: action_token_ids,
-                self.model.action_len_: action_len,
+                self.model.action_idx_: action_id_in,
+                self.model.action_idx_out_: action_id_out,
+                self.model.action_len_: new_action_len,
                 self.model.expected_q_: expected_q})
         self.train_summary_writer.add_summary(
             summaries, step - self.hp.observation_t)
