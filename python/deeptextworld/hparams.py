@@ -167,7 +167,7 @@ default_config = {
         embedding_size=64,
         learning_rate=1e-5,
         lstm_num_layers=1,
-        num_turns=11,
+        num_turns=5,
         num_tokens=1000,
         num_conv_filters=32),
     "TransformerDRRN": HParams(

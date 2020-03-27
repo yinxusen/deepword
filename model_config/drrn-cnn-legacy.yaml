@@ -1,0 +1,22 @@
+---
+# for the legacy CNN DRRN
+
+model_creator: "LegacyCnnDRRN"
+num_tokens: 1000
+num_turns: 5
+batch_size: 32
+save_gap_t: 10000
+embedding_size: 64
+learning_rate: 5e-5
+num_conv_filters: 32
+tokenizer_type: NLTK
+max_snapshot_to_keep: 20
+eval_episode: 5
+game_episode_terminal_t: 100
+replay_mem: 100000
+collect_floor_plan: True
+annealing-eps-t: 2000000
+observation-t: 10000
+init_eps: 0.6
+start-t-ignore-model-t: True
+use_step_wise_reward: True
