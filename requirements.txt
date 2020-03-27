@@ -1,7 +1,7 @@
 # Agent required
 bitarray==1.2.1
 nltk==3.4.5
-PyYAML==5.3
+ruamel.yaml==0.16.10
 fire==0.2.1
 tqdm==4.43.0
 watchdog==0.10.2

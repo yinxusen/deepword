@@ -53,8 +53,8 @@ def run_eval(
     game_names = [os.path.basename(fn) for fn in game_files]
     logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
-    pre_config_file = os.path.join(model_dir, 'hparams.json')
-    hp = load_hparams(pre_config_file, cmd_args=None)
+    config_file = os.path.join(model_dir, 'hparams.json')
+    hp = load_hparams(config_file, cmd_args=None, fn_pre_config=None)
     hp.set_hparam("compute_policy_action_every_step", True)
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)

@@ -45,7 +45,7 @@ class LstmDQN(BaseDQN):
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     def get_q_actions(self):
-        h_state = self.enc_tj(self.inputs["src"])
+        _, h_state = self.enc_tj(self.inputs["src"])
         q_actions = self.enc_actions(h_state)
         return q_actions
 

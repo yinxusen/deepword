@@ -3,8 +3,10 @@ import os
 import sys
 from collections import namedtuple
 from os.path import join as pjoin
+from typing import Optional, Dict, Any, Iterable
 
-import tensorflow as tf
+import ruamel.yaml
+from tensorflow.contrib.training import HParams
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 home_dir = os.path.expanduser("~")
@@ -74,17 +76,17 @@ conventions = Conventions(
     nltk_eos_token="</S>")
 
 
-def get_model_hparams(model_creator):
+def get_model_hparams(model_creator: str) -> HParams:
     try:
-        model_hparams = HPARAMS[model_creator]
+        model_hparams = default_config[model_creator]
     except Exception as e:
         raise ValueError(
             'unknown model creator: {}\n{}'.format(model_creator, e))
     return model_hparams
 
 
-HPARAMS = {
-    "default": tf.contrib.training.HParams(
+default_config = {
+    "default": HParams(
         model_dir='',
         eval_episode=0,
         init_eps=1.,
@@ -97,6 +99,7 @@ HPARAMS = {
         game_episode_terminal_t=100,
         vocab_size=0,
         n_tokens_per_action=10,
+        n_actions=256,  # only works for DQN models
         hidden_state_size=32,
         sos=None,
         eos=None,
@@ -122,7 +125,7 @@ HPARAMS = {
         glove_emb_path="",
         glove_trainable=False,
         compute_policy_action_every_step=False),
-    "LstmDQN": tf.contrib.training.HParams(
+    "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
         batch_size=32,
@@ -130,23 +133,21 @@ HPARAMS = {
         lstm_num_units=32,
         lstm_num_layers=3,
         embedding_size=64,
-        n_actions=256,
         learning_rate=1e-5,
         num_turns=21,
         num_tokens=1000),
-    "CnnDQN": tf.contrib.training.HParams(
+    "CnnDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
-        n_actions=256,
         learning_rate=1e-5,
         lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
-    "CnnDRRN": tf.contrib.training.HParams(
+    "CnnDRRN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
@@ -157,7 +158,7 @@ HPARAMS = {
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
-    "LegacyCnnDRRN": tf.contrib.training.HParams(
+    "LegacyCnnDRRN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="LegacyDRRNCore",
         tokenizer_type="NLTK",
@@ -165,26 +166,29 @@ HPARAMS = {
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
-    "TransformerDRRN": tf.contrib.training.HParams(
+    "TransformerDRRN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32),
-    "BertDRRN": tf.contrib.training.HParams(
+    "BertDRRN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DRRNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=768,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=512,
         num_conv_filters=32,
@@ -192,40 +196,43 @@ HPARAMS = {
         cls_val_id=0,
         sep_val_id=0,
         mask_val_id=0),
-    "CnnDSQN": tf.contrib.training.HParams(
+    "CnnDSQN": HParams(
         agent_clazz='DSQNAgent',
         core_clazz="DSQNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=11,
         num_tokens=1000,
         num_conv_filters=32,
         snn_train_epochs=1000),
-    "TransformerDSQN": tf.contrib.training.HParams(
+    "TransformerDSQN": HParams(
         agent_clazz='DSQNAgent',
         core_clazz="DSQNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=6,
         num_tokens=500,
         num_conv_filters=32,
         snn_train_epochs=1000),
-    "TransformerDSQNWithFactor": tf.contrib.training.HParams(
+    "TransformerDSQNWithFactor": HParams(
         agent_clazz='DSQNAgent',
         core_clazz="DSQNCore",
         batch_size=32,
         save_gap_t=1000,
         embedding_size=64,
         learning_rate=1e-5,
+        lstm_num_layers=1,
         num_turns=6,
         num_tokens=500,
         num_conv_filters=32,
         snn_train_epochs=1000),
-    "TransformerGenDQN": tf.contrib.training.HParams(
+    "TransformerGenDQN": HParams(
         agent_clazz='GenDQNAgent',
         core_clazz="GenDQNCore",
         batch_size=32,
@@ -236,7 +243,7 @@ HPARAMS = {
         num_tokens=1000,
         max_decoding_size=10,
         tokenizer_type="NLTK"),
-    "BertCommonsenseModel": tf.contrib.training.HParams(
+    "BertCommonsenseModel": HParams(
         agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,
@@ -250,7 +257,7 @@ HPARAMS = {
         sep_val_id=0,
         mask_val_id=0
     ),
-    "AlbertCommonsenseModel": tf.contrib.training.HParams(
+    "AlbertCommonsenseModel": HParams(
         agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,
@@ -269,7 +276,7 @@ HPARAMS = {
 }
 
 
-def output_hparams(hp):
+def output_hparams(hp: HParams) -> str:
     out_str = ['------------hparams---------------']
     hp_dict = hp.values()
     keys = sorted(hp_dict.keys())
@@ -279,16 +286,17 @@ def output_hparams(hp):
     return "\n".join(out_str)
 
 
-def update_hparams_from_cmd(hp, cmd_args, allowed_to_change=None):
-    dict_cmd_args = vars(cmd_args)
-    for hp_key in dict_cmd_args:
-        if (hp_key in hp and dict_cmd_args[hp_key] is not None and
+def update_hparams_from_dict(
+        hp: HParams, cmd_args: Dict[str, Any],
+        allowed_to_change: Optional[Iterable[str]] = None) -> HParams:
+    for hp_key in cmd_args:
+        if (hp_key in hp and cmd_args[hp_key] is not None and
                 (hp_key in allowed_to_change if allowed_to_change else True)):
-            hp.set_hparam(hp_key, dict_cmd_args[hp_key])
+            hp.set_hparam(hp_key, cmd_args[hp_key])
     return hp
 
 
-def update_hparams_from_hparams(hp, hp2):
+def update_hparams_from_hparams(hp: HParams, hp2: HParams) -> HParams:
     """hp should not have same keys with hp2"""
     dict_hp2 = hp2.values()
     for k in dict_hp2:
@@ -299,7 +307,7 @@ def update_hparams_from_hparams(hp, hp2):
     return hp
 
 
-def update_hparams_from_file(hp, file_args):
+def update_hparams_from_file(hp: HParams, file_args: str) -> HParams:
     with open(file_args, 'r') as f:
         json_val = json.load(f)
         for k in json_val:
@@ -310,18 +318,33 @@ def update_hparams_from_file(hp, file_args):
     return hp
 
 
-def copy_hparams(hp):
-    hp2 = tf.contrib.training.HParams()
+def copy_hparams(hp: HParams) -> HParams:
+    hp2 = HParams()
     dict_hp = hp.values()
     for k in dict_hp:
         hp2.add_hparam(k, dict_hp.get(k))
     return hp2
 
 
-def load_hparams(file_args=None, cmd_args=None):
+def has_valid_val(dict_args: Optional[Dict[str, Any]], key: str) -> bool:
     """
-    load hparams for evaluation.
-    priority(file_args) > priority(cmd_args) unless arg in allowed_to_change
+    1. if dict_args exists
+    2. if key in dict_args
+    3. if dict_args[key] is not None
+    """
+    return (dict_args is not None and key in dict_args
+            and dict_args[key] is not None)
+
+
+def load_hparams(
+        fn_model_config: Optional[str] = None,
+        cmd_args: Optional[Dict[str, Any]] = None,
+        fn_pre_config: Optional[str] = None) -> HParams:
+    """
+    load hyper-parameters
+    priority(file_args) > priority(cmd_args) except arg in allowed_to_change
+    priority(cmd_args) > priority(pre_config)
+    priority(pre_config) > priority(default)
     """
     allowed_to_change = [
         "model_dir", "eval_episode", "game_episode_terminal_t",
@@ -329,31 +352,48 @@ def load_hparams(file_args=None, cmd_args=None):
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t"
     ]
+
+    if fn_pre_config:
+        with open(fn_pre_config, 'rt') as f:
+            pre_config = ruamel.yaml.safe_load(f.read())
+    else:
+        pre_config = None
+
     hp = get_model_hparams("default")
-    # first load hp from file for choosing model_hp
-    # notice that only hparams in hp can be updated.
-    if file_args is not None:
-        hp = update_hparams_from_file(hp, file_args)
+    if fn_model_config is not None:
+        hp = update_hparams_from_file(hp, fn_model_config)
         model_creator = hp.model_creator
     else:
-        model_creator = cmd_args.model_creator
+        if (has_valid_val(cmd_args, "model_creator")
+                and has_valid_val(pre_config, "model_creator")):
+            assert cmd_args["model_creator"] == pre_config["model_creator"]
+        model_creator = (
+            cmd_args["model_creator"]
+            if has_valid_val(cmd_args, "model_creator")
+            else pre_config["model_creator"])
 
     model_hp = get_model_hparams(model_creator)
     hp = update_hparams_from_hparams(hp, model_hp)
 
     # second load hp from file to change params back
-    if file_args is not None:
-        hp = update_hparams_from_file(hp, file_args)
+    if fn_model_config is not None:
+        hp = update_hparams_from_file(hp, fn_model_config)
+        if pre_config is not None:
+            hp = update_hparams_from_dict(hp, pre_config, allowed_to_change)
         if cmd_args is not None:
-            hp = update_hparams_from_cmd(hp, cmd_args, allowed_to_change)
+            hp = update_hparams_from_dict(hp, cmd_args, allowed_to_change)
     elif cmd_args is not None:
-        hp = update_hparams_from_cmd(hp, cmd_args)
+        if pre_config is not None:
+            hp = update_hparams_from_dict(hp, pre_config)
+        hp = update_hparams_from_dict(hp, cmd_args)
+    elif pre_config is not None:
+        hp = update_hparams_from_dict(hp, pre_config)
     else:
         raise ValueError("file_args and cmd_args are both None")
     return hp
 
 
-def save_hparams(hp, file_path):
+def save_hparams(hp: HParams, file_path: str) -> None:
     with open(file_path, 'w') as f:
         new_hp = copy_hparams(hp)
         new_hp.set_hparam("model_dir", ".")

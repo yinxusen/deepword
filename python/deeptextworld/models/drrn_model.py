@@ -3,7 +3,7 @@ import tensorflow as tf
 
 import deeptextworld.models.utils as dqn
 from deeptextworld.hparams import conventions
-from deeptextworld.models.dqn_model import BaseDQN, CnnDQN
+from deeptextworld.models.dqn_model import CnnDQN
 from deeptextworld.models.encoders import LstmEncoder, TxEncoder
 from deeptextworld.models.export_models import DRRNModel
 
@@ -58,7 +58,7 @@ class CnnDRRN(CnnDQN):
         _, h_actions = self.enc_actions(self.inputs["actions"])
         h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         q_actions = tf.reduce_sum(
-            tf.multiply(h_state_expanded, h_actions[0]), axis=-1)
+            tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
 
     @classmethod
@@ -108,13 +108,13 @@ class TransformerDRRN(CnnDRRN):
             self.inputs["src"], training=(not self.is_infer))
         h_state = self.wt(pooled)
         h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
-        h_actions = self.enc_actions(self.inputs["actions"])
+        _, h_actions = self.enc_actions(self.inputs["actions"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
 
 
-class BertDRRN(BaseDQN):
+class BertDRRN(CnnDRRN):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -136,9 +136,6 @@ class BertDRRN(BaseDQN):
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
         self.h_state_size = self.hp.hidden_state_size
-        self.enc_actions = tf.layers.Dense(
-            units=self.h_state_size, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
         self.wt = tf.layers.Dense(
             units=self.h_state_size, activation=tf.tanh,
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
@@ -169,18 +166,11 @@ class BertDRRN(BaseDQN):
             self.bert_ckpt_file,
             assignment_map={"bert/": "tj-bert-encoder/bert/"})
         h_state = self.wt(bert_model.pooled_output)
-        h_actions = self.enc_actions(self.inputs["actions"])
+        _, h_actions = self.enc_actions(self.inputs["actions"])
         h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions
-
-    def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_1d_action(
-            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.inputs["b_weight"])
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op, abs_loss
 
 
 def create_train_model(model_creator, hp, device_placement):

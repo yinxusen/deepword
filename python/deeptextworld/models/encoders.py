@@ -94,13 +94,15 @@ class LstmEncoder(tf.keras.layers.Layer):
     def call(self, x, training=None):
         # index-0 is paddings
         mask = tf.math.equal(x, 0)
-        # adding embedding and position encoding.
-        x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
-        state = None
-        for i in range(self.num_layers):
-            output, x, state = self.enc_layers[i](
-                x, mask=mask, training=training)
-        return x, state
+        # (batch_size, input_seq_len, d_model)
+        x = self.embedding(x)
+        (outputs, state_h, state_c
+         ) = self.enc_layers[0](x, mask=mask, training=training)
+        for i in range(1, self.num_layers):
+            (outputs, state_h, state_c
+             ) = self.enc_layers[i](
+                outputs, mask=mask, training=training)
+        return outputs, state_h
 
 
 class TxEncoder(tf.keras.layers.Layer):
@@ -113,6 +115,6 @@ class TxEncoder(tf.keras.layers.Layer):
             num_layers, d_model, num_heads, dff, input_vocab_size, dropout_rate)
 
     def call(self, x, x_seg=None, training=None):
-        x = self.encoder(x, x_seg=x_seg, training=training)
+        x = self.encoder(x, training=training, x_seg=x_seg)
         pooled = tf.reduce_max(x, axis=1)
         return x, pooled

@@ -9,15 +9,15 @@
 
 set -e -x
 
-echo "SLURM_JOBID="$SLURM_JOBID
-echo "SLURM_JOBNAME="$SLURM_JOB_NAME
-echo "SLURM_JOB_NODELIST"=$SLURM_JOB_NODELIST
-echo "SLURM_NNODES"=$SLURM_NNODES
-echo "SLURMTMPDIR="$SLURMTMPDIR
-echo "working directory = "$SLURM_SUBMIT_DIR
+echo "SLURM_JOBID=$SLURM_JOBID"
+echo "SLURM_JOBNAME=$SLURM_JOB_NAME"
+echo "SLURM_JOB_NODELIST=$SLURM_JOB_NODELIST"
+echo "SLURM_NNODES=$SLURM_NNODES"
+echo "SLURMTMPDIR=$SLURMTMPDIR"
+echo "working directory=$SLURM_SUBMIT_DIR"
 
 
-if [[ `hostname` =~ "hpc" ]]; then
+if [[ $(hostname) =~ "hpc" ]]; then
     PDIR="$SLURM_SUBMIT_DIR"
     filename="$SLURM_JOB_NAME"
     extension="${filename##*.}"
@@ -37,15 +37,29 @@ else
     filename="${filename%.*}"
 fi
 
-DATAHOME=$1
-F_GAMES=$2
-MODELHOME=$3
 
 if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
-    source $HOME/local/etc/init_tensorflow.sh
+    # shellcheck source=/dev/null
+    source "$HOME/local/etc/init_tensorflow.sh"
 fi
 
-./bin/run.sh python/deeptextworld/dqn_train.py \
-    --game-path $DATAHOME -m $MODELHOME --f-games $F_GAMES \
-    --mode gen-teacher-data --eval-randomness 0.5 --eval-mode all \
-    --game-episode-terminal-t 100
+
+if [ "$#" -ne 4 ]; then
+    echo "Illegal number of parameters"
+    exit
+fi
+
+
+MODELHOME=$1
+PRE_CONF_FILE=$2
+GAMEPATH=$3
+F_GAMES=$4
+
+
+pushd "$PDIR"
+./sbin/run.sh python/deeptextworld/main.py \
+    --config-file "$PRE_CONF_FILE" \
+    --model-dir "$MODELHOME" \
+    train-dqn \
+    --game-path "$GAMEPATH" --f-games "$F_GAMES"
+popd

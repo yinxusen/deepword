@@ -491,6 +491,8 @@ def get_best_batch_ids(
     we compute the best idx for each group
     :return:
     """
+    assert q_actions.ndim == 1
+    assert np.all(np.greater(actions_repeats, 0))
     actions_slices = np.cumsum(actions_repeats)[:-1]
     qs_slices = np.split(q_actions, actions_slices)
     actions_idx_per_slice = np.asarray([np.argmax(qs) for qs in qs_slices])

@@ -2,7 +2,7 @@ import glob
 import os
 import sys
 
-from deeptextworld.dqn_train import split_train_dev
+from deeptextworld.main import split_train_dev
 
 
 def split(f_games):

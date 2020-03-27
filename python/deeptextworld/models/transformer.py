@@ -231,16 +231,16 @@ class Encoder(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
     def call(self, x, training=None, mask=None, x_seg=None):
-        seq_len = tf.shape(x)[1]
+        if mask is None:
+            mask = create_padding_mask(x)
 
+        seq_len = tf.shape(x)[1]
         # adding embedding and position encoding.
         x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
         if x_seg is not None:
             x += tf.nn.embedding_lookup(self.seg_embeddings, x_seg)
-        if mask is None:
-            mask = create_padding_mask(x)
 
         x = self.dropout(x, training=training)
         for i in range(self.num_layers):

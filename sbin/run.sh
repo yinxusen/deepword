@@ -7,4 +7,4 @@ export PYTHONPATH="$WORK_DIR/python/:$PYTHONPATH"
 
 executable=$1
 
-python $executable "${@:2}"
+python "$executable" "${@:2}"

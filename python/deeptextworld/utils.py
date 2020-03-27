@@ -14,7 +14,7 @@ from itertools import chain
 from typing import List, Tuple
 
 import numpy as np
-import yaml
+import ruamel.yaml
 
 from deeptextworld.stats import mean_confidence_interval
 
@@ -95,7 +95,7 @@ def setup_logging(
         path = value
     if os.path.exists(path):
         with open(path, 'rt') as f:
-            config = yaml.safe_load(f.read())
+            config = ruamel.yaml.safe_load(f.read())
             logging.config.dictConfig(config)
     else:
         logging.basicConfig(level=default_level)

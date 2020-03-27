@@ -163,7 +163,8 @@ class LegacyCnnDRRN(BaseDQN):
                 self.inputs["src"], self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = tf.layers.dense(h_state, units=32, use_bias=True)
+            new_h = tf.layers.dense(
+                h_state, units=self.hp.hidden_state_size, use_bias=True)
             h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
@@ -171,8 +172,8 @@ class LegacyCnnDRRN(BaseDQN):
                     self.inputs["actions"],
                     self.inputs["actions_len"],
                     self.src_embeddings,
-                    num_units=32,
-                    num_layers=1)[-1].h
+                    num_units=self.hp.hidden_state_size,
+                    num_layers=self.hp.lstm_num_layers)[-1].h
 
             q_actions = tf.reduce_sum(
                 tf.multiply(h_state_expanded, h_actions), axis=-1)

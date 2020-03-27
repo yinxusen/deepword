@@ -1,0 +1,15 @@
+---
+model_creator: "TransformerGenDQN"
+num_tokens: 500
+num_turns: 6
+max_decoding_size: 300  # decode concat actions
+batch_size: 32
+save_gap_t: 10000
+embedding_size: 64
+learning_rate: 5e-5
+tokenizer_type: "Bert"
+max_snapshot_to_keep: 100
+eval_episode: 5
+game_episode_terminal_t: 100
+replay_mem: 100000
+collect_floor_plan: True

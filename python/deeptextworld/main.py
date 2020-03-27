@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 import gym
 import tensorflow as tf
 import textworld.gym
+from tensorflow.contrib.training import HParams
 from tqdm import trange
 
 from deeptextworld.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
@@ -22,7 +23,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 def hp_parser() -> ArgumentParser:
     parser = ArgumentParser(argument_default=None)
-    parser.add_argument('--model-creator', type=str, default="CnnDRRN")
+    parser.add_argument('--model-creator', type=str)
     parser.add_argument('--config-file', type=str)
     parser.add_argument('--init-eps', type=float)
     parser.add_argument('--final-eps', type=float)
@@ -139,13 +140,16 @@ def train(hp, model_dir, game_dir, f_games=None):
     env.close()
 
 
-def process_hp(args):
-    config_file = args.config_file
-    if not config_file:
-        f_hparams = os.path.join(args.model_dir, "hparams.json")
-        if os.path.isfile(f_hparams):
-            config_file = f_hparams
-    hp = load_hparams(file_args=config_file, cmd_args=args)
+def process_hp(args) -> HParams:
+    fn_hparams = os.path.join(args.model_dir, "hparams.json")
+    if os.path.isfile(fn_hparams):
+        model_config_file = fn_hparams
+    else:
+        model_config_file = None
+
+    hp = load_hparams(
+        fn_model_config=model_config_file, cmd_args=vars(args),
+        fn_pre_config=args.config_file)
     return hp
 
 
