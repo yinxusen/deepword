@@ -1,4 +1,6 @@
 ---
+# for Transformer DRRN
+
 model_creator: "TransformerDRRN"
 num_tokens: 256
 num_turns: 6

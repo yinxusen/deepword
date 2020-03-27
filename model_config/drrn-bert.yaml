@@ -1,4 +1,6 @@
 ---
+# for Bert DRRN
+
 model_creator: "BertDRRN"
 num_tokens: 256
 num_turns: 6

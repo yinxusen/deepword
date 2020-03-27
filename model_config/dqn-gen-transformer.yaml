@@ -1,4 +1,6 @@
 ---
+# for Transformer Gen DQN
+
 model_creator: "TransformerGenDQN"
 num_tokens: 500
 num_turns: 6

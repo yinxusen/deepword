@@ -1,4 +1,6 @@
 ---
+# for CNN DRRN
+
 model_creator: "CnnDRRN"
 num_tokens: 256
 num_turns: 6

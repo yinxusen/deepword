@@ -1,9 +1,11 @@
 ---
+# for pre-training of Transformer Gen DQN with Concat Actions
+
 model_creator: "TransformerGenDQN"
 num_tokens: 500
 num_turns: 6
 max_decoding_size: 300  # decode concat actions
-batch_size: 32
+batch_size: 16
 save_gap_t: 10000
 embedding_size: 64
 learning_rate: 5e-5
