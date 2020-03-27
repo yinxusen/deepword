@@ -11,6 +11,7 @@ import random
 import sys
 import time
 from itertools import chain
+from os.path import join as pjoin
 from typing import List, Tuple
 
 import numpy as np
@@ -284,10 +285,10 @@ def load_game_files(game_dir, f_games=None):
         with open(f_games, "r") as f:
             selected_games = map(lambda x: x.strip(), f.readlines())
         game_files = list(map(
-            lambda x: os.path.join(game_dir, "{}.ulx".format(x)),
+            lambda x: pjoin(game_dir, "{}.ulx".format(x)),
             selected_games))
     else:
-        game_files = glob.glob(os.path.join(game_dir, "*.ulx"))
+        game_files = glob.glob(pjoin(game_dir, "*.ulx"))
     return game_files
 
 
@@ -303,17 +304,19 @@ def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     return train_games, dev_games
 
 
+dir_path = os.path.dirname(os.path.realpath(__file__))
+project_path = pjoin(dir_path, "../..")
+fn_log = pjoin(project_path, "conf/logging.yaml")
+fn_log_eval = pjoin(project_path, "conf/logging-eval.yaml")
+
+
 def setup_train_log(model_dir):
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    log_config_file = '{}/../../../conf/logging.yaml'.format(current_dir)
+    assert os.path.isfile(fn_log)
     setup_logging(
-        default_path=log_config_file,
-        local_log_filename=os.path.join(model_dir, 'game_script.log'))
+        default_path=fn_log,
+        local_log_filename=pjoin(model_dir, 'game_script.log'))
 
 
 def setup_eval_log(log_filename):
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    log_config_file = '{}/../../../conf/logging-eval.yaml'.format(current_dir)
-    setup_logging(
-        default_path=log_config_file,
-        local_log_filename=log_filename)
+    assert os.path.isfile(fn_log_eval)
+    setup_logging(default_path=fn_log_eval, local_log_filename=log_filename)

@@ -30,7 +30,10 @@ class GenDQNCore(TFCore):
         self.debug("master_mask: {}".format(master_mask))
         beam_size = 1
         temperature = 1
-        self.debug("temperature: {}".format(temperature))
+        use_greedy = False
+
+        self.debug("use_greedy: {}, temperature: {}".format(
+            use_greedy, temperature))
         res = self.sess.run(
             [self.model.decoded_idx_infer,
              self.model.col_eos_idx,
@@ -42,7 +45,7 @@ class GenDQNCore(TFCore):
                 self.model.src_seg_: [master_mask],
                 self.model.temperature_: temperature,
                 self.model.beam_size_: beam_size,
-                self.model.use_greedy_: False
+                self.model.use_greedy_: use_greedy
             })
         action_idx = res[0]
         col_eos_idx = res[1]
@@ -73,6 +76,16 @@ class GenDQNCore(TFCore):
                     map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
                         zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
                  for ac in res_summary])))
+
+        if self.hp.decode_concat_action:
+            action_idx = np.random.choice(action_mask)
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE.rnd,
+                action_idx=action_idx,
+                token_idx=action_matrix[action_idx],
+                action_len=action_len[action_idx],
+                action=actions[action_idx],
+                q_actions=None)
         return action_desc
 
     def _compute_expected_q(
