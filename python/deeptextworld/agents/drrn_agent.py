@@ -58,7 +58,7 @@ class DRRNCore(TFCore):
         for mid in action_mask:
             cnt_action_array.append(
                 cnt_action[mid] if mid in cnt_action else 0.)
-
+        self.debug("cnt_action_array: {}".format(cnt_action_array))
         action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action_array)
         real_action_idx = action_mask[action_idx]
         action_desc = ActionDesc(

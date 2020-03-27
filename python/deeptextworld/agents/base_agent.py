@@ -1023,6 +1023,8 @@ class BaseAgent(Logging):
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
+        self.debug("master: {}, raw reward: {}, instant reward: {}".format(
+            master, scores[0], instant_reward))
         if self.hp.collect_floor_plan:
             self._curr_place = self.collect_floor_plan(master, self._prev_place)
         else:
