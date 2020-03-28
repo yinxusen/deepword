@@ -175,6 +175,13 @@ def process_train_student(args):
     learner.train(n_epochs=args.n_epochs)
 
 
+def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
+    tester = learner_clazz(
+        hp, model_dir, train_data_dir=None, eval_data_path=data_path)
+    acc, total = tester.test(device, ckpt_path)
+    return str(acc * 1. / total) if total != 0 else "Nan"
+
+
 def process_eval_student(args):
     hp = process_hp(args)
     assert args.learner_clazz == "SwagLearner"
@@ -188,13 +195,6 @@ def process_eval_student(args):
     if len(files) == 0:
         return
 
-    def eval_one_ckpt(device, ckpt_path):
-        tester = learner_clazz(
-            hp, args.model_dir, train_data_dir=None,
-            eval_data_path=args.data_path)
-        acc, total = tester.test(device, ckpt_path)
-        return str(acc * 1. / total) if total != 0 else "Nan"
-
     files_colocate_gpus = [
         files[i * n_gpus:(i + 1) * n_gpus]
         for i in range((len(files) + n_gpus - 1) // n_gpus)]
@@ -206,7 +206,9 @@ def process_eval_student(args):
         for k in range(n_gpus):
             if k < len(batch_files):
                 res = pool.apply_async(
-                    eval_one_ckpt, args=(gpus[k], batch_files[k]))
+                    eval_one_ckpt, args=(
+                        hp, args.model_dir, args.data_path, learner_clazz,
+                        gpus[k], batch_files[k]))
                 results.append(res)
 
         for k, res in enumerate(results):
