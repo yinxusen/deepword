@@ -15,8 +15,8 @@ eval_episode: 5
 game_episode_terminal_t: 100
 replay_mem: 100000
 collect_floor_plan: True
-annealing-eps-t: 2000000
-observation-t: 10000
+annealing_eps_t: 2000000
+observation_t: 10000
 init_eps: 0.6
-start-t-ignore-model-t: True
+start_t_ignore_model_t: True
 use_step_wise_reward: True

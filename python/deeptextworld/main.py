@@ -22,6 +22,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
 def hp_parser() -> ArgumentParser:
+    # TODO: "store_true" defaults to be False, so use an explict default=None
     parser = ArgumentParser(argument_default=None)
     parser.add_argument('--model-creator', type=str)
     parser.add_argument('--config-file', type=str)
@@ -37,12 +38,15 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument('--observation-t', type=int)
     parser.add_argument('--total-t', default=sys.maxsize, type=int)
     parser.add_argument('--game-episode-terminal-t', type=int)
-    parser.add_argument('--collect-floor-plan', action='store_true')
-    parser.add_argument('--start-t-ignore-model-t', action='store_true')
-    parser.add_argument('--n-actions', type=int)
-    parser.add_argument('--use-step-wise-reward', action='store_true')
     parser.add_argument(
-        '--compute-policy-action-every-step', action='store_true')
+        '--collect-floor-plan', action='store_true', default=None)
+    parser.add_argument(
+        '--start-t-ignore-model-t', action='store_true', default=None)
+    parser.add_argument('--n-actions', type=int)
+    parser.add_argument(
+        '--use-step-wise-reward', action='store_true', default=None)
+    parser.add_argument(
+        '--compute-policy-action-every-step', action='store_true', default=None)
     parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
     parser.add_argument("--max-snapshot-to-keep", type=int)
     return parser

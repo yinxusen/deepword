@@ -52,6 +52,8 @@ def load_swag_data(
     with open(fn_swag, "r") as f:
         lines = list(reader(f.readlines()))[1:]  # remove the first line
 
+    assert len(lines[0]) == 12, "use train.csv or val.csv which contain labels"
+
     lines = np.asarray(lines, dtype=np.object)
     labels = list(lines[:, -1].astype(np.int32))
     start_str = list(lines[:, 3])
