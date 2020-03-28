@@ -181,11 +181,10 @@ def process_eval_student(args):
     learner_clazz = learner_name2clazz(args.learner_clazz)
 
     n_gpus = args.n_gpus
-    pool = Pool(n_gpus)
     gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
     watched_files = pjoin(args.model_dir, "last_weights", "after-epoch-*.index")
     files = glob.glob(watched_files)
-    eprint("evaluate {} files".format(len(files)))
+    eprint("evaluate {} checkpoints".format(len(files)))
     if len(files) == 0:
         return
 
@@ -201,6 +200,8 @@ def process_eval_student(args):
         for i in range((len(files) + n_gpus - 1) // n_gpus)]
 
     for batch_files in files_colocate_gpus:
+        pool = Pool(n_gpus)
+        eprint("process: {}".format(batch_files))
         results = []
         for k in range(n_gpus):
             if k < len(batch_files):
@@ -210,6 +211,8 @@ def process_eval_student(args):
 
         for k, res in enumerate(results):
             eprint("model: {}, res: {}".format(batch_files[k], res.get()))
+        pool.close()
+        pool.join()
 
 
 def process_eval_dqn(args):
