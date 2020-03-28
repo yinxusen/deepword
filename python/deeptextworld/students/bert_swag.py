@@ -23,14 +23,13 @@ from deeptextworld.utils import eprint, model_name2clazz
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
-MAX_ENDING_STR_LEN = 100
-
 
 def process_one_line(
         tokenizer: Tokenizer,
         start_str: str,
         ending_str: List[str],
-        max_start_len: int) -> Tuple[List[int], int, np.ndarray, np.ndarray]:
+        max_start_len: int,
+        max_end_len: int) -> Tuple[List[int], int, np.ndarray, np.ndarray]:
     tj_ids = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(start_str))
     tj_len = len(tj_ids)
     padded_tj_ids = pad_str_ids(
@@ -39,7 +38,7 @@ def process_one_line(
         tokenizer.convert_tokens_to_ids(tokenizer.tokenize(a))
         for a in ending_str]
     action_len = np.asarray([len(a) for a in actions], dtype=np.int32)
-    max_action_size = min(np.max(action_len), MAX_ENDING_STR_LEN)
+    max_action_size = min(np.max(action_len), max_end_len)
     action_matrix = np.asarray(
         [pad_str_ids(a, max_size=max_action_size, padding_val_id=0)
          for a in actions], dtype=np.int32)
@@ -64,16 +63,20 @@ def load_swag_data(
 
 def get_bert_input(
         start_str: List[str], ending_str: List[np.ndarray],
-        tokenizer: Tokenizer, sep_val_id, cls_val_id, num_tokens
+        tokenizer: Tokenizer, sep_val_id, cls_val_id,
+        num_tokens, n_tokens_per_action
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    TODO: here we use n_tokens_per_actions for end str size
+    """
     inp = []
     seg_tj_action = []
     inp_size = []
-    num_tokens_tj = num_tokens - MAX_ENDING_STR_LEN - 3
+    num_tokens_tj = num_tokens - n_tokens_per_action - 3
 
     for tj, actions in zip(start_str, ending_str):
         tj_ids, tj_len, action_matrix, action_len = process_one_line(
-            tokenizer, tj, list(actions), num_tokens_tj)
+            tokenizer, tj, list(actions), num_tokens_tj, n_tokens_per_action)
         _inp, _seg_tj_action, _inp_size = bert_commonsense_input(
             action_matrix, action_len, tj_ids, tj_len,
             sep_val_id, cls_val_id, num_tokens)
@@ -187,7 +190,7 @@ class SwagLearner(BertLearner):
                     inp, seg_tj_action, inp_size = get_bert_input(
                         batch_start_str, batch_ending_str, self.tokenizer,
                         self.hp.sep_val_id, self.hp.cls_val_id,
-                        self.hp.num_tokens)
+                        self.hp.num_tokens, self.hp.n_tokens_per_action)
                     queue.put((inp, seg_tj_action, inp_size, batch_labels))
                 except Exception as e:
                     eprint("add_batch error: {}".format(e))
