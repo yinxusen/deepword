@@ -87,6 +87,7 @@ def get_parser() -> ArgumentParser:
     student_eval_parser = subparsers.add_parser('eval-student')
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str, required=True)
+    student_eval_parser.add_argument('--n-gpus', type=int, default=1)
     return parser
 
 
