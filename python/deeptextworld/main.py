@@ -1,8 +1,11 @@
+import glob
 import logging
 import os
 import sys
 import traceback
 from argparse import ArgumentParser
+from os.path import join as pjoin
+from multiprocessing import Pool
 
 import gym
 import tensorflow as tf
@@ -15,7 +18,7 @@ from deeptextworld.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
 from deeptextworld.hparams import load_hparams
 from deeptextworld.utils import agent_name2clazz, learner_name2clazz
 from deeptextworld.utils import load_and_split, load_game_files
-from deeptextworld.utils import setup_train_log, setup_eval_log
+from deeptextworld.utils import setup_train_log, setup_eval_log, eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -175,9 +178,37 @@ def process_eval_student(args):
     hp = process_hp(args)
     assert args.learner_clazz == "SwagLearner"
     learner_clazz = learner_name2clazz(args.learner_clazz)
-    learner = learner_clazz(
-        hp, args.model_dir, train_data_dir=None, eval_data_path=args.data_path)
-    learner.test()
+
+    n_gpus = args.n_gpus
+    pool = Pool(n_gpus)
+    gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
+    watched_files = pjoin(args.model_dir, "last_weights", "after-epoch-*.index")
+    files = glob.glob(watched_files)
+    eprint("evaluate {} files".format(len(files)))
+    if len(files) == 0:
+        return
+
+    def eval_one_ckpt(device, ckpt_path):
+        tester = learner_clazz(
+            hp, args.model_dir, train_data_dir=None,
+            eval_data_path=args.data_path)
+        acc, total = tester.test(device, ckpt_path)
+        return str(acc * 1. / total) if total != 0 else "Nan"
+
+    files_colocate_gpus = [
+        files[i * n_gpus:(i + 1) * n_gpus]
+        for i in range((len(files) + n_gpus - 1) // n_gpus)]
+
+    for batch_files in files_colocate_gpus:
+        results = []
+        for k in range(n_gpus):
+            if k < len(batch_files):
+                res = pool.apply_async(
+                    eval_one_ckpt, args=(gpus[k], batch_files[k]))
+                results.append(res)
+
+        for k, res in enumerate(results):
+            eprint("model: {}, res: {}".format(batch_files[k], res.get()))
 
 
 def process_eval_dqn(args):

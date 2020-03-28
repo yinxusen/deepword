@@ -6,7 +6,7 @@ from csv import reader
 from os.path import join as pjoin
 from queue import Queue
 from threading import Thread
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -18,7 +18,7 @@ from deeptextworld.agents.utils import Tokenizer
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import pad_str_ids
 from deeptextworld.students.student_learner import BertLearner
-from deeptextworld.utils import eprint
+from deeptextworld.utils import eprint, model_name2clazz
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -115,9 +115,11 @@ class SwagLearner(BertLearner):
         return sess, model, saver, sw, train_steps, queue
 
     def _prepare_test(
-            self, device_placement: str = "/device:GPU:0"
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None
     ) -> Tuple[Session, Any, Saver, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_model(device_placement)
+        sess, model, saver, train_steps = self._prepare_model(
+            device_placement, restore_from)
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,
@@ -126,10 +128,12 @@ class SwagLearner(BertLearner):
         t.start()
         return sess, model, saver, train_steps, queue
 
-    def test(self, device_placement: str = "/device:GPU:0") -> Tuple[int, int]:
+    def test(
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None) -> Tuple[int, int]:
         if self.sess is None:
             (self.sess, self.model, self.saver, self.train_steps, self.queue
-             ) = self._prepare_test(device_placement)
+             ) = self._prepare_test(device_placement, restore_from)
 
         wait_times = 10
         while wait_times > 0 and self.queue.empty():

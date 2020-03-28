@@ -96,8 +96,13 @@ class StudentLearner(object):
         return combined_data_path
 
     def _prepare_model(
-            self, device_placement: str
+            self, device_placement: str, restore_from: Optional[str] = None
     ) -> Tuple[Session, Any, Saver, int]:
+        """
+        create and load model from restore_from
+        if restore_from is None, use the latest checkpoint from last_weights
+        if model_dir
+        """
         model_clazz = model_name2clazz(self.hp.model_creator)
         model = model_clazz.get_train_student_model(
             hp=self.hp,
@@ -113,10 +118,11 @@ class StudentLearner(object):
             global_step = tf.train.get_or_create_global_step()
 
         try:
-            ckpt_path = tf.train.latest_checkpoint(self.load_from)
-            saver.restore(sess, ckpt_path)
+            if restore_from is None:
+                restore_from = tf.train.latest_checkpoint(self.load_from)
+            saver.restore(sess, restore_from)
             trained_steps = sess.run(global_step)
-            eprint("load student from ckpt: {}".format(ckpt_path))
+            eprint("load student from ckpt: {}".format(restore_from))
         except Exception as e:
             eprint("load model failed: {}".format(e))
             trained_steps = 0
