@@ -189,15 +189,17 @@ def process_eval_student(args):
 
     n_gpus = args.n_gpus
     gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
-    watched_files = pjoin(args.model_dir, "last_weights", "after-epoch-*.index")
-    files = glob.glob(watched_files)
-    eprint("evaluate {} checkpoints".format(len(files)))
-    if len(files) == 0:
+    watched_file_regex = pjoin(
+        args.model_dir, "last_weights", "after-epoch-*.index")
+    files = glob.glob(watched_file_regex)
+    ckpt_files = [os.path.splitext(f)[0] for f in files]
+    eprint("evaluate {} checkpoints".format(len(ckpt_files)))
+    if len(ckpt_files) == 0:
         return
 
     files_colocate_gpus = [
-        files[i * n_gpus:(i + 1) * n_gpus]
-        for i in range((len(files) + n_gpus - 1) // n_gpus)]
+        ckpt_files[i * n_gpus:(i + 1) * n_gpus]
+        for i in range((len(ckpt_files) + n_gpus - 1) // n_gpus)]
 
     for batch_files in files_colocate_gpus:
         pool = Pool(n_gpus)
