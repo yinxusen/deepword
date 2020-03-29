@@ -38,6 +38,7 @@ class BertCommonsenseModel(BaseDQN):
             self.bert_init_ckpt_dir)
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
+        self.dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def get_q_actions(self):
         src = self.inputs["src"]
@@ -54,8 +55,9 @@ class BertCommonsenseModel(BaseDQN):
                 config=bert_config, is_training=(not self.is_infer),
                 input_ids=src, input_mask=src_masks,
                 token_type_ids=seg_tj_action)
-            pooled = bert_model.pooled_output
-            q_actions = tf.layers.dense(pooled, units=1, use_bias=True)[:, 0]
+            pooled = bert_model.get_pooled_output()
+            output = self.dropout(pooled, training=(not self.is_infer))
+            q_actions = tf.layers.dense(output, units=1, use_bias=True)[:, 0]
 
         # initialize bert from checkpoint file
         tf.train.init_from_checkpoint(
