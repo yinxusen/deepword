@@ -852,7 +852,7 @@ class BaseAgent(Logging):
 
     def choose_action(
             self, actions: List[str], all_actions: List[str],
-            action_mask: np.ndarray) -> ActionDesc:
+            action_mask: np.ndarray, instant_reward: float) -> ActionDesc:
         # when q_actions is required to get, this should be True
         if self.hp.compute_policy_action_every_step:
             policy_action_desc = self.get_policy_action(action_mask)
@@ -1062,13 +1062,14 @@ class BaseAgent(Logging):
         self.debug("effective actions: {}".format(effective_actions))
 
         if self.tjs.get_last_sid() > 0:
-            original_data = self.memo.append(Memolet(
+            memo_let = Memolet(
                 tid=self.tjs.get_current_tid(),
                 sid=self.tjs.get_last_sid(),
                 gid=self.game_id,
                 aid=self._last_action.action_idx,
                 token_id=self._last_action.token_idx,
                 a_len=self._last_action.action_len,
+                a_type=self._last_action.action_type,
                 reward=instant_reward,
                 is_terminal=dones[0],
                 action_mask=self._last_action_mask,
@@ -1076,7 +1077,9 @@ class BaseAgent(Logging):
                 next_action_mask=action_mask,
                 next_sys_action_mask=sys_action_mask,
                 q_actions=self._last_action.q_actions
-            ))
+            )
+            self.debug("memo_let: {}".format(memo_let))
+            original_data = self.memo.append(memo_let)
             if isinstance(original_data, Memolet):
                 if original_data.is_terminal:
                     self._stale_tids.append(original_data.tid)
@@ -1086,6 +1089,7 @@ class BaseAgent(Logging):
 
     def next_step_action(
             self, actions: List[str], all_actions: List[str],
+            instant_reward: float,
             action_mask: np.ndarray, sys_action_mask: np.ndarray) -> str:
 
         if self.is_training:
@@ -1093,7 +1097,7 @@ class BaseAgent(Logging):
         else:
             pass
         self._last_action = self.choose_action(
-            actions, all_actions, action_mask)
+            actions, all_actions, action_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
 
@@ -1141,7 +1145,7 @@ class BaseAgent(Logging):
             return None
 
         player_t = self.next_step_action(
-            actions, all_actions, action_mask, sys_action_mask)
+            actions, all_actions, instant_reward, action_mask, sys_action_mask)
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
         self.total_t += 1

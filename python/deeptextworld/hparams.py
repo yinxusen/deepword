@@ -159,7 +159,7 @@ default_config = {
         num_tokens=1000,
         num_conv_filters=32),
     "LegacyCnnDRRN": HParams(
-        agent_clazz='BaseAgent',
+        agent_clazz='CompetitionAgent',
         core_clazz="LegacyDRRNCore",
         tokenizer_type="NLTK",
         batch_size=32,

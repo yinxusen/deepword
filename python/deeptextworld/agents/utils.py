@@ -19,6 +19,7 @@ class Memolet(namedtuple(
         "aid",
         "token_id",
         "a_len",
+        "a_type",
         "reward",
         "is_terminal",
         "action_mask",
