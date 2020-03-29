@@ -1,3 +1,4 @@
+import math
 import random
 import sys
 import time
@@ -21,10 +22,10 @@ from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import Memolet, pad_str_ids
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
+from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.agents.utils import get_best_batch_ids
 from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams
-from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten
 from deeptextworld.utils import model_name2clazz
@@ -154,7 +155,7 @@ class StudentLearner(object):
                 memory, tjs, action_collector = self._load_snapshot(mp, tp, ap)
                 random.shuffle(memory)
                 i = 0
-                while i < len(memory) // self.hp.batch_size:
+                while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
                     ss = i * self.hp.batch_size
                     ee = min((i + 1) * self.hp.batch_size, len(memory))
                     batch_memory = memory[ss:ee]
@@ -221,6 +222,10 @@ class StudentLearner(object):
             eprint("waiting data ... (retry times: {})".format(wait_times))
             time.sleep(10)
             wait_times -= 1
+
+        if self.queue.empty():
+            eprint("No data received. exit")
+            return
 
         epoch_size = self.hp.save_gap_t
 
