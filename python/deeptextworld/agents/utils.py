@@ -175,7 +175,7 @@ class BertTokenizer(Tokenizer):
 
 class AlbertTokenizer(BertTokenizer):
     def __init__(self, vocab_file, do_lower_case, spm_model_file):
-        super(BertTokenizer, self).__init__(vocab_file, do_lower_case)
+        super(AlbertTokenizer, self).__init__(vocab_file, do_lower_case)
         self.tokenizer = AlbertTok(vocab_file, do_lower_case, spm_model_file)
         self._special_tokens = [
             conventions.albert_unk_token,
