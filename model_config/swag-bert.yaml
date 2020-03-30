@@ -4,6 +4,7 @@
 model_creator: "BertCommonsenseModel"
 num_tokens: 256
 n_tokens_per_action: 40  # for end str
-batch_size: 8
-save_gap_t: 5000
-learning_rate: 5e-5
+batch_size: 8  # bert paper uses 16
+save_gap_t: 10000  # batch_size * save_gap_t ~= # training data
+learning_rate: 1e-5  # Bert paper uses 2e-5
+tokenizer_type: Bert

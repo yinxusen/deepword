@@ -195,7 +195,7 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
         with tf.device(device_placement):
-            model = model_creator(hp)
+            model = model_creator(hp, is_infer=True)
             inputs = model.inputs
             q_actions = model.get_q_actions()
     return CommonsenseModel(

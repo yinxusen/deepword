@@ -129,6 +129,39 @@ class StudentLearner(object):
             trained_steps = 0
         return sess, model, saver, trained_steps
 
+    def _prepare_eval_model(
+            self, device_placement: str, restore_from: Optional[str] = None
+    ) -> Tuple[Session, Any, Saver, int]:
+        """
+        create and load model from restore_from
+        if restore_from is None, use the latest checkpoint from last_weights
+        if model_dir
+        """
+        model_clazz = model_name2clazz(self.hp.model_creator)
+        model = model_clazz.get_eval_student_model(
+            hp=self.hp,
+            device_placement=device_placement)
+        conf = tf.ConfigProto(
+            log_device_placement=False, allow_soft_placement=True)
+        sess = tf.Session(graph=model.graph, config=conf)
+        with model.graph.as_default():
+            sess.run(tf.global_variables_initializer())
+            saver = tf.train.Saver(
+                max_to_keep=self.hp.max_snapshot_to_keep,
+                save_relative_paths=True)
+            global_step = tf.train.get_or_create_global_step()
+
+        try:
+            if restore_from is None:
+                restore_from = tf.train.latest_checkpoint(self.load_from)
+            saver.restore(sess, restore_from)
+            trained_steps = sess.run(global_step)
+            eprint("load student from ckpt: {}".format(restore_from))
+        except Exception as e:
+            eprint("load model failed: {}".format(e))
+            trained_steps = 0
+        return sess, model, saver, trained_steps
+
     def _load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
@@ -265,7 +298,8 @@ class StudentLearner(object):
         raise NotImplementedError()
 
     def _prepare_test(self) -> Tuple[Session, Any, Saver, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_eval_model(
+            device_placement="/device:GPU:0")
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,
@@ -393,10 +427,6 @@ class GenConcatActionsLearner(GenLearner):
 class BertLearner(StudentLearner):
     def _train_impl(self, data, train_step):
         inp, seg_tj_action, inp_len, swag_labels = data
-        eprint(inp)
-        eprint(seg_tj_action)
-        eprint(inp_len)
-        eprint(swag_labels)
         _, summaries = self.sess.run(
             [self.model.swag_train_op, self.model.swag_train_summary_op],
             feed_dict={

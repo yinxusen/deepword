@@ -1,0 +1,10 @@
+---
+# bert for swag data
+
+model_creator: "AlbertCommonsenseModel"
+num_tokens: 256
+n_tokens_per_action: 40  # for end str
+batch_size: 8
+save_gap_t: 10000
+learning_rate: 1e-5
+tokenizer_type: Albert

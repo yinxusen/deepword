@@ -121,7 +121,7 @@ class SwagLearner(BertLearner):
             self, device_placement: str = "/device:GPU:0",
             restore_from: Optional[str] = None
     ) -> Tuple[Session, Any, Saver, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_model(
+        sess, model, saver, train_steps = self._prepare_eval_model(
             device_placement, restore_from)
         queue = Queue(maxsize=100)
         t = Thread(
