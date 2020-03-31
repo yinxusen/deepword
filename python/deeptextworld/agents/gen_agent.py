@@ -1,4 +1,5 @@
-from typing import List, Optional, Any, Dict
+from collections import namedtuple
+from typing import List, Optional, Any, Dict, Tuple
 
 import numpy as np
 
@@ -9,11 +10,47 @@ from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.models.export_models import GenDQNModel
 
 
+class GenSummary(namedtuple(
+        "GenSummary", ("ids", "tokens", "gens", "q_action"))):
+
+    def __repr__(self):
+        return (" ".join(["{}[{:.2f}]".format(t, p)
+                          for t, p in zip(self.tokens, self.gens)])
+                + "\t{}".format(self.q_action))
+
+
 class GenDQNCore(TFCore):
     def __init__(self, hp, model_dir, tokenizer):
         super(GenDQNCore, self).__init__(hp, model_dir, tokenizer)
         self.model: Optional[GenDQNModel] = None
         self.target_model: Optional[GenDQNModel] = None
+
+    def concat_action2actions(
+            self, concat_action_idx: List[int]) -> List[str]:
+        concat_action = self.tokenizer.de_tokenize(concat_action_idx)
+        actions = [a.strip() for a in concat_action.split(";")]
+        return actions
+
+    def gen_summary(
+            self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
+            decoded_logits: np.ndarray, p_gen: np.ndarray, beam_size: int
+    ) -> List[GenSummary]:
+        """
+        Return [ids, tokens, generation probabilities of each token, q_action]
+        sorted by q_action (from larger to smaller)
+        q_action: the average of decoded logits of selected tokens
+        """
+        res_summary = []
+        for bid in range(beam_size):
+            n_cols = col_eos_idx[bid]
+            ids = list(action_idx[bid, :n_cols])
+            tokens = self.tokenizer.convert_ids_to_tokens(ids)
+            gen_prob_per_token = list(p_gen[bid, :n_cols])
+            q_action = np.sum(decoded_logits[bid, :n_cols, ids]) / n_cols
+            res_summary.append(
+                GenSummary(ids, tokens, gen_prob_per_token, q_action))
+        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
+        return res_summary
 
     def get_a_policy_action(
             self, trajectory: List[ActionMaster],
@@ -52,30 +89,19 @@ class GenDQNCore(TFCore):
         decoded_logits = res[2]
         p_gen = res[3]
 
-        res_summary = []
-        for bid in range(beam_size):
-            action = self.tokenizer.de_tokenize(
-                list(action_idx[bid, :col_eos_idx[bid]]))
-            res_summary.append(
-                (action_idx[bid], col_eos_idx[bid],
-                 action, p_gen[bid],
-                 np.sum(decoded_logits[bid, :col_eos_idx[bid], action_idx[bid]])
-                 / col_eos_idx[bid]))
-
-        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
+        res_summary = self.gen_summary(
+            action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
         top_action = res_summary[0]
+        self.debug("generated actions:\n{}".format(
+            "\n".join([str(x) for x in res_summary])))
 
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_gen, action_idx=None,
             token_idx=top_action[0], action_len=top_action[1],
             action=top_action[2], q_actions=None)
 
-        self.debug("generated actions:\n{}".format(
-            "\n".join(
-                [" ".join(
-                    map(lambda a_p: "{}[{:.2f}]".format(a_p[0], a_p[1]),
-                        zip(ac[2].split(), list(ac[3])))) + "\t{}".format(ac[4])
-                 for ac in res_summary])))
+        self.debug("gen actions: {}".format(
+            self.concat_action2actions(top_action.ids)))
 
         if self.hp.decode_concat_action:
             action_idx = np.random.choice(action_mask)

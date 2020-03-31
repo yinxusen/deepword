@@ -146,7 +146,9 @@ class BertTokenizer(Tokenizer):
             conventions.bert_padding_token,
             conventions.bert_cls_token,
             conventions.bert_sep_token,
-            conventions.bert_mask_token]
+            conventions.bert_mask_token,
+            conventions.bert_sos_token,
+            conventions.bert_eos_token]
 
     @property
     def vocab(self):
