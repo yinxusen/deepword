@@ -886,14 +886,14 @@ class BaseAgent(Logging):
         return instant_reward
 
     def get_repetition_penalty(
-            self, master: str, instant_reward: float) -> float:
+            self, master: str, raw_instant_reward: float) -> float:
         """
         add a penalty of self._cumulative_penalty if the current Action-Master
         repeats the failure of last Action-Master.
         """
         if (master == self._prev_master and self._last_action is not None
                 and self._last_action.action == self._prev_last_action and
-                instant_reward < 0):
+                raw_instant_reward <= 0):
             self._cumulative_penalty -= 0.1
         else:
             self._prev_last_action = (
@@ -921,8 +921,9 @@ class BaseAgent(Logging):
                 pass
         # add repetition penalty and per-step penalty
         if self.hp.use_step_wise_reward:
-            instant_reward += (
-                self.get_repetition_penalty(master, instant_reward) + (-0.1))
+            curr_cumulative_penalty = self.get_repetition_penalty(
+                master, raw_instant_reward)
+            instant_reward += (curr_cumulative_penalty + (-0.1))
         instant_reward = self.clip_reward(instant_reward)
         return instant_reward
 

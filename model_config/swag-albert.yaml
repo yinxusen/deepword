@@ -8,3 +8,4 @@ batch_size: 8
 save_gap_t: 10000
 learning_rate: 1e-5
 tokenizer_type: Albert
+max_snapshot_to_keep: 10

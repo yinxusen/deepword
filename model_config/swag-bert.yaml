@@ -8,3 +8,4 @@ batch_size: 8  # bert paper uses 16
 save_gap_t: 10000  # batch_size * save_gap_t ~= # training data
 learning_rate: 1e-5  # Bert paper uses 2e-5
 tokenizer_type: Bert
+max_snapshot_to_keep: 10
