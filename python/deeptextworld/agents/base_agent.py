@@ -680,6 +680,8 @@ class BaseAgent(Logging):
             restore_from=restore_from)
 
         if self.is_training:
+            # save hparams if training
+            save_hparams(self.hp, pjoin(self.model_dir, 'hparams.json'))
             if self.hp.start_t_ignore_model_t:
                 self.total_t = min(
                     self.hp.observation_t,
@@ -776,9 +778,6 @@ class BaseAgent(Logging):
         self._save_context_objs()
         self._delete_stale_context_objs()
         self._clean_stale_context(self._stale_tids)
-        # notice that we should not save hparams when evaluating
-        # that's why I move this function calling here from __init__
-        save_hparams(self.hp, pjoin(self.model_dir, 'hparams.json'))
 
     def get_compatible_snapshot_tag(self) -> List[int]:
         action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
