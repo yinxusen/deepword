@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import fire
 import gym
@@ -55,7 +56,9 @@ def run_eval(
 
     config_file = os.path.join(model_dir, 'hparams.json')
     hp = load_hparams(config_file, cmd_args=None, fn_pre_config=None)
+    # TODO: important setup for gen-data
     hp.set_hparam("compute_policy_action_every_step", True)
+    hp.set_hparam("max_snapshot_to_keep", sys.maxsize)
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)
