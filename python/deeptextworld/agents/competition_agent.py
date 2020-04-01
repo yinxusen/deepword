@@ -83,10 +83,10 @@ class CompetitionAgent(BaseAgent):
         actions = list(set(actions))
         return actions
 
-    def rule_based_policy(self, actions, all_actions, instant_reward):
-        if (self._last_action is not None and
-                self._last_action.action == ACT.prepare_meal and
-                instant_reward > 0):
+    def rule_based_policy(self, actions, instant_reward):
+        if (self._last_action is not None
+                and self._last_action.action == ACT.prepare_meal
+                and instant_reward > 0):
             action = ACT.eat_meal
         elif ACT.examine_cookbook in actions and not self._see_cookbook:
             action = ACT.examine_cookbook
@@ -102,14 +102,11 @@ class CompetitionAgent(BaseAgent):
         else:
             action = None
 
-        if action is not None:
-            if action not in all_actions:
-                self.debug("eat meal not in action list, adding it in ...")
-                self.actor.extend([action])
-                all_actions = self.actor.actions
-            action_idx = all_actions.index(action)
-        else:
-            action_idx = None
+        # TODO: if the rule-based action not in effective actions, drop it
+        if action is not None and action not in actions:
+            action = None
+
+        action_idx = self.actor.action2idx.get(action) if action else None
         action_desc = ActionDesc(
             action_type=ACT_TYPE.rule, action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
@@ -117,70 +114,21 @@ class CompetitionAgent(BaseAgent):
             action=action, q_actions=None)
         return action_desc
 
-    def collect_new_sample(self, master, instant_reward, dones, infos):
-        self.tjs.append(ActionMaster(
-            action=self._last_action.action if self._last_action else "",
-            master=master))
+    def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
+        filtered_actions = self.filter_admissible_actions(admissible_actions)
+        effective_actions = self.go_with_floor_plan(filtered_actions)
+        return effective_actions
 
-        if not dones[0]:
-            state = ObsInventory(
-                obs=infos[INFO_KEY.desc][0],
-                inventory=infos[INFO_KEY.inventory][0])
-        else:
-            obs = (
-                "terminal and win" if infos[INFO_KEY.won]
-                else "terminal and lose")
-            state = ObsInventory(obs=obs, inventory="")
-        self.stc.append(state)
-
-        admissible_actions = self.get_admissible_actions(infos)
-        sys_action_mask = self.actor.extend(admissible_actions)
-        admissible_actions = self.filter_admissible_actions(admissible_actions)
-        effective_actions = self.go_with_floor_plan(admissible_actions)
-        action_mask = self.actor.extend(effective_actions)
-        all_actions = self.actor.actions
-        # TODO: use all actions instead of using admissible actions
-        self.debug("effective actions: {}".format(effective_actions))
-
-        if self.tjs.get_last_sid() > 0:
-            memo_let = Memolet(
-                tid=self.tjs.get_current_tid(),
-                sid=self.tjs.get_last_sid(),
-                gid=self.game_id,
-                aid=self._last_action.action_idx,
-                token_id=self._last_action.token_idx,
-                a_len=self._last_action.action_len,
-                a_type=self._last_action.action_type,
-                reward=instant_reward,
-                is_terminal=dones[0],
-                action_mask=self._last_action_mask,
-                sys_action_mask=self._last_sys_action_mask,
-                next_action_mask=action_mask,
-                next_sys_action_mask=sys_action_mask,
-                q_actions=self._last_action.q_actions
-            )
-            self.debug("memo_let: {}".format(memo_let))
-            original_data = self.memo.append(memo_let)
-            if isinstance(original_data, Memolet):
-                if original_data.is_terminal:
-                    self._stale_tids.append(original_data.tid)
-
-        return (effective_actions, all_actions, action_mask, sys_action_mask,
-                instant_reward)
-
-    def choose_action(
-            self, actions, all_actions, action_mask, instant_reward):
+    def choose_action(self, actions, action_mask, instant_reward):
         # when q_actions is required to get, this should be True
         if self.hp.compute_policy_action_every_step:
             policy_action_desc = self.get_policy_action(action_mask)
         else:
             policy_action_desc = None
 
-        action_desc = self.rule_based_policy(
-            actions, all_actions, instant_reward)
+        action_desc = self.rule_based_policy(actions, instant_reward)
         if action_desc.action_idx is None:
-            action_desc = self.random_walk_for_collecting_fp(
-                actions, all_actions)
+            action_desc = self.random_walk_for_collecting_fp(actions)
             if action_desc.action_idx is None:
                 if random.random() < self.eps:
                     action_desc = self.get_a_random_action(action_mask)

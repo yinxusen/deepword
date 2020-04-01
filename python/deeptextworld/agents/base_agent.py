@@ -809,8 +809,7 @@ class BaseAgent(Logging):
             ["{} to {}".format(a, local_map.get(a))
              if a in local_map else a for a in actions])
 
-    def random_walk_for_collecting_fp(
-            self, actions: List[str], all_actions: List[str]) -> ActionDesc:
+    def random_walk_for_collecting_fp(self, actions: List[str]) -> ActionDesc:
         action_idx, action = None, None
 
         if self.hp.collect_floor_plan:
@@ -828,7 +827,7 @@ class BaseAgent(Logging):
                 self.debug("admissible actions for random walk: {}".format(
                     admissible_actions))
                 action = np.random.choice(admissible_actions)
-                action_idx = all_actions.index(action)
+                action_idx = self.actor.action2idx.get(action)
             else:
                 pass
         else:
@@ -850,15 +849,17 @@ class BaseAgent(Logging):
         return policy_action_desc
 
     def choose_action(
-            self, actions: List[str], all_actions: List[str],
-            action_mask: np.ndarray, instant_reward: float) -> ActionDesc:
+            self,
+            actions: List[str],
+            action_mask: np.ndarray,
+            instant_reward: float) -> ActionDesc:
         # when q_actions is required to get, this should be True
         if self.hp.compute_policy_action_every_step:
             policy_action_desc = self.get_policy_action(action_mask)
         else:
             policy_action_desc = None
 
-        action_desc = self.random_walk_for_collecting_fp(actions, all_actions)
+        action_desc = self.random_walk_for_collecting_fp(actions)
         if action_desc.action_idx is None:
             if random.random() < self.eps:
                 action_desc = self.get_a_random_action(action_mask)
@@ -1032,33 +1033,28 @@ class BaseAgent(Logging):
 
         return master, instant_reward
 
+    def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
+        effective_actions = self.go_with_floor_plan(admissible_actions)
+        return effective_actions
+
     def collect_new_sample(
             self, master: str, instant_reward: float, dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[
-            List[str], List[str], np.ndarray, np.ndarray, float]:
+            List[str], np.ndarray, np.ndarray, float]:
 
         self.tjs.append(ActionMaster(
             action=self._last_action.action if self._last_action else "",
             master=master))
 
-        if not dones[0]:
-            state = ObsInventory(
-                obs=infos[INFO_KEY.desc][0],
-                inventory=infos[INFO_KEY.inventory][0])
-        else:
-            obs = (
-                "terminal and win" if infos[INFO_KEY.won]
-                else "terminal and lose")
-            state = ObsInventory(obs=obs, inventory="")
+        state = ObsInventory(
+            obs=infos[INFO_KEY.desc][0],
+            inventory=infos[INFO_KEY.inventory][0])
         self.stc.append(state)
 
         admissible_actions = self.get_admissible_actions(infos)
         sys_action_mask = self.actor.extend(admissible_actions)
-        effective_actions = self.go_with_floor_plan(admissible_actions)
+        effective_actions = self.prepare_actions(admissible_actions)
         action_mask = self.actor.extend(effective_actions)
-        all_actions = self.actor.actions
-        # TODO: use all actions instead of using admissible actions
-        # action_mask = self.actor.extend(all_actions)
         self.debug("effective actions: {}".format(effective_actions))
 
         if self.tjs.get_last_sid() > 0:
@@ -1084,20 +1080,21 @@ class BaseAgent(Logging):
                 if original_data.is_terminal:
                     self._stale_tids.append(original_data.tid)
 
-        return (effective_actions, all_actions, action_mask, sys_action_mask,
-                instant_reward)
+        return effective_actions, action_mask, sys_action_mask, instant_reward
 
     def next_step_action(
-            self, actions: List[str], all_actions: List[str],
+            self,
+            actions: List[str],
             instant_reward: float,
-            action_mask: np.ndarray, sys_action_mask: np.ndarray) -> str:
+            action_mask: np.ndarray,
+            sys_action_mask: np.ndarray) -> str:
 
         if self.is_training:
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
         else:
             pass
         self._last_action = self.choose_action(
-            actions, all_actions, action_mask, instant_reward)
+            actions, action_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
 
@@ -1136,7 +1133,7 @@ class BaseAgent(Logging):
 
         assert len(obs) == 1, "cannot handle batch game training"
         master, instant_reward = self.update_status(obs, scores, dones, infos)
-        (actions, all_actions, action_mask, sys_action_mask, instant_reward
+        (actions, action_mask, sys_action_mask, instant_reward
          ) = self.collect_new_sample(master, instant_reward, dones, infos)
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
@@ -1145,7 +1142,7 @@ class BaseAgent(Logging):
             return None
 
         player_t = self.next_step_action(
-            actions, all_actions, instant_reward, action_mask, sys_action_mask)
+            actions, instant_reward, action_mask, sys_action_mask)
         if self.is_training and self.total_t >= self.hp.observation_t:
             self.train_one_batch()
         self.total_t += 1

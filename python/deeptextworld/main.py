@@ -28,6 +28,7 @@ def hp_parser() -> ArgumentParser:
     # TODO: "store_true" defaults to be False, so use an explict default=None
     parser = ArgumentParser(argument_default=None)
     parser.add_argument('--model-creator', type=str)
+    parser.add_argument('--agent-clazz', type=str)
     parser.add_argument('--config-file', type=str)
     parser.add_argument('--init-eps', type=float)
     parser.add_argument('--final-eps', type=float)

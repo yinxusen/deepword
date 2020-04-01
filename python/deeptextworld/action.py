@@ -94,6 +94,10 @@ class ActionCollector(Logging):
     def action_matrix(self) -> np.ndarray:
         return np.asarray(self._action_matrix)
 
+    @property
+    def action2idx(self) -> Dict[str, int]:
+        return self._action2idx
+
     def get_action_len(self, gid: Optional[str] = None) -> np.ndarray:
         if gid is None or gid == self._curr_gid:
             return self.action_len

@@ -182,7 +182,7 @@ class DSQNAgent(BaseAgent):
 
     def collect_new_sample(
             self, master, instant_reward, dones, infos):
-        (actions, all_actions, actions_mask, sys_actions_mask, instant_reward
+        (actions, actions_mask, sys_actions_mask, instant_reward
          ) = super(DSQNAgent, self).collect_new_sample(
             master, instant_reward, dones, infos)
 
@@ -196,9 +196,7 @@ class DSQNAgent(BaseAgent):
         else:
             pass  # final states are not considered
 
-        return (
-            actions, all_actions, actions_mask, sys_actions_mask,
-            instant_reward)
+        return actions, actions_mask, sys_actions_mask, instant_reward
 
     def get_snn_pairs(
             self, batch_size: int) -> Tuple[
