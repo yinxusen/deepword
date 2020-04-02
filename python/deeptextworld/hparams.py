@@ -125,7 +125,8 @@ default_config = {
         glove_emb_path="",
         glove_trainable=False,
         compute_policy_action_every_step=False,
-        learner_clazz=""),
+        learner_clazz="",
+        scan_dir_for_new_train_data=True),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",

@@ -181,8 +181,16 @@ class StudentLearner(object):
 
     def _add_batch(
             self, combined_data_path: List[Tuple[str, str, str]],
-            queue: Queue, training: bool = True) -> None:
+            queue: Queue, training: bool = True,
+            scan_dir_for_new_train_data: bool = True) -> None:
         while True:
+            if training and scan_dir_for_new_train_data:
+                new_combined_data_path = self._get_combined_data_path(
+                    self.train_data_dir)
+                if set(new_combined_data_path) != set(combined_data_path):
+                    eprint(
+                        "update training data: {}".format(combined_data_path))
+                    combined_data_path = new_combined_data_path
             for tp, ap, mp, in sorted(
                     combined_data_path, key=lambda k: random.random()):
                 memory, tjs, action_collector = self._load_snapshot(mp, tp, ap)
