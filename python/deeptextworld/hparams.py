@@ -124,7 +124,8 @@ default_config = {
         use_glove_emb=False,
         glove_emb_path="",
         glove_trainable=False,
-        compute_policy_action_every_step=False),
+        compute_policy_action_every_step=False,
+        learner_clazz=""),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
@@ -244,7 +245,7 @@ default_config = {
         max_decoding_size=10,
         decode_concat_action=False,
         tokenizer_type="NLTK"),
-    "BertCommonsenseModel": HParams(
+    "BertCommonsense": HParams(
         agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,
@@ -258,7 +259,7 @@ default_config = {
         sep_val_id=0,
         mask_val_id=0
     ),
-    "AlbertCommonsenseModel": HParams(
+    "AlbertCommonsense": HParams(
         agent_clazz='BaseAgent',
         core_clazz="BertCore",
         batch_size=32,

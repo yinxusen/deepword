@@ -82,12 +82,12 @@ def get_parser() -> ArgumentParser:
 
     student_parser = subparsers.add_parser('train-student')
     student_parser.add_argument('--data-path', type=str, required=True)
-    student_parser.add_argument('--learner-clazz', type=str, required=True)
+    student_parser.add_argument('--learner-clazz', type=str)
     student_parser.add_argument('--n-epochs', type=int, default=1000)
 
     student_eval_parser = subparsers.add_parser('eval-student')
     student_eval_parser.add_argument('--data-path', type=str, required=True)
-    student_eval_parser.add_argument('--learner-clazz', type=str, required=True)
+    student_eval_parser.add_argument('--learner-clazz', type=str)
     student_eval_parser.add_argument('--n-gpus', type=int, default=1)
     return parser
 
@@ -171,7 +171,7 @@ def process_train_dqn(args):
 def process_train_student(args):
     hp = process_hp(args)
     setup_train_log(args.model_dir)
-    learner_clazz = learner_name2clazz(args.learner_clazz)
+    learner_clazz = learner_name2clazz(hp.learner_clazz)
     learner = learner_clazz(hp, args.model_dir, args.data_path)
     learner.train(n_epochs=args.n_epochs)
 
@@ -185,8 +185,8 @@ def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
 
 def process_eval_student(args):
     hp = process_hp(args)
-    assert args.learner_clazz == "SwagLearner"
-    learner_clazz = learner_name2clazz(args.learner_clazz)
+    assert hp.learner_clazz == "SwagLearner"
+    learner_clazz = learner_name2clazz(hp.learner_clazz)
 
     n_gpus = args.n_gpus
     gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]

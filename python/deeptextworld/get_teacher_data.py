@@ -8,8 +8,8 @@ import numpy as np
 import textworld.gym
 from tqdm import trange
 
-from deeptextworld.hparams import load_hparams
-from deeptextworld.utils import load_and_split, agent_name2clazz
+from deeptextworld.hparams import load_hparams, output_hparams
+from deeptextworld.utils import load_and_split, agent_name2clazz, eprint
 
 
 def run_agent_eval(
@@ -58,7 +58,11 @@ def run_eval(
     hp = load_hparams(config_file, cmd_args=None, fn_pre_config=None)
     # TODO: important setup for gen-data
     hp.set_hparam("compute_policy_action_every_step", True)
-    hp.set_hparam("max_snapshot_to_keep", sys.maxsize)
+    hp.set_hparam("max_snapshot_to_keep", 100)
+    hp.set_hparam("agent_clazz", "CompetitionAgent")
+
+    eprint("generate data with the following config:")
+    eprint(output_hparams(hp))
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, model_dir)

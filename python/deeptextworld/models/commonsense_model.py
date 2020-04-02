@@ -7,7 +7,7 @@ from deeptextworld.models.dqn_model import BaseDQN
 from deeptextworld.models.export_models import CommonsenseModel
 
 
-class BertCommonsenseModel(BaseDQN):
+class BertCommonsense(BaseDQN):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -23,7 +23,7 @@ class BertCommonsenseModel(BaseDQN):
         :param hp:
         :param is_infer:
         """
-        super(BertCommonsenseModel, self).__init__(hp, is_infer)
+        super(BertCommonsense, self).__init__(hp, is_infer)
         self.num_tokens = hp.num_tokens
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
@@ -106,7 +106,7 @@ class BertCommonsenseModel(BaseDQN):
         return cls.get_eval_student_model(hp, device_placement)
 
 
-class AlbertCommonsenseModel(BertCommonsenseModel):
+class AlbertCommonsense(BertCommonsense):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -122,7 +122,7 @@ class AlbertCommonsenseModel(BertCommonsenseModel):
         :param hp:
         :param is_infer:
         """
-        super(AlbertCommonsenseModel, self).__init__(hp, is_infer)
+        super(AlbertCommonsense, self).__init__(hp, is_infer)
         self.bert_init_ckpt_dir = conventions.albert_ckpt_dir
         self.bert_config_file = "{}/albert_config.json".format(
             self.bert_init_ckpt_dir)

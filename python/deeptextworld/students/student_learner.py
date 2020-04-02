@@ -426,14 +426,14 @@ class GenConcatActionsLearner(GenLearner):
 
 class BertLearner(StudentLearner):
     def _train_impl(self, data, train_step):
-        inp, seg_tj_action, inp_len, swag_labels = data
+        inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
         _, summaries = self.sess.run(
-            [self.model.swag_train_op, self.model.swag_train_summary_op],
+            [self.model.train_op, self.model.train_summary_op],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
                 self.model.seg_tj_action_: seg_tj_action,
-                self.model.swag_labels_: swag_labels
+                self.model.expected_q_: selected_qs
                 })
         self.sw.add_summary(summaries, train_step)
 
@@ -455,6 +455,7 @@ class BertLearner(StudentLearner):
             action_matrix, action_len, action_mask)
         batch_q_idx = sample_batch_ids(
             expected_qs, actions_repeats, k=n_classes)
+        selected_qs = expected_qs[batch_q_idx]
 
         # [CLS] + [trajectory] + [SEP] + [action] + [SEP]
         max_allowed_trajectory_size = (
@@ -481,4 +482,18 @@ class BertLearner(StudentLearner):
         seg_tj_action = np.concatenate([a[1] for a in processed_input], axis=0)
         inp_len = np.concatenate([a[2] for a in processed_input], axis=0)
 
-        return inp, seg_tj_action, inp_len, swag_labels
+        return inp, seg_tj_action, inp_len, selected_qs, swag_labels
+
+
+class BertSoftmaxLearner(BertLearner):
+    def _train_impl(self, data, train_step):
+        inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
+        _, summaries = self.sess.run(
+            [self.model.swag_train_op, self.model.swag_train_summary_op],
+            feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_len,
+                self.model.seg_tj_action_: seg_tj_action,
+                self.model.swag_labels_: swag_labels
+                })
+        self.sw.add_summary(summaries, train_step)
