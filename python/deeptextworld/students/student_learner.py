@@ -339,7 +339,7 @@ class StudentLearner(object):
         for et in trange(n_epochs, ascii=True, desc="epoch"):
             for it in trange(epoch_size, ascii=True, desc="step"):
                 try:
-                    data = self.queue.get(timeout=100)
+                    data = self.queue.get(timeout=1000)
                     self._train_impl(
                         data, self.train_steps + et * epoch_size + it)
                 except Exception as e:
