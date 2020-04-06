@@ -16,13 +16,13 @@ class Trajectory(Generic[T]):
     Fetching data from Trajectory feeding into Encoder should be implemented
     in extended classes.
     """
-    def __init__(self, num_turns: int) -> None:
+    def __init__(self, num_turns: int, size_per_turn: int = 1) -> None:
         super(Trajectory, self).__init__()
         self.trajectories: Dict[int, List[T]] = dict()
         self.curr_tj: Optional[List[T]] = None
         self.curr_tid: Optional[int] = None
         self.num_turns: int = num_turns
-        self.size_per_turn: int = 1
+        self.size_per_turn: int = size_per_turn
 
     def get_last_sid(self) -> int:
         """

@@ -27,6 +27,16 @@ class Memolet(namedtuple(
         "next_action_mask",
         "next_sys_action_mask",
         "q_actions"))):
+    """
+    end_of_episode: game stops by 1) winning, 2) losing, or 3) exceeding
+    maximum number of steps.
+    is_terminal: is current step reaches the terminal game state by winning
+    or losing. is_terminal = True means for the current step, q value equals
+    to the instant reward.
+
+    TODO: Notice that end_of_episode doesn't imply is_terminal. Only winning
+        or losing means is_terminal = True.
+    """
     pass
 
 

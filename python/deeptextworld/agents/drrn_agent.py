@@ -39,12 +39,6 @@ class DRRNCore(TFCore):
         actions_repeats = [len(action_mask)]
 
         src, src_len, _ = self.trajectory2input(trajectory)
-        self.debug("trajectory: {}".format(trajectory))
-        self.debug("src: {}".format(src))
-        self.debug("src_len: {}".format(src_len))
-        self.debug("action_matrix: {}".format(action_matrix))
-        self.debug("admissible_action_matrix: {}".format(
-            admissible_action_matrix))
         q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len],
@@ -52,13 +46,12 @@ class DRRNCore(TFCore):
             self.model.actions_len_: admissible_action_len,
             self.model.actions_repeats_: actions_repeats
         })
-        self.debug("q_actions_t {}".format(q_actions_t))
 
         cnt_action_array = []
         for mid in action_mask:
             cnt_action_array.append(
                 cnt_action[mid] if mid in cnt_action else 0.)
-        self.debug("cnt_action_array: {}".format(cnt_action_array))
+
         action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action_array)
         real_action_idx = action_mask[action_idx]
         action_desc = ActionDesc(

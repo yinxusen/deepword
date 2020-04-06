@@ -824,8 +824,6 @@ class BaseAgent(Logging):
                 open_actions = list(
                     filter(lambda a: a.startswith("open"), actions))
                 admissible_actions = cardinal_go + open_actions
-                self.debug("admissible actions for random walk: {}".format(
-                    admissible_actions))
                 action = np.random.choice(admissible_actions)
                 action_idx = self.actor.action2idx.get(action)
             else:
@@ -1011,25 +1009,35 @@ class BaseAgent(Logging):
             self.core.create_or_reload_target_model()
 
     def _clean_stale_context(self, tids: List[int]) -> None:
-        self.debug("tjs deletes {}".format(tids))
         self.tjs.request_delete_keys(tids)
         self.stc.request_delete_keys(tids)
 
     def update_status(
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, float]:
-        self._prev_place = self._curr_place
         master = infos[INFO_KEY.desc][0] if self.in_game_t == 0 else obs[0]
         instant_reward = self.get_instant_reward(
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
-        self.debug("master: {}, raw reward: {}, instant reward: {}".format(
-            master, scores[0], instant_reward))
-        if self.hp.collect_floor_plan:
-            self._curr_place = self.collect_floor_plan(master, self._prev_place)
+        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+            self.debug(self.report_status([
+                ("t", self.total_t),
+                ("in_game_t", self.in_game_t),
+                ("eps", self.eps),
+                ("action", self._last_action),
+                ("master", master.replace("\n", " ")),
+                ("is_terminal", dones[0])
+            ]))
         else:
-            self._curr_place = None
+            self.info(self.report_status([
+                ("master", master.replace("\n", " ")),
+                ("max_score", infos[INFO_KEY.max_score][0])
+            ]))
+
+        if self.hp.collect_floor_plan:
+            self._prev_place = self._curr_place
+            self._curr_place = self.collect_floor_plan(master, self._prev_place)
 
         return master, instant_reward
 
@@ -1055,6 +1063,7 @@ class BaseAgent(Logging):
         sys_action_mask = self.actor.extend(admissible_actions)
         effective_actions = self.prepare_actions(admissible_actions)
         action_mask = self.actor.extend(effective_actions)
+
         self.debug("effective actions: {}".format(effective_actions))
 
         if self.tjs.get_last_sid() > 0:
@@ -1074,7 +1083,6 @@ class BaseAgent(Logging):
                 next_sys_action_mask=sys_action_mask,
                 q_actions=self._last_action.q_actions
             )
-            self.debug("memo_let: {}".format(memo_let))
             original_data = self.memo.append(memo_let)
             if isinstance(original_data, Memolet):
                 if original_data.is_terminal:
@@ -1097,8 +1105,6 @@ class BaseAgent(Logging):
             actions, action_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
-
-        self.debug("action: {}".format(self._last_action))
 
         if self._last_action.action_type == ACT_TYPE.policy_drrn:
             if action_idx not in self._cnt_action:

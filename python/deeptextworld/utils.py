@@ -16,6 +16,7 @@ from typing import List, Tuple
 
 import numpy as np
 import ruamel.yaml
+from bitarray import bitarray
 
 from deeptextworld.stats import mean_confidence_interval
 
@@ -320,3 +321,18 @@ def setup_train_log(model_dir):
 def setup_eval_log(log_filename):
     assert os.path.isfile(fn_log_eval)
     setup_logging(default_path=fn_log_eval, local_log_filename=log_filename)
+
+
+def bytes2array(byte_action_masks):
+    """
+    Convert a list of byte-array masks to a list of np-array masks.
+    TODO: last bit set as False to represent the end of the bit-string, i.e.
+        '\0' in c/c++.
+    """
+    vec_action_masks = []
+    for mask in byte_action_masks:
+        bit_mask = bitarray(endian='little')
+        bit_mask.frombytes(mask)
+        bit_mask[-1] = False
+        vec_action_masks.append(bit_mask.tolist())
+    return np.asarray(vec_action_masks, dtype=np.int32)

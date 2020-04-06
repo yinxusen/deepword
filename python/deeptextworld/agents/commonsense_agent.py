@@ -45,7 +45,8 @@ class BertCore(TFCore):
     ) -> Tuple[List[int], int, List[int]]:
         # remove the length for [CLS] and two [SEP]s.
         return dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens - 3,
+            trajectory, self.tokenizer,
+            self.hp.num_tokens - 3 - self.hp.n_tokens_per_action,
             self.hp.padding_val_id)
 
     def get_a_policy_action(

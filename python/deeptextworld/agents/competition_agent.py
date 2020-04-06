@@ -84,6 +84,10 @@ class CompetitionAgent(BaseAgent):
         return actions
 
     def rule_based_policy(self, actions, instant_reward):
+        # TODO: use see cookbook again if gain one reward
+        if instant_reward > 0:
+            self._see_cookbook = False
+
         if (self._last_action is not None
                 and self._last_action.action == ACT.prepare_meal
                 and instant_reward > 0):
@@ -155,8 +159,8 @@ class CompetitionAgent(BaseAgent):
         self._see_cookbook = False
 
     def update_status(self, obs, scores, dones, infos):
-        self._prev_place = self._curr_place
-        master = infos[INFO_KEY.desc][0] if self.in_game_t == 0 else obs[0]
+        master, instant_reward = super(CompetitionAgent, self).update_status(
+            obs, scores, dones, infos)
 
         if (not self._theme_words[self.game_id]
                 and self._last_action is not None
@@ -164,16 +168,5 @@ class CompetitionAgent(BaseAgent):
             self._theme_words[self.game_id] = self.get_theme_words(master)
             self.debug(
                 "get theme words: {}".format(self._theme_words[self.game_id]))
-
-        instant_reward = self.get_instant_reward(
-            scores[0], obs[0], dones[0],
-            infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
-
-        self.debug("master: {}, raw reward: {}, instant reward: {}".format(
-            master, scores[0], instant_reward))
-        if self.hp.collect_floor_plan:
-            self._curr_place = self.collect_floor_plan(master, self._prev_place)
-        else:
-            self._curr_place = None
 
         return master, instant_reward

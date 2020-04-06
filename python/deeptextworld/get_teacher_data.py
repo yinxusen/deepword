@@ -1,4 +1,3 @@
-import logging
 import os
 
 import fire
@@ -13,7 +12,6 @@ from deeptextworld.utils import load_and_split, agent_name2clazz, eprint
 
 def run_agent_eval(
         agent, game_files, max_episode_steps, epoch_size, epoch_limit):
-    logger = logging.getLogger("eval")
     requested_infos = agent.select_additional_infos()
     env_id = textworld.gym.register_games(
         game_files, requested_infos, batch_size=1,
@@ -35,9 +33,9 @@ def run_agent_eval(
                 scores = [0] * len(obs)
                 dones = [False] * len(obs)
                 agent.eps = np.random.random()
-                logger.info("new randomness: {}".format(agent.eps))
+                eprint("new randomness: {}".format(agent.eps))
         agent.save_snapshot()
-        logger.info("save snapshot epoch: {}".format(epoch_t))
+        eprint("save snapshot epoch: {}".format(epoch_t))
     game_env.close()
 
 
@@ -46,12 +44,11 @@ def run_eval(
     """
     Evaluation an agent.
     """
-    logger = logging.getLogger("eval")
     train_games, dev_games = load_and_split(game_path, f_games)
     game_files = train_games
-    logger.info("load {} game files".format(len(game_files)))
+    eprint("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
-    logger.debug("games for eval: \n{}".format("\n".join(sorted(game_names))))
+    eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
     config_file = os.path.join(model_dir, 'hparams.json')
     hp = load_hparams(config_file, cmd_args=None, fn_pre_config=None)
@@ -59,6 +56,7 @@ def run_eval(
     hp.set_hparam("compute_policy_action_every_step", True)
     hp.set_hparam("max_snapshot_to_keep", 100)
     hp.set_hparam("agent_clazz", "CompetitionAgent")
+    hp.set_hparam("use_step_wise_reward", True)
 
     eprint("generate data with the following config:")
     eprint(output_hparams(hp))
