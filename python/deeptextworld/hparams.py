@@ -402,3 +402,4 @@ def save_hparams(hp: HParams, file_path: str) -> None:
         new_hp = copy_hparams(hp)
         new_hp.set_hparam("model_dir", ".")
         f.write(new_hp.to_json())
+        f.write("\n")

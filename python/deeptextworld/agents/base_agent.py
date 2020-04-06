@@ -27,6 +27,13 @@ from deeptextworld.utils import eprint
 from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 
 
+class DRRNMemoTeacher(namedtuple(
+    "DRRNMemoTeacher",
+    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
+     "action_mask", "next_action_mask", "q_actions"))):
+    pass
+
+
 class BaseCore(Logging, ABC):
     def __init__(
             self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
@@ -379,7 +386,7 @@ class BaseAgent(Logging):
         all_paths = glob.glob(
             os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
         tags = list(
-            map(lambda fn: int(os.path.splitext(fn)[0].split("-")[1]),
+            map(lambda fn: int(os.path.splitext(fn)[0].split("-")[-1]),
                 map(lambda p: os.path.basename(p), all_paths)))
         return tags
 

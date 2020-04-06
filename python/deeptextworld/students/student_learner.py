@@ -17,7 +17,7 @@ from tensorflow.train import Saver
 from tqdm import trange
 
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
 from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import Memolet, pad_str_ids
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
@@ -28,7 +28,7 @@ from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten
-from deeptextworld.utils import model_name2clazz
+from deeptextworld.utils import model_name2clazz, bytes2idx
 
 
 class CMD:
@@ -47,7 +47,7 @@ class StudentLearner(object):
             self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
             eval_data_path: Optional[str] = None) -> None:
         # prefix should match BaseAgent
-        self.tjs_prefix = "trajectories"
+        self.tjs_prefix = "raw-trajectories"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
 
@@ -162,7 +162,71 @@ class StudentLearner(object):
             trained_steps = 0
         return sess, model, saver, trained_steps
 
+    @classmethod
+    def lst_str2am(
+            cls, tj: List[str], allow_unfinished_tj: bool = False
+    ) -> List[ActionMaster]:
+        tj = [""] + tj
+
+        if not allow_unfinished_tj and len(tj) % 2 != 0:
+            raise ValueError("wrong old trajectory: {}".format(tj))
+
+        res_tj = []
+        i = 0
+        while i < len(tj) // 2:
+            res_tj.append(ActionMaster(action=tj[i * 2], master=tj[i * 2 + 1]))
+            i += 1
+
+        return res_tj
+
+    @classmethod
+    def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMaster]:
+        tjs = Trajectory[ActionMaster](
+            num_turns=old_tjs.num_turns // 2, size_per_turn=1)
+        tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
+        tjs.curr_tid = old_tjs.curr_tid
+        tjs.trajectories = [
+            (k, cls.lst_str2am(v)) for k, v in old_tjs.trajectories.items()]
+        return tjs
+
+    @classmethod
+    def memo_old2new(cls, old_memo: List[DRRNMemoTeacher]) -> List[Memolet]:
+        res = []
+        for m in old_memo:
+            mask = bytes2idx(m.action_mask)
+            next_mask = bytes2idx(m.next_action_mask)
+            res.append(Memolet(
+                tid=m.tid, sid=m.sid // 2, gid=m.gid, aid=m.aid,
+                token_id=None, a_len=None, a_type=None,
+                reward=m.reward, is_terminal=m.is_terminal,
+                action_mask=mask, sys_action_mask=None,
+                next_action_mask=next_mask, next_sys_action_mask=None,
+                q_actions=m.q_actions[mask]))
+        return res
+
     def _load_snapshot(
+            self, memo_path: str, tjs_path: str, action_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
+        """load snapshot for old data"""
+        old_memory = np.load(memo_path, allow_pickle=True)["data"]
+        old_memory = list(filter(
+            lambda x: isinstance(x, DRRNMemoTeacher), old_memory))
+        memory = self.memo_old2new(old_memory)
+
+        old_tjs = Trajectory[str](
+            num_turns=self.hp.num_turns * 2 + 1, size_per_turn=2)
+        old_tjs.load_tjs(tjs_path)
+        tjs = self.tjs_str2am(old_tjs)
+
+        actions = ActionCollector(
+            tokenizer=self.tokenizer,
+            n_tokens=self.hp.n_tokens_per_action,
+            unk_val_id=self.hp.unk_val_id,
+            padding_val_id=self.hp.padding_val_id)
+        actions.load_actions(action_path)
+        return memory, tjs, actions
+
+    def _load_snapshot_v2(
             self, memo_path: str, tjs_path: str, action_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
