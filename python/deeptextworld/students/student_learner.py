@@ -185,16 +185,16 @@ class StudentLearner(object):
             num_turns=old_tjs.num_turns // 2, size_per_turn=1)
         tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
         tjs.curr_tid = old_tjs.curr_tid
-        tjs.trajectories = [
-            (k, cls.lst_str2am(v)) for k, v in old_tjs.trajectories.items()]
+        tjs.trajectories = dict([
+            (k, cls.lst_str2am(v)) for k, v in old_tjs.trajectories.items()])
         return tjs
 
     @classmethod
     def memo_old2new(cls, old_memo: List[DRRNMemoTeacher]) -> List[Memolet]:
         res = []
         for m in old_memo:
-            mask = bytes2idx(m.action_mask)
-            next_mask = bytes2idx(m.next_action_mask)
+            mask = bytes2idx(m.action_mask, size=128)
+            next_mask = bytes2idx(m.next_action_mask, size=128)
             res.append(Memolet(
                 tid=m.tid, sid=m.sid // 2, gid=m.gid, aid=m.aid,
                 token_id=None, a_len=None, a_type=None,
@@ -393,8 +393,8 @@ class DRRNLearner(StudentLearner):
     def _train_impl(self, data, train_step):
         (p_states, p_len, actions, action_len, actions_repeats, expected_qs
          ) = data
-        _, summaries = self.sess.run(
-            [self.model.train_op, self.model.train_summary_op],
+        _, summaries, loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
                 self.model.src_: p_states,
                 self.model.src_len_: p_len,
@@ -404,6 +404,7 @@ class DRRNLearner(StudentLearner):
                 self.model.action_idx_: np.arange(len(expected_qs)),
                 self.model.expected_q_: expected_qs,
                 self.model.b_weight_: [1.]})
+        eprint("loss: {}".format(loss))
         self.sw.add_summary(summaries, train_step)
 
     def _prepare_data(self, b_memory, tjs, action_collector):

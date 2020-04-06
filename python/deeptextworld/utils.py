@@ -338,8 +338,10 @@ def bytes2array(byte_action_masks):
     return np.asarray(vec_action_masks, dtype=np.int32)
 
 
-def bytes2idx(byte_mask: List[bytes]) -> np.ndarray:
+def bytes2idx(byte_mask: List[bytes], size: int) -> np.ndarray:
     bit_mask = bitarray(endian='little')
     bit_mask.frombytes(byte_mask)
+    bit_mask = bit_mask[:size]
     bit_mask[-1] = False
-    return np.where(np.asarray(bit_mask.tolist() == 1))[0]
+    np_mask = np.asarray(bit_mask.tolist(), dtype=np.int32)
+    return np.where(np_mask == 1)[0]
