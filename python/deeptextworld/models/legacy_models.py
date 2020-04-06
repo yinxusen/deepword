@@ -239,3 +239,11 @@ class LegacyCnnDRRN(BaseDQN):
             loss=None,
             train_summary_op=None,
             src_seg_=None)
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return cls.get_train_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return cls.get_eval_model(hp, device_placement)
