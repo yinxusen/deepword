@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 from albert.tokenization import FullTokenizer as AlbertTok
@@ -327,7 +327,7 @@ def tj2ids(
         trajectory: List[ActionMaster],
         tokenizer: Tokenizer,
         with_action_padding: bool = False,
-        max_action_size: int = 10,
+        max_action_size: Optional[int] = None,
         padding_val_id: int = 0) -> Tuple[List[int], List[int]]:
     """
     Convert a trajectory (list of ActionMaster) into ids
@@ -357,7 +357,7 @@ def dqn_input(
         num_tokens: int,
         padding_val_id: int,
         with_action_padding: bool = False,
-        max_action_size: int = 10
+        max_action_size: Optional[int] = None
 ) -> Tuple[List[int], int, List[int]]:
     """
     Given a trajectory (a list of ActionMaster), get trajectory indexes, length
@@ -386,7 +386,7 @@ def batch_dqn_input(
         num_tokens: int,
         padding_val_id: int,
         with_action_padding: bool = False,
-        max_action_size: int = 10
+        max_action_size: Optional[int] = None
 ) -> Tuple[List[List[int]], List[int], List[List[int]]]:
     batch_src = []
     batch_src_len = []

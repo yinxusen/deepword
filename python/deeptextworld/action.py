@@ -114,6 +114,9 @@ class ActionCollector(Logging):
         else:
             return self._actions_base[gid]
 
+    def get_game_ids(self) -> List[str]:
+        return list(self._actions_base.keys())
+
     @property
     def actions(self) -> List[str]:
         return self._actions

@@ -1,36 +1,121 @@
 import unittest
 import random
 
+from tensorflow.contrib.training import HParams
+
 from deeptextworld.agents.utils import *
 from deeptextworld.action import ActionCollector
+from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.hparams import copy_hparams
+from deeptextworld.utils import eprint
 
 
-def gen_rand_str(vocab: List[str], length_up_to: int, n_rows: int) -> List[str]:
+tokenizer_hp = HParams(
+    vocab_size=0,
+    sos=None,
+    eos=None,
+    padding_val=None,
+    unk_val=None,
+    cls_val=None,
+    sep_val=None,
+    mask_val=None,
+    sos_id=None,
+    eos_id=None,
+    padding_val_id=None,
+    unk_val_id=None,
+    cls_val_id=None,
+    sep_val_id=None,
+    mask_val_id=None,
+    tokenizer_type=None)
+
+
+def gen_rand_str(
+        vocab: List[str], length_up_to: int, n_rows: int,
+        allow_empty_str: bool = True) -> List[str]:
     res = []
+    assert length_up_to > 0
     for i in range(n_rows):
-        n_cols = random.randint(0, length_up_to)
+        n_cols = random.randint(0 if allow_empty_str else 1, length_up_to)
         res.append(" ".join(random.choices(vocab, k=n_cols)))
     return res
 
 
+def gen_action_master(
+        vocab: List[str], turns_up_to: int, n_rows: int
+) -> List[List[ActionMaster]]:
+    assert turns_up_to > 0, "at least need 1-turn of action-master"
+    res = []
+    for i in range(n_rows):
+        n_turns = np.random.randint(1, turns_up_to + 1)
+        rnd_actions = gen_rand_str(vocab, 10, n_turns, allow_empty_str=False)
+        rnd_masters = gen_rand_str(vocab, 50, n_turns, allow_empty_str=False)
+        res.append(
+            [ActionMaster(a, m) for a, m in zip(rnd_actions, rnd_masters)])
+    return res
+
+
+def gen_action_collector(hp: HParams, tokenizer: Tokenizer) -> ActionCollector:
+    ac = ActionCollector(
+        tokenizer, n_tokens=10,
+        unk_val_id=hp.unk_val_id, padding_val_id=hp.padding_val_id)
+    vocab = list(tokenizer.vocab.keys())
+
+    game_ids = gen_rand_str(vocab, length_up_to=10, n_rows=1000)
+
+    for gid in game_ids:
+        ac.add_new_episode(gid)
+        ac.extend(gen_rand_str(
+            vocab, length_up_to=10, n_rows=random.randint(1, 100)))
+
+    return ac
+
+
 class TestAgentInput(unittest.TestCase):
+    def test_dqn_input(self):
+        hp = copy_hparams(tokenizer_hp)
+        hp.set_hparam("tokenizer_type", "Bert")
+        hp, tokenizer = BaseAgent.init_tokens(hp)
+        vocab = list(tokenizer.vocab.keys())
+
+        for _ in range(1000):
+            num_tokens = np.random.randint(1, 1024)
+            trajectories = gen_action_master(vocab, turns_up_to=5, n_rows=8)
+            src, src_len, src_master_mask = batch_dqn_input(
+                trajectories, tokenizer, num_tokens, hp.padding_val_id,
+                with_action_padding=False, max_action_size=None)
+            self.assertTrue(all([0 < x <= num_tokens for x in src_len]))
+            # TODO: how to test generated src?
+
+        # test with action padding
+        for _ in range(1000):
+            num_tokens = 256
+            trajectories = gen_action_master(vocab, turns_up_to=5, n_rows=8)
+            max_action_size = np.random.randint(1, num_tokens)
+            src, src_len, src_master_mask = batch_dqn_input(
+                trajectories, tokenizer, num_tokens, hp.padding_val_id,
+                with_action_padding=True, max_action_size=max_action_size)
+            self.assertTrue(all([0 < x <= num_tokens for x in src_len]))
+            for ss, ll, mm in zip(src, src_len, src_master_mask):
+                self.assertTrue(all([x == 0 for x in ss[ll:]]))
+                if ll < num_tokens:  # for those untrimmed trajectories
+                    action_token_ids = np.where(np.asarray(mm[:ll]) == 0)[0]
+                    next_starter_minimum = 0
+                    for idx in action_token_ids:
+                        if idx >= next_starter_minimum:
+                            self.assertTrue(
+                                idx + max_action_size - 1 in action_token_ids)
+                            next_starter_minimum = idx + max_action_size
+                        else:
+                            self.assertTrue(idx - 1 in action_token_ids)
+                else:  # for trimmed trajectories
+                    pass
+
     def test_drrn_action_input(self):
-        tok = NLTKTokenizer(
-            vocab_file=conventions.nltk_vocab_file, do_lower_case=True)
-        ac = ActionCollector(
-            tok, n_tokens=10,
-            unk_val_id=tok.vocab[conventions.nltk_unk_token],
-            padding_val_id=tok.vocab[conventions.nltk_padding_token])
-
-        game_ids = gen_rand_str(
-            list(tok.vocab.keys()), length_up_to=10, n_rows=1000)
-
-        for gid in game_ids:
-            ac.add_new_episode(gid)
-            ac.extend(gen_rand_str(
-                list(tok.vocab.keys()), length_up_to=10,
-                n_rows=random.randint(1, 100)))
-
+        hp = copy_hparams(tokenizer_hp)
+        hp.set_hparam("tokenizer_type", "NLTK")
+        hp, tokenizer = BaseAgent.init_tokens(hp)
+        ac = gen_action_collector(hp, tokenizer)
+        game_ids = ac.get_game_ids()
         action_len = [ac.get_action_len(gid) for gid in game_ids]
         action_matrix = [ac.get_action_matrix(gid) for gid in game_ids]
         action_mask = [
@@ -49,6 +134,47 @@ class TestAgentInput(unittest.TestCase):
             action1 = action_matrix[i][expected_ids[i]]
             action2 = inp_matrix[batch_ids[i]]
             self.assertTrue(np.all(np.equal(action1, action2)))
+
+    def test_bert_commonsense_input(self):
+        hp = copy_hparams(tokenizer_hp)
+        hp.set_hparam("tokenizer_type", "Bert")
+        hp, tokenizer = BaseAgent.init_tokens(hp)
+        vocab = list(tokenizer.vocab.keys())
+        ac = gen_action_collector(hp, tokenizer)
+        game_ids = ac.get_game_ids()
+
+        num_tokens = 256
+        n_tokens_per_action = 10
+        n_special_tokens = 3
+        n_tj_tokens = num_tokens - n_tokens_per_action - n_special_tokens
+        trajectories = gen_action_master(vocab, turns_up_to=5, n_rows=8)
+        src, src_len, src_master_mask = batch_dqn_input(
+            trajectories, tokenizer, n_tj_tokens, hp.padding_val_id)
+        for s, l, m in zip(src, src_len, src_master_mask):
+            gid = np.random.choice(game_ids)
+            action_matrix = ac.get_action_matrix(gid)
+            n_actions = len(action_matrix)
+            action_mask = np.random.choice(
+                np.arange(n_actions), size=np.random.randint(1, n_actions))
+            inp, seg_tj_action, inp_size = bert_commonsense_input(
+                action_matrix=action_matrix[action_mask],
+                action_len=ac.get_action_len(gid)[action_mask],
+                trajectory=s, trajectory_len=l,
+                sep_val_id=hp.sep_val_id, cls_val_id=hp.cls_val_id,
+                num_tokens=num_tokens)
+            self.assertEqual(len(action_mask), len(inp))
+            self.assertEqual(len(inp), len(seg_tj_action))
+            self.assertEqual(len(inp), len(inp_size))
+            self.assertTrue(all([0 < x < num_tokens for x in inp_size]))
+            for ii, ss, ll in zip(inp, seg_tj_action, inp_size):
+                self.assertEqual(len(ii), num_tokens)
+                self.assertEqual(ii[0], hp.cls_val_id)
+                self.assertEqual(ii[ll-1], hp.sep_val_id)
+                self.assertTrue(all([x == 0 for x in ii[ll:]]))
+                self.assertTrue(hp.sep_val_id in ii[:ll-1])
+                inner_sep_idx = list(ii[:ll-1]).index(hp.sep_val_id)
+                self.assertTrue(all([x == 0 for x in ss[:inner_sep_idx+1]]))
+                self.assertTrue(all([x == 1 for x in ss[inner_sep_idx+1:]]))
 
 
 if __name__ == '__main__':
