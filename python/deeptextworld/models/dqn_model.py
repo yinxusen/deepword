@@ -1,14 +1,27 @@
 import tensorflow as tf
+import numpy as np
 
 import deeptextworld.models.utils as dqn
-from deeptextworld.models.encoders import CnnEncoder, LstmEncoder
 from deeptextworld.models.export_models import DQNModel
 
 
 class BaseDQN(object):
-    def __init__(self, hp, is_infer=False):
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
         self.is_infer = is_infer
         self.hp = hp
+        if src_embeddings is None:
+            if hp.use_glove_emb:
+                _, glove_emb = self.init_glove(hp.glove_emb_path)
+                self.src_embeddings = tf.get_variable(
+                    name="src_embeddings", dtype=tf.float32,
+                    initializer=glove_emb, trainable=hp.glove_trainable)
+            else:
+                self.src_embeddings = tf.get_variable(
+                    name="src_embeddings", dtype=tf.float32,
+                    shape=[hp.vocab_size, hp.embedding_size])
+        else:
+            self.src_embeddings = src_embeddings
+
         self.global_step = tf.train.get_or_create_global_step()
         self.optimizer = tf.train.AdamOptimizer(self.hp.learning_rate)
         self.inputs = {
@@ -19,34 +32,32 @@ class BaseDQN(object):
             "b_weight": tf.placeholder(tf.float32, [None])
         }
 
+    @classmethod
+    def init_glove(cls, glove_path):
+        with open(glove_path, "r") as f:
+            glove = list(map(lambda s: s.strip().split(), f.readlines()))
+        glove_tokens = list(map(lambda x: x[0], glove))
+        glove_embeddings = np.asarray(
+            list(map(lambda x: x[1:], glove)), dtype=np.float32)
+        return glove_tokens, glove_embeddings
+
     def get_q_actions(self):
         raise NotImplementedError()
 
     def get_train_op(self, q_actions):
         raise NotImplementedError()
 
-    @classmethod
-    def get_train_model(cls, hp, device_placement):
-        return create_train_model(cls, hp, device_placement)
-
-    @classmethod
-    def get_eval_model(cls, hp, device_placement):
-        return create_eval_model(cls, hp, device_placement)
-
 
 class LstmDQN(BaseDQN):
-    def __init__(self, hp, is_infer=False):
-        super(LstmDQN, self).__init__(hp, is_infer)
-        self.enc_tj = LstmEncoder(
-            self.hp.lstm_num_units, self.hp.lstm_num_layers,
-            self.hp.vocab_size, self.hp.embedding_size)
-        self.enc_actions = tf.layers.Dense(
-            units=self.hp.n_actions, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        super(LstmDQN, self).__init__(hp, src_embeddings, is_infer)
 
     def get_q_actions(self):
-        _, h_state = self.enc_tj(self.inputs["src"])
-        q_actions = self.enc_actions(h_state)
+        inner_states = dqn.encoder_lstm(
+            self.inputs["src"], self.inputs["src_len"], self.src_embeddings,
+            self.hp.lstm_num_units, self.hp.lstm_num_layers)
+        q_actions = tf.layers.dense(
+            inner_states[-1].c, units=self.hp.n_actions, use_bias=True)
         return q_actions
 
     def get_train_op(self, q_actions):
@@ -58,23 +69,25 @@ class LstmDQN(BaseDQN):
 
 
 class CnnDQN(BaseDQN):
-    def __init__(self, hp, is_infer=False):
-        super(CnnDQN, self).__init__(hp, is_infer)
-        filter_sizes = [3, 4, 5]
-        num_filters = hp.num_conv_filters
-        self.enc_tj = CnnEncoder(
-            filter_sizes=filter_sizes, num_filters=num_filters,
-            num_layers=1, input_vocab_size=self.hp.vocab_size)
-        # this enc_actions will map hidden game states to actions
-        # that's why units = n_actions.
-        # for real action encoder, choose the real hidden action size
-        self.enc_actions = tf.layers.Dense(
-            units=self.hp.n_actions, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+    def __init__(self, hp, src_embeddings=None, is_infer=False):
+        super(CnnDQN, self).__init__(hp, src_embeddings, is_infer)
+        self.filter_sizes = [3, 4, 5]
+        self.num_filters = hp.num_conv_filters
+        self.num_tokens = hp.num_tokens
+        self.l2_loss = tf.constant(0.0)
+        self.l2_reg_lambda = 0.5
+
+        self.pos_embeddings = tf.get_variable(
+            name="pos_embeddings", dtype=tf.float32,
+            shape=[self.num_tokens, self.hp.embedding_size])
 
     def get_q_actions(self):
-        h_state = self.enc_tj(self.inputs["src"])
-        q_actions = self.enc_actions(h_state)
+        inner_states = dqn.encoder_cnn(
+            self.inputs["src"], self.src_embeddings, self.pos_embeddings,
+            self.filter_sizes, self.num_filters, self.hp.embedding_size,
+            self.is_infer)
+        q_actions = tf.layers.dense(
+            inner_states, units=self.hp.n_actions, use_bias=True)
         return q_actions
 
     def get_train_op(self, q_actions):
