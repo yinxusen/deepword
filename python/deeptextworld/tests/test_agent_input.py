@@ -176,6 +176,46 @@ class TestAgentInput(unittest.TestCase):
                 self.assertTrue(all([x == 0 for x in ss[:inner_sep_idx+1]]))
                 self.assertTrue(all([x == 1 for x in ss[inner_sep_idx+1:]]))
 
+    def test_sample_ids(self):
+        actions_repeats = np.random.randint(
+            2, 1024, size=np.random.randint(1, 100))
+        q_actions = np.random.random(np.sum(actions_repeats))
+        selected_frequencies = np.zeros_like(q_actions)
+        n_sampling_times = 10000
+        for _ in range(n_sampling_times):
+            k = np.random.randint(1, np.max(actions_repeats))
+            action_ids = sample_batch_ids(q_actions, list(actions_repeats), k)
+            self.assertEqual(len(action_ids), k * len(actions_repeats))
+            sampled_q_actions = q_actions[action_ids].reshape([-1, k])
+            self.assertTrue(
+                [x == 0 for x in np.argmax(sampled_q_actions, axis=-1)])
+            idx_starter = 0
+            for n_repeats, ids in zip(
+                    actions_repeats, np.asarray(action_ids).reshape([-1, k])):
+                self.assertTrue(
+                    [idx_starter <= x < idx_starter + n_repeats for x in ids])
+                self.assertAlmostEqual(
+                    q_actions[ids[0]],
+                    np.max(q_actions[idx_starter: idx_starter + n_repeats]))
+                if n_repeats >= k:  # assert selected items are unique
+                    self.assertEqual(len(ids), len(set(ids)))
+                selected_frequencies[ids] += 1
+                idx_starter += n_repeats
+
+        idx_starter = 0
+        for n_repeats in actions_repeats:
+            curr_frequencies = (
+                selected_frequencies[idx_starter: idx_starter + n_repeats]
+                / n_sampling_times)
+            curr_max_id = np.argmax(curr_frequencies)
+            self.assertAlmostEqual(curr_frequencies[curr_max_id], 1.0)
+            others = np.concatenate(
+                [curr_frequencies[:curr_max_id],
+                 curr_frequencies[curr_max_id+1:]])
+            # assert uniformly selected
+            self.assertTrue([x < 0.1 for x in others - np.mean(others)])
+            idx_starter += n_repeats
+
 
 if __name__ == '__main__':
     unittest.main()
