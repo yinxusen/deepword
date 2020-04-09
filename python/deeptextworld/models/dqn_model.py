@@ -3,6 +3,7 @@ import numpy as np
 
 import deeptextworld.models.utils as dqn
 from deeptextworld.models.export_models import DQNModel
+from deeptextworld.agents.utils import conventions
 
 
 class BaseDQN(object):
@@ -11,7 +12,7 @@ class BaseDQN(object):
         self.hp = hp
         if src_embeddings is None:
             if hp.use_glove_emb:
-                _, glove_emb = self.init_glove(hp.glove_emb_path)
+                _, glove_emb = self.init_glove(conventions.glove_emb_file)
                 self.src_embeddings = tf.get_variable(
                     name="src_embeddings", dtype=tf.float32,
                     initializer=glove_emb, trainable=hp.glove_trainable)

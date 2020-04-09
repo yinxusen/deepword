@@ -488,9 +488,10 @@ class BaseAgent(Logging):
         return new_hp, tokenizer
 
     @classmethod
-    def get_nltk_tokenizer(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
-        tokenizer = NLTKTokenizer(
-            vocab_file=conventions.nltk_vocab_file, do_lower_case=True)
+    def get_nltk_tokenizer(
+            cls, hp: HParams, vocab_file: str = conventions.nltk_vocab_file
+    ) -> Tuple[HParams, Tokenizer]:
+        tokenizer = NLTKTokenizer(vocab_file=vocab_file, do_lower_case=True)
         new_hp = copy_hparams(hp)
         new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
         new_hp.set_hparam("padding_val", conventions.nltk_padding_token)
@@ -519,7 +520,13 @@ class BaseAgent(Logging):
         elif hp.tokenizer_type.lower() == "albert":
             new_hp, tokenizer = cls.get_albert_tokenizer(hp)
         elif hp.tokenizer_type.lower() == "nltk":
-            new_hp, tokenizer = cls.get_nltk_tokenizer(hp)
+            if hp.use_glove_emb:
+                # the glove vocab file has been modified to have special tokens
+                # i.e. [PAD] [UNK] <S> </S>
+                new_hp, tokenizer = cls.get_nltk_tokenizer(
+                    hp, vocab_file=conventions.glove_vocab_file)
+            else:
+                new_hp, tokenizer = cls.get_nltk_tokenizer(hp)
         else:
             raise ValueError(
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))

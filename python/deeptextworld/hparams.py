@@ -122,11 +122,10 @@ default_config = {
         use_step_wise_reward=True,
         tokenizer_type="BERT",
         use_glove_emb=False,
-        glove_emb_path="",
         glove_trainable=False,
         compute_policy_action_every_step=False,
         learner_clazz="",
-        scan_dir_for_new_train_data=True),
+        scan_dir_for_new_train_data=False),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
