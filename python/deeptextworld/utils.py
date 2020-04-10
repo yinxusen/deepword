@@ -147,10 +147,10 @@ def agent_name2clazz(name):
     :return:
     """
     from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent, \
-        gen_agent, commonsense_agent, competition_agent
+        gen_agent, commonsense_agent, competition_agent, gen_drrn_agent
 
     for namespace in [dqn_agent, drrn_agent, dsqn_agent, gen_agent,
-                      commonsense_agent, competition_agent]:
+                      commonsense_agent, competition_agent, gen_drrn_agent]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in agents".format(name))

@@ -5,7 +5,7 @@ import re
 from abc import ABC
 from os import remove as prm
 from os.path import join as pjoin
-from typing import Any, Optional
+from typing import Any
 
 import tensorflow as tf
 from tensorflow import Session
@@ -532,9 +532,8 @@ class BaseAgent(Logging):
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))
         return new_hp, tokenizer
 
-    @classmethod
     def get_admissible_actions(
-            cls, infos: Dict[str, List[Any]]) -> List[str]:
+            self, infos: Dict[str, List[Any]]) -> List[str]:
         return [a.lower() for a in infos[INFO_KEY.actions][0]]
 
     @classmethod

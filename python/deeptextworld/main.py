@@ -4,8 +4,8 @@ import os
 import sys
 import traceback
 from argparse import ArgumentParser
-from os.path import join as pjoin
 from multiprocessing import Pool
+from os.path import join as pjoin
 
 import gym
 import tensorflow as tf

@@ -78,7 +78,7 @@ conventions = Conventions(
 
 def get_model_hparams(model_creator: str) -> HParams:
     try:
-        model_hparams = default_config[model_creator]
+        model_hparams = copy_hparams(default_config[model_creator])
     except Exception as e:
         raise ValueError(
             'unknown model creator: {}\n{}'.format(model_creator, e))

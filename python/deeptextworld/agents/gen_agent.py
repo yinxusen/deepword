@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Optional, Any, Dict, Tuple
+from typing import List, Optional, Any, Dict
 
 import numpy as np
 
@@ -51,6 +51,46 @@ class GenDQNCore(TFCore):
                 GenSummary(ids, tokens, gen_prob_per_token, q_action))
         res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
         return res_summary
+
+    def get_decoded_concat_actions(
+            self, trajectory: List[ActionMaster]) -> List[str]:
+        self.debug("trajectory: {}".format(trajectory))
+        src, src_len, master_mask = self.trajectory2input(trajectory)
+        self.debug("src: {}".format(src))
+        self.debug("src_len: {}".format(src_len))
+        self.debug("master_mask: {}".format(master_mask))
+        beam_size = 1
+        temperature = 1
+        use_greedy = False
+
+        self.debug("use_greedy: {}, temperature: {}".format(
+            use_greedy, temperature))
+        res = self.sess.run(
+            [self.model.decoded_idx_infer,
+             self.model.col_eos_idx,
+             self.model.decoded_logits_infer,
+             self.model.p_gen_infer],
+            feed_dict={
+                self.model.src_: [src],
+                self.model.src_len_: [src_len],
+                self.model.src_seg_: [master_mask],
+                self.model.temperature_: temperature,
+                self.model.beam_size_: beam_size,
+                self.model.use_greedy_: use_greedy
+            })
+        action_idx = res[0]
+        col_eos_idx = res[1]
+        decoded_logits = res[2]
+        p_gen = res[3]
+
+        res_summary = self.gen_summary(
+            action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
+        top_action = res_summary[0]
+        self.debug("generated actions:\n{}".format(
+            "\n".join([str(x) for x in res_summary])))
+
+        actions = self.concat_action2actions(top_action.ids)
+        return actions
 
     def get_a_policy_action(
             self, trajectory: List[ActionMaster],
