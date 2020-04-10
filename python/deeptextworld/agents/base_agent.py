@@ -332,8 +332,7 @@ class BaseAgent(Logging):
         self.info(output_hparams(self.hp))
 
         core_class = core_name2clazz(self.hp.core_clazz)
-        self.core: BaseCore = core_class(
-            self.hp, self.model_dir, self.tokenizer)
+        self.core = core_class(self.hp, self.model_dir, self.tokenizer)
 
         self.tjs: Optional[Trajectory[ActionMaster]] = None
         self.memo: Optional[TreeMemory] = None

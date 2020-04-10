@@ -30,6 +30,8 @@ class GenDRRNAgent(BaseAgent):
 
     def _init_impl(self, load_best=False, restore_from=None) -> None:
         super(GenDRRNAgent, self)._init_impl(load_best, restore_from)
+        # colocate gen-core and core on the same GPU
+        self.gen_core.set_d4eval(self.core.d4eval)
         self.gen_core.init(
             is_training=False, load_best=False, restore_from=None)
 
@@ -50,6 +52,8 @@ class GenCompetitionDRRNAgent(CompetitionAgent):
 
     def _init_impl(self, load_best=False, restore_from=None) -> None:
         super(GenCompetitionDRRNAgent, self)._init_impl(load_best, restore_from)
+        # colocate gen-core and core on the same GPU
+        self.gen_core.set_d4eval(self.core.d4eval)
         self.gen_core.init(
             is_training=False, load_best=False, restore_from=None)
 
