@@ -18,6 +18,8 @@ We support
 
 4. Bert commonsense agents
 
+5. Generation + DRRN agents
+
 We provide
 
 1. CNN models
@@ -49,6 +51,15 @@ cite our papers
     author={Xusen Yin and Jonathan May},
     year={2019},
     eprint={1908.04777},
+    archivePrefix={arXiv},
+    primaryClass={cs.CL}
+}
+
+@misc{yin2020zeroshot,
+    title={Zero-Shot Learning of Text Adventure Games with Sentence-Level Semantics},
+    author={Xusen Yin and Jonathan May},
+    year={2020},
+    eprint={2004.02986},
     archivePrefix={arXiv},
     primaryClass={cs.CL}
 }
