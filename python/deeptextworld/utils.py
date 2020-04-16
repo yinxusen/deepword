@@ -274,22 +274,31 @@ def split_train_dev(game_files, train_ratio=0.9, rnd_seed=42):
     return train_games, dev_games
 
 
-def load_game_files(game_dir, f_games=None):
+def load_game_files(game_path, f_games=None):
     """
-    Choose games appearing in f_games in a given game dir. Return all games in
-    the game dir if f_games is None.
-    :param game_dir: a dir
-    :param f_games: a file of game names
-    :return: a list of games
+    Load a dir of games, or a single game.
+    if game_path represents a file, then return a list of the file;
+    if game_path is a dir, then return a list of files in the dir suffixed with
+      .ulx;
+    if f_games is set, then load files in the game_path with names listed in
+      f_games.
+    :param game_path: a dir, or a single file
+    :param f_games: a file of game names, without suffix, default suffix .ulx
+    :return: a list of game files
     """
-    if f_games is not None:
-        with open(f_games, "r") as f:
-            selected_games = map(lambda x: x.strip(), f.readlines())
-        game_files = list(map(
-            lambda x: pjoin(game_dir, "{}.ulx".format(x)),
-            selected_games))
+    if os.path.isfile(game_path):
+        game_files = [game_path]
+    elif os.path.isdir(game_path):
+        if f_games is not None:
+            with open(f_games, "r") as f:
+                selected_games = map(lambda x: x.strip(), f.readlines())
+            game_files = list(map(
+                lambda x: pjoin(game_path, "{}.ulx".format(x)),
+                selected_games))
+        else:
+            game_files = glob.glob(pjoin(game_path, "*.ulx"))
     else:
-        game_files = glob.glob(pjoin(game_dir, "*.ulx"))
+        raise ValueError("game path {} doesn't exist".format(game_path))
     return game_files
 
 

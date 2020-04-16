@@ -1027,7 +1027,8 @@ class BaseAgent(Logging):
     def update_status(
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, float]:
-        master = infos[INFO_KEY.desc][0] if self.in_game_t == 0 else obs[0]
+        desc = infos[INFO_KEY.desc][0]
+        master = desc if self.in_game_t == 0 and desc else obs[0]
         instant_reward = self.get_instant_reward(
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
