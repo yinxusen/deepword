@@ -465,6 +465,70 @@ class GenLearner(StudentLearner):
         return p_states, p_len, master_mask, actions_in, actions_out, action_len
 
 
+class GenMixActionsLearner(StudentLearner):
+    def _train_impl(self, data, train_step):
+        (p_states, p_len, master_mask, actions_in, actions_out, action_len,
+         b_weight) = data
+        eprint("batch size: {}".format(len(p_states)))
+        eprint(p_states[:10])
+        eprint(p_len[:10])
+        eprint(actions_in[:10])
+        eprint(b_weight[:10])
+        _, summaries, loss = self.sess.run(
+            [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op,
+             self.model.loss_seq2seq],
+            feed_dict={
+                self.model.src_: p_states,
+                self.model.src_len_: p_len,
+                self.model.src_seg_: master_mask,
+                self.model.action_idx_: actions_in,
+                self.model.action_idx_out_: actions_out,
+                self.model.action_len_: action_len,
+                self.model.b_weight_: b_weight})
+        self.sw.add_summary(summaries, train_step)
+        eprint("loss: {}".format(loss))
+
+    @staticmethod
+    def softmax(x):
+        """numerical stability softmax"""
+        e_x = np.exp(x - np.sum(x))
+        return e_x / np.sum(e_x)
+
+    def _prepare_data(self, b_memory, tjs, action_collector):
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        # b_weight is softmax(q-values)
+        # TODO: since every trajectory has different size of admissible actions,
+        #   the softmax version of q-values could have different range for each
+        #   trajectory. But it's fine for now, since we only need the weight
+        #   inside admissible actions for each trajectory.
+        b_weight = np.asarray(flatten(
+            [list(self.softmax(m.q_actions)) for m in b_memory]))
+
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        action_matrix = (
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask)
+
+        actions_in, actions_out, action_len = get_action_idx_pair(
+            actions, action_len, self.hp.sos_id, self.hp.eos_id)
+
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        p_states, p_len, master_mask = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+        p_states = np.repeat(p_states, actions_repeats, axis=0)
+        p_len = np.repeat(p_len, actions_repeats, axis=0)
+        master_mask = np.repeat(master_mask, actions_repeats, axis=0)
+
+        return (
+            p_states, p_len, master_mask, actions_in, actions_out, action_len,
+            b_weight)
+
+
 class GenConcatActionsLearner(GenLearner):
     def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
@@ -517,15 +581,14 @@ class BertLearner(StudentLearner):
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
         expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
-        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-        p_states, p_len, _ = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         action_matrix = (
             [action_collector.get_action_matrix(gid) for gid in game_id])
         actions, action_len, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
+
         batch_q_idx = sample_batch_ids(
             expected_qs, actions_repeats, k=n_classes)
         selected_qs = expected_qs[batch_q_idx]
@@ -561,8 +624,9 @@ class BertLearner(StudentLearner):
 class BertSoftmaxLearner(BertLearner):
     def _train_impl(self, data, train_step):
         inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
-        _, summaries = self.sess.run(
-            [self.model.swag_train_op, self.model.swag_train_summary_op],
+        _, summaries, loss = self.sess.run(
+            [self.model.swag_train_op, self.model.swag_train_summary_op,
+             self.model.swag_loss],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
@@ -570,3 +634,4 @@ class BertSoftmaxLearner(BertLearner):
                 self.model.swag_labels_: swag_labels
                 })
         self.sw.add_summary(summaries, train_step)
+        eprint("loss: {}".format(loss))

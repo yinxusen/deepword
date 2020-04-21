@@ -62,6 +62,10 @@ class TransformerGenDQN(BaseDQN):
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):
+        """
+        b_weight under this function comes from experience replay pool, which
+        is the abs difference between true q and estimated q values.
+        """
         loss, abs_loss = l2_loss_2d_action(
             q_actions, self.inputs["action_idx_out"], self.inputs["expected_q"],
             self.hp.vocab_size, self.inputs["action_len"],
@@ -70,15 +74,18 @@ class TransformerGenDQN(BaseDQN):
         return loss, train_op, abs_loss
 
     def get_seq2seq_train_op(self, q_actions):
+        """
+        b_weight under this function comes from softmax(q-values) from other
+        DRRN agent.
+        """
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=self.inputs["action_idx_out"], logits=q_actions)
+        losses = self.inputs["b_weight"][:, None] * losses
         action_len_mask = tf.sequence_mask(
             self.inputs["action_len"], self.hp.n_tokens_per_action)
-        bare_loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
-        loss = (bare_loss +
-                tf.add_n(self.transformer.decoder.final_layer.losses))
+        loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return bare_loss, loss, train_op
+        return loss, train_op
 
     def get_best_2d_q(self, q_actions):
         action_idx = tf.argmax(q_actions, axis=-1, output_type=tf.int32)
@@ -137,13 +144,11 @@ def create_train_gen_model(model_creator, hp, device_placement):
             loss_summary = tf.summary.scalar("loss", loss)
             acc_train_summary = tf.summary.scalar("acc_train", acc_train)
             train_summary_op = tf.summary.merge([loss_summary])
-            (bare_loss_seq2seq, loss_seq2seq, train_seq2seq_op
+            (loss_seq2seq, train_seq2seq_op
              ) = model.get_seq2seq_train_op(q_actions)
             loss_summary_2 = tf.summary.scalar("loss_seq2seq", loss_seq2seq)
-            bare_loss_summary = tf.summary.scalar(
-                "bare_loss_seq2seq", bare_loss_seq2seq)
             train_seq2seq_summary_op = tf.summary.merge(
-                [loss_summary_2, bare_loss_summary, acc_train_summary])
+                [loss_summary_2, acc_train_summary])
     return GenDQNModel(
         graph=graph, q_actions=q_actions,
         decoded_idx_infer=decoded_idx,

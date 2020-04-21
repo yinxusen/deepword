@@ -312,7 +312,7 @@ class Decoder(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
         self.logit_gen_layer = tf.keras.layers.Dense(units=1, use_bias=True)
         self.final_layer = tf.keras.layers.Dense(
-            tgt_vocab_size, kernel_regularizer=tf.keras.regularizers.l2(0.01))
+            units=tgt_vocab_size, use_bias=True)
 
     def call(
             self, x, enc_x, enc_output, training,
@@ -334,9 +334,7 @@ class Decoder(tf.keras.layers.Layer):
         x = self.embedding(x)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
-
         raw_x = x
-
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers):
@@ -344,6 +342,7 @@ class Decoder(tf.keras.layers.Layer):
                 x, enc_output, training, look_ahead_mask, padding_mask)
             attention_logits.append(attn_logits)
 
+        x = self.dropout(x, training=training)
         gen_logits = self.final_layer(x)
         gen_logits = gen_logits - tf.reduce_logsumexp(
             gen_logits, axis=-1, keepdims=True)
@@ -369,6 +368,7 @@ class Decoder(tf.keras.layers.Layer):
         # context vectors. but for transformer, the decoder state and context
         # vectors are highly correlated, so we use one of them.
         combined_features = tf.concat([x, raw_x], axis=-1)
+        combined_features = self.dropout(combined_features, training=training)
         # (batch_size, dec_t, 1)
         logit_gen = self.logit_gen_layer(combined_features)
         # normalized logit of gen

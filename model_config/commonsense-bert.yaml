@@ -7,7 +7,7 @@ num_turns: 5
 batch_size: 8  # expanded to 32 since we take 4 actions per tj
 save_gap_t: 5000
 embedding_size: 64
-learning_rate: 5e-5
+learning_rate: 1e-5
 bert_num_hidden_layers: 12  # full-size bert-base
 tokenizer_type: "BERT"
 max_snapshot_to_keep: 100
