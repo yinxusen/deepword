@@ -16,5 +16,5 @@ game_episode_terminal_t: 100
 replay_mem: 100000
 collect_floor_plan: True
 decode_concat_action: False
-gen_loss_weighted_by_qs: True  # for student learner
+gen_loss_weighted_by_qs: False  # for student learner
 learner_clazz: GenMixActionsLearner  # for student learner

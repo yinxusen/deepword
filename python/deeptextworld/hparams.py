@@ -244,6 +244,7 @@ default_config = {
         num_tokens=1000,
         max_decoding_size=10,
         decode_concat_action=False,
+        gen_loss_weighted_by_qs=False,
         tokenizer_type="NLTK"),
     "BertCommonsense": HParams(
         agent_clazz='BaseAgent',

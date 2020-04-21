@@ -470,10 +470,6 @@ class GenMixActionsLearner(StudentLearner):
         (p_states, p_len, master_mask, actions_in, actions_out, action_len,
          b_weight) = data
         eprint("batch size: {}".format(len(p_states)))
-        eprint(p_states[:10])
-        eprint(p_len[:10])
-        eprint(actions_in[:10])
-        eprint(b_weight[:10])
         _, summaries, loss = self.sess.run(
             [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op,
              self.model.loss_seq2seq],
@@ -504,8 +500,13 @@ class GenMixActionsLearner(StudentLearner):
         #   the softmax version of q-values could have different range for each
         #   trajectory. But it's fine for now, since we only need the weight
         #   inside admissible actions for each trajectory.
-        b_weight = np.asarray(flatten(
-            [list(self.softmax(m.q_actions)) for m in b_memory]))
+        if self.hp.gen_loss_weighted_by_qs:
+            b_weight = np.asarray(flatten(
+                [list(self.softmax(m.q_actions)) for m in b_memory]))
+        else:
+            b_weight = np.asarray(flatten(
+                [list(self.softmax(np.zeros_like(m.q_actions)))
+                 for m in b_memory]))
 
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
