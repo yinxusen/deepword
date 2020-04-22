@@ -5,7 +5,7 @@ import numpy as np
 
 from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE, TFCore
 from deeptextworld.agents.utils import bert_commonsense_input, ActionMaster, \
-    ObsInventory, dqn_input
+    ObsInventory, dqn_input, categorical_without_replacement, get_best_1d_q
 from deeptextworld.models.export_models import CommonsenseModel
 
 
@@ -87,7 +87,27 @@ class BertCore(TFCore):
         results = ["{}\t{}".format(a, q) for a, q in results]
         self.debug("\n".join(results))
 
-        action_idx = np.argmax(q_actions_t)
+        if self.hp.policy_utilization_method.lower() == "Sampling".lower():
+            self.debug("sampling from q-values with t = {}".format(
+                self.hp.policy_q_vals_t))
+            action_idx = categorical_without_replacement(
+                logits=q_actions_t * self.hp.policy_q_vals_t,
+                k=1)
+        elif self.hp.policy_utilization_method.lower() == "LinUCB".lower():
+            self.debug("LinUCB choosing action")
+            cnt_action_array = []
+            for mid in action_mask:
+                cnt_action_array.append(
+                    cnt_action[mid] if mid in cnt_action else 0.)
+
+            action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action_array)
+        elif self.hp.policy_utilization_method.lower() == "EPS".lower():
+            self.debug("EPS action")
+            action_idx, q_val = get_best_1d_q(q_actions_t)
+        else:
+            raise ValueError("Unknown policy utilization method: {}".format(
+                self.hp.policy_utilization_method))
+
         action = actions[action_idx]
         true_action_idx = action_mask[action_idx]
 

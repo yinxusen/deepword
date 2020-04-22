@@ -53,6 +53,9 @@ def hp_parser() -> ArgumentParser:
         '--compute-policy-action-every-step', action='store_true', default=None)
     parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
     parser.add_argument("--max-snapshot-to-keep", type=int)
+    parser.add_argument(
+        "--policy-utilization-method", type=str, help="[EPS/LinUCB/Sampling]")
+    parser.add_argument("--policy-q-vals-t", type=float)
     return parser
 
 
