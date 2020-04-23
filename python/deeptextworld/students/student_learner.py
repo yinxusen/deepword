@@ -25,7 +25,7 @@ from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.agents.utils import get_best_batch_ids
 from deeptextworld.agents.utils import sample_batch_ids
-from deeptextworld.hparams import save_hparams
+from deeptextworld.hparams import save_hparams, output_hparams
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten
 from deeptextworld.utils import model_name2clazz, bytes2idx
@@ -59,6 +59,7 @@ class StudentLearner(object):
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
         self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
         save_hparams(self.hp, pjoin(model_dir, "hparams.json"))
+        eprint(output_hparams(self.hp))
 
         self.sess = None
         self.model = None
@@ -469,7 +470,6 @@ class GenMixActionsLearner(StudentLearner):
     def _train_impl(self, data, train_step):
         (p_states, p_len, master_mask, actions_in, actions_out, action_len,
          b_weight) = data
-        eprint("batch size: {}".format(len(p_states)))
         _, summaries, loss = self.sess.run(
             [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op,
              self.model.loss_seq2seq],
@@ -491,6 +491,7 @@ class GenMixActionsLearner(StudentLearner):
         return e_x / np.sum(e_x)
 
     def _prepare_data(self, b_memory, tjs, action_collector):
+        n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
@@ -515,19 +516,24 @@ class GenMixActionsLearner(StudentLearner):
         actions, action_len, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
+        batch_q_idx = sample_batch_ids(
+            b_weight, actions_repeats, k=n_classes)
+        selected_b_weights = b_weight[batch_q_idx]
+
         actions_in, actions_out, action_len = get_action_idx_pair(
-            actions, action_len, self.hp.sos_id, self.hp.eos_id)
+            actions[batch_q_idx], action_len[batch_q_idx],
+            self.hp.sos_id, self.hp.eos_id)
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
             states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
-        p_states = np.repeat(p_states, actions_repeats, axis=0)
-        p_len = np.repeat(p_len, actions_repeats, axis=0)
-        master_mask = np.repeat(master_mask, actions_repeats, axis=0)
+        p_states = np.repeat(p_states, n_classes, axis=0)
+        p_len = np.repeat(p_len, n_classes, axis=0)
+        master_mask = np.repeat(master_mask, n_classes, axis=0)
 
         return (
             p_states, p_len, master_mask, actions_in, actions_out, action_len,
-            b_weight)
+            selected_b_weights)
 
 
 class GenConcatActionsLearner(GenLearner):
