@@ -30,7 +30,7 @@ def reason_of_failure(last_commands):
     return res
 
 
-def most_commom_steps(scoring_steps):
+def most_common_steps(scoring_steps):
     """
     1. find the most common scoring steps,
     2. if ties, choose the one with the best score.
@@ -61,6 +61,7 @@ def format_steps(mcs, max_n_vals):
 
     return retval + ['-'] * (max_n_vals - len(retval))
 
+
 def diff_from_keys(keys, j_result, j_result2):
     for game_name in keys:
         game_res = j_result["games"][game_name]
@@ -80,8 +81,8 @@ def diff_from_keys(keys, j_result, j_result2):
         # print(reason_of_failure(map(lambda x: x["commands"][-1], game_res["runs"])))
         # print(reason_of_failure(map(lambda x: x["commands"][-1], game_res2["runs"])))
         max_vals = 11
-        most_common_1 = most_commom_steps(scoring_steps)
-        most_common_2 = most_commom_steps(scoring_steps2)
+        most_common_1 = most_common_steps(scoring_steps)
+        most_common_2 = most_common_steps(scoring_steps2)
         if len(most_common_1) != 0 and len(most_common_1) == len(most_common_2):
             print(sum(most_common_1), ",", sum(most_common_2))
             # most_common_1 = format_steps(most_common_1, max_vals)
