@@ -7,7 +7,7 @@ import textworld.gym
 from textworld import EnvInfos
 from tqdm import tqdm
 
-from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.competition_agent import CompetitionAgent
 from deeptextworld.floor_plan import FloorPlanCollector
 from deeptextworld.utils import load_game_files
 from deeptextworld.agents.utils import INFO_KEY
@@ -116,7 +116,7 @@ class OneStepCollector(CollectorAgent):
         self.templates.update(infos[INFO_KEY.templates][0])
         self.total_score += infos[INFO_KEY.max_score][0]
         self.ingredients.update(
-            BaseAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
+            CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
         action = random.choice(infos[INFO_KEY.actions][0])
         return action
 

@@ -44,7 +44,8 @@ def repeat_action_error(g_name, j_game):
         if run1["steps"] == 100:
             print("{}, exceed step limit".format(g_type))
         elif run1["commands"][-1] in run1["commands"][:-1]:
-            print("{}, repeat dangerous action: {}".format(g_type, run1["commands"][-1]))
+            print("{}, repeat dangerous action: {}".format(
+                g_type, run1["commands"][-1]))
         else:
             print("{}, unknown error: {}".format(g_type, run1["commands"][-1]))
 

@@ -4,12 +4,12 @@ import sys
 
 
 def diff_names(f_games, test_set):
-    with open(f_games, "r") as f:
-        fnames = map(lambda n: n.strip(), f.readlines())
-    with open(test_set, "r") as f:
-        test_names = set(map(lambda n: n.strip(), f.readlines()))
+    with open(f_games, "r") as ff:
+        fn_games = map(lambda n: n.strip(), ff.readlines())
+    with open(test_set, "r") as ff:
+        test_names = set(map(lambda n: n.strip(), ff.readlines()))
 
-    diff = filter(lambda n: n not in test_names, fnames)
+    diff = filter(lambda n: n not in test_names, fn_games)
     with open("{}-diff".format(f_games), "w") as ft:
         ft.write("\n".join(sorted(diff)) + "\n")
 
