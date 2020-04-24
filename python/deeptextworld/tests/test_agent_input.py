@@ -1,14 +1,12 @@
-import unittest
 import random
+import unittest
 
 from tensorflow.contrib.training import HParams
 
-from deeptextworld.agents.utils import *
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.utils import *
 from deeptextworld.hparams import copy_hparams
-from deeptextworld.utils import eprint
-
 
 tokenizer_hp = HParams(
     vocab_size=0,
