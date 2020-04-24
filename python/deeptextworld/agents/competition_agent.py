@@ -46,6 +46,11 @@ class CompetitionAgent(BaseAgent):
     def filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
+        TODO: current filtering logic has problem. e.g. when there is no
+          theme words, then all actions are moved in contained.
+          Most of them will be filtered out because of this, which is wrong.
+          Fortunately for cooking game it's OK for now.
+          Do not apply this action filter for other games.
         :param admissible_actions: raw action given by the game.
         :return:
         """
