@@ -533,7 +533,14 @@ class BaseAgent(Logging):
 
     def get_admissible_actions(
             self, infos: Dict[str, List[Any]]) -> List[str]:
-        return [a.lower() for a in infos[INFO_KEY.actions][0]]
+        """
+        We add inventory and look, in case that the game doesn't provide these
+        two key actions.
+        """
+        # system provided admissible actions
+        sys_actions = [a.lower() for a in infos[INFO_KEY.actions][0]]
+        admissible_actions = list(set(sys_actions) | {ACT.inventory, ACT.look})
+        return admissible_actions
 
     @classmethod
     def _compute_game_id(cls, infos: Dict[str, List[Any]]) -> str:
