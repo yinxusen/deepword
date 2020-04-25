@@ -122,6 +122,11 @@ def run_agent(agent, game_env, nb_games, nb_epochs):
                 obs, scores, dones, infos = game_env.step(commands)
             # Let the agent knows the game is done.
             agent.act(obs, scores, dones, infos)
+        if agent.total_t > agent.hp.observation_t + agent.hp.annealing_eps_t:
+            logger.info("training steps exceed MAX, stop training...")
+            logger.info("total training steps: {}".format(
+                agent.total_t - agent.hp.observation_t))
+            return
 
 
 def train(hp, model_dir, game_dir, f_games=None):
