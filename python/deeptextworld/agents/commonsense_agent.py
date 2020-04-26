@@ -91,7 +91,7 @@ class BertCore(TFCore):
             self.debug("sampling from q-values with t = {}".format(
                 self.hp.policy_q_vals_t))
             action_idx = categorical_without_replacement(
-                logits=q_actions_t * self.hp.policy_q_vals_t,
+                logits=q_actions_t / self.hp.policy_q_vals_t,
                 k=1)
         elif self.hp.policy_utilization_method.lower() == "LinUCB".lower():
             self.debug("LinUCB choosing action")
