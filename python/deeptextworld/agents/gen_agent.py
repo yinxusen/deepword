@@ -92,20 +92,14 @@ class GenDQNCore(TFCore):
         actions = self.concat_action2actions(top_action.ids)
         return actions
 
-    def get_a_policy_action(
-            self, trajectory: List[ActionMaster],
-            state: Optional[ObsInventory],
-            action_matrix: np.ndarray,
-            action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+    def get_decoded_beam_actions(
+            self, trajectory: List[ActionMaster]) -> List[str]:
         self.debug("trajectory: {}".format(trajectory))
         src, src_len, master_mask = self.trajectory2input(trajectory)
         self.debug("src: {}".format(src))
         self.debug("src_len: {}".format(src_len))
         self.debug("master_mask: {}".format(master_mask))
-        beam_size = 1
+        beam_size = 20
         temperature = 1
         use_greedy = False
 
@@ -131,27 +125,36 @@ class GenDQNCore(TFCore):
 
         res_summary = self.gen_summary(
             action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
-        top_action = res_summary[0]
         self.debug("generated actions:\n{}".format(
             "\n".join([str(x) for x in res_summary])))
 
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_gen, action_idx=None,
-            token_idx=top_action[0], action_len=top_action[1],
-            action=top_action[2], q_actions=None)
+        actions = [self.tokenizer.de_tokenize(aid) for aid in action_idx]
+        return actions
 
-        self.debug("gen actions: {}".format(
-            self.concat_action2actions(top_action.ids)))
+    def get_a_policy_action(
+            self, trajectory: List[ActionMaster],
+            state: Optional[ObsInventory],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            actions: List[str],
+            action_mask: np.ndarray,
+            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
 
         if self.hp.decode_concat_action:
-            action_idx = np.random.choice(action_mask)
-            action_desc = ActionDesc(
-                action_type=ACT_TYPE.rnd,
-                action_idx=action_idx,
-                token_idx=action_matrix[action_idx],
-                action_len=action_len[action_idx],
-                action=actions[action_idx],
-                q_actions=None)
+            gen_actions = self.get_decoded_concat_actions(trajectory)
+        else:
+            gen_actions = self.get_decoded_beam_actions(trajectory)
+
+        self.debug("gen actions: {}".format(gen_actions))
+        action_idx = np.random.choice(action_mask)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.rnd,
+            action_idx=action_idx,
+            token_idx=action_matrix[action_idx],
+            action_len=action_len[action_idx],
+            action=actions[action_idx],
+            q_actions=None)
+
         return action_desc
 
     def _compute_expected_q(
