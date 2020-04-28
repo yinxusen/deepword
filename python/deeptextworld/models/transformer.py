@@ -626,7 +626,7 @@ class Transformer(tf.keras.Model):
         decoded_idx = results[1][:, 1:]
         decoded_logits = results[3][:, 1:]
         # valid_len includes the final EOS
-        decoded_valid_len = results[4]
+        decoded_valid_len = tf.squeeze(results[4], axis=-1)
         decoded_p_gen = results[5][:, 1:]
         return decoded_idx, decoded_logits, decoded_p_gen, decoded_valid_len
 

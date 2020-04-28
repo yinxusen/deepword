@@ -59,10 +59,7 @@ class GenDQNModel(DQNModel):
             beam_size_: tf.placeholder,
             use_greedy_: tf.placeholder,
             col_eos_idx: tf.Tensor,
-            decoded_logits_infer: tf.Tensor,
-            loss_seq2seq: Optional[tf.Tensor],
-            train_seq2seq_summary_op: Optional[tf.Operation],
-            train_seq2seq_op: Optional[tf.Operation]):
+            decoded_logits_infer: tf.Tensor):
         super(GenDQNModel, self).__init__(
             graph,
             q_actions,
@@ -87,9 +84,6 @@ class GenDQNModel(DQNModel):
         self.use_greedy_ = use_greedy_
         self.col_eos_idx = col_eos_idx
         self.decoded_logits_infer = decoded_logits_infer
-        self.loss_seq2seq = loss_seq2seq
-        self.train_seq2seq_summary_op = train_seq2seq_summary_op
-        self.train_seq2seq_op = train_seq2seq_op
 
 
 class DRRNModel(DQNModel):
