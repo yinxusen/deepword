@@ -1,4 +1,3 @@
-from collections import namedtuple
 from typing import List, Optional, Any, Dict
 
 import numpy as np
@@ -6,17 +5,8 @@ import numpy as np
 from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE
 from deeptextworld.agents.base_agent import BaseAgent, TFCore
 from deeptextworld.agents.utils import ActionMaster, ObsInventory, Memolet
-from deeptextworld.agents.utils import get_action_idx_pair
+from deeptextworld.agents.utils import get_action_idx_pair, GenSummary
 from deeptextworld.models.export_models import GenDQNModel
-
-
-class GenSummary(namedtuple(
-        "GenSummary", ("ids", "tokens", "gens", "q_action"))):
-
-    def __repr__(self):
-        return (" ".join(["{}[{:.2f}]".format(t, p)
-                          for t, p in zip(self.tokens, self.gens)])
-                + "\t{}".format(self.q_action))
 
 
 class GenDQNCore(TFCore):
@@ -25,13 +15,7 @@ class GenDQNCore(TFCore):
         self.model: Optional[GenDQNModel] = None
         self.target_model: Optional[GenDQNModel] = None
 
-    def concat_action2actions(
-            self, concat_action_idx: List[int]) -> List[str]:
-        concat_action = self.tokenizer.de_tokenize(concat_action_idx)
-        actions = [a.strip() for a in concat_action.split(";")]
-        return actions
-
-    def gen_summary(
+    def summary(
             self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
             decoded_logits: np.ndarray, p_gen: np.ndarray, beam_size: int
     ) -> List[GenSummary]:
@@ -48,12 +32,12 @@ class GenDQNCore(TFCore):
             gen_prob_per_token = list(p_gen[bid, :n_cols])
             q_action = np.sum(decoded_logits[bid, :n_cols, ids]) / n_cols
             res_summary.append(
-                GenSummary(ids, tokens, gen_prob_per_token, q_action))
+                GenSummary(ids, tokens, gen_prob_per_token, q_action, n_cols))
         res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
         return res_summary
 
-    def get_decoded_concat_actions(
-            self, trajectory: List[ActionMaster]) -> List[str]:
+    def decode_action(
+            self, trajectory: List[ActionMaster]) -> GenSummary:
         self.debug("trajectory: {}".format(trajectory))
         src, src_len, master_mask = self.trajectory2input(trajectory)
         self.debug("src: {}".format(src))
@@ -61,7 +45,7 @@ class GenDQNCore(TFCore):
         self.debug("master_mask: {}".format(master_mask))
         beam_size = 1
         temperature = 1
-        use_greedy = False
+        use_greedy = True
 
         self.debug("use_greedy: {}, temperature: {}".format(
             use_greedy, temperature))
@@ -78,58 +62,18 @@ class GenDQNCore(TFCore):
                 self.model.beam_size_: beam_size,
                 self.model.use_greedy_: use_greedy
             })
+
         action_idx = res[0]
         col_eos_idx = res[1]
         decoded_logits = res[2]
         p_gen = res[3]
 
-        res_summary = self.gen_summary(
-            action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
-        top_action = res_summary[0]
-        self.debug("generated actions:\n{}".format(
-            "\n".join([str(x) for x in res_summary])))
-
-        actions = self.concat_action2actions(top_action.ids)
-        return actions
-
-    def get_decoded_beam_actions(
-            self, trajectory: List[ActionMaster]) -> List[str]:
-        self.debug("trajectory: {}".format(trajectory))
-        src, src_len, master_mask = self.trajectory2input(trajectory)
-        self.debug("src: {}".format(src))
-        self.debug("src_len: {}".format(src_len))
-        self.debug("master_mask: {}".format(master_mask))
-        beam_size = 20
-        temperature = 1
-        use_greedy = False
-
-        self.debug("use_greedy: {}, temperature: {}".format(
-            use_greedy, temperature))
-        res = self.sess.run(
-            [self.model.decoded_idx_infer,
-             self.model.col_eos_idx,
-             self.model.decoded_logits_infer,
-             self.model.p_gen_infer],
-            feed_dict={
-                self.model.src_: [src],
-                self.model.src_len_: [src_len],
-                self.model.src_seg_: [master_mask],
-                self.model.temperature_: temperature,
-                self.model.beam_size_: beam_size,
-                self.model.use_greedy_: use_greedy
-            })
-        action_idx = res[0]
-        col_eos_idx = res[1]
-        decoded_logits = res[2]
-        p_gen = res[3]
-
-        res_summary = self.gen_summary(
+        res_summary = self.summary(
             action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
         self.debug("generated actions:\n{}".format(
             "\n".join([str(x) for x in res_summary])))
 
-        actions = [self.tokenizer.de_tokenize(aid) for aid in action_idx]
-        return actions
+        return res_summary[0]
 
     def get_a_policy_action(
             self, trajectory: List[ActionMaster],
@@ -140,20 +84,16 @@ class GenDQNCore(TFCore):
             action_mask: np.ndarray,
             cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
 
-        if self.hp.decode_concat_action:
-            gen_actions = self.get_decoded_concat_actions(trajectory)
-        else:
-            gen_actions = self.get_decoded_beam_actions(trajectory)
-
-        self.debug("gen actions: {}".format(gen_actions))
-        action_idx = np.random.choice(action_mask)
+        gen_res = self.decode_action(trajectory)
+        action = self.tokenizer.de_tokenize(gen_res.ids)
+        self.debug("gen action: {}".format(action))
         action_desc = ActionDesc(
-            action_type=ACT_TYPE.rnd,
-            action_idx=action_idx,
-            token_idx=action_matrix[action_idx],
-            action_len=action_len[action_idx],
-            action=actions[action_idx],
-            q_actions=None)
+            action_type=ACT_TYPE.policy_gen,
+            action_idx=None,
+            token_idx=gen_res.ids,
+            action_len=gen_res.len,
+            action=action,
+            q_actions=gen_res.q_action)
 
         return action_desc
 

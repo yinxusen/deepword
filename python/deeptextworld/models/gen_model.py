@@ -126,10 +126,6 @@ class TransformerGenDQN(BaseDQN):
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):
-        """
-        b_weight under this function comes from experience replay pool, which
-        is the abs difference between true q and estimated q values.
-        """
         loss, abs_loss = l2_loss_2d_action(
             q_actions, self.inputs["action_idx_out"], self.inputs["expected_q"],
             self.hp.vocab_size, self.inputs["action_len"],
@@ -139,6 +135,12 @@ class TransformerGenDQN(BaseDQN):
 
 
 class TransformerPGN(TransformerGenDQN):
+    """
+    TransformerPGN is similar with TransformerGenDQN, the only difference is
+    the former uses cross entropy loss, while the latter uses MSE.
+    Thus, TransformerPGN is not allowed training with the DQN framework.
+    It can only be trained with supervised learning, e.g. imitation learning.
+    """
     def __init__(self, hp, is_infer=False):
         super(TransformerPGN, self).__init__(hp, is_infer)
 
@@ -162,8 +164,9 @@ class TransformerPGN(TransformerGenDQN):
 
     def get_train_op(self, q_actions):
         """
-        b_weight under this function comes from softmax(q-values) from other
-        DRRN agent.
+        b_weight could be
+          1. per instance, i.e. [batch_size, 1]
+          2. per token, i.e. [batch_size, n_tokens]
         """
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=self.inputs["action_idx_out"], logits=q_actions)
@@ -172,4 +175,4 @@ class TransformerPGN(TransformerGenDQN):
             self.inputs["action_len"], self.hp.n_tokens_per_action)
         loss = tf.reduce_mean(tf.boolean_mask(losses, action_len_mask))
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
-        return loss, train_op, loss
+        return loss, train_op, None

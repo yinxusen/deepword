@@ -59,6 +59,15 @@ class ActionDesc(namedtuple(
     pass
 
 
+class GenSummary(namedtuple(
+        "GenSummary", ("ids", "tokens", "gens", "q_action", "len"))):
+
+    def __repr__(self):
+        return (" ".join(["{}[{:.2f}]".format(t, p)
+                          for t, p in zip(self.tokens, self.gens)])
+                + "\t{}".format(self.q_action))
+
+
 class Tokenizer(object):
     @property
     def vocab(self) -> Dict[str, int]:
