@@ -24,7 +24,8 @@ tokenizer_hp = HParams(
     cls_val_id=None,
     sep_val_id=None,
     mask_val_id=None,
-    tokenizer_type=None)
+    tokenizer_type=None,
+    use_glove_emb=False)
 
 
 def gen_rand_str(
@@ -163,7 +164,7 @@ class TestAgentInput(unittest.TestCase):
             self.assertEqual(len(action_mask), len(inp))
             self.assertEqual(len(inp), len(seg_tj_action))
             self.assertEqual(len(inp), len(inp_size))
-            self.assertTrue(all([0 < x < num_tokens for x in inp_size]))
+            self.assertTrue(all([0 < x <= num_tokens for x in inp_size]))
             for ii, ss, ll in zip(inp, seg_tj_action, inp_size):
                 self.assertEqual(len(ii), num_tokens)
                 self.assertEqual(ii[0], hp.cls_val_id)
@@ -213,6 +214,38 @@ class TestAgentInput(unittest.TestCase):
             # assert uniformly selected
             self.assertTrue([x < 0.1 for x in others - np.mean(others)])
             idx_starter += n_repeats
+
+    def test_align_batch_str(self):
+        hp = copy_hparams(tokenizer_hp)
+        hp.set_hparam("tokenizer_type", "NLTK")
+        hp, tokenizer = BaseAgent.init_tokens(hp)
+        vocab = list(tokenizer.vocab.keys())
+
+        for _ in range(100):
+            num_tokens = np.random.randint(1, 1024)
+            n_rows = 100
+            data = gen_rand_str(
+                vocab, length_up_to=num_tokens, n_rows=n_rows,
+                allow_empty_str=True)
+            ids = [tokenizer.convert_tokens_to_ids(tokenizer.tokenize(s))
+                   for s in data]
+            str_len_allowance = 1000
+            valid_len = [len(x) for x in ids]
+            aligned_str, aligned_len = align_batch_str(
+                ids, str_len_allowance, hp.padding_val_id, valid_len)
+
+            self.assertTrue(np.all(aligned_len <= str_len_allowance))
+            self.assertTrue(aligned_str.shape[0] == n_rows)
+            self.assertTrue(aligned_str.shape[1] <= str_len_allowance)
+            self.assertTrue(aligned_str.shape[1] <= max(valid_len))
+
+            for s, l, raw_str, raw_len in zip(
+                    aligned_str, aligned_len, ids, valid_len):
+                self.assertTrue(l == min(raw_len, str_len_allowance))
+                for i in range(min(l, raw_len)):
+                    self.assertEqual(s[i], raw_str[i])
+                for i in range(l, aligned_str.shape[1]):
+                    self.assertEqual(s[i], hp.padding_val_id)
 
 
 if __name__ == '__main__':

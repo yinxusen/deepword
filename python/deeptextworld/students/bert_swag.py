@@ -15,10 +15,10 @@ from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 
 from deeptextworld.agents.utils import Tokenizer
+from deeptextworld.agents.utils import align_batch_str
 from deeptextworld.agents.utils import bert_commonsense_input
-from deeptextworld.agents.utils import pad_str_ids
 from deeptextworld.students.student_learner import BertLearner
-from deeptextworld.utils import eprint, model_name2clazz
+from deeptextworld.utils import eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -32,17 +32,20 @@ def process_one_line(
         max_end_len: int) -> Tuple[List[int], int, np.ndarray, np.ndarray]:
     tj_ids = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(start_str))
     tj_len = len(tj_ids)
-    padded_tj_ids = pad_str_ids(
-        tj_ids, max_size=max_start_len, padding_val_id=0)
+    aligned_tj = align_batch_str(
+        [tj_ids], str_len_allowance=max_start_len, padding_val_id=0,
+        valid_len=[tj_len])
+    tj_ids = aligned_tj[0][0]
+    tj_len = aligned_tj[1][0]
+
     actions = [
         tokenizer.convert_tokens_to_ids(tokenizer.tokenize(a))
         for a in ending_str]
-    action_len = np.asarray([len(a) for a in actions], dtype=np.int32)
-    max_action_size = min(np.max(action_len), max_end_len)
-    action_matrix = np.asarray(
-        [pad_str_ids(a, max_size=max_action_size, padding_val_id=0)
-         for a in actions], dtype=np.int32)
-    return padded_tj_ids, tj_len, action_matrix, action_len
+    action_matrix, action_len = align_batch_str(
+        actions, str_len_allowance=max_end_len, padding_val_id=0,
+        valid_len=[len(a) for a in actions])
+
+    return tj_ids, tj_len, action_matrix, action_len
 
 
 def load_swag_data(

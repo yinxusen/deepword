@@ -19,7 +19,7 @@ from tqdm import trange
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
 from deeptextworld.agents.utils import ActionMaster
-from deeptextworld.agents.utils import Memolet, pad_str_ids
+from deeptextworld.agents.utils import Memolet, align_batch_str
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_action_idx_pair
@@ -27,7 +27,7 @@ from deeptextworld.agents.utils import get_best_batch_ids
 from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams, output_hparams
 from deeptextworld.trajectory import Trajectory
-from deeptextworld.utils import eprint, flatten
+from deeptextworld.utils import eprint, flatten, softmax
 from deeptextworld.utils import model_name2clazz, bytes2idx
 
 
@@ -430,10 +430,10 @@ class DRRNLearner(StudentLearner):
 
 class GenLearner(StudentLearner):
     def _train_impl(self, data, train_step):
-        (p_states, p_len, master_mask, actions_in, actions_out, action_len
-         ) = data
-        _, summaries = self.sess.run(
-            [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op],
+        (p_states, p_len, master_mask, actions_in, actions_out, action_len,
+         b_weight) = data
+        _, summaries, loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
                 self.model.src_: p_states,
                 self.model.src_len_: p_len,
@@ -441,8 +441,9 @@ class GenLearner(StudentLearner):
                 self.model.action_idx_: actions_in,
                 self.model.action_idx_out_: actions_out,
                 self.model.action_len_: action_len,
-                self.model.b_weight_: [1.]})
+                self.model.b_weight_: b_weight})
         self.sw.add_summary(summaries, train_step)
+        eprint("loss: {}".format(loss))
 
     def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
@@ -463,33 +464,13 @@ class GenLearner(StudentLearner):
         actions_in, actions_out, action_len = get_action_idx_pair(
             actions[best_q_idx], action_len[best_q_idx],
             self.hp.sos_id, self.hp.eos_id)
-        return p_states, p_len, master_mask, actions_in, actions_out, action_len
+        b_weight = [1.]
+        return (
+            p_states, p_len, master_mask, actions_in, actions_out, action_len,
+            b_weight)
 
 
-class GenMixActionsLearner(StudentLearner):
-    def _train_impl(self, data, train_step):
-        (p_states, p_len, master_mask, actions_in, actions_out, action_len,
-         b_weight) = data
-        _, summaries, loss = self.sess.run(
-            [self.model.train_seq2seq_op, self.model.train_seq2seq_summary_op,
-             self.model.loss_seq2seq],
-            feed_dict={
-                self.model.src_: p_states,
-                self.model.src_len_: p_len,
-                self.model.src_seg_: master_mask,
-                self.model.action_idx_: actions_in,
-                self.model.action_idx_out_: actions_out,
-                self.model.action_len_: action_len,
-                self.model.b_weight_: b_weight})
-        self.sw.add_summary(summaries, train_step)
-        eprint("loss: {}".format(loss))
-
-    @staticmethod
-    def softmax(x):
-        """numerical stability softmax"""
-        e_x = np.exp(x - np.sum(x))
-        return e_x / np.sum(e_x)
-
+class GenMixActionsLearner(GenLearner):
     def _prepare_data(self, b_memory, tjs, action_collector):
         n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
@@ -503,10 +484,10 @@ class GenMixActionsLearner(StudentLearner):
         #   inside admissible actions for each trajectory.
         if self.hp.gen_loss_weighted_by_qs:
             b_weight = np.asarray(flatten(
-                [list(self.softmax(m.q_actions)) for m in b_memory]))
+                [list(softmax(m.q_actions)) for m in b_memory]))
         else:
             b_weight = np.asarray(flatten(
-                [list(self.softmax(np.zeros_like(m.q_actions)))
+                [list(softmax(np.zeros_like(m.q_actions)))
                  for m in b_memory]))
 
         action_len = (
@@ -533,11 +514,42 @@ class GenMixActionsLearner(StudentLearner):
 
         return (
             p_states, p_len, master_mask, actions_in, actions_out, action_len,
-            selected_b_weights)
+            selected_b_weights[:, None])
 
 
 class GenConcatActionsLearner(GenLearner):
-    def _prepare_data(self, b_memory, tjs, action_collector):
+    """
+    TODO: we choose action_mask in memory; however, when all admissible actions
+      are required, e.g. in pre-training without using q-values, we can use
+      sys_action_mask.
+      Notice that sys_action_mask won't compatible with q-values, since the
+      q-values are computed against action_mask.
+    """
+    @classmethod
+    def concat_actions(
+            cls,
+            action_ids: List[np.ndarray],
+            action_len: List[int],
+            action_weight: np.ndarray,
+            sep_val_id: int,
+            sort_by_weight: bool = True
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """concat given action_ids into one output str"""
+        if sort_by_weight:
+            sorted_idx = np.argsort(-action_weight, axis=-1)
+            action_ids = np.take_along_axis(action_ids, sorted_idx, axis=0)
+            action_len = np.take_along_axis(action_len, sorted_idx)
+            action_weight = np.take_along_axis(
+                action_weight, sorted_idx, axis=-1)
+
+        action_ids = flatten(
+            [(x[:l], [sep_val_id]) for x, l in zip(action_ids, action_len)])
+        concat_action = np.concatenate(action_ids, axis=0)[:-1]
+        token_weight = np.repeat(action_weight, repeats=action_len + 1)[:-1]
+        return concat_action, token_weight
+
+    def _prepare_data_v2(self, b_memory, tjs, action_collector):
+        """prepare concat actions without using q-values to weigh"""
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
@@ -555,17 +567,80 @@ class GenConcatActionsLearner(GenLearner):
             self.tokenizer.convert_tokens_to_ids(
                 self.tokenizer.tokenize(concat_actions))
             for concat_actions in actions]
-        action_len = np.asarray([len(x) for x in action_idx])
-        max_concat_action_len = min(
-            np.max(action_len), self.hp.max_decoding_size)
-        action_matrix = np.asarray(
-            [pad_str_ids(x, max_concat_action_len, self.hp.padding_val_id)
-             for x in action_idx])
+
+        action_matrix, action_len = align_batch_str(
+            ids=action_idx, str_len_allowance=self.hp.max_decoding_size,
+            padding_val_id=self.hp.padding_val_id,
+            valid_len=[len(x) for x in action_idx])
 
         actions_in, actions_out, action_len = get_action_idx_pair(
             action_matrix, action_len, self.hp.sos_id, self.hp.eos_id)
         return (
             p_states, p_len, master_mask, actions_in, actions_out, action_len)
+
+    def _prepare_data(self, b_memory, tjs, action_collector):
+        """prepare concat action weighted by q-values"""
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = [m.q_actions for m in b_memory]
+
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        p_states, p_len, master_mask = batch_dqn_input(
+            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+
+        batch_concat_action_in = []
+        batch_concat_action_out = []
+        batch_token_weight = []
+        batch_concat_action_len = []
+
+        for gid, mask, q_vals in zip(game_id, action_mask, expected_qs):
+            action_len = action_collector.get_action_len(gid)[mask]
+            action_ids = action_collector.get_action_matrix(gid)[mask]
+
+            # step 1: concat actions
+            concat_action, token_weight = self.concat_actions(
+                action_ids, action_len, softmax(q_vals),
+                self.tokenizer.vocab[";"], sort_by_weight=True)
+
+            # step 2: padding or trimming to max allowance
+            concat_len = len(concat_action)
+            padding_size = self.hp.max_decoding_size - concat_len
+            if padding_size > 0:
+                concat_action = np.pad(
+                    concat_action, (0, padding_size),
+                    mode='constant', constant_values=self.hp.padding_val_id)
+                token_weight = np.pad(
+                    token_weight, (0, padding_size),
+                    mode='constant', constant_values=0)
+            else:
+                concat_action = concat_action[:self.hp.max_decoding_size]
+                token_weight = token_weight[:self.hp.max_decoding_size]
+            concat_len = min(concat_len, self.hp.max_decoding_size)
+
+            # step 3: create in/out format for PGN
+            action_id_in = np.pad(
+                concat_action, (1,),
+                mode='constant', constant_values=self.hp.sos_id)
+            # make sure original action_matrix is untouched.
+            action_id_out = np.copy(concat_action)
+            new_action_len = min(concat_len + 1, self.hp.max_decoding_size)
+            action_id_out[new_action_len - 1] = self.hp.eos_id
+            token_weight[new_action_len - 1] = token_weight[new_action_len - 2]
+
+            # step 4: collect results
+            batch_concat_action_in.append(action_id_in)
+            batch_concat_action_out.append(action_id_out)
+            batch_token_weight.append(token_weight)
+            batch_concat_action_len.append(new_action_len)
+
+        return (
+            p_states, p_len, master_mask,
+            np.asarray(batch_concat_action_in),
+            np.asarray(batch_concat_action_out),
+            np.asarray(batch_concat_action_len),
+            np.asarray(batch_token_weight))
 
 
 class BertLearner(StudentLearner):

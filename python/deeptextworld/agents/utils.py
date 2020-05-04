@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union, Iterator
 
 import numpy as np
 from albert.tokenization import FullTokenizer as AlbertTok
@@ -13,20 +13,20 @@ from deeptextworld.utils import load_vocab, get_token2idx
 
 class Memolet(namedtuple(
     "Memolet", (
-        "tid",
-        "sid",
-        "gid",
-        "aid",
-        "token_id",
-        "a_len",
-        "a_type",
-        "reward",
-        "is_terminal",
-        "action_mask",
-        "sys_action_mask",
-        "next_action_mask",
-        "next_sys_action_mask",
-        "q_actions"))):
+            "tid",
+            "sid",
+            "gid",
+            "aid",
+            "token_id",
+            "a_len",
+            "a_type",
+            "reward",
+            "is_terminal",
+            "action_mask",
+            "sys_action_mask",
+            "next_action_mask",
+            "next_sys_action_mask",
+            "q_actions"))):
     """
     end_of_episode: game stops by 1) winning, 2) losing, or 3) exceeding
     maximum number of steps.
@@ -50,17 +50,17 @@ class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
 
 class ActionDesc(namedtuple(
     "ActionDesc", (
-        "action_type",
-        "action_idx",
-        "token_idx",
-        "action_len",
-        "action",
-        "q_actions"))):
+            "action_type",
+            "action_idx",
+            "token_idx",
+            "action_len",
+            "action",
+            "q_actions"))):
     pass
 
 
 class GenSummary(namedtuple(
-        "GenSummary", ("ids", "tokens", "gens", "q_action", "len"))):
+    "GenSummary", ("ids", "tokens", "gens", "q_action", "len"))):
 
     def __repr__(self):
         return (" ".join(["{}[{:.2f}]".format(t, p)
@@ -321,15 +321,32 @@ class ScannerDecayEPS(ScheduledEPS):
         return eps_t
 
 
-def pad_str_ids(
-        action_ids: List[int], max_size: int, padding_val_id: int) -> List[int]:
+def align_batch_str(
+        ids: List[List[int]], str_len_allowance: int,
+        padding_val_id: int, valid_len: List[int]
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    pad action index up to max_size, or trim action in the end if too large
+    Align a batch of string indexes.
+    The maximum length will not exceed str_len_allowance.
+    Each array of ids will be either padded or trimmed to reach
+    the maximum length, notice that padded length won't be counted in as valid
+    length.
+    :param ids: a list of array of index (int)
+    :param str_len_allowance:
+    :param padding_val_id:
+    :param valid_len:
+    :return: aligned ids and aligned length
     """
-    if 0 < len(action_ids) < max_size:
-        return action_ids + [padding_val_id] * (max_size - len(action_ids))
-    else:
-        return action_ids[:max_size]
+    def align() -> Iterator[Tuple[List[int], int]]:
+        m = min(str_len_allowance, np.max(valid_len))
+        for s, l in zip(ids, valid_len):
+            if 0 <= l < m:
+                yield s[:l] + [padding_val_id] * (m - l), l
+            else:
+                yield s[:m], m
+
+    aligned_ids, aligned_len = zip(*align())
+    return np.asarray(aligned_ids), np.asarray(aligned_len)
 
 
 def tj2ids(
@@ -349,8 +366,11 @@ def tj2ids(
         action_ids = tokenizer.convert_tokens_to_ids(
             tokenizer.tokenize(am.action))
         if with_action_padding:
-            action_ids = pad_str_ids(
-                action_ids, max_action_size, padding_val_id)
+            if len(action_ids) < max_action_size:
+                action_ids += [padding_val_id] * (
+                        max_action_size - len(action_ids))
+            else:
+                action_ids = action_ids[:max_action_size]
         master_ids = tokenizer.convert_tokens_to_ids(
             tokenizer.tokenize(am.master))
         ids += action_ids
@@ -453,6 +473,9 @@ def bert_commonsense_input(
     Given one trajectory and its admissible actions, create a training
     set of input for Bert.
 
+    Notice: the trajectory_len and action_len need to be confirmed that to have
+    special tokens e.g. [CLS], [SEP] positions to be reserved.
+
     E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
     suppose we need length to be 10.
     output:
@@ -469,6 +492,8 @@ def bert_commonsense_input(
     """
 
     assert action_matrix.ndim == 2, "action_matrix: {}".format(action_matrix)
+    assert np.all(trajectory_len + action_len <= num_tokens - 3), \
+        "trajectory len or action len are too large"
 
     tj = np.concatenate([
         np.asarray([cls_val_id]), trajectory[:trajectory_len],
@@ -548,9 +573,11 @@ def sample_batch_ids(
         remains = (list(range(curr_best)) +
                    list(range(curr_best + 1, len(qs_slices[blk_i]))))
         if len(remains) >= k - 1:
-            companion = list(np.random.choice(remains, size=k-1, replace=False))
+            companion = list(
+                np.random.choice(remains, size=k - 1, replace=False))
         else:
-            companion = list(np.random.choice(remains, size=k-1, replace=True))
+            companion = list(
+                np.random.choice(remains, size=k - 1, replace=True))
         action_idx_blocks_per_slice.append([curr_best] + companion)
     actions_idx = (
             np.insert(actions_slices, 0, 0)[:, np.newaxis] +
@@ -607,5 +634,5 @@ def get_action_idx_pair(
     action_id_out = np.copy(action_matrix)
     new_action_len = np.min(
         [action_len + 1, np.zeros_like(action_len) + max_col_size], axis=0)
-    action_id_out[list(range(n_rows)), new_action_len-1] = eos_id
+    action_id_out[list(range(n_rows)), new_action_len - 1] = eos_id
     return action_id_in, action_id_out, new_action_len

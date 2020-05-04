@@ -354,3 +354,9 @@ def bytes2idx(byte_mask: List[bytes], size: int) -> np.ndarray:
     bit_mask[-1] = False
     np_mask = np.asarray(bit_mask.tolist(), dtype=np.int32)
     return np.where(np_mask == 1)[0]
+
+
+def softmax(x):
+    """numerical stability softmax"""
+    e_x = np.exp(x - np.sum(x))
+    return e_x / np.sum(e_x)

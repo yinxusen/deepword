@@ -27,5 +27,3 @@ class TestTeacherData(unittest.TestCase):
             converted_np_mask = bytes2idx(bit_mask, size=n_actions + 1)
             self.assertEqual(len(np_masks), len(converted_np_mask))
             self.assertTrue(np.all(np.equal(np_masks, converted_np_mask)))
-
-
