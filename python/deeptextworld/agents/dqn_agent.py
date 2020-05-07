@@ -38,15 +38,23 @@ class DQNCore(TFCore):
             self.model.src_: [src],
             self.model.src_len_: [src_len]
         })[0]
+
+        cnt_action_array = []
+        for mid in action_mask:
+            cnt_action_array.append(
+                cnt_action[mid] if mid in cnt_action else 0.)
+
         admissible_q_actions = q_actions[action_mask]
-        action_idx, q_val = get_best_1d_q(admissible_q_actions)
+        action_idx, q_val = get_best_1d_q(
+            admissible_q_actions - cnt_action_array)
         real_action_idx = action_mask[action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn,
             action_idx=real_action_idx,
             token_idx=action_matrix[real_action_idx],
             action_len=action_len[real_action_idx],
-            action=actions[real_action_idx])
+            action=actions[real_action_idx],
+            q_actions=admissible_q_actions)
         return action_desc
 
     def _compute_expected_q(

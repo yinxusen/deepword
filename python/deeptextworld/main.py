@@ -56,6 +56,7 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument(
         "--policy-utilization-method", type=str, help="[EPS/LinUCB/Sampling]")
     parser.add_argument("--policy-q-vals-t", type=float)
+    parser.add_argument("--action-file", type=str)
     return parser
 
 

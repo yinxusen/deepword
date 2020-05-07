@@ -13,6 +13,7 @@ from tensorflow.contrib.training import HParams
 from tensorflow.python.client import device_lib
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
+from termcolor import colored
 from textworld import EnvInfos
 
 from deeptextworld.action import ActionCollector
@@ -159,7 +160,9 @@ class TFCore(BaseCore, ABC):
         :return: trained steps
         """
         self.info(
-            "Try to restore parameters from: {}".format(restore_from))
+            colored(
+                "Try to restore parameters from: {}".format(restore_from),
+                "magenta", attrs=["bold", "underline"]))
         with model.graph.as_default():
             try:
                 saver.restore(sess, restore_from)
@@ -508,6 +511,28 @@ class BaseAgent(Logging):
         return new_hp, tokenizer
 
     @classmethod
+    def get_zork_tokenizer(
+            cls,
+            hp: HParams,
+            vocab_file: str = conventions.legacy_zork_vocab_file
+    ) -> Tuple[HParams, Tokenizer]:
+        tokenizer = LegacyZorkTokenizer(vocab_file=vocab_file)
+        new_hp = copy_hparams(hp)
+        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
+        new_hp.set_hparam("padding_val", conventions.nltk_padding_token)
+        new_hp.set_hparam("unk_val", conventions.nltk_unk_token)
+        new_hp.set_hparam("sos", conventions.nltk_sos_token)
+        new_hp.set_hparam("eos", conventions.nltk_eos_token)
+
+        new_hp.set_hparam(
+            'padding_val_id', tokenizer.vocab[conventions.nltk_padding_token])
+        new_hp.set_hparam(
+            'unk_val_id', tokenizer.vocab[conventions.nltk_unk_token])
+        new_hp.set_hparam('sos_id', tokenizer.vocab[conventions.nltk_sos_token])
+        new_hp.set_hparam('eos_id', tokenizer.vocab[conventions.nltk_eos_token])
+        return new_hp, tokenizer
+
+    @classmethod
     def init_tokens(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
         """
         Note that BERT must use bert vocabulary.
@@ -526,6 +551,8 @@ class BaseAgent(Logging):
                     hp, vocab_file=conventions.glove_vocab_file)
             else:
                 new_hp, tokenizer = cls.get_nltk_tokenizer(hp)
+        elif hp.tokenizer_type.lower() == "zork":
+            new_hp, tokenizer = cls.get_zork_tokenizer(hp)
         else:
             raise ValueError(
                 "Unknown tokenizer type: {}".format(hp.tokenizer_type))
@@ -692,7 +719,8 @@ class BaseAgent(Logging):
         self.stc = self.init_state_text(stc_path, with_loading=True)
 
     def _init_impl(
-            self, load_best=False, restore_from: Optional[str] = None) -> None:
+            self, load_best: bool = False,
+            restore_from: Optional[str] = None) -> None:
         self._load_context_objs()
         self.core.init(
             is_training=self.is_training, load_best=load_best,
@@ -828,33 +856,31 @@ class BaseAgent(Logging):
             ["{} to {}".format(a, local_map.get(a))
              if a in local_map else a for a in actions])
 
-    def random_walk_for_collecting_fp(self, actions: List[str]) -> ActionDesc:
-        action_idx, action = None, None
+    def random_walk_for_collecting_fp(
+            self, actions: List[str]) -> Optional[ActionDesc]:
+        cardinal_go = list(filter(
+            lambda a: a.startswith("go") and len(a.split()) == 2, actions))
 
-        if self.hp.collect_floor_plan:
+        if (self.hp.collect_floor_plan and self.in_game_t < 50
+                and len(cardinal_go) != 0):
             # collecting floor plan by choosing random action
             # if there are still go actions without room name
             # Notice that only choosing "go" actions cannot finish
             # collecting floor plan because there is the need to open doors
             # Notice also that only allow random walk in the first 50 steps
-            cardinal_go = list(filter(
-                lambda a: a.startswith("go") and len(a.split()) == 2, actions))
-            if self.in_game_t < 50 and len(cardinal_go) != 0:
-                open_actions = list(
-                    filter(lambda a: a.startswith("open"), actions))
-                admissible_actions = cardinal_go + open_actions
-                action = np.random.choice(admissible_actions)
-                action_idx = self.actor.action2idx.get(action)
-            else:
-                pass
+            open_actions = list(
+                filter(lambda a: a.startswith("open"), actions))
+            admissible_actions = cardinal_go + open_actions
+            action = np.random.choice(admissible_actions)
+            action_idx = self.actor.action2idx.get(action)
+            action_desc = ActionDesc(
+                action_type=ACT_TYPE.rnd_walk, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action, q_actions=None)
+            return action_desc
         else:
-            pass
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.rnd_walk, action_idx=action_idx,
-            token_idx=self.actor.action_matrix[action_idx],
-            action_len=self.actor.action_len[action_idx],
-            action=action, q_actions=None)
-        return action_desc
+            return None
 
     def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
@@ -864,6 +890,11 @@ class BaseAgent(Logging):
             self.actor.action_len, self.actor.actions, action_mask,
             self._cnt_action)
         return policy_action_desc
+
+    def rule_based_policy(
+            self, actions: List[str], instant_reward: float
+    ) -> Optional[ActionDesc]:
+        return None
 
     def choose_action(
             self,
@@ -876,15 +907,17 @@ class BaseAgent(Logging):
         else:
             policy_action_desc = None
 
-        action_desc = self.random_walk_for_collecting_fp(actions)
-        if action_desc.action_idx is None:
-            if random.random() < self.eps:
-                action_desc = self.get_a_random_action(action_mask)
-            else:
-                if policy_action_desc:
-                    action_desc = policy_action_desc
+        action_desc = self.rule_based_policy(actions, instant_reward)
+        if not action_desc:
+            action_desc = self.random_walk_for_collecting_fp(actions)
+            if not action_desc:
+                if random.random() < self.eps:
+                    action_desc = self.get_a_random_action(action_mask)
                 else:
-                    action_desc = self.get_policy_action(action_mask)
+                    if policy_action_desc:
+                        action_desc = policy_action_desc
+                    else:
+                        action_desc = self.get_policy_action(action_mask)
 
         final_action_desc = ActionDesc(
             action_type=action_desc.action_type,
@@ -893,7 +926,9 @@ class BaseAgent(Logging):
             token_idx=action_desc.token_idx,
             action=action_desc.action,
             q_actions=(
-                policy_action_desc.q_actions if policy_action_desc else None))
+                policy_action_desc.q_actions
+                if self.hp.compute_policy_action_every_step else
+                action_desc.q_actions))
         return final_action_desc
 
     def get_raw_instant_reward(self, score: float) -> float:
@@ -1035,23 +1070,36 @@ class BaseAgent(Logging):
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, float]:
         desc = infos[INFO_KEY.desc][0]
-        master = desc if self.in_game_t == 0 and desc else obs[0]
+        master = (remove_zork_version_info(desc)
+                  if self.in_game_t == 0 and desc else obs[0])
         instant_reward = self.get_instant_reward(
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
-        if self.tjs.get_last_sid() > 0:  # pass the 1st master
+        if self._last_action:
             self.debug(self.report_status([
                 ("t", self.total_t),
                 ("in_game_t", self.in_game_t),
                 ("eps", self.eps),
-                ("action", self._last_action),
-                ("master", master.replace("\n", " ")),
-                ("is_terminal", dones[0])
+                ("action", colored(
+                    self._last_action.action,
+                    "yellow"
+                    if self._last_action.action_type == ACT_TYPE.policy_drrn
+                    else "red", attrs=["underline"])),
+                ("master", colored(
+                    master.replace("\n", " "), "cyan", attrs=["underline"])),
+                ("reward", colored(
+                    "{:.2f}".format(instant_reward),
+                    "green" if instant_reward > 0 else "red")),
+                ("is_terminal", dones[0]),
+                ("max_q_val", (
+                    "{:.2f}".format(np.max(self._last_action.q_actions))
+                    if self._last_action.q_actions is not None else "-"))
             ]))
         else:
             self.info(self.report_status([
-                ("master", master.replace("\n", " ")),
+                ("master", colored(
+                    master.replace("\n", " "), "cyan", attrs=["underline"])),
                 ("max_score", infos[INFO_KEY.max_score][0])
             ]))
 
@@ -1083,8 +1131,6 @@ class BaseAgent(Logging):
         sys_action_mask = self.actor.extend(admissible_actions)
         effective_actions = self.prepare_actions(admissible_actions)
         action_mask = self.actor.extend(effective_actions)
-
-        self.debug("effective actions: {}".format(effective_actions))
 
         if self.tjs.get_last_sid() > 0:
             memo_let = Memolet(

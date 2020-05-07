@@ -20,6 +20,7 @@ class Conventions(namedtuple(
         "nltk_vocab_file",
         "glove_vocab_file",
         "glove_emb_file",
+        "legacy_zork_vocab_file",
         "albert_ckpt_dir",
         "albert_vocab_file",
         "albert_spm_path",
@@ -52,6 +53,7 @@ conventions = Conventions(
         home_dir, "local/opt/glove-models/glove.6B/vocab.glove.6B.4more.txt"),
     glove_emb_file=pjoin(
         home_dir, "local/opt/glove-models/glove.6B/glove.6B.50d.4more.txt"),
+    legacy_zork_vocab_file=pjoin(home_dir, "local/opt/legacy-zork-vocab.txt"),
     albert_ckpt_dir=pjoin(
         home_dir, "local/opt/bert-models/albert-model"),
     albert_vocab_file=pjoin(
@@ -123,11 +125,13 @@ default_config = {
         tokenizer_type="BERT",
         use_glove_emb=False,
         glove_trainable=False,
+        use_legacy_zork_vocab=False,
         compute_policy_action_every_step=False,
         learner_clazz="",
         scan_dir_for_new_train_data=False,
         policy_utilization_method="LinUCB",
-        policy_q_vals_t=1.),
+        policy_q_vals_t=1.,
+        action_file=None),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
@@ -356,7 +360,8 @@ def load_hparams(
         "batch_size", "learning_rate", "compute_policy_action_every_step",
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
-        "agent_clazz", "policy_utilization_method", "policy_q_vals_t"
+        "agent_clazz", "policy_utilization_method", "policy_q_vals_t",
+        "action_file"
     ]
 
     if fn_pre_config:

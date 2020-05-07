@@ -70,6 +70,9 @@ def eval_agent(
             scores = [0] * len(obs)
             dones = [False] * len(obs)
             steps = [0] * len(obs)
+            # TODO: make sure verbose won't affect games other than Zork
+            tmp_obs, _, _, _ = game_env.step(["verbose"] * len(obs))
+            eprint("use verbose: {}".format(tmp_obs[0]))
             while not all(dones):
                 # Increase step counts.
                 steps = ([step + int(not done)

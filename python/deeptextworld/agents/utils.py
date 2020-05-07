@@ -1,5 +1,6 @@
+import string
 from collections import namedtuple
-from typing import List, Dict, Tuple, Optional, Union, Iterator
+from typing import List, Dict, Tuple, Optional, Iterator
 
 import numpy as np
 from albert.tokenization import FullTokenizer as AlbertTok
@@ -60,7 +61,7 @@ class ActionDesc(namedtuple(
 
 
 class GenSummary(namedtuple(
-    "GenSummary", ("ids", "tokens", "gens", "q_action", "len"))):
+        "GenSummary", ("ids", "tokens", "gens", "q_action", "len"))):
 
     def __repr__(self):
         return (" ".join(["{}[{:.2f}]".format(t, p)
@@ -155,6 +156,18 @@ class NLTKTokenizer(Tokenizer):
             filter(lambda t: t not in self._special_tokens,
                    self.convert_ids_to_tokens(ids)))
         return res
+
+
+class LegacyZorkTokenizer(NLTKTokenizer):
+    def __init__(self, vocab_file):
+        super(LegacyZorkTokenizer, self).__init__(
+            vocab_file, do_lower_case=True)
+        self.empty_trans_table = str.maketrans("", "", string.punctuation)
+
+    def tokenize(self, text):
+        tokens = super(LegacyZorkTokenizer, self).tokenize(
+            text.translate(self.empty_trans_table))
+        return list(filter(lambda t: t.isalpha(), tokens))
 
 
 class BertTokenizer(Tokenizer):
@@ -636,3 +649,14 @@ def get_action_idx_pair(
         [action_len + 1, np.zeros_like(action_len) + max_col_size], axis=0)
     action_id_out[list(range(n_rows)), new_action_len - 1] = eos_id
     return action_id_in, action_id_out, new_action_len
+
+
+def remove_zork_version_info(text):
+    zork_info = [
+        "ZORK I: The Great Underground Empire",
+        "Copyright (c) 1981, 1982, 1983 Infocom, Inc. All rights reserved.",
+        "ZORK is a registered trademark of Infocom, Inc.",
+        "Revision 88 / Serial number 840726"]
+    # don't strip texts, keep the raw response
+    return "\n".join(
+        filter(lambda s: s.strip() not in zork_info, text.split("\n")))

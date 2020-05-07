@@ -111,51 +111,20 @@ class CompetitionAgent(BaseAgent):
         else:
             action = None
 
-        # TODO: if the rule-based action not in effective actions, drop it
-        if action is not None and action not in actions:
-            action = None
-
-        action_idx = self.actor.action2idx.get(action) if action else None
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.rule, action_idx=action_idx,
-            token_idx=self.actor.action_matrix[action_idx],
-            action_len=self.actor.action_len[action_idx],
-            action=action, q_actions=None)
-        return action_desc
+        if action is not None and action in actions:
+            action_idx = self.actor.action2idx.get(action)
+            return ActionDesc(
+                action_type=ACT_TYPE.rule, action_idx=action_idx,
+                token_idx=self.actor.action_matrix[action_idx],
+                action_len=self.actor.action_len[action_idx],
+                action=action, q_actions=None)
+        else:
+            return None
 
     def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
         filtered_actions = self.filter_admissible_actions(admissible_actions)
         effective_actions = self.go_with_floor_plan(filtered_actions)
         return effective_actions
-
-    def choose_action(self, actions, action_mask, instant_reward):
-        # when q_actions is required to get, this should be True
-        if self.hp.compute_policy_action_every_step:
-            policy_action_desc = self.get_policy_action(action_mask)
-        else:
-            policy_action_desc = None
-
-        action_desc = self.rule_based_policy(actions, instant_reward)
-        if action_desc.action_idx is None:
-            action_desc = self.random_walk_for_collecting_fp(actions)
-            if action_desc.action_idx is None:
-                if random.random() < self.eps:
-                    action_desc = self.get_a_random_action(action_mask)
-                else:
-                    if policy_action_desc:
-                        action_desc = policy_action_desc
-                    else:
-                        action_desc = self.get_policy_action(action_mask)
-
-        final_action_desc = ActionDesc(
-            action_type=action_desc.action_type,
-            action_idx=action_desc.action_idx,
-            action_len=action_desc.action_len,
-            token_idx=action_desc.token_idx,
-            action=action_desc.action,
-            q_actions=(
-                policy_action_desc.q_actions if policy_action_desc else None))
-        return final_action_desc
 
     def _start_episode_impl(self, obs, infos):
         super(CompetitionAgent, self)._start_episode_impl(obs, infos)

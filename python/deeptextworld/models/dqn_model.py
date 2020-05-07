@@ -1,9 +1,9 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 import deeptextworld.models.utils as dqn
-from deeptextworld.models.export_models import DQNModel
 from deeptextworld.agents.utils import conventions
+from deeptextworld.models.export_models import DQNModel
 
 
 class BaseDQN(object):
@@ -48,6 +48,62 @@ class BaseDQN(object):
     def get_train_op(self, q_actions):
         raise NotImplementedError()
 
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp)
+                inputs = model.inputs
+                src_placeholder = inputs["src"]
+                src_len_placeholder = inputs["src_len"]
+                action_idx_placeholder = inputs["action_idx"]
+                expected_q_placeholder = inputs["expected_q"]
+                b_weight_placeholder = inputs["b_weight"]
+                q_actions = model.get_q_actions()
+                loss, train_op, abs_loss = model.get_train_op(q_actions)
+                loss_summary = tf.summary.scalar("loss", loss)
+                train_summary_op = tf.summary.merge([loss_summary])
+        return DQNModel(
+            graph=graph,
+            q_actions=q_actions,
+            src_=src_placeholder,
+            src_len_=src_len_placeholder,
+            train_op=train_op,
+            action_idx_=action_idx_placeholder,
+            expected_q_=expected_q_placeholder,
+            b_weight_=b_weight_placeholder,
+            loss=loss,
+            train_summary_op=train_summary_op,
+            abs_loss=abs_loss,
+            src_seg_=None,
+            h_state=None)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp, is_infer=True)
+                inputs = model.inputs
+                src_placeholder = inputs["src"]
+                src_len_placeholder = inputs["src_len"]
+                q_actions = model.get_q_actions()
+        return DQNModel(
+            graph=graph,
+            q_actions=q_actions,
+            src_=src_placeholder,
+            src_len_=src_len_placeholder,
+            train_op=None,
+            action_idx_=None,
+            expected_q_=None,
+            b_weight_=None,
+            loss=None,
+            train_summary_op=None,
+            abs_loss=None,
+            src_seg_=None,
+            h_state=None)
+
 
 class LstmDQN(BaseDQN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
@@ -86,7 +142,7 @@ class CnnDQN(BaseDQN):
         inner_states = dqn.encoder_cnn(
             self.inputs["src"], self.src_embeddings, self.pos_embeddings,
             self.filter_sizes, self.num_filters, self.hp.embedding_size,
-            self.is_infer)
+            self.is_infer, num_channels=1, activation="relu")
         q_actions = tf.layers.dense(
             inner_states, units=self.hp.n_actions, use_bias=True)
         return q_actions
@@ -97,59 +153,3 @@ class CnnDQN(BaseDQN):
             self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
-
-
-def create_train_model(model_creator, hp, device_placement):
-    graph = tf.Graph()
-    with graph.as_default():
-        with tf.device(device_placement):
-            model = model_creator(hp)
-            inputs = model.inputs
-            src_placeholder = inputs["src"]
-            src_len_placeholder = inputs["src_len"]
-            action_idx_placeholder = inputs["action_idx"]
-            expected_q_placeholder = inputs["expected_q"]
-            b_weight_placeholder = inputs["b_weight"]
-            q_actions = model.get_q_actions()
-            loss, train_op, abs_loss = model.get_train_op(q_actions)
-            loss_summary = tf.summary.scalar("loss", loss)
-            train_summary_op = tf.summary.merge([loss_summary])
-    return DQNModel(
-        graph=graph,
-        q_actions=q_actions,
-        src_=src_placeholder,
-        src_len_=src_len_placeholder,
-        train_op=train_op,
-        action_idx_=action_idx_placeholder,
-        expected_q_=expected_q_placeholder,
-        b_weight_=b_weight_placeholder,
-        loss=loss,
-        train_summary_op=train_summary_op,
-        abs_loss=abs_loss,
-        src_seg_=None,
-        h_state=None)
-
-
-def create_eval_model(model_creator, hp, device_placement):
-    graph = tf.Graph()
-    with graph.as_default():
-        with tf.device(device_placement):
-            model = model_creator(hp, is_infer=True)
-            inputs = model.inputs
-            src_placeholder = inputs["src"]
-            src_len_placeholder = inputs["src_len"]
-            q_actions = model.get_q_actions()
-    return DQNModel(
-        graph=graph,
-        q_actions=q_actions,
-        src_=src_placeholder,
-        src_len_=src_len_placeholder,
-        train_op=None,
-        action_idx_=None,
-        expected_q_=None,
-        b_weight_=None,
-        loss=None,
-        train_summary_op=None,
-        abs_loss=None,
-        src_seg_=None,
-        h_state=None)
