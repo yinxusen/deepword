@@ -247,9 +247,17 @@ class StudentLearner(object):
     def _add_batch(
             self, combined_data_path: List[Tuple[str, str, str]],
             queue: Queue, training: bool = True,
-            scan_dir_for_new_train_data: bool = True) -> None:
+            append_new_data: bool = True) -> None:
+        """
+        :param combined_data_path:
+        :param queue:
+        :param training:
+        :param append_new_data: scan train_data_dir for new data after every
+            epoch of training.
+        :return:
+        """
         while True:
-            if training and scan_dir_for_new_train_data:
+            if training and append_new_data:
                 new_combined_data_path = self._get_combined_data_path(
                     self.train_data_dir)
                 if set(new_combined_data_path) != set(combined_data_path):

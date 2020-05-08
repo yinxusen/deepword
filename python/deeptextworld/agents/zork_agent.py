@@ -20,8 +20,3 @@ class ZorkAgent(BaseAgent):
         """
         admissible_actions = self.loaded_actions
         return admissible_actions
-
-    def _init_impl(self, load_best=False, restore_from=None):
-        super(ZorkAgent, self)._init_impl(load_best, restore_from)
-        if not self.is_training:
-            self.eps = 0.05  # default for Zork

@@ -50,13 +50,14 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument(
         '--use-step-wise-reward', action='store_true', default=None)
     parser.add_argument(
-        '--compute-policy-action-every-step', action='store_true', default=None)
+        '--always-compute-policy', action='store_true', default=None)
     parser.add_argument("--tokenizer-type", type=str, help="[bert|albert|nltk]")
     parser.add_argument("--max-snapshot-to-keep", type=int)
     parser.add_argument(
-        "--policy-utilization-method", type=str, help="[EPS/LinUCB/Sampling]")
-    parser.add_argument("--policy-q-vals-t", type=float)
+        "--policy-to-action", type=str, help="[EPS/LinUCB/Sampling]")
+    parser.add_argument("--policy-sampling-temp", type=float)
     parser.add_argument("--action-file", type=str)
+    parser.add_argument("--policy-eps", type=float)
     return parser
 
 
@@ -148,8 +149,7 @@ def train(hp, model_dir, game_dir, f_games=None):
 
     env_id = textworld.gym.register_games(
         train_games, requested_infos, batch_size=1,
-        max_episode_steps=hp.game_episode_terminal_t,
-        name="training")
+        max_episode_steps=hp.game_episode_terminal_t, name="training")
     env = gym.make(env_id)
     try:
         run_agent(agent, env, len(train_games), nb_epochs)

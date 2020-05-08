@@ -125,12 +125,11 @@ default_config = {
         tokenizer_type="BERT",
         use_glove_emb=False,
         glove_trainable=False,
-        use_legacy_zork_vocab=False,
-        compute_policy_action_every_step=False,
+        always_compute_policy=False,
         learner_clazz="",
-        scan_dir_for_new_train_data=False,
-        policy_utilization_method="LinUCB",
-        policy_q_vals_t=1.,
+        policy_to_action="LinUCB",
+        policy_sampling_temp=1.,
+        policy_eps=0.,
         action_file=None),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
@@ -357,11 +356,11 @@ def load_hparams(
     """
     allowed_to_change = [
         "model_dir", "eval_episode", "game_episode_terminal_t",
-        "batch_size", "learning_rate", "compute_policy_action_every_step",
+        "batch_size", "learning_rate", "always_compute_policy",
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
-        "agent_clazz", "policy_utilization_method", "policy_q_vals_t",
-        "action_file"
+        "agent_clazz", "policy_to_action", "policy_sampling_temp",
+        "action_file", "policy_eps"
     ]
 
     if fn_pre_config:

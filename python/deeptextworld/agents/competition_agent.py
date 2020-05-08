@@ -1,4 +1,3 @@
-import random
 import re
 
 from deeptextworld.agents.base_agent import BaseAgent

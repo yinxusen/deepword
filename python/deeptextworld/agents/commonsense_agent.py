@@ -1,11 +1,11 @@
 import math
-from typing import Optional, List, Any, Tuple, Dict
+from typing import Optional, List, Any, Tuple
 
 import numpy as np
 
-from deeptextworld.agents.base_agent import ActionDesc, ACT_TYPE, TFCore
+from deeptextworld.agents.base_agent import TFCore
 from deeptextworld.agents.utils import bert_commonsense_input, ActionMaster, \
-    ObsInventory, dqn_input, categorical_without_replacement, get_best_1d_q
+    ObsInventory, dqn_input
 from deeptextworld.models.export_models import CommonsenseModel
 
 
@@ -49,17 +49,15 @@ class BertCore(TFCore):
             self.hp.num_tokens - 3 - self.hp.n_tokens_per_action,
             self.hp.padding_val_id)
 
-    def get_a_policy_action(
-            self, trajectory: List[ActionMaster],
+    def policy(
+            self,
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
-            action_matrix: np.ndarray, action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            action_mask: np.ndarray) -> np.ndarray:
         action_matrix = action_matrix[action_mask, :]
         action_len = action_len[action_mask]
-        actions = np.asarray(actions)[action_mask]
-
         src, src_len, _ = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_commonsense_input(
             action_matrix, action_len, src, src_len,
@@ -81,39 +79,5 @@ class BertCore(TFCore):
             })
             total_q_actions.append(q_actions_t)
 
-        q_actions_t = np.concatenate(total_q_actions, axis=-1)
-        results = sorted(
-            zip(list(actions), list(q_actions_t)), key=lambda x: x[-1])
-        results = ["{}\t{}".format(a, q) for a, q in results]
-        self.debug("\n".join(results))
-
-        if self.hp.policy_utilization_method.lower() == "Sampling".lower():
-            self.debug("sampling from q-values with t = {}".format(
-                self.hp.policy_q_vals_t))
-            action_idx = categorical_without_replacement(
-                logits=q_actions_t / self.hp.policy_q_vals_t,
-                k=1)
-        elif self.hp.policy_utilization_method.lower() == "LinUCB".lower():
-            self.debug("LinUCB choosing action")
-            cnt_action_array = []
-            for mid in action_mask:
-                cnt_action_array.append(
-                    cnt_action[mid] if mid in cnt_action else 0.)
-
-            action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action_array)
-        elif self.hp.policy_utilization_method.lower() == "EPS".lower():
-            self.debug("EPS action")
-            action_idx, q_val = get_best_1d_q(q_actions_t)
-        else:
-            raise ValueError("Unknown policy utilization method: {}".format(
-                self.hp.policy_utilization_method))
-
-        action = actions[action_idx]
-        true_action_idx = action_mask[action_idx]
-
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_drrn, action_idx=true_action_idx,
-            token_idx=action_matrix[action_idx],
-            action_len=action_len[action_idx],
-            action=action, q_actions=q_actions_t)
-        return action_desc
+        q_actions = np.concatenate(total_q_actions, axis=-1)
+        return q_actions

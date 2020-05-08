@@ -7,11 +7,10 @@ This agent can be compared with previous template-gen agent.
 
 import os
 from os.path import join as pjoin
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any
 
 import numpy as np
 
-from deeptextworld.agents.base_agent import ActionDesc
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.base_agent import TFCore
 from deeptextworld.agents.competition_agent import CompetitionAgent
@@ -94,14 +93,13 @@ class PGNCore(TFCore):
             actions = [self.tokenizer.de_tokenize(x.ids) for x in res]
         return actions
 
-    def get_a_policy_action(
-            self, trajectory: List[ActionMaster],
+    def policy(
+            self,
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+            action_mask: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
     def train_one_batch(

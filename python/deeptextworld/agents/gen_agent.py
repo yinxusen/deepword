@@ -75,27 +75,13 @@ class GenDQNCore(TFCore):
 
         return res_summary[0]
 
-    def get_a_policy_action(
+    def policy(
             self, trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
-
-        gen_res = self.decode_action(trajectory)
-        action = self.tokenizer.de_tokenize(gen_res.ids)
-        self.debug("gen action: {}".format(action))
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_gen,
-            action_idx=None,
-            token_idx=gen_res.ids,
-            action_len=gen_res.len,
-            action=action,
-            q_actions=gen_res.q_action)
-
-        return action_desc
+            action_mask: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
 
     def _compute_expected_q(
             self,
@@ -199,3 +185,17 @@ class GenDQNAgent(BaseAgent):
     def _prepare_other_train_data(self, b_memory: List[Memolet]) -> Any:
         action_token_ids = [m.token_id for m in b_memory]
         return action_token_ids
+
+    def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
+        trajectory = self.tjs.fetch_last_state()
+        gen_res = self.core.decode_action(trajectory)
+        action = self.tokenizer.de_tokenize(gen_res.ids)
+        self.debug("gen action: {}".format(action))
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.policy_gen,
+            action_idx=None,
+            token_idx=gen_res.ids,
+            action_len=gen_res.len,
+            action=action,
+            q_actions=gen_res.q_action)
+        return action_desc

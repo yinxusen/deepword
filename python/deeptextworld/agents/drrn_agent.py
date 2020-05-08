@@ -1,14 +1,13 @@
-from typing import Optional, List, Any, Tuple, Dict
+from typing import Optional, List, Any, Tuple
 
 import numpy as np
 
-from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
+from deeptextworld.agents.base_agent import TFCore
 from deeptextworld.agents.utils import ActionMaster, ObsInventory
 from deeptextworld.agents.utils import batch_drrn_action_input
-from deeptextworld.agents.utils import id_real2batch
-from deeptextworld.agents.utils import get_best_batch_ids
-from deeptextworld.agents.utils import get_best_1d_q
 from deeptextworld.agents.utils import dqn_input
+from deeptextworld.agents.utils import get_best_batch_ids
+from deeptextworld.agents.utils import id_real2batch
 from deeptextworld.models.export_models import DRRNModel
 
 
@@ -22,14 +21,13 @@ class DRRNCore(TFCore):
         self.model: Optional[DRRNModel] = None
         self.target_model: Optional[DRRNModel] = None
 
-    def get_a_policy_action(
+    def policy(
             self,
             trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
-            action_len: np.ndarray, actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+            action_len: np.ndarray,
+            action_mask: np.ndarray) -> np.ndarray:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
@@ -39,7 +37,7 @@ class DRRNCore(TFCore):
         actions_repeats = [len(action_mask)]
 
         src, src_len, _ = self.trajectory2input(trajectory)
-        q_actions_t = self.sess.run(self.model.q_actions, feed_dict={
+        q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len],
             self.model.actions_: admissible_action_matrix,
@@ -47,21 +45,7 @@ class DRRNCore(TFCore):
             self.model.actions_repeats_: actions_repeats
         })
 
-        cnt_action_array = []
-        for mid in action_mask:
-            cnt_action_array.append(
-                cnt_action[mid] if mid in cnt_action else 0.)
-
-        action_idx, q_val = get_best_1d_q(q_actions_t - cnt_action_array)
-        real_action_idx = action_mask[action_idx]
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_drrn,
-            action_idx=real_action_idx,
-            token_idx=action_matrix[real_action_idx],
-            action_len=action_len[real_action_idx],
-            action=actions[real_action_idx],
-            q_actions=q_actions_t)
-        return action_desc
+        return q_actions
 
     def _compute_expected_q(
             self,

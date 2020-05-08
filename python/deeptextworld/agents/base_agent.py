@@ -45,14 +45,13 @@ class BaseCore(Logging, ABC):
         self.loaded_ckpt_step: int = 0
         self.is_training: bool = True
 
-    def get_a_policy_action(
+    def policy(
             self,
             trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
-            action_len: np.ndarray, actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+            action_len: np.ndarray,
+            action_mask: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
     def save_model(self, t: Optional[int] = None) -> None:
@@ -738,8 +737,16 @@ class BaseAgent(Logging):
                     self.hp.observation_t + self.core.loaded_ckpt_step,
                     len(self.memo) if self.memo is not None else 0)
         else:
-            self.eps = 0
             self.total_t = 0
+            if self.hp.policy_to_action.lower() == "Sampling".lower():
+                self.eps = 0
+            elif self.hp.policy_to_action.lower() == "LinUCB".lower():
+                self.eps = 0
+            elif self.hp.policy_to_action.lower() == "EPS".lower():
+                self.eps = self.hp.policy_eps
+            else:
+                raise ValueError("Unknown policy utilization method: {}".format(
+                    self.hp.policy_to_action))
 
     def _start_episode(
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
@@ -784,7 +791,9 @@ class BaseAgent(Logging):
              ("score", scores[0]),
              ("won", infos[INFO_KEY.won][0]),
              ("lost", infos[INFO_KEY.lost][0]),
-             ("last eps", self.eps)]))
+             ("policy_to_action", self.hp.policy_to_action),
+             ("eps", self.eps),
+             ("sampling_temp", self.hp.policy_sampling_temp)]))
         self._episode_has_started = False
         self._last_action_mask = None
         self._last_sys_action_mask = None
@@ -885,11 +894,34 @@ class BaseAgent(Logging):
     def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
         state = self.stc.fetch_last_state()[0]
-        policy_action_desc = self.core.get_a_policy_action(
-            trajectory, state, self.actor.action_matrix,
-            self.actor.action_len, self.actor.actions, action_mask,
-            self._cnt_action)
-        return policy_action_desc
+
+        q_actions = self.core.policy(
+            trajectory, state,
+            self.actor.action_matrix, self.actor.action_len, action_mask)
+
+        if self.hp.policy_to_action.lower() == "Sampling".lower():
+            action_idx = categorical_without_replacement(
+                logits=q_actions / self.hp.policy_sampling_temp, k=1)
+        elif self.hp.policy_to_action.lower() == "LinUCB".lower():
+            cnt_action_array = []
+            for mid in action_mask:
+                cnt_action_array.append(self._cnt_action.get(mid, 0.))
+            action_idx, _ = get_best_1d_q(q_actions - cnt_action_array)
+        elif self.hp.policy_to_action.lower() == "EPS".lower():
+            action_idx, _ = get_best_1d_q(q_actions)
+        else:
+            raise ValueError("Unknown policy utilization method: {}".format(
+                self.hp.policy_to_action))
+
+        true_action_idx = action_mask[action_idx]
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.policy_drrn,
+            action_idx=true_action_idx,
+            token_idx=self.actor.action_matrix[action_idx],
+            action_len=self.actor.action_len[action_idx],
+            action=self.actor.actions[action_idx],
+            q_actions=q_actions)
+        return action_desc
 
     def rule_based_policy(
             self, actions: List[str], instant_reward: float
@@ -902,7 +934,7 @@ class BaseAgent(Logging):
             action_mask: np.ndarray,
             instant_reward: float) -> ActionDesc:
         # when q_actions is required to get, this should be True
-        if self.hp.compute_policy_action_every_step:
+        if self.hp.always_compute_policy:
             policy_action_desc = self.get_policy_action(action_mask)
         else:
             policy_action_desc = None
@@ -927,8 +959,7 @@ class BaseAgent(Logging):
             action=action_desc.action,
             q_actions=(
                 policy_action_desc.q_actions
-                if self.hp.compute_policy_action_every_step else
-                action_desc.q_actions))
+                if self.hp.always_compute_policy else action_desc.q_actions))
         return final_action_desc
 
     def get_raw_instant_reward(self, score: float) -> float:
@@ -1080,7 +1111,6 @@ class BaseAgent(Logging):
             self.debug(self.report_status([
                 ("t", self.total_t),
                 ("in_game_t", self.in_game_t),
-                ("eps", self.eps),
                 ("action", colored(
                     self._last_action.action,
                     "yellow"
@@ -1091,11 +1121,7 @@ class BaseAgent(Logging):
                 ("reward", colored(
                     "{:.2f}".format(instant_reward),
                     "green" if instant_reward > 0 else "red")),
-                ("is_terminal", dones[0]),
-                ("max_q_val", (
-                    "{:.2f}".format(np.max(self._last_action.q_actions))
-                    if self._last_action.q_actions is not None else "-"))
-            ]))
+                ("is_terminal", dones[0])]))
         else:
             self.info(self.report_status([
                 ("master", colored(

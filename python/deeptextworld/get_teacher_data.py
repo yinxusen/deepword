@@ -53,7 +53,7 @@ def run_eval(
     config_file = os.path.join(model_dir, 'hparams.json')
     hp = load_hparams(config_file, cmd_args=None, fn_pre_config=None)
     # TODO: important setup for gen-data
-    hp.set_hparam("compute_policy_action_every_step", True)
+    hp.set_hparam("always_compute_policy", True)
     hp.set_hparam("max_snapshot_to_keep", 100)
     hp.set_hparam("agent_clazz", "CompetitionAgent")
     hp.set_hparam("use_step_wise_reward", True)

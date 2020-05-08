@@ -5,7 +5,7 @@ from typing import Dict, Optional, List, Any
 import numpy as np
 
 from deeptextworld.agents.base_agent import BaseCore, BaseAgent
-from deeptextworld.agents.base_agent import TFCore, ActionDesc, ACT_TYPE
+from deeptextworld.agents.base_agent import TFCore
 from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import ObsInventory
 from deeptextworld.agents.utils import get_best_1d_q
@@ -20,15 +20,13 @@ class DQNCore(TFCore):
     def __init__(self, hp, model_dir, tokenizer):
         super(DQNCore, self).__init__(hp, model_dir, tokenizer)
 
-    def get_a_policy_action(
+    def policy(
             self,
             trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
+            action_mask: np.ndarray) -> np.ndarray:
         """
         get either an random action index with action string
         or the best predicted action index with action string.
@@ -38,24 +36,7 @@ class DQNCore(TFCore):
             self.model.src_: [src],
             self.model.src_len_: [src_len]
         })[0]
-
-        cnt_action_array = []
-        for mid in action_mask:
-            cnt_action_array.append(
-                cnt_action[mid] if mid in cnt_action else 0.)
-
-        admissible_q_actions = q_actions[action_mask]
-        action_idx, q_val = get_best_1d_q(
-            admissible_q_actions - cnt_action_array)
-        real_action_idx = action_mask[action_idx]
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_drrn,
-            action_idx=real_action_idx,
-            token_idx=action_matrix[real_action_idx],
-            action_len=action_len[real_action_idx],
-            action=actions[real_action_idx],
-            q_actions=admissible_q_actions)
-        return action_desc
+        return q_actions[action_mask]
 
     def _compute_expected_q(
             self,
@@ -184,28 +165,16 @@ class TabularCore(BaseCore):
                     prev_q_val + delta_q_val * b_weight[i])
         return abs_loss
 
-    def get_a_policy_action(
+    def policy(
             self,
             trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
-            actions: List[str],
-            action_mask: np.ndarray,
-            cnt_action: Optional[Dict[int, float]]) -> ActionDesc:
-
+            action_mask: np.ndarray) -> np.ndarray:
         hs = self.get_state_hash(state)
         q_actions = self.q_mat.get(hs, np.zeros(self.hp.n_actions))
-        admissible_q_actions = q_actions[action_mask]
-        action_idx, q_val = get_best_1d_q(admissible_q_actions)
-        real_action_idx = action_mask[action_idx]
-        action_desc = ActionDesc(
-            action_type=ACT_TYPE.policy_tbl,
-            action_idx=real_action_idx,
-            token_idx=action_matrix[real_action_idx],
-            action_len=action_len[real_action_idx],
-            action=actions[real_action_idx])
-        return action_desc
+        return q_actions[action_mask]
 
     def create_or_reload_target_model(
             self, restore_from: Optional[str] = None) -> None:
