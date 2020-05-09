@@ -14,8 +14,8 @@ from tensorflow.contrib.training import HParams
 from tqdm import trange
 
 from deeptextworld.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
-    FullDirEvalPlayer
-from deeptextworld.hparams import load_hparams
+    FullDirEvalPlayer, agent_collect_data
+from deeptextworld.hparams import load_hparams, output_hparams
 from deeptextworld.utils import agent_name2clazz, learner_name2clazz
 from deeptextworld.utils import load_and_split, load_game_files
 from deeptextworld.utils import setup_train_log, setup_eval_log, eprint
@@ -67,7 +67,9 @@ def get_parser() -> ArgumentParser:
         conflict_handler='resolve')
     parser.add_argument('--model-dir', type=str, required=True)
 
-    subparsers = parser.add_subparsers(dest='mode')
+    subparsers = parser.add_subparsers(
+        dest='mode',
+        help="[train-dqn|eva--dqn|train-student|eval-student|gen-data]")
 
     teacher_parser = subparsers.add_parser('train-dqn')
     teacher_parser.add_argument(
@@ -94,6 +96,14 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str)
     student_eval_parser.add_argument('--n-gpus', type=int, default=1)
+
+    gen_data_parser = subparsers.add_parser('gen-data')
+    gen_data_parser.add_argument('--game-path', type=str, required=True)
+    gen_data_parser.add_argument('--f-games', type=str)
+    gen_data_parser.add_argument('--load-best', action='store_true')
+    gen_data_parser.add_argument('--restore-from', type=str)
+    gen_data_parser.add_argument('--epoch-size', type=int)
+    gen_data_parser.add_argument('--epoch-limit', type=int, default=5)
     return parser
 
 
@@ -253,6 +263,34 @@ def process_eval_dqn(args):
         raise ValueError()
 
 
+def process_gen_data(args):
+    hp = process_hp(args)
+    setup_eval_log(log_filename="/tmp/eval-logging.txt")
+    train_games, dev_games = load_and_split(args.game_path, args.f_games)
+    game_files = train_games
+    eprint("load {} game files".format(len(game_files)))
+    game_names = [os.path.basename(fn) for fn in game_files]
+    eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
+
+    if args.epoch_size is None:
+        args.epoch_size = hp.replay_mem
+
+    # need to compute policy at every step
+    hp.set_hparam("always_compute_policy", True)
+    hp.set_hparam("max_snapshot_to_keep", args.epoch_limit)
+
+    eprint("generate data with the following config:")
+    eprint(output_hparams(hp))
+
+    agent_clazz = agent_name2clazz(hp.agent_clazz)
+    agent = agent_clazz(hp, args.model_dir)
+    agent.eval(load_best=True)
+
+    agent_collect_data(
+        agent, game_files, hp.game_episode_terminal_t,
+        args.epoch_size, args.epoch_limit)
+
+
 def main(args):
     args.model_dir = args.model_dir.rstrip('/')
     if not os.path.isdir(args.model_dir):
@@ -266,6 +304,10 @@ def main(args):
         process_eval_student(args)
     elif args.mode == "eval-dqn":
         process_eval_dqn(args)
+    elif args.mode == "gen-data":
+        process_gen_data(args)
+    else:
+        raise ValueError("please choose mode")
 
 
 if __name__ == '__main__':

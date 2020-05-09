@@ -92,6 +92,37 @@ def eval_agent(
     return eval_results, agent.core.loaded_ckpt_step
 
 
+def agent_collect_data(
+        agent, game_files, max_episode_steps, epoch_size, epoch_limit):
+    requested_infos = agent.select_additional_infos()
+    env_id = textworld.gym.register_games(
+        game_files, requested_infos, batch_size=1,
+        max_episode_steps=max_episode_steps,
+        name="eval")
+    game_env = gym.make(env_id)
+    agent.eps = random.random()
+    eprint("new randomness: {}".format(agent.eps))
+
+    obs, infos = game_env.reset()
+    scores = [0] * len(obs)
+    dones = [False] * len(obs)
+    for epoch_t in range(epoch_limit):
+        for _ in range(epoch_size):
+            if not all(dones):
+                commands = agent.act(obs, scores, dones, infos)
+                obs, scores, dones, infos = game_env.step(commands)
+            else:
+                agent.act(obs, scores, dones, infos)
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                agent.eps = random.random()
+                eprint("new randomness: {}".format(agent.eps))
+        agent.save_snapshot()
+        eprint("save snapshot epoch: {}".format(epoch_t))
+    game_env.close()
+
+
 class MultiGPUsEvalPlayer(Logging):
     """
     Eval Player that runs on multiple GPUs
