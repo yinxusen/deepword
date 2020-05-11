@@ -272,8 +272,15 @@ def process_gen_data(args):
     game_names = [os.path.basename(fn) for fn in game_files]
     eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
 
+    # make sure epoch_size equals to replay_mem
+    # if set, always use epoch_size;
+    # otherwise, use replay_mem.
+    # TODO: don't set replay_mem directly, because the replay_mem in cmd_args
+    #   cannot reset replay_mem in hparams.json
     if args.epoch_size is None:
         args.epoch_size = hp.replay_mem
+    else:
+        hp.set_hparam("replay_mem", args.epoch_size)
 
     # need to compute policy at every step
     hp.set_hparam("always_compute_policy", True)
