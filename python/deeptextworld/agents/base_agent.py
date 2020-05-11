@@ -24,7 +24,7 @@ from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
 from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
-from deeptextworld.utils import eprint
+from deeptextworld.utils import eprint, report_status
 from deeptextworld.utils import model_name2clazz, get_hash, core_name2clazz
 
 
@@ -368,11 +368,8 @@ class BaseAgent(Logging):
         self._cnt_action: Optional[Dict[int, float]] = None
         self._largest_valid_tag = 0
         self._stale_tags: Optional[List[int]] = None
-
-    @classmethod
-    def report_status(cls, lst_of_status: List[Tuple[str, object]]) -> str:
-        return ', '.join(
-            map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
+        self._positive_scores = 0
+        self._negative_scores = 0
 
     @classmethod
     def get_path_tags(cls, path: str, prefix: str) -> List[int]:
@@ -741,7 +738,7 @@ class BaseAgent(Logging):
             if self.hp.policy_to_action.lower() == "Sampling".lower():
                 self.eps = 0
             elif self.hp.policy_to_action.lower() == "LinUCB".lower():
-                self.eps = 0
+                self.eps = self.hp.policy_eps
             elif self.hp.policy_to_action.lower() == "EPS".lower():
                 self.eps = self.hp.policy_eps
             else:
@@ -774,6 +771,8 @@ class BaseAgent(Logging):
         self._prev_place = None
         self._curr_place = None
         self._cnt_action = dict()
+        self._positive_scores = 0
+        self._negative_scores = 0
 
     def _end_episode(
             self, obs: List[str], scores: List[int],
@@ -785,10 +784,12 @@ class BaseAgent(Logging):
         :param infos: additional infos of each game
         :return:
         """
-        self.info(self.report_status(
+        self.info(report_status(
             [("training", self.is_training),
              ("#steps", self.in_game_t),
              ("score", scores[0]),
+             ("positive scores", self._positive_scores),
+             ("negative scores", self._negative_scores),
              ("won", infos[INFO_KEY.won][0]),
              ("lost", infos[INFO_KEY.lost][0]),
              ("policy_to_action", self.hp.policy_to_action),
@@ -994,6 +995,10 @@ class BaseAgent(Logging):
         # 2. you lost     --> discourage this action
         # 3. out of step  --> do nothing
         raw_instant_reward = self.get_raw_instant_reward(score)
+        if raw_instant_reward >= 0:
+            self._positive_scores += raw_instant_reward
+        else:
+            self._negative_scores += raw_instant_reward
         instant_reward = raw_instant_reward
         if is_terminal:
             if won:
@@ -1009,6 +1014,14 @@ class BaseAgent(Logging):
             instant_reward += (curr_cumulative_penalty + (-0.1))
         instant_reward = self.clip_reward(instant_reward)
         return instant_reward
+
+    @property
+    def positive_scores(self):
+        return self._positive_scores
+
+    @property
+    def negative_scores(self):
+        return self._negative_scores
 
     def collect_floor_plan(self, master: str, prev_place: str) -> str:
         """
@@ -1108,7 +1121,7 @@ class BaseAgent(Logging):
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
         if self._last_action:
-            self.debug(self.report_status([
+            self.debug(report_status([
                 ("t", self.total_t),
                 ("in_game_t", self.in_game_t),
                 ("action", colored(
@@ -1123,7 +1136,7 @@ class BaseAgent(Logging):
                     "green" if instant_reward > 0 else "red")),
                 ("is_terminal", dones[0])]))
         else:
-            self.info(self.report_status([
+            self.info(report_status([
                 ("master", colored(
                     master.replace("\n", " "), "cyan", attrs=["underline"])),
                 ("max_score", infos[INFO_KEY.max_score][0])
@@ -1136,7 +1149,10 @@ class BaseAgent(Logging):
         return master, instant_reward
 
     def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
-        effective_actions = self.go_with_floor_plan(admissible_actions)
+        if self.hp.collect_floor_plan:
+            effective_actions = self.go_with_floor_plan(admissible_actions)
+        else:
+            effective_actions = admissible_actions
         return effective_actions
 
     def collect_new_sample(
@@ -1206,7 +1222,10 @@ class BaseAgent(Logging):
         self._last_action_mask = action_mask
         self._last_sys_action_mask = sys_action_mask
         # revert back go actions for the game playing
-        if action.startswith("go"):
+        # TODO: better collecting floor plan schedule?
+        # TODO: better condition for reverting go-actions?
+        if (self.hp.collect_floor_plan and action.startswith("go")
+                and "to" in action):
             action = " ".join(action.split()[:2])
         return action
 

@@ -121,9 +121,10 @@ class CompetitionAgent(BaseAgent):
             return None
 
     def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
-        filtered_actions = self.filter_admissible_actions(admissible_actions)
-        effective_actions = self.go_with_floor_plan(filtered_actions)
-        return effective_actions
+        actions = super(CompetitionAgent, self).prepare_actions(
+            admissible_actions)
+        actions = self.filter_admissible_actions(actions)
+        return actions
 
     def _start_episode_impl(self, obs, infos):
         super(CompetitionAgent, self)._start_episode_impl(obs, infos)

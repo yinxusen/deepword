@@ -20,7 +20,7 @@ from deeptextworld.agents.utils import INFO_KEY
 from deeptextworld.log import Logging
 from deeptextworld.utils import agent_name2clazz
 from deeptextworld.utils import agg_results, scores_of_tiers
-from deeptextworld.utils import eprint
+from deeptextworld.utils import eprint, report_status
 
 
 def eval_agent(
@@ -71,8 +71,8 @@ def eval_agent(
             dones = [False] * len(obs)
             steps = [0] * len(obs)
             # TODO: make sure verbose won't affect games other than Zork
-            tmp_obs, _, _, _ = game_env.step(["verbose"] * len(obs))
-            eprint("use verbose: {}".format(tmp_obs[0]))
+            # tmp_obs, _, _, _ = game_env.step(["verbose"] * len(obs))
+            # eprint("use verbose: {}".format(tmp_obs[0]))
             while not all(dones):
                 # Increase step counts.
                 steps = ([step + int(not done)
@@ -87,8 +87,10 @@ def eval_agent(
             if game_name not in eval_results:
                 eval_results[game_name] = []
             eval_results[game_name].append(
-                (scores[0], infos[INFO_KEY.max_score][0], steps[0],
+                (scores[0], agent.positive_scores, agent.negative_scores,
+                 infos[INFO_KEY.max_score][0], steps[0],
                  infos[INFO_KEY.won][0], action_list))
+        game_env.close()
     return eval_results, agent.core.loaded_ckpt_step
 
 
@@ -205,15 +207,19 @@ class MultiGPUsEvalPlayer(Logging):
         results = [res[0] for res in results]
 
         eval_results = dict(ChainMap(*results))
-        (agg_res, total_scores, confidence_intervals, total_steps,
-         n_won) = agg_results(eval_results)
+        (agg_res, total_scores, confidence_intervals, total_positive_scores,
+         total_negative_scores, total_steps, n_won) = agg_results(eval_results)
         self.info("eval_results: {}".format(eval_results))
         self.info("eval aggregated results: {}".format(agg_res))
-        self.info(
-            "after-epoch: {}, scores: {:.2f}, confidence: {:2f},"
-            " steps: {:.2f}, n_won: {:.2f}".format(
-                loaded_steps[0], total_scores, confidence_intervals,
-                total_steps, n_won))
+        self.info(report_status([
+            ("after-epoch", loaded_steps[0]),
+            ("scores", "{:.2f}".format(total_scores)),
+            ("confidence", "{:.2f}".format(confidence_intervals)),
+            ("positive scores", "{:.2f}".format(total_positive_scores)),
+            ("negative scores", "{:.2f}".format(total_negative_scores)),
+            ("steps", total_steps),
+            ("n_won", n_won)
+        ]))
         tiers2scores = scores_of_tiers(agg_res)
         self.info("scores per tiers:\n{}".format(tiers2scores))
 

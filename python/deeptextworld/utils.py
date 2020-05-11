@@ -173,7 +173,8 @@ def agg_results(eval_results, max_steps_per_episode=100):
       dict(game_name, [eval_result1, evaluate_result2, ..., evaluate_resultM])
       and the number of eval_results are the same for all games.
       evaluate_result:
-        score, max_score, steps, won (bool), used_action_list
+        score, positive_score, negative_score, max_score, steps, won (bool),
+        used_action_list
     :param max_steps_per_episode: i.e. M, default = 100
 
     :return:
@@ -185,6 +186,8 @@ def agg_results(eval_results, max_steps_per_episode=100):
     """
     agg_per_game = {}
     total_scores_per_episode = None  # np array of shape M
+    total_positive_scores = 0
+    total_negative_scores = 0
     total_steps = 0
     max_scores_per_episode = 0
     total_episodes = 0
@@ -192,25 +195,30 @@ def agg_results(eval_results, max_steps_per_episode=100):
     for game_name in eval_results:
         res = eval_results[game_name]
         agg_score = np.asarray(list(map(lambda r: r[0], res)))
+        agg_positive_score = sum(map(lambda r: r[1], res))
+        agg_negative_score = sum(map(lambda r: r[2], res))
         # all max scores should be equal, so just pick anyone
-        agg_max_score = max(map(lambda r: r[1], res))
+        agg_max_score = max(map(lambda r: r[3], res))
         max_scores_per_episode += agg_max_score
         n_episodes = len(res)
         total_episodes += n_episodes
-        agg_step = sum(map(lambda r: r[2], res))
-        agg_nb_won = len(list(filter(lambda r: r[3], res)))
+        agg_step = sum(map(lambda r: r[4], res))
+        agg_nb_won = len(list(filter(lambda r: r[5], res)))
         total_won += agg_nb_won
         agg_per_game[game_name] = (
-            np.sum(agg_score), agg_max_score * n_episodes,
-            agg_step, agg_nb_won)
+            np.sum(agg_score), agg_positive_score, agg_negative_score,
+            agg_max_score * n_episodes, agg_step, agg_nb_won)
         if total_scores_per_episode is None:
             total_scores_per_episode = np.zeros_like(agg_score)
         total_scores_per_episode += agg_score
+        total_positive_scores += agg_positive_score
+        total_negative_scores += agg_negative_score
         total_steps += agg_step
     max_steps = total_episodes * max_steps_per_episode
-    sample_mean, confidence_interval = mean_confidence_interval(
+    total_scores, confidence_interval = mean_confidence_interval(
         total_scores_per_episode / max_scores_per_episode)
-    return (agg_per_game, sample_mean, confidence_interval,
+    return (agg_per_game, total_scores, confidence_interval,
+            total_positive_scores, total_negative_scores,
             total_steps * 1. / max_steps, total_won * 1. / total_episodes)
 
 
@@ -362,3 +370,8 @@ def softmax(x):
     """numerical stability softmax"""
     e_x = np.exp(x - np.sum(x))
     return e_x / np.sum(e_x)
+
+
+def report_status(lst_of_status: List[Tuple[str, object]]) -> str:
+    return ', '.join(
+        map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
