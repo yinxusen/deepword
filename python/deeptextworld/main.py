@@ -281,13 +281,12 @@ def process_gen_data(args):
         args.epoch_size = hp.replay_mem
     else:
         hp.set_hparam("replay_mem", args.epoch_size)
+    eprint("effective replay_mem: {}, epoch_size: {}".format(
+        hp.replay_mem, args.epoch_size))
 
     # need to compute policy at every step
     hp.set_hparam("always_compute_policy", True)
     hp.set_hparam("max_snapshot_to_keep", args.epoch_limit)
-
-    eprint("generate data with the following config:")
-    eprint(output_hparams(hp))
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, args.model_dir)
