@@ -47,7 +47,7 @@ class StudentLearner(object):
             self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
             eval_data_path: Optional[str] = None) -> None:
         # prefix should match BaseAgent
-        self.tjs_prefix = "raw-trajectories"
+        self.tjs_prefix = "trajectories"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
 
@@ -208,6 +208,20 @@ class StudentLearner(object):
     def _load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
+        memory = np.load(memo_path, allow_pickle=True)["data"]
+        if isinstance(memory[0], DRRNMemoTeacher):
+            eprint("load old data with DRRNMemoTeacher")
+            return self._load_snapshot_v1(memo_path, tjs_path, action_path)
+        elif isinstance(memory[0], Memolet):
+            eprint("load new data with Memolet")
+            return self._load_snapshot_v2(memo_path, tjs_path, action_path)
+        else:
+            raise ValueError(
+                "Unrecognized memory type: {}".format(type(memory[0])))
+
+    def _load_snapshot_v1(
+            self, memo_path: str, tjs_path: str, action_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
         old_memory = list(filter(
@@ -256,6 +270,7 @@ class StudentLearner(object):
             epoch of training.
         :return:
         """
+        eprint("try to add batch data: {}".format(combined_data_path))
         while True:
             if training and append_new_data:
                 new_combined_data_path = self._get_combined_data_path(
@@ -413,7 +428,7 @@ class DRRNLearner(StudentLearner):
                 self.model.action_idx_: np.arange(len(expected_qs)),
                 self.model.expected_q_: expected_qs,
                 self.model.b_weight_: [1.]})
-        eprint("loss: {}".format(loss))
+        eprint("\nloss: {}".format(loss))
         self.sw.add_summary(summaries, train_step)
 
     def _prepare_data(self, b_memory, tjs, action_collector):
@@ -451,7 +466,7 @@ class GenLearner(StudentLearner):
                 self.model.action_len_: action_len,
                 self.model.b_weight_: b_weight})
         self.sw.add_summary(summaries, train_step)
-        eprint("loss: {}".format(loss))
+        eprint("\nloss: {}".format(loss))
 
     def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
@@ -724,4 +739,4 @@ class BertSoftmaxLearner(BertLearner):
                 self.model.swag_labels_: swag_labels
                 })
         self.sw.add_summary(summaries, train_step)
-        eprint("loss: {}".format(loss))
+        eprint("\nloss: {}".format(loss))
