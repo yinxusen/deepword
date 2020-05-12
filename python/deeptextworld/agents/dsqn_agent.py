@@ -1,117 +1,14 @@
 from bisect import bisect_left
 from multiprocessing.pool import ThreadPool
 from os import remove as prm
-from typing import Dict, Tuple, List, Optional, Any
+from typing import Dict, Tuple, List, Any
 
 import numpy as np
 from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.agents.drrn_agent import DRRNCore
-from deeptextworld.agents.utils import ActionMaster, ObsInventory, Memolet
-from deeptextworld.agents.utils import batch_drrn_action_input
-from deeptextworld.agents.utils import id_real2batch
-from deeptextworld.models.export_models import DSQNModel
-
-
-class DSQNCore(DRRNCore):
-    def __init__(self, hp, model_dir, tokenizer):
-        super(DRRNCore, self).__init__(hp, model_dir, tokenizer)
-        self.model: Optional[DSQNModel] = None
-        self.target_model: Optional[DSQNModel] = None
-
-    def train_one_batch(
-            self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
-            pre_states: Optional[List[ObsInventory]],
-            post_states: Optional[List[ObsInventory]],
-            action_matrix: List[np.ndarray],
-            action_len: List[np.ndarray],
-            pre_action_mask: List[np.ndarray],
-            post_action_mask: List[np.ndarray],
-            dones: List[bool],
-            rewards: List[float],
-            action_idx: List[int],
-            b_weight: np.ndarray,
-            step: int,
-            others: Any) -> np.ndarray:
-
-        expected_q = self._compute_expected_q(
-            post_action_mask, post_trajectories, action_matrix, action_len,
-            dones, rewards)
-
-        src, src_len, src2, src2_len, labels = others.get()
-        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
-        (actions, actions_lens, actions_repeats, id_real2mask
-         ) = batch_drrn_action_input(
-            action_matrix, action_len, pre_action_mask)
-        action_batch_ids = id_real2batch(
-            action_idx, id_real2mask, actions_repeats)
-
-        _, summaries, weighted_loss, abs_loss = self.sess.run(
-            [self.model.merged_train_op, self.model.weighted_train_summary_op,
-             self.model.weighted_loss, self.model.abs_loss],
-            feed_dict={
-                self.model.src_: pre_src,
-                self.model.src_len_: pre_src_len,
-                self.model.b_weight_: b_weight,
-                self.model.action_idx_: action_batch_ids,
-                self.model.actions_mask_: pre_action_mask,
-                self.model.expected_q_: expected_q,
-                self.model.actions_: actions,
-                self.model.actions_len_: actions_lens,
-                self.model.actions_repeats_: actions_repeats,
-                self.model.snn_src_: src,
-                self.model.snn_src_len_: src_len,
-                self.model.snn_src2_: src2,
-                self.model.snn_src2_len_: src2_len,
-                self.model.labels_: labels})
-        self.train_summary_writer.add_summary(
-            summaries, step - self.hp.observation_t)
-        return abs_loss
-
-    # TODO: refine the code
-    def eval_snn(
-            self,
-            snn_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
-                            np.ndarray],
-            batch_size: int = 32) -> float:
-
-        src, src_len, src2, src2_len, labels = snn_data
-        eval_data_size = len(src)
-        self.info("start eval with size {}".format(eval_data_size))
-        n_iter = (eval_data_size // batch_size) + 1
-        total_acc = 0
-        total_samples = 0
-        for i in range(n_iter):
-            self.debug("eval snn iter {} total {}".format(i, n_iter))
-            non_empty_src = list(filter(
-                lambda x: x[1][0] != 0 and x[1][1] != 0,
-                enumerate(zip(src_len, src2_len))))
-            non_empty_src_idx = [x[0] for x in non_empty_src]
-            src = src[non_empty_src_idx, :]
-            src_len = src_len[non_empty_src_idx]
-            src2 = src2[non_empty_src_idx, :]
-            src2_len = src2_len[non_empty_src_idx]
-            labels = labels[non_empty_src_idx]
-            labels = labels.astype(np.int32)
-            pred, diff_two_states = self.sess.run(
-                [self.model.pred, self.model.diff_two_states],
-                feed_dict={self.model.snn_src_: src,
-                           self.model.snn_src2_: src2,
-                           self.model.snn_src_len_: src_len,
-                           self.model.snn_src2_len_: src2_len})
-            pred_labels = (pred > 0).astype(np.int32)
-            total_acc += np.sum(np.equal(labels, pred_labels))
-            total_samples += len(src)
-        if total_samples == 0:
-            avg_acc = -1
-        else:
-            avg_acc = total_acc * 1. / total_samples
-            self.debug("valid sample size {}".format(total_samples))
-        return avg_acc
-    pass
+from deeptextworld.agents.utils import Memolet
+from deeptextworld.agents.utils import batch_dqn_input
 
 
 class DSQNAgent(BaseAgent):
@@ -228,9 +125,18 @@ class DSQNAgent(BaseAgent):
             diff_set.append(
                 self.hash_states2tjs[dk][npc(len(self.hash_states2tjs[dk]))])
 
-        tgt_src, tgt_src_len = self.tjs.fetch_batch_states_impl(tgt_set)
-        same_src, same_src_len = self.tjs.fetch_batch_states_impl(same_set)
-        diff_src, diff_src_len = self.tjs.fetch_batch_states_impl(diff_set)
+        trajectories = [
+            self.tjs.fetch_state_by_idx(tid, sid) for tid, sid in
+            tgt_set + same_set + diff_set]
+        batch_src, batch_src_len, batch_mask = batch_dqn_input(
+            trajectories, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id, with_action_padding=False)
+        tgt_src = batch_src[: len(tgt_set)]
+        tgt_src_len = batch_src_len[: len(tgt_set)]
+        same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
+        same_src_len = batch_src_len[len(tgt_set): len(tgt_set) + len(same_set)]
+        diff_src = batch_src[-len(diff_set):]
+        diff_src_len = batch_src_len[-len(diff_set):]
 
         src = np.concatenate([tgt_src, tgt_src], axis=0)
         src_len = np.concatenate([tgt_src_len, tgt_src_len], axis=0)

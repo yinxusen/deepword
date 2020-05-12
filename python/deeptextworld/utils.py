@@ -159,7 +159,11 @@ def agent_name2clazz(name):
 
 
 def core_name2clazz(name):
-    return agent_name2clazz(name)
+    from deeptextworld.agents import cores
+
+    if hasattr(cores, name):
+        return getattr(cores, name)
+    raise ValueError("{} not found in agents".format(name))
 
 
 def agg_results(eval_results, max_steps_per_episode=100):
