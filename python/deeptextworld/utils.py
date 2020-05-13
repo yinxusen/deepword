@@ -146,12 +146,12 @@ def agent_name2clazz(name):
     :param name:
     :return:
     """
-    from deeptextworld.agents import dqn_agent, drrn_agent, dsqn_agent, \
-        gen_agent, commonsense_agent, competition_agent, gen_drrn_agent, \
+    from deeptextworld.agents import base_agent, dsqn_agent, \
+        gen_agent, competition_agent, gen_drrn_agent, \
         zork_agent
 
-    for namespace in [dqn_agent, drrn_agent, dsqn_agent, gen_agent,
-                      commonsense_agent, competition_agent, gen_drrn_agent,
+    for namespace in [base_agent, dsqn_agent, gen_agent,
+                      competition_agent, gen_drrn_agent,
                       zork_agent]:
         if hasattr(namespace, name):
             return getattr(namespace, name)

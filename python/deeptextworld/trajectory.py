@@ -17,6 +17,22 @@ class Trajectory(Generic[T]):
     in extended classes.
     """
     def __init__(self, num_turns: int, size_per_turn: int = 1) -> None:
+        """
+        Take the ActionMaster (AM) as an example,
+        Trajectory(AM1, AM2, AM3, AM4, AM5), and last_sid points to AM5;
+        num_turns = 1 means we choose [AM4, AM5];
+
+        size_per_turn only controls the way we separate pre- and post-trajectory
+        default with size_per_turn = 1, AM4 is the pre-trajectory of AM5.
+
+        Sometimes we need to change it, e.g. with legacy data where we store
+        trajectory as Trajectory(M1, A1, M2, A2, M3, A3, M4), and the last
+        sid points to M4, then the pre-trajectory of [A3, M4] is [A2, M3],
+        that's why the size_per_turn should set to 2.
+
+        :param num_turns: how many turns to choose other than current turn
+        :param size_per_turn: how many cells count as one turn
+        """
         super(Trajectory, self).__init__()
         self.trajectories: Dict[int, List[T]] = dict()
         self.curr_tj: Optional[List[T]] = None

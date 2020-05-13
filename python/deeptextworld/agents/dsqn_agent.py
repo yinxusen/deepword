@@ -9,6 +9,7 @@ from numpy.random import choice as npc
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
+from deeptextworld.utils import get_hash
 
 
 class DSQNAgent(BaseAgent):
@@ -84,7 +85,8 @@ class DSQNAgent(BaseAgent):
             master, instant_reward, dones, infos)
 
         if not dones[0]:
-            hs, _ = self.stc.fetch_last_state()
+            state = self.stc.fetch_last_state()[-1]
+            hs = get_hash(state.obs + "\n" + state.inventory)
             if hs not in self.hash_states2tjs:
                 self.hash_states2tjs[hs] = []
             last_tid = self.tjs.get_current_tid()

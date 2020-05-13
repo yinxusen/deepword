@@ -121,11 +121,94 @@ class CnnDSQN(BaseDQN):
 
     @classmethod
     def get_train_model(cls, hp, device_placement):
-        return create_train_model(cls, hp, device_placement)
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp)
+                inputs = model.inputs
+                q_actions, new_h = model.get_q_actions()
+                semantic_same, h_states_diff = model.is_semantic_same()
+                loss, train_op, abs_loss = model.get_train_op(q_actions)
+                snn_loss, snn_train_op = model.get_snn_train_op(semantic_same)
+                (weighted_loss, merged_train_op, s1, s2
+                 ) = model.get_merged_train_op(loss, snn_loss)
+                loss_summary = tf.summary.scalar("loss", loss)
+                snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
+                weighted_loss_summary = tf.summary.scalar(
+                    "weighted_loss", weighted_loss)
+                s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
+                s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
+                train_summary_op = tf.summary.merge([loss_summary])
+                snn_train_summary_op = tf.summary.merge([snn_loss_summary])
+                weighted_train_summary_op = tf.summary.merge(
+                    [loss_summary, snn_loss_summary, weighted_loss_summary,
+                     s1_summary, s2_summary])
+        return DSQNModel(
+            graph=graph,
+            q_actions=q_actions,
+            semantic_same=semantic_same,
+            src_=inputs["src"],
+            src_len_=inputs["src_len"],
+            actions_=inputs["actions"],
+            actions_len_=inputs["actions_len"],
+            snn_src_=inputs["snn_src"],
+            snn_src_len_=inputs["snn_src_len"],
+            snn_src2_=inputs["snn_src2"],
+            snn_src2_len_=inputs["snn_src2_len"],
+            actions_repeats_=inputs["actions_repeats"],
+            src_seg_=inputs["src_seg"],
+            labels_=inputs["labels"],
+            b_weight_=inputs["b_weight"],
+            abs_loss=abs_loss,
+            train_op=train_op,
+            action_idx_=inputs["action_idx"],
+            expected_q_=inputs["expected_q"],
+            loss=loss,
+            snn_train_op=snn_train_op,
+            weighted_loss=weighted_loss,
+            snn_loss=snn_loss,
+            merged_train_op=merged_train_op,
+            train_summary_op=train_summary_op,
+            snn_train_summary_op=snn_train_summary_op,
+            weighted_train_summary_op=weighted_train_summary_op,
+            h_states_diff=h_states_diff,
+            h_state=new_h)
 
     @classmethod
     def get_eval_model(cls, hp, device_placement):
-        return create_eval_model(cls, hp, device_placement)
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp, is_infer=True)
+                inputs = model.inputs
+                q_actions, new_h = model.get_q_actions()
+                semantic_same, h_states_diff = model.is_semantic_same()
+        return DSQNModel(
+            graph=graph, q_actions=q_actions, semantic_same=semantic_same,
+            src_=inputs["src"],
+            src_len_=inputs["src_len"],
+            actions_=inputs["actions"],
+            actions_len_=inputs["actions_len"],
+            snn_src_=inputs["snn_src"],
+            snn_src_len_=inputs["snn_src_len"],
+            snn_src2_=inputs["snn_src2"],
+            snn_src2_len_=inputs["snn_src2_len"],
+            actions_repeats_=inputs["actions_repeats"],
+            src_seg_=inputs["src_seg"],
+            labels_=inputs["labels"],
+            b_weight_=inputs["b_weight"],
+            abs_loss=None,
+            train_op=None, action_idx_=inputs["action_idx"],
+            expected_q_=inputs["expected_q"], loss=None,
+            snn_train_op=None,
+            weighted_loss=None,
+            snn_loss=None,
+            merged_train_op=None,
+            train_summary_op=None,
+            snn_train_summary_op=None,
+            weighted_train_summary_op=None,
+            h_states_diff=h_states_diff,
+            h_state=new_h)
 
 
 class TransformerDSQN(CnnDSQN):
@@ -144,8 +227,10 @@ class TransformerDSQN(CnnDSQN):
         :param is_infer:
         """
         super(TransformerDSQN, self).__init__(hp, src_embeddings, is_infer)
+        self.d_model = 128
+        self.factoring = True
         self.attn_encoder = txf.Encoder(
-            num_layers=1, d_model=128, num_heads=8, dff=256,
+            num_layers=1, d_model=self.d_model, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
     def get_q_actions(self):
@@ -157,14 +242,20 @@ class TransformerDSQN(CnnDSQN):
         with tf.variable_scope("drrn-encoder", reuse=False):
             padding_mask = txf.create_padding_mask(self.inputs["src"])
             inner_state = self.attn_encoder(
-                self.inputs["src"],
-                training=(not self.is_infer), mask=padding_mask, x_seg=None)
+                self.inputs["src"], training=(not self.is_infer),
+                mask=padding_mask, x_seg=None)
             pooled = tf.reduce_max(inner_state, axis=1)
-            h_state = tf.reshape(pooled, [-1, 128])
+            h_state = tf.reshape(pooled, [-1, self.d_model])
             new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True)
-            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
+                h_state, units=self.hp.hidden_state_size, use_bias=True,
+                name="new_h")
+            if self.factoring:
+                new_h_var = tf.layers.dense(
+                    h_state, units=self.hp.hidden_state_size, use_bias=True,
+                    name="new_h_var")
+                new_h += new_h_var
 
+            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 h_actions = dqn.encoder_lstm(
                     self.inputs["actions"],
@@ -179,13 +270,16 @@ class TransformerDSQN(CnnDSQN):
 
     def get_h_state(self, src):
         padding_mask = txf.create_padding_mask(src)
-        with tf.variable_scope("drrn-encoder", reuse=True):
+        with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
             inner_state = self.attn_encoder(
-                src,
-                training=(not self.is_infer), mask=padding_mask, x_seg=None)
+                src, training=(not self.is_infer), mask=padding_mask,
+                x_seg=None)
             pooled = tf.reduce_max(inner_state, axis=1)
-            h_state = tf.reshape(pooled, [-1, 128])
-        return h_state
+            h_state = tf.reshape(pooled, [-1, self.d_model])
+            new_h = tf.layers.dense(
+                h_state, units=self.hp.hidden_state_size, use_bias=True,
+                name="new_h")
+        return new_h
 
     def is_semantic_same(self):
         h_state = self.get_h_state(self.inputs["snn_src"])
@@ -195,153 +289,3 @@ class TransformerDSQN(CnnDSQN):
             diff_two_states, activation=None, units=1, use_bias=True,
             name="snn_dense"))
         return semantic_same, diff_two_states
-
-
-class TransformerDSQNWithFactor(TransformerDSQN):
-    def __init__(self, hp, src_embeddings=None, is_infer=False):
-        """
-        inputs:
-          src: source sentences to encode
-          src_len: length of source sentences
-          action_idx: the action chose to run
-          expected_q: E(q) computed from the iterative equation of DQN
-          actions: all possible actions
-          actions_len: length of actions
-          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
-                        some actions for a certain state.
-        :param hp:
-        :param is_infer:
-        """
-        super(TransformerDSQNWithFactor, self).__init__(
-            hp, src_embeddings, is_infer)
-        # trajectory pooler
-        self.wt = tf.layers.Dense(
-            units=32, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-        self.wt2 = tf.layers.Dense(
-            units=32, activation=tf.tanh,
-            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
-
-    def get_q_actions(self):
-        with tf.variable_scope("drrn-encoder", reuse=False):
-            padding_mask = txf.create_padding_mask(self.inputs["src"])
-            inner_state = self.attn_encoder(
-                self.inputs["src"],
-                training=(not self.is_infer), mask=padding_mask, x_seg=None)
-            pooled = tf.reduce_max(inner_state, axis=1)
-            pooled = tf.reshape(pooled, [-1, 128])
-            h_state = self.wt(pooled)
-            h_state_var = self.wt2(pooled)
-
-            h_state_expanded = dqn.repeat(
-                h_state + h_state_var, self.inputs["actions_repeats"])
-
-            with tf.variable_scope("drrn-action-encoder", reuse=False):
-                h_actions = dqn.encoder_lstm(
-                    self.inputs["actions"],
-                    self.inputs["actions_len"],
-                    self.src_embeddings,
-                    num_units=self.hp.hidden_state_size,
-                    num_layers=self.hp.lstm_num_layers)[-1].h
-
-            q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions
-
-    def get_h_state(self, src):
-        padding_mask = txf.create_padding_mask(self.inputs["src"])
-        with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
-            inner_state = self.attn_encoder(
-                src,
-                training=(not self.is_infer), mask=padding_mask, x_seg=None)
-            pooled = tf.reduce_max(inner_state, axis=1)
-            pooled = tf.reshape(pooled, [-1, 128])
-            h_state = self.wt(pooled)
-        return h_state
-
-
-def create_train_model(model_creator, hp, device_placement):
-    graph = tf.Graph()
-    with graph.as_default():
-        with tf.device(device_placement):
-            model = model_creator(hp)
-            inputs = model.inputs
-            q_actions = model.get_q_actions()
-            semantic_same, h_states_diff = model.is_semantic_same()
-            loss, train_op, abs_loss = model.get_train_op(q_actions)
-            snn_loss, snn_train_op = model.get_snn_train_op(semantic_same)
-            weighted_loss, merged_train_op, s1, s2 = model.get_merged_train_op(
-                loss, snn_loss)
-            loss_summary = tf.summary.scalar("loss", loss)
-            snn_loss_summary = tf.summary.scalar("snn_loss", snn_loss)
-            weighted_loss_summary = tf.summary.scalar(
-                "weighted_loss", weighted_loss)
-            s1_summary = tf.summary.scalar("w_dqn", 0.5 * tf.exp(-s1))
-            s2_summary = tf.summary.scalar("w_snn", tf.exp(-s2))
-            train_summary_op = tf.summary.merge([loss_summary])
-            snn_train_summary_op = tf.summary.merge([snn_loss_summary])
-            weighted_train_summary_op = tf.summary.merge(
-                [loss_summary, snn_loss_summary, weighted_loss_summary,
-                 s1_summary, s2_summary])
-    return DSQNModel(
-        graph=graph, q_actions=q_actions, semantic_same=semantic_same,
-        src_=inputs["src"],
-        src_len_=inputs["src_len"],
-        actions_=inputs["actions"],
-        actions_len_=inputs["actions_len"],
-        snn_src_=inputs["snn_src"],
-        snn_src_len_=inputs["snn_src_len"],
-        snn_src2_=inputs["snn_src2"],
-        snn_src2_len_=inputs["snn_src2_len"],
-        actions_repeats_=inputs["actions_repeats"],
-        src_seg_=inputs["src_seg"],
-        labels_=inputs["labels"],
-        b_weight_=inputs["b_weight"],
-        abs_loss=abs_loss,
-        train_op=train_op, action_idx_=inputs["action_idx"],
-        expected_q_=inputs["expected_q"], loss=loss,
-        snn_train_op=snn_train_op,
-        weighted_loss=weighted_loss,
-        snn_loss=snn_loss,
-        merged_train_op=merged_train_op,
-        train_summary_op=train_summary_op,
-        snn_train_summary_op=snn_train_summary_op,
-        weighted_train_summary_op=weighted_train_summary_op,
-        h_states_diff=h_states_diff,
-        h_state=None)
-
-
-def create_eval_model(model_creator, hp, device_placement):
-    graph = tf.Graph()
-    with graph.as_default():
-        with tf.device(device_placement):
-            model = model_creator(hp, is_infer=True)
-            inputs = model.inputs
-            q_actions = model.get_q_actions()
-            semantic_same, h_states_diff = model.is_semantic_same()
-    return DSQNModel(
-        graph=graph, q_actions=q_actions, semantic_same=semantic_same,
-        src_=inputs["src"],
-        src_len_=inputs["src_len"],
-        actions_=inputs["actions"],
-        actions_len_=inputs["actions_len"],
-        snn_src_=inputs["snn_src"],
-        snn_src_len_=inputs["snn_src_len"],
-        snn_src2_=inputs["snn_src2"],
-        snn_src2_len_=inputs["snn_src2_len"],
-        actions_repeats_=inputs["actions_repeats"],
-        src_seg_=inputs["src_seg"],
-        labels_=inputs["labels"],
-        b_weight_=inputs["b_weight"],
-        abs_loss=None,
-        train_op=None, action_idx_=inputs["action_idx"],
-        expected_q_=inputs["expected_q"], loss=None,
-        snn_train_op=None,
-        weighted_loss=None,
-        snn_loss=None,
-        merged_train_op=None,
-        train_summary_op=None,
-        snn_train_summary_op=None,
-        weighted_train_summary_op=None,
-        h_states_diff=h_states_diff,
-        h_state=None)

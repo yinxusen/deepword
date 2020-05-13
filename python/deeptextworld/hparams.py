@@ -226,18 +226,6 @@ default_config = {
         num_tokens=500,
         num_conv_filters=32,
         snn_train_epochs=1000),
-    "TransformerDSQNWithFactor": HParams(
-        agent_clazz='DSQNAgent',
-        core_clazz="DSQNCore",
-        batch_size=32,
-        save_gap_t=1000,
-        embedding_size=64,
-        learning_rate=1e-5,
-        lstm_num_layers=1,
-        num_turns=6,
-        num_tokens=500,
-        num_conv_filters=32,
-        snn_train_epochs=1000),
     "TransformerGenDQN": HParams(
         agent_clazz='GenDQNAgent',
         core_clazz="GenDQNCore",

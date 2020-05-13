@@ -320,7 +320,8 @@ class BaseAgent(Logging):
         return tjs
 
     def init_state_text(self, state_text_path, with_loading=True):
-        stc = Trajectory[ObsInventory](num_turns=1)
+        # num_turns = 0, we only need the most recent ObsInventory
+        stc = Trajectory[ObsInventory](num_turns=0)
         if with_loading:
             try:
                 stc.load_tjs(state_text_path)
@@ -615,7 +616,7 @@ class BaseAgent(Logging):
 
     def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
-        state = self.stc.fetch_last_state()[0]
+        state = self.stc.fetch_last_state()[-1]
 
         q_actions = self.core.policy(
             trajectory, state,
