@@ -84,7 +84,7 @@ def get_parser() -> ArgumentParser:
     eval_parser.add_argument('--f-games', type=str)
     eval_parser.add_argument('--n-gpus', type=int, default=1)
     eval_parser.add_argument('--debug', action='store_true')
-    eval_parser.add_argument('--load-best', action='store_true')
+    eval_parser.add_argument('--load-best', action='store_true', default=False)
     eval_parser.add_argument('--restore-from', type=str)
 
     student_parser = subparsers.add_parser('train-student')
@@ -100,7 +100,8 @@ def get_parser() -> ArgumentParser:
     gen_data_parser = subparsers.add_parser('gen-data')
     gen_data_parser.add_argument('--game-path', type=str, required=True)
     gen_data_parser.add_argument('--f-games', type=str)
-    gen_data_parser.add_argument('--load-best', action='store_true')
+    gen_data_parser.add_argument(
+        '--load-best', action='store_true', default=False)
     gen_data_parser.add_argument('--restore-from', type=str)
     gen_data_parser.add_argument('--epoch-size', type=int)
     gen_data_parser.add_argument('--epoch-limit', type=int, default=5)
@@ -290,7 +291,7 @@ def process_gen_data(args):
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, args.model_dir)
-    agent.eval(load_best=True)
+    agent.eval(load_best=args.load_best)
 
     agent_collect_data(
         agent, game_files, hp.game_episode_terminal_t,

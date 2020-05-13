@@ -247,7 +247,9 @@ class TFCore(BaseCore, ABC):
         if restore_from is not None:
             trained_step = self.safe_loading(model, sess, saver, restore_from)
         else:
-            self.warning('No checkpoint to load, using untrained model')
+            self.warning(colored(
+                "No checkpoint to load, using untrained model",
+                "red", "on_white", ["bold", "blink", "underline"]))
             trained_step = 0
         return trained_step
 
