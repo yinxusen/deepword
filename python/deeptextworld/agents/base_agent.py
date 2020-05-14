@@ -858,7 +858,7 @@ class BaseAgent(Logging):
                     "green" if instant_reward > 0 else "red")),
                 ("is_terminal", dones[0])]))
         else:
-            self.info(report_status([
+            self.debug(report_status([
                 ("master", colored(
                     master.replace("\n", " "), "cyan", attrs=["underline"])),
                 ("max_score", infos[INFO_KEY.max_score][0])
