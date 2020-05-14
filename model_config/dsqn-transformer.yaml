@@ -1,20 +1,20 @@
 ---
 # for Transformer DRRN
 
-model_creator: "TransformerDSQN"
+model_creator: TransformerDSQN
 num_tokens: 256
 num_turns: 5
 batch_size: 32
 save_gap_t: 5000
 embedding_size: 64
 learning_rate: 5e-5
-tokenizer_type: "BERT"
+tokenizer_type: BERT
 max_snapshot_to_keep: 100
 eval_episode: 5
 game_episode_terminal_t: 100
 replay_mem: 500000  # 500k
 collect_floor_plan: True
-agent_clazz: DSQNAgent
+agent_clazz: DSQNCompetitionAgent
 core_clazz: DSQNCore
 learner_clazz: null  # unimplemented DSQNLearner
 annealing_eps_t: 10000000  # 10 million

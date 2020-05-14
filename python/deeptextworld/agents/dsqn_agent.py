@@ -7,6 +7,7 @@ import numpy as np
 from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
+from deeptextworld.agents.competition_agent import CompetitionAgent
 from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.utils import get_hash
@@ -172,3 +173,9 @@ class DSQNAgent(BaseAgent):
         async_snn_data = self.pool_train.apply_async(
             self.get_snn_pairs, args=(self.hp.batch_size,))
         return async_snn_data
+
+
+class DSQNCompetitionAgent(DSQNAgent, CompetitionAgent):
+    # TODO: Multi-inheritance is dangerous.
+    #     Make sure there are no overlapped method overriding for both parents.
+    pass

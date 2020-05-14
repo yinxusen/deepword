@@ -1,7 +1,7 @@
 ---
 # for the legacy CNN DRRN
 
-model_creator: "LegacyCnnDRRN"
+model_creator: LegacyCnnDRRN
 num_tokens: 1000
 num_turns: 5
 batch_size: 32

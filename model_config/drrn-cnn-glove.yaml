@@ -1,7 +1,7 @@
 ---
 # for CNN DRRN
 
-model_creator: "CnnDRRN"
+model_creator: CnnDRRN
 num_tokens: 256
 num_turns: 5
 batch_size: 32
@@ -9,7 +9,7 @@ save_gap_t: 5000
 embedding_size: 50
 learning_rate: 5e-5
 num_conv_filters: 32
-tokenizer_type: "NLTK"
+tokenizer_type: NLTK
 max_snapshot_to_keep: 100
 eval_episode: 5
 game_episode_terminal_t: 100
