@@ -45,6 +45,9 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument(
         '--collect-floor-plan', action='store_true', default=None)
     parser.add_argument(
+        '--disable-collect-floor-plan', dest='collect_floor_plan',
+        action='store_false')
+    parser.add_argument(
         '--start-t-ignore-model-t', action='store_true', default=None)
     parser.add_argument('--n-actions', type=int)
     parser.add_argument(

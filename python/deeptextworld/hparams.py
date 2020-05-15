@@ -362,13 +362,25 @@ def load_hparams(
         hp = update_hparams_from_file(hp, fn_model_config)
         model_creator = hp.model_creator
     else:
-        if (has_valid_val(cmd_args, "model_creator")
-                and has_valid_val(pre_config, "model_creator")):
-            assert cmd_args["model_creator"] == pre_config["model_creator"]
-        model_creator = (
+        cmd_mc = (
             cmd_args["model_creator"]
-            if has_valid_val(cmd_args, "model_creator")
-            else pre_config["model_creator"])
+            if has_valid_val(cmd_args, "model_creator") else None)
+        pre_conf_mc = (
+            pre_config["model_creator"]
+            if has_valid_val(pre_config, "mode_creator") else None)
+        if cmd_mc and pre_conf_mc:
+            if cmd_mc == pre_conf_mc:
+                model_creator = cmd_mc
+            else:
+                raise ValueError(
+                    "model_creator incompatible from cmd args ({})"
+                    " and pre_config file ({})".format(cmd_mc, pre_conf_mc))
+        elif cmd_mc or pre_conf_mc:
+            model_creator = cmd_mc if cmd_mc else pre_conf_mc
+        else:
+            raise ValueError(
+                "model_creator doesn't exist. if run training, specify model"
+                "_creator, if run evaluation, make sure hparams.json exists.")
 
     model_hp = get_model_hparams(model_creator)
     hp = update_hparams_from_hparams(hp, model_hp)
