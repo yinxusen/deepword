@@ -1,5 +1,5 @@
 ---
-# for Transformer DRRN
+# for Transformer DRRN teacher
 
 model_creator: TransformerDSQN
 num_tokens: 500

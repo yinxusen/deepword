@@ -367,7 +367,7 @@ def load_hparams(
             if has_valid_val(cmd_args, "model_creator") else None)
         pre_conf_mc = (
             pre_config["model_creator"]
-            if has_valid_val(pre_config, "mode_creator") else None)
+            if has_valid_val(pre_config, "model_creator") else None)
         if cmd_mc and pre_conf_mc:
             if cmd_mc == pre_conf_mc:
                 model_creator = cmd_mc

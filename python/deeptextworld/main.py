@@ -11,11 +11,12 @@ import gym
 import tensorflow as tf
 import textworld.gym
 from tensorflow.contrib.training import HParams
+from termcolor import colored
 from tqdm import trange
 
 from deeptextworld.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
     FullDirEvalPlayer, agent_collect_data
-from deeptextworld.hparams import load_hparams, output_hparams
+from deeptextworld.hparams import load_hparams
 from deeptextworld.utils import agent_name2clazz, learner_name2clazz
 from deeptextworld.utils import load_and_split, load_game_files
 from deeptextworld.utils import setup_train_log, setup_eval_log, eprint
@@ -188,13 +189,26 @@ def process_hp(args) -> HParams:
     return hp
 
 
+warning_hparams_exist = """
+hparams.json exists! some hyper-parameter setting from CMD and pre-config file
+will be disabled. make sure to clear model_dir first if you want to train a
+new agent from scratch!
+""".replace("\n", " ").strip()
+
+
 def process_train_dqn(args):
+    fn_hparams = os.path.join(args.model_dir, "hparams.json")
+    if os.path.isfile(fn_hparams):
+        eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
     hp = process_hp(args)
     setup_train_log(args.model_dir)
     train(hp, args.model_dir, game_dir=args.game_path, f_games=args.f_games)
 
 
 def process_train_student(args):
+    fn_hparams = os.path.join(args.model_dir, "hparams.json")
+    if os.path.isfile(fn_hparams):
+        eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
     hp = process_hp(args)
     setup_train_log(args.model_dir)
     learner_clazz = learner_name2clazz(hp.learner_clazz)
