@@ -152,7 +152,7 @@ class SwagLearner(BertSoftmaxLearner):
         eprint("start test")
         i = 0
         for data in iter(self.queue.get, None):
-            inp, seg_tj_action, inp_len, swag_labels = data
+            inp, seg_tj_action, inp_len, _, swag_labels = data
 
             if i % 100 == 0:
                 print("process a batch of {} .. {}".format(len(inp), i))
