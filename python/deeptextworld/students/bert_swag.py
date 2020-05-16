@@ -17,7 +17,7 @@ from tensorflow.train import Saver
 from deeptextworld.agents.utils import Tokenizer
 from deeptextworld.agents.utils import align_batch_str
 from deeptextworld.agents.utils import bert_commonsense_input
-from deeptextworld.students.student_learner import BertLearner
+from deeptextworld.students.student_learner import BertSoftmaxLearner
 from deeptextworld.utils import eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
@@ -93,7 +93,7 @@ def get_bert_input(
     return inp, seg_tj_action, inp_size
 
 
-class SwagLearner(BertLearner):
+class SwagLearner(BertSoftmaxLearner):
     def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
@@ -174,7 +174,9 @@ class SwagLearner(BertLearner):
         return acc, total
 
     def _add_batch(
-            self, swag_path: str, queue: Queue, training: bool = True) -> None:
+            self, swag_path: str,
+            queue: Queue, training: bool = True,
+            append_new_data: bool = True) -> None:
         start_str, ending_str, labels = load_swag_data(swag_path)
         data = list(zip(start_str, ending_str, labels))
         while True:
@@ -194,7 +196,8 @@ class SwagLearner(BertLearner):
                         batch_start_str, batch_ending_str, self.tokenizer,
                         self.hp.sep_val_id, self.hp.cls_val_id,
                         self.hp.num_tokens, self.hp.n_tokens_per_action)
-                    queue.put((inp, seg_tj_action, inp_size, batch_labels))
+                    queue.put(
+                        (inp, seg_tj_action, inp_size, None, batch_labels))
                 except Exception as e:
                     eprint("add_batch error: {}".format(e))
                     traceback.print_tb(e.__traceback__)
