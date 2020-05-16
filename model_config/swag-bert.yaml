@@ -1,7 +1,7 @@
 ---
 # bert for swag data
 
-model_creator: BertCommonsenseModel
+model_creator: BertCommonsense
 num_tokens: 256
 n_tokens_per_action: 40  # for end str
 batch_size: 8  # bert paper uses 16
