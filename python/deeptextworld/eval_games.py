@@ -365,8 +365,10 @@ class FullDirEvalPlayer(Logging):
             range_max = steps[-1]
         if range_min is None:
             range_min = steps[0]
+        steps = [step for step in steps if range_min <= step <= range_max]
+        eprint("valid evaluation steps: {}".format(
+            ",".join([str(step) for step in steps])))
 
         event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        for step in step2ckpt:
-            if range_min <= step <= range_max:
-                event_handler.run_eval_player(step2ckpt[step])
+        for step in steps:
+            event_handler.run_eval_player(step2ckpt[step])
