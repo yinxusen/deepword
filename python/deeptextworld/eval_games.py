@@ -13,6 +13,7 @@ from threading import Lock
 
 import gym
 import textworld.gym
+from termcolor import colored
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -349,12 +350,23 @@ class FullDirEvalPlayer(Logging):
     def __init__(self):
         super(FullDirEvalPlayer, self).__init__()
 
-    def start(self, hp, model_dir, game_files, n_gpus):
+    @classmethod
+    def start(
+            cls, hp, model_dir, game_files, n_gpus,
+            range_min=None, range_max=None):
         watched_files = pjoin(model_dir, "last_weights", "after-epoch-*.index")
-        files = glob.glob(watched_files)
+        files = [os.path.splitext(fn)[0] for fn in glob.glob(watched_files)]
         if len(files) == 0:
+            eprint(colored("No checkpoint found!", "red"))
             return
+        step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
+        steps = sorted(list(step2ckpt.keys()))
+        if range_max is None:
+            range_max = steps[-1]
+        if range_min is None:
+            range_min = steps[0]
+
         event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        for f in files:
-            restore_from = os.path.splitext(f)[0]
-            event_handler.run_eval_player(restore_from)
+        for step in step2ckpt:
+            if range_min <= step <= range_max:
+                event_handler.run_eval_player(step2ckpt[step])

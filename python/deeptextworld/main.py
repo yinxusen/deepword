@@ -90,6 +90,9 @@ def get_parser() -> ArgumentParser:
     eval_parser.add_argument('--debug', action='store_true')
     eval_parser.add_argument('--load-best', action='store_true', default=False)
     eval_parser.add_argument('--restore-from', type=str)
+    eval_parser.add_argument('--load-dev', action='store_true', default=False)
+    eval_parser.add_argument('--ckpt-range-min', type=int)
+    eval_parser.add_argument('--ckpt-range-max', type=int)
 
     student_parser = subparsers.add_parser('train-student')
     student_parser.add_argument('--data-path', type=str, required=True)
@@ -263,20 +266,26 @@ def process_eval_student(args):
 def process_eval_dqn(args):
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
+    if args.load_dev:
+        eprint(colored("load dev data", "blue", "on_red", "bold"))
+        _, eval_games = load_and_split(args.game_path, args.f_games)
+    else:
+        eprint(colored("load test data", "yellow", "on_red", "bold"))
+        eval_games = load_game_files(args.game_path, args.f_games)
+
     if args.eval_mode == "eval":
-        game_files = load_game_files(args.game_path, args.f_games)
         eval_player = MultiGPUsEvalPlayer(
-            hp, args.model_dir, game_files, args.n_gpus, args.load_best)
+            hp, args.model_dir, eval_games, args.n_gpus, args.load_best)
         eval_player.evaluate(
             restore_from=args.restore_from, debug=args.debug)
     elif args.eval_mode == "dev-eval":
-        _, eval_games = load_and_split(args.game_path, args.f_games)
         eval_player = LoopDogEvalPlayer()
         eval_player.start(hp, args.model_dir, eval_games, args.n_gpus)
     elif args.eval_mode == "full-eval":
-        _, eval_games = load_and_split(args.game_path, args.f_games)
         eval_player = FullDirEvalPlayer()
-        eval_player.start(hp, args.model_dir, eval_games, args.n_gpus)
+        eval_player.start(
+            hp, args.model_dir, eval_games, args.n_gpus,
+            range_min=args.ckpt_range_min, range_max=args.ckpt_range_max)
     else:
         raise ValueError()
 
