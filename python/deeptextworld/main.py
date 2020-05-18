@@ -267,10 +267,10 @@ def process_eval_dqn(args):
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
     if args.load_dev:
-        eprint(colored("load dev data", "blue", "on_red", "bold"))
+        eprint(colored("load dev data", "blue", "on_red", attrs=["bold"]))
         _, eval_games = load_and_split(args.game_path, args.f_games)
     else:
-        eprint(colored("load test data", "yellow", "on_red", "bold"))
+        eprint(colored("load test data", "yellow", "on_red", attrs=["bold"]))
         eval_games = load_game_files(args.game_path, args.f_games)
 
     if args.eval_mode == "eval":
