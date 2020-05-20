@@ -18,8 +18,6 @@ import numpy as np
 import ruamel.yaml
 from bitarray import bitarray
 
-from deeptextworld.stats import mean_confidence_interval
-
 
 def get_hash(txt: str) -> str:
     """
@@ -164,101 +162,6 @@ def core_name2clazz(name):
     if hasattr(cores, name):
         return getattr(cores, name)
     raise ValueError("{} not found in agents".format(name))
-
-
-def agg_results(eval_results, max_steps_per_episode=100):
-    """
-    Aggregate evaluation results.
-    We run N test games, each with M episodes, each episode has a maximum of
-    K steps.
-
-    :param eval_results: evaluation results of text-based games, in the
-    following format:
-      dict(game_name, [eval_result1, evaluate_result2, ..., evaluate_resultM])
-      and the number of eval_results are the same for all games.
-      evaluate_result:
-        score, positive_score, negative_score, max_score, steps, won (bool),
-        used_action_list
-    :param max_steps_per_episode: i.e. M, default = 100
-
-    :return:
-      agg_per_game:
-        dict(game_name, sum scores, sum max scores, sum steps, # won)
-      sample_mean: total earned scores / total maximum scores
-      confidence_interval: confidence interval of sample_mean over M episodes.
-      steps: total used steps / total maximum steps
-    """
-    agg_per_game = {}
-    total_scores_per_episode = None  # np array of shape M
-    total_positive_scores = 0
-    total_negative_scores = 0
-    total_steps = 0
-    max_scores_per_episode = 0
-    total_episodes = 0
-    total_won = 0
-    for game_name in eval_results:
-        res = eval_results[game_name]
-        agg_score = np.asarray(list(map(lambda r: r[0], res)))
-        agg_positive_score = sum(map(lambda r: r[1], res))
-        agg_negative_score = sum(map(lambda r: r[2], res))
-        # all max scores should be equal, so just pick anyone
-        agg_max_score = max(map(lambda r: r[3], res))
-        max_scores_per_episode += agg_max_score
-        n_episodes = len(res)
-        total_episodes += n_episodes
-        agg_step = sum(map(lambda r: r[4], res))
-        agg_nb_won = len(list(filter(lambda r: r[5], res)))
-        total_won += agg_nb_won
-        agg_per_game[game_name] = (
-            np.sum(agg_score), agg_positive_score, agg_negative_score,
-            agg_max_score * n_episodes, agg_step, agg_nb_won)
-        if total_scores_per_episode is None:
-            total_scores_per_episode = np.zeros_like(agg_score)
-        total_scores_per_episode += agg_score
-        total_positive_scores += agg_positive_score
-        total_negative_scores += agg_negative_score
-        total_steps += agg_step
-    max_steps = total_episodes * max_steps_per_episode
-    total_scores, confidence_interval = mean_confidence_interval(
-        total_scores_per_episode / max_scores_per_episode)
-    return (agg_per_game, total_scores, confidence_interval,
-            total_positive_scores, total_negative_scores,
-            total_steps * 1. / max_steps, total_won * 1. / total_episodes)
-
-
-def scores_of_tiers(agg_per_game):
-    """
-    Compute scores per tier given aggregated scores per game
-    :param agg_per_game:
-    :return: list of tier-name -> scores, starting from tier1 to tier6
-    """
-    games = agg_per_game.keys()
-
-    tiers2games = {
-        "tier1": list(
-            filter(lambda k: "go" not in k and "recipe1" in k, games)),
-        "tier2": list(
-            filter(lambda k: "go" not in k and "recipe2" in k, games)),
-        "tier3": list(
-            filter(lambda k: "go" not in k and "recipe3" in k, games)),
-        "tier4": list(filter(lambda k: "go6" in k, games)),
-        "tier5": list(filter(lambda k: "go9" in k, games)),
-        "tier6": list(filter(lambda k: "go12" in k, games))
-    }
-
-    tiers2scores = dict()
-
-    for k_tier in tiers2games:
-        if not tiers2games[k_tier]:
-            continue
-        earned = 0
-        total = 0
-        for g in tiers2games[k_tier]:
-            earned += agg_per_game[g][0]
-            total += agg_per_game[g][1]
-        tiers2scores[k_tier] = earned * 1. / total
-    tiers2scores = sorted(list(tiers2scores.items()), key=lambda x: x[0])
-    return tiers2scores
 
 
 def split_train_dev(game_files, train_ratio=0.9, rnd_seed=42):

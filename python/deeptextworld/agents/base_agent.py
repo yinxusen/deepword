@@ -623,23 +623,23 @@ class BaseAgent(Logging):
             self.actor.action_matrix, self.actor.action_len, action_mask)
 
         if self.hp.policy_to_action.lower() == "Sampling".lower():
-            action_idx = categorical_without_replacement(
+            masked_action_idx = categorical_without_replacement(
                 logits=q_actions / self.hp.policy_sampling_temp, k=1)
         elif self.hp.policy_to_action.lower() == "LinUCB".lower():
             cnt_action_array = []
             for mid in action_mask:
                 cnt_action_array.append(self._cnt_action.get(mid, 0.))
-            action_idx, _ = get_best_1d_q(q_actions - cnt_action_array)
+            masked_action_idx, _ = get_best_1d_q(q_actions - cnt_action_array)
         elif self.hp.policy_to_action.lower() == "EPS".lower():
-            action_idx, _ = get_best_1d_q(q_actions)
+            masked_action_idx, _ = get_best_1d_q(q_actions)
         else:
             raise ValueError("Unknown policy utilization method: {}".format(
                 self.hp.policy_to_action))
 
-        true_action_idx = action_mask[action_idx]
+        action_idx = action_mask[masked_action_idx]
         action_desc = ActionDesc(
             action_type=ACT_TYPE.policy_drrn,
-            action_idx=true_action_idx,
+            action_idx=action_idx,
             token_idx=self.actor.action_matrix[action_idx],
             action_len=self.actor.action_len[action_idx],
             action=self.actor.actions[action_idx],

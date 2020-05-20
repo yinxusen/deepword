@@ -7,25 +7,40 @@ import sys
 import time
 import traceback
 from collections import ChainMap
+from collections import namedtuple
+from functools import reduce
 from multiprocessing import Pool
+from operator import and_
 from os.path import join as pjoin
 from threading import Lock
+from typing import List, Dict, Optional, Tuple
 
 import gym
+import numpy as np
 import textworld.gym
+from tensorflow.contrib.training import HParams
 from termcolor import colored
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from deeptextworld.agents.utils import INFO_KEY
 from deeptextworld.log import Logging
+from deeptextworld.stats import mean_confidence_interval
 from deeptextworld.utils import agent_name2clazz
-from deeptextworld.utils import agg_results, scores_of_tiers
 from deeptextworld.utils import eprint, report_status
 
 
+class EvalResult(namedtuple(
+        "EvalResult",
+        ("score", "positive_score", "negative_score", "max_score",
+         "steps", "won", "action_list"))):
+    pass
+
+
 def eval_agent(
-        hp, model_dir, load_best, restore_from, game_files, gpu_device=None):
+        hp: HParams, model_dir: str, load_best: bool, restore_from: str,
+        game_files: List[str], gpu_device: Optional[str] = None
+) -> Tuple[Dict[str, List[EvalResult]], int]:
     """
     Evaluate an agent with given games.
     For each game, we run nb_episodes, and max_episode_steps for on episode.
@@ -87,10 +102,14 @@ def eval_agent(
 
             if game_name not in eval_results:
                 eval_results[game_name] = []
-            eval_results[game_name].append(
-                (scores[0], agent.positive_scores, agent.negative_scores,
-                 infos[INFO_KEY.max_score][0], steps[0],
-                 infos[INFO_KEY.won][0], action_list))
+            eval_results[game_name].append(EvalResult(
+                score=scores[0],
+                positive_score=agent.positive_scores,
+                negative_score=agent.negative_scores,
+                max_score=infos[INFO_KEY.max_score][0],
+                steps=steps[0],
+                won=infos[INFO_KEY.won][0],
+                action_list=action_list))
         game_env.close()
     return eval_results, agent.core.loaded_ckpt_step
 
@@ -124,6 +143,108 @@ def agent_collect_data(
         agent.save_snapshot()
         eprint("save snapshot epoch: {}".format(epoch_t))
     game_env.close()
+
+
+def agg_eval_results(
+        eval_results: Dict[str, List[EvalResult]],
+        max_steps_per_episode: int = 100
+) -> Tuple[Dict[str, EvalResult], float, float, float, float, float, float]:
+    """
+    Aggregate evaluation results.
+    We run N test games, each with M episodes, each episode has a maximum of
+    K steps.
+
+    :param eval_results: evaluation results of text-based games, in the
+    following format:
+      dict(game_name, [eval_result1, evaluate_result2, ..., evaluate_resultM])
+      and the number of eval_results are the same for all games.
+      evaluate_result:
+        score, positive_score, negative_score, max_score, steps, won (bool),
+        used_action_list
+    :param max_steps_per_episode: i.e. M, default = 100
+
+    :return:
+      agg_per_game:
+        dict(game_name, sum scores, sum max scores, sum steps, # won)
+      sample_mean: total earned scores / total maximum scores
+      confidence_interval: confidence interval of sample_mean over M episodes.
+      steps: total used steps / total maximum steps
+    """
+    agg_per_game = {}
+    total_scores_per_episode = None  # np array of shape M
+    total_positive_scores = 0
+    total_negative_scores = 0
+    total_steps = 0
+    max_scores_per_episode = 0
+    total_episodes = 0
+    total_won = 0
+    for game_name in eval_results:
+        res = eval_results[game_name]
+        agg_score = np.asarray(list(map(lambda r: r.score, res)))
+        agg_positive_score = sum(map(lambda r: r.positive_score, res))
+        agg_negative_score = sum(map(lambda r: r.negative_score, res))
+        # all max scores should be equal, so just pick anyone
+        agg_max_score = max(map(lambda r: r.max_score, res))
+        max_scores_per_episode += agg_max_score
+        n_episodes = len(res)
+        total_episodes += n_episodes
+        agg_step = sum(map(lambda r: r.steps, res))
+        agg_nb_won = len(list(filter(lambda r: r.won, res)))
+        total_won += agg_nb_won
+        agg_per_game[game_name] = EvalResult(
+            score=np.sum(agg_score),
+            positive_score=agg_positive_score,
+            negative_score=agg_negative_score,
+            max_score=agg_max_score * n_episodes,
+            steps=agg_step,
+            won=agg_nb_won,
+            action_list=None)
+        if total_scores_per_episode is None:
+            total_scores_per_episode = np.zeros_like(agg_score)
+        total_scores_per_episode += agg_score
+        total_positive_scores += agg_positive_score
+        total_negative_scores += agg_negative_score
+        total_steps += agg_step
+    max_steps = total_episodes * max_steps_per_episode
+    total_scores_percentage, confidence_interval = mean_confidence_interval(
+        total_scores_per_episode / max_scores_per_episode)
+    return (agg_per_game, total_scores_percentage, confidence_interval,
+            total_positive_scores, total_negative_scores,
+            total_steps * 1. / max_steps, total_won * 1. / total_episodes)
+
+
+def scores_of_tiers(agg_per_game: Dict[str, EvalResult]) -> Dict[str, float]:
+    """
+    Compute scores per tier given aggregated scores per game
+    :param agg_per_game:
+    :return: list of tier-name -> scores, starting from tier1 to tier6
+    """
+    games = agg_per_game.keys()
+
+    tiers2games = {
+        "tier1": list(
+            filter(lambda k: "go" not in k and "recipe1" in k, games)),
+        "tier2": list(
+            filter(lambda k: "go" not in k and "recipe2" in k, games)),
+        "tier3": list(
+            filter(lambda k: "go" not in k and "recipe3" in k, games)),
+        "tier4": list(filter(lambda k: "go6" in k, games)),
+        "tier5": list(filter(lambda k: "go9" in k, games)),
+        "tier6": list(filter(lambda k: "go12" in k, games))
+    }
+
+    tiers2scores = dict()
+
+    for k_tier in tiers2games:
+        if not tiers2games[k_tier]:
+            continue
+        earned = 0
+        total = 0
+        for g in tiers2games[k_tier]:
+            earned += agg_per_game[g].score
+            total += agg_per_game[g].max_score
+        tiers2scores[k_tier] = earned * 1. / total
+    return tiers2scores
 
 
 class MultiGPUsEvalPlayer(Logging):
@@ -205,11 +326,15 @@ class MultiGPUsEvalPlayer(Logging):
 
         loaded_steps = [res[1] for res in results]
         assert len(set(loaded_steps)) == 1, "load different versions of model"
+
         results = [res[0] for res in results]
+        game_names = [set(res.keys()) for res in results]
+        assert not reduce(and_, game_names), "Game names should not repeat"
 
         eval_results = dict(ChainMap(*results))
         (agg_res, total_scores, confidence_intervals, total_positive_scores,
-         total_negative_scores, total_steps, n_won) = agg_results(eval_results)
+         total_negative_scores, total_steps, n_won
+         ) = agg_eval_results(eval_results)
         self.info("eval_results: {}".format(eval_results))
         self.info("eval aggregated results: {}".format(agg_res))
         self.info(report_status([
@@ -218,10 +343,11 @@ class MultiGPUsEvalPlayer(Logging):
             ("confidence", "{:.2f}".format(confidence_intervals)),
             ("positive scores", "{:.2f}".format(total_positive_scores)),
             ("negative scores", "{:.2f}".format(total_negative_scores)),
-            ("steps", total_steps),
-            ("n_won", n_won)
+            ("steps", "{:.2f}".format(total_steps)),
+            ("n_won", "{:.2f}".format(n_won))
         ]))
         tiers2scores = scores_of_tiers(agg_res)
+        tiers2scores = sorted(list(tiers2scores.items()), key=lambda x: x[0])
         self.info("scores per tiers:\n{}".format(tiers2scores))
 
         if not self.load_best:
