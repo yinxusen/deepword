@@ -328,9 +328,7 @@ class MultiGPUsEvalPlayer(Logging):
         assert len(set(loaded_steps)) == 1, "load different versions of model"
 
         results = [res[0] for res in results]
-        game_names = [set(res.keys()) for res in results]
-        assert not reduce(and_, game_names), "Game names should not repeat"
-
+        # TODO: same key will be updated by ChainMap
         eval_results = dict(ChainMap(*results))
         (agg_res, total_scores, confidence_intervals, total_positive_scores,
          total_negative_scores, total_steps, n_won
