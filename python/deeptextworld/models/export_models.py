@@ -229,3 +229,62 @@ class DSQNModel(DRRNModel):
         self.merged_train_op = merged_train_op
         self.snn_train_op = snn_train_op
         self.h_states_diff = h_states_diff
+
+
+class DSQNZorkModel(DQNModel):
+    def __init__(
+            self,
+            graph: tf.Graph,
+            q_actions: tf.Tensor,
+            src_: tf.placeholder,
+            src_len_: tf.placeholder,
+            action_idx_: Optional[tf.placeholder],
+            train_op: Optional[tf.Operation],
+            loss: Optional[tf.Tensor],
+            expected_q_: Optional[tf.placeholder],
+            b_weight_: Optional[tf.placeholder],
+            train_summary_op: Optional[tf.Operation],
+            abs_loss: Optional[tf.Tensor],
+            src_seg_: Optional[tf.placeholder],
+            h_state: Optional[tf.Tensor],
+            snn_train_summary_op: Optional[tf.Operation],
+            weighted_train_summary_op: Optional[tf.Operation],
+            semantic_same: tf.Tensor,
+            snn_src_: Optional[tf.placeholder],
+            snn_src_len_: Optional[tf.placeholder],
+            snn_src2_: Optional[tf.placeholder],
+            snn_src2_len_: Optional[tf.placeholder],
+            labels_: Optional[tf.placeholder],
+            snn_loss: Optional[tf.Tensor],
+            weighted_loss: Optional[tf.Tensor],
+            merged_train_op: Optional[tf.Operation],
+            snn_train_op: Optional[tf.Operation],
+            h_states_diff: Optional[tf.Tensor]):
+        super(DSQNZorkModel, self).__init__(
+            graph,
+            q_actions,
+            src_,
+            src_len_,
+            action_idx_,
+            train_op,
+            loss,
+            expected_q_,
+            b_weight_,
+            train_summary_op,
+            abs_loss,
+            src_seg_,
+            h_state)
+
+        self.snn_train_summary_op = snn_train_summary_op
+        self.weighted_train_summary_op = weighted_train_summary_op
+        self.semantic_same = semantic_same
+        self.snn_src_ = snn_src_
+        self.snn_src_len_ = snn_src_len_
+        self.snn_src2_ = snn_src2_
+        self.snn_src2_len_ = snn_src2_len_
+        self.labels_ = labels_
+        self.snn_loss = snn_loss
+        self.weighted_loss = weighted_loss
+        self.merged_train_op = merged_train_op
+        self.snn_train_op = snn_train_op
+        self.h_states_diff = h_states_diff

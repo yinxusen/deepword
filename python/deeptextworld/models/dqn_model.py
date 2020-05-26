@@ -118,9 +118,9 @@ class LstmDQN(BaseDQN):
         return q_actions
 
     def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_1d_action(
+        loss, abs_loss = dqn.l2_loss_1d_action_v2(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.inputs["b_weight"])
+            self.hp.n_actions, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
 
@@ -148,8 +148,8 @@ class CnnDQN(BaseDQN):
         return q_actions
 
     def get_train_op(self, q_actions):
-        loss, abs_loss = dqn.l2_loss_1d_action(
+        loss, abs_loss = dqn.l2_loss_1d_action_v2(
             q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
-            self.inputs["b_weight"])
+            self.hp.n_actions, self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss

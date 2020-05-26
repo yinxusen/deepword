@@ -8,6 +8,7 @@ from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.competition_agent import CompetitionAgent
+from deeptextworld.agents.zork_agent import ZorkAgent
 from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.utils import get_hash
@@ -176,6 +177,12 @@ class DSQNAgent(BaseAgent):
 
 
 class DSQNCompetitionAgent(DSQNAgent, CompetitionAgent):
+    # TODO: Multi-inheritance is dangerous.
+    #     Make sure there are no overlapped method overriding for both parents.
+    pass
+
+
+class DSQNZorkAgent(DSQNAgent, ZorkAgent):
     # TODO: Multi-inheritance is dangerous.
     #     Make sure there are no overlapped method overriding for both parents.
     pass

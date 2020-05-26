@@ -134,13 +134,25 @@ def run_agent(agent, game_env, nb_games, nb_epochs):
             scores = [0] * len(obs)
             dones = [False] * len(obs)
             steps = [0] * len(obs)
+            # TODO: be cautious about the local variable problem
+            look_res = [""] * len(obs)
+            inventory_res = [""] * len(obs)
             while not all(dones):
+                # TODO: get fake description from an extra look per step
+                look_res, _, _, _ = game_env.step(["look"])
+                infos['description'] = look_res
+                inventory_res, _, _, _ = game_env.step(["inventory"])
+                infos['inventory'] = inventory_res
                 # Increase step counts.
                 steps = ([step + int(not done)
                           for step, done in zip(steps, dones)])
                 commands = agent.act(obs, scores, dones, infos)
                 obs, scores, dones, infos = game_env.step(commands)
             # Let the agent knows the game is done.
+            # last state obs + inv copy previous state
+            # TODO: this is OK for now, since we don't use last states for SNN
+            infos['description'] = look_res
+            infos['inventory'] = inventory_res
             agent.act(obs, scores, dones, infos)
         if agent.total_t >= agent.hp.observation_t + agent.hp.annealing_eps_t:
             logger.info("training steps exceed MAX, stop training ...")

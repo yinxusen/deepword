@@ -214,6 +214,18 @@ default_config = {
         num_tokens=1000,
         num_conv_filters=32,
         snn_train_epochs=1000),
+    "CnnZorkDSQN": HParams(
+        agent_clazz='DSQNZorkAgent',
+        core_clazz="DSQNZorkCore",
+        batch_size=32,
+        save_gap_t=1000,
+        embedding_size=64,
+        learning_rate=1e-5,
+        lstm_num_layers=1,
+        num_turns=11,
+        num_tokens=1000,
+        num_conv_filters=32,
+        snn_train_epochs=1000),
     "TransformerDSQN": HParams(
         agent_clazz='DSQNAgent',
         core_clazz="DSQNCore",
