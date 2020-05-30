@@ -74,7 +74,7 @@ class DSQNAgent(BaseAgent):
         for k in self.hash_states2tjs.keys():
             start_t = bisect_left(
                 [t for t, s in self.hash_states2tjs[k]], max(tids))
-            if not self.hash_states2tjs[k][start_t:]:
+            if self.hash_states2tjs[k][start_t:]:
                 hs2tj_cleaned[k] = self.hash_states2tjs[k][start_t:]
             else:
                 self.debug("remove key {} from hs2tj".format(k))
