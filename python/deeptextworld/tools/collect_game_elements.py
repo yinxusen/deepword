@@ -6,6 +6,7 @@ import gym
 import textworld.gym
 from textworld import EnvInfos
 from tqdm import tqdm
+import numpy as np
 
 from deeptextworld.agents.competition_agent import CompetitionAgent
 from deeptextworld.floor_plan import FloorPlanCollector
@@ -99,6 +100,7 @@ class OneStepCollector(CollectorAgent):
         self.templates = set()
         self.ingredients = set()
         self.total_score = 0
+        self.all_max_scores = []
 
     @classmethod
     def request_infos(cls):
@@ -115,8 +117,9 @@ class OneStepCollector(CollectorAgent):
     def act(self, obs, scores, dones, infos):
         self.templates.update(infos[INFO_KEY.templates][0])
         self.total_score += infos[INFO_KEY.max_score][0]
-        self.ingredients.update(
-            CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
+        self.all_max_scores.append(infos[INFO_KEY.max_score][0])
+        # self.ingredients.update(
+        #     CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
         action = random.choice(infos[INFO_KEY.actions][0])
         return action
 
@@ -170,6 +173,8 @@ class Main(object):
         print("ingredients:\n", agent.ingredients)
         print("templates:\n", agent.templates)
         print("total scores: ", agent.total_score)
+        print("mean score: {}, std: {}".format(
+            np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
 
 
 if __name__ == '__main__':

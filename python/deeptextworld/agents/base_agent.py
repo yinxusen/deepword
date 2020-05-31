@@ -9,6 +9,8 @@ from typing import Any
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 from textworld import EnvInfos
+from scipy.special import logsumexp
+from scipy.stats import entropy
 
 from deeptextworld.action import ActionCollector
 from deeptextworld.agents.utils import *
@@ -621,6 +623,11 @@ class BaseAgent(Logging):
         q_actions = self.core.policy(
             trajectory, state,
             self.actor.action_matrix, self.actor.action_len, action_mask)
+
+        self.debug("q_actions: {}".format(list(q_actions)))
+        self.debug("exp of q_actions: {}".format(list(np.exp(q_actions))))
+        self.debug("ent: {:.5f}".format(
+            entropy(pk=np.exp(q_actions), qk=np.ones_like(q_actions))))
 
         if self.hp.policy_to_action.lower() == "Sampling".lower():
             masked_action_idx = categorical_without_replacement(
