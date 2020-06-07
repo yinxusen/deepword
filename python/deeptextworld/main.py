@@ -79,6 +79,8 @@ def get_parser() -> ArgumentParser:
     teacher_parser.add_argument(
         '--game-path', type=str, help='[a dir|a game file]', required=True)
     teacher_parser.add_argument('--f-games', type=str)
+    teacher_parser.add_argument(
+        '--request-obs-inv', action='store_true', default=False)
 
     eval_parser = subparsers.add_parser('eval-dqn')
     eval_parser.add_argument(
@@ -152,7 +154,65 @@ def run_agent(agent, game_env, nb_games, nb_epochs):
             return
 
 
-def train(hp, model_dir, game_dir, f_games=None):
+def run_agent_v2(agent, game_env, nb_games, nb_epochs):
+    """
+    Run a train agent on given games.
+    Proactively request `look` and `inventory` results from games to substitute
+    the description and inventory parts of infos.
+    This is useful when games don't provide description and inventory, e.g. for
+    Z-machine games.
+
+    NB: This will incur extra steps for game playing, remember to use 3-times of
+    previous step quota. E.g. previously use 100 max steps, now you need 100 * 3
+    max steps.
+
+    :param agent:
+    :param game_env:
+    :param nb_games:
+    :param nb_epochs:
+    :return:
+    """
+    logger = logging.getLogger("train")
+    for epoch_no in trange(nb_epochs):
+        for game_no in trange(nb_games):
+            logger.info("playing game epoch_no/game_no: {}/{}".format(
+                epoch_no, game_no))
+
+            obs, infos = game_env.reset()
+            scores = [0] * len(obs)
+            dones = [False] * len(obs)
+            steps = [0] * len(obs)
+            # TODO: be cautious about the local variable problem
+            look_res = [""] * len(obs)
+            inventory_res = [""] * len(obs)
+            while not all(dones):
+                # TODO: get fake description from an extra look per step
+                look_res, _, _, _ = game_env.step(["look"])
+                infos['description'] = look_res
+                inventory_res, _, _, _ = game_env.step(["inventory"])
+                infos['inventory'] = inventory_res
+                # Increase step counts.
+                steps = ([step + int(not done)
+                          for step, done in zip(steps, dones)])
+                commands = agent.act(obs, scores, dones, infos)
+                obs, scores, dones, infos = game_env.step(commands)
+            # Let the agent knows the game is done.
+            # last state obs + inv copy previous state
+            # TODO: this is OK for now, since we don't use last states for SNN
+            infos['description'] = look_res
+            infos['inventory'] = inventory_res
+            agent.act(obs, scores, dones, infos)
+        if agent.total_t >= agent.hp.observation_t + agent.hp.annealing_eps_t:
+            logger.info("training steps exceed MAX, stop training ...")
+            logger.info("total training steps: {}".format(
+                agent.total_t - agent.hp.observation_t))
+            logger.info("save final model and snapshot ...")
+            agent.save_snapshot()
+            agent.core.save_model()
+            return
+
+
+def train(hp, model_dir, game_dir, f_games=None, func_run_agent=run_agent):
     logger = logging.getLogger('train')
     train_games, _ = load_and_split(game_dir, f_games)
     logger.info("load {} game files".format(len(train_games)))
@@ -170,13 +230,36 @@ def train(hp, model_dir, game_dir, f_games=None):
         max_episode_steps=hp.game_episode_terminal_t, name="training")
     env = gym.make(env_id)
     try:
-        run_agent(agent, env, len(train_games), nb_epochs)
+        func_run_agent(agent, env, len(train_games), nb_epochs)
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         logger.error("error: {}".format(e))
         traceback.print_exception(
             exc_type, exc_value, exc_traceback, limit=None, file=sys.stdout)
     env.close()
+
+
+def train_v2(hp, model_dir, game_dir, f_games=None):
+    """
+    Train DQN agents by proactively requesting description and inventory
+
+    max step per episode will be enlarged by 3-times.
+
+    :param hp:
+    :param model_dir:
+    :param game_dir:
+    :param f_games:
+    :return:
+    """
+    assert "game_episode_terminal_t" in hp, \
+        "cannot find game_episode_terminal_t in hp"
+    eprint("Requested game_episode_terminal_t: {}".format(
+        hp.game_episode_terminal_t))
+    hp.set_hparam('game_episode_terminal_t', hp.game_episode_terminal_t * 3)
+    eprint("New game_episode_terminal_t: {}".format(hp.game_episode_terminal_t))
+
+    # use run_agent_v2 to manually request description and inventory
+    train(hp, model_dir, game_dir, f_games, func_run_agent=run_agent_v2)
 
 
 def process_hp(args) -> HParams:
@@ -205,7 +288,12 @@ def process_train_dqn(args):
         eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
     hp = process_hp(args)
     setup_train_log(args.model_dir)
-    train(hp, args.model_dir, game_dir=args.game_path, f_games=args.f_games)
+    if args.request_obs_inv:
+        train_v2(
+            hp, args.model_dir, game_dir=args.game_path, f_games=args.f_games)
+    else:
+        train(
+            hp, args.model_dir, game_dir=args.game_path, f_games=args.f_games)
 
 
 def process_train_student(args):

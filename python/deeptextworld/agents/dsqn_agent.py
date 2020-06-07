@@ -8,6 +8,7 @@ from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.competition_agent import CompetitionAgent
+from deeptextworld.agents.zork_agent import ZorkAgent
 from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
 from deeptextworld.utils import get_hash
@@ -73,7 +74,7 @@ class DSQNAgent(BaseAgent):
         for k in self.hash_states2tjs.keys():
             start_t = bisect_left(
                 [t for t, s in self.hash_states2tjs[k]], max(tids))
-            if not self.hash_states2tjs[k][start_t:]:
+            if self.hash_states2tjs[k][start_t:]:
                 hs2tj_cleaned[k] = self.hash_states2tjs[k][start_t:]
             else:
                 self.debug("remove key {} from hs2tj".format(k))
@@ -176,6 +177,12 @@ class DSQNAgent(BaseAgent):
 
 
 class DSQNCompetitionAgent(DSQNAgent, CompetitionAgent):
+    # TODO: Multi-inheritance is dangerous.
+    #     Make sure there are no overlapped method overriding for both parents.
+    pass
+
+
+class DSQNZorkAgent(DSQNAgent, ZorkAgent):
     # TODO: Multi-inheritance is dangerous.
     #     Make sure there are no overlapped method overriding for both parents.
     pass

@@ -31,6 +31,7 @@ from deeptextworld.models.dqn_model import DQNModel
 from deeptextworld.models.export_models import CommonsenseModel
 from deeptextworld.models.export_models import DRRNModel
 from deeptextworld.models.export_models import DSQNModel
+from deeptextworld.models.export_models import DSQNZorkModel
 from deeptextworld.models.export_models import GenDQNModel
 from deeptextworld.utils import eprint
 from deeptextworld.utils import get_hash
@@ -760,6 +761,98 @@ class LegacyDRRNCore(DRRNCore):
             max_action_size=self.hp.n_tokens_per_action)
 
 
+class DSQNZorkCore(DQNCore):
+    def __init__(self, hp, model_dir, tokenizer):
+        super(DQNCore, self).__init__(hp, model_dir, tokenizer)
+        self.model: Optional[DSQNZorkModel] = None
+        self.target_model: Optional[DSQNZorkModel] = None
+
+    def train_one_batch(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int,
+            others: Any) -> np.ndarray:
+
+        src, src_len, src2, src2_len, labels = others.get()
+
+        expected_q = self._compute_expected_q(
+            action_mask=post_action_mask, trajectories=post_trajectories,
+            dones=dones, rewards=rewards)
+
+        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
+
+        _, summaries, weighted_loss, abs_loss = self.sess.run(
+            [self.model.merged_train_op, self.model.weighted_train_summary_op,
+             self.model.weighted_loss, self.model.abs_loss],
+            feed_dict={
+                self.model.src_: pre_src,
+                self.model.src_len_: pre_src_len,
+                self.model.b_weight_: b_weight,
+                self.model.action_idx_: action_idx,
+                self.model.expected_q_: expected_q,
+                self.model.snn_src_: src,
+                self.model.snn_src_len_: src_len,
+                self.model.snn_src2_: src2,
+                self.model.snn_src2_len_: src2_len,
+                self.model.labels_: labels})
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
+        return abs_loss
+
+    # TODO: refine the code
+    def eval_snn(
+            self,
+            snn_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+                            np.ndarray],
+            batch_size: int = 32) -> float:
+
+        src, src_len, src2, src2_len, labels = snn_data
+        eval_data_size = len(src)
+        self.info("start eval with size {}".format(eval_data_size))
+        n_iter = (eval_data_size // batch_size) + 1
+        total_acc = 0
+        total_samples = 0
+        for i in range(n_iter):
+            self.debug("eval snn iter {} total {}".format(i, n_iter))
+            non_empty_src = list(filter(
+                lambda x: x[1][0] != 0 and x[1][1] != 0,
+                enumerate(zip(src_len, src2_len))))
+            non_empty_src_idx = [x[0] for x in non_empty_src]
+            src = src[non_empty_src_idx, :]
+            src_len = src_len[non_empty_src_idx]
+            src2 = src2[non_empty_src_idx, :]
+            src2_len = src2_len[non_empty_src_idx]
+            labels = labels[non_empty_src_idx]
+            labels = labels.astype(np.int32)
+            pred, diff_two_states = self.sess.run(
+                [self.model.semantic_same, self.model.h_states_diff],
+                feed_dict={self.model.snn_src_: src,
+                           self.model.snn_src2_: src2,
+                           self.model.snn_src_len_: src_len,
+                           self.model.snn_src2_len_: src2_len})
+            pred_labels = (pred > 0).astype(np.int32)
+            total_acc += np.sum(np.equal(labels, pred_labels))
+            total_samples += len(src)
+        if total_samples == 0:
+            avg_acc = -1
+        else:
+            avg_acc = total_acc * 1. / total_samples
+            self.debug("valid sample size {}".format(total_samples))
+        return avg_acc
+    pass
+
+
 class DSQNCore(DRRNCore):
     def __init__(self, hp, model_dir, tokenizer):
         super(DRRNCore, self).__init__(hp, model_dir, tokenizer)
@@ -783,11 +876,10 @@ class DSQNCore(DRRNCore):
             step: int,
             others: Any) -> np.ndarray:
 
+        src, src_len, src2, src2_len, labels = others.get()
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
-
-        src, src_len, src2, src2_len, labels = others.get()
         pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
