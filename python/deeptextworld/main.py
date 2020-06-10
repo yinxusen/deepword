@@ -92,7 +92,10 @@ def get_parser() -> ArgumentParser:
     eval_parser.add_argument('--debug', action='store_true')
     eval_parser.add_argument('--load-best', action='store_true', default=False)
     eval_parser.add_argument('--restore-from', type=str)
-    eval_parser.add_argument('--load-dev', action='store_true', default=False)
+    eval_parser.add_argument(
+        '--load-dev-data', action='store_true', default=False)
+    eval_parser.add_argument(
+        '--load-train-data', action='store_true', default=False)
     eval_parser.add_argument('--ckpt-range-min', type=int)
     eval_parser.add_argument('--ckpt-range-max', type=int)
 
@@ -354,11 +357,15 @@ def process_eval_student(args):
 def process_eval_dqn(args):
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
-    if args.load_dev:
+    if args.load_dev_data and not args.load_train_data:
         eprint(colored("load dev data", "blue", "on_red", attrs=["bold"]))
         _, eval_games = load_and_split(args.game_path, args.f_games)
-    else:
-        eprint(colored("load test data", "yellow", "on_red", attrs=["bold"]))
+    elif args.load_train_data and not args.load_dev_data:
+        eprint(colored("load train data", "blue", "on_red", attrs=["bold"]))
+        eval_games, _ = load_and_split(args.game_path, args.f_games)
+    else:  # if load_dev and load_train are both True or both False
+        eprint(colored(
+            "load all test data", "yellow", "on_red", attrs=["bold"]))
         eval_games = load_game_files(args.game_path, args.f_games)
 
     if args.eval_mode == "eval":
