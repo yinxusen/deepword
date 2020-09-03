@@ -1,5 +1,3 @@
-import glob
-import os
 import random
 import re
 from collections import namedtuple
@@ -44,6 +42,13 @@ class BaseAgent(Logging):
     """
 
     def __init__(self, hp: HParams, model_dir: str) -> None:
+        """
+        Initialize a base agent
+
+        Args:
+            hp: hyper-parameters, refer to :py:mod:`deeptextworld.hparams`
+            model_dir: path to model dir
+        """
         super(BaseAgent, self).__init__()
         self.model_dir = model_dir
 
@@ -226,7 +231,6 @@ class BaseAgent(Logging):
     def train(self) -> None:
         """
         call train() before performing training
-        :return:
         """
         self.is_training = True
         self._init()
@@ -234,8 +238,9 @@ class BaseAgent(Logging):
     def eval(self, load_best=True) -> None:
         """
         call eval() before performing evaluation
-        :param load_best: load from best weights, or from last weights
-        :return:
+
+        Args:
+            load_best: load from the best weights, otherwise from last weights
         """
         self.is_training = False
         self._init(load_best)
@@ -244,6 +249,9 @@ class BaseAgent(Logging):
         """
         reset is only used for evaluation during training
         do not use it at anywhere else.
+
+        Args:
+            restore_from: where to restore the model, `None` goes to default
         """
         self.is_training = False
         self._initialized = False
@@ -602,10 +610,16 @@ class BaseAgent(Logging):
 
     @property
     def positive_scores(self):
+        """
+        Total positive scores earned
+        """
         return self._positive_scores
 
     @property
     def negative_scores(self):
+        """
+        Total negative scores
+        """
         return self._negative_scores
 
     def _collect_floor_plan(self, master: str, prev_place: str) -> str:
@@ -820,11 +834,15 @@ class BaseAgent(Logging):
         """
         Acts upon the current list of observations.
         One text command must be returned for each observation.
-        :param obs:
-        :param scores: score obtained so far for each game
-        :param dones: whether a game is finished
-        :param infos:
-        :return: if all dones, return None, else return actions
+
+        Args:
+            obs: observed texts for each game
+            scores: score obtained so far for each game
+            dones: whether a game is finished
+            infos: extra information requested from TextWorld
+
+        Returns:
+            if all dones, return None, else return actions
 
         Notes:
             Commands returned for games marked as `done` have no effect.

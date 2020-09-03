@@ -179,9 +179,13 @@ def get_path_tags(path: str, prefix: str) -> List[int]:
     Get tag from a path of saved objects. E.g. actions-100.npz
     100 will be extracted
     Make sure the item to be extracted is saved with suffix of npz.
-    :param path:
-    :param prefix:
-    :return:
+
+    Args:
+        path: path to find files with prefix
+        prefix: prefix
+
+    Returns:
+        list of all tags
     """
     all_paths = glob.glob(
         os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
@@ -201,11 +205,15 @@ def align_batch_str(
     Each array of ids will be either padded or trimmed to reach
     the maximum length, notice that padded length won't be counted in as valid
     length.
-    :param ids: a list of array of index (int)
-    :param str_len_allowance:
-    :param padding_val_id:
-    :param valid_len:
-    :return: aligned ids and aligned length
+
+    Args:
+        ids: a list of array of index (int)
+        str_len_allowance:
+        padding_val_id:
+        valid_len:
+
+    Returns:
+        aligned ids and aligned length
     """
     def align() -> Iterator[Tuple[List[int], int]]:
         m = min(str_len_allowance, np.max(valid_len))
@@ -358,7 +366,9 @@ def bert_commonsense_input(
      [0, 0, 0, 0, 0, 1, 1, 0]]
     input size:
     [8, 7, 7]
-    :return: trajectory + action; segmentation ids; sizes
+
+    Returns:
+        trajectory + action; segmentation ids; sizes
     """
 
     assert action_matrix.ndim == 2, "action_matrix: {}".format(action_matrix)
@@ -406,7 +416,6 @@ def get_best_batch_ids(
     then q_actions can be split into three groups:
     [1, 2, 3], [4, 5, 6, 7], [8, 9, 10];
     we compute the best idx for each group
-    :return:
     """
     assert q_actions.ndim == 1
     assert np.all(np.greater(actions_repeats, 0))
@@ -490,12 +499,15 @@ def get_action_idx_pair(
     Notice that we remove the final pad to keep the action length unchanged.
     Notice 2. pad should be indexed as 0.
 
-    :param action_matrix: np array of action index of N * K, there are N
-    actions, and each of them has a length of K (with paddings).
-    :param action_len: length of each action (remove paddings).
-    :param sos_id:
-    :param eos_id:
-    :return: action index as input, action index as output, new action len
+    Args:
+        action_matrix: np array of action index of N * K, there are N,
+         and each of them has a length of K (with paddings).
+        action_len: length of each action (remove paddings).
+        sos_id:
+        eos_id:
+
+    Returns:
+        action index as input, action index as output, new action len
     """
     n_rows, max_col_size = action_matrix.shape
     action_id_in = np.concatenate(

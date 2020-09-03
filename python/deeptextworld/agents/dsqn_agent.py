@@ -8,9 +8,10 @@ from numpy.random import choice as npc
 
 from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.competition_agent import CompetitionAgent
-from deeptextworld.agents.zork_agent import ZorkAgent
 from deeptextworld.agents.utils import Memolet
 from deeptextworld.agents.utils import batch_dqn_input
+from deeptextworld.agents.utils import get_path_tags
+from deeptextworld.agents.zork_agent import ZorkAgent
 from deeptextworld.utils import get_hash
 
 
@@ -25,7 +26,7 @@ class DSQNAgent(BaseAgent):
         self.hash_states2tjs: Dict[str, List[Tuple[int, int]]] = dict()
         self.pool_train = ThreadPool(processes=2)
 
-    def init_hs2tj(
+    def _init_hs2tj(
             self, hs2tj_path: str,
             with_loading: bool = True) -> Dict[str, List[Tuple[int, int]]]:
         hash_states2tjs = dict()
@@ -43,7 +44,7 @@ class DSQNAgent(BaseAgent):
         super(DSQNAgent, self)._load_context_objs()
         # load hs2tj
         hs2tj_path = self._get_context_obj_path(self.hs2tj_prefix)
-        self.hash_states2tjs = self.init_hs2tj(
+        self.hash_states2tjs = self._init_hs2tj(
             hs2tj_path, with_loading=self.is_training)
 
     def _save_context_objs(self):
@@ -56,7 +57,7 @@ class DSQNAgent(BaseAgent):
         valid_tags = super(DSQNAgent, self)._get_compatible_snapshot_tag()
         valid_tags = set(valid_tags)
         # mix valid tags w/ context objs
-        hs2tj_tags = self._get_path_tags(self.model_dir, self.hs2tj_prefix)
+        hs2tj_tags = get_path_tags(self.model_dir, self.hs2tj_prefix)
         valid_tags.intersection_update(hs2tj_tags)
         return list(valid_tags)
 
@@ -102,6 +103,22 @@ class DSQNAgent(BaseAgent):
     def get_snn_pairs(
             self, batch_size: int) -> Tuple[
             np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Sample SNN pairs for SNN part training
+
+        Args:
+            batch_size: how many data points to generate. Notice that
+             batch_size * 2 data points will be generated, one half for
+             trajectory pairs with the same states; the other half for
+             trajectory pairs with different states.
+
+        Returns:
+            src: trajectories
+            src_len: length of them
+            src2: the paired trajectories
+            src2_len: length of them
+            labels: `0` for same states; `1` for different states
+        """
         # target key set should contain items more than twice, since we need to
         # separate target set and same set.
         target_key_set = list(
@@ -153,6 +170,17 @@ class DSQNAgent(BaseAgent):
     def save_train_pairs(
             self, t: int, src: np.ndarray, src_len: np.ndarray,
             src2: np.ndarray, src2_len: np.ndarray, labels: np.ndarray) -> None:
+        """
+        Save SNN pairs for verification.
+
+        Args:
+            t: current training steps
+            src: trajectories
+            src_len: length of trajectories
+            src2: paired trajectories
+            src2_len: length of paired trajectories
+            labels: `0` or `1` for same or different states
+        """
         src_str = []
         for s in src:
             src_str.append(" ".join(

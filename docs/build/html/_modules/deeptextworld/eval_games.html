@@ -1,0 +1,594 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.eval_games &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.eval_games</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">ChainMap</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">namedtuple</span>
+<span class="kn">from</span> <span class="nn">multiprocessing</span> <span class="k">import</span> <span class="n">Pool</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="k">import</span> <span class="n">join</span> <span class="k">as</span> <span class="n">pjoin</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="k">import</span> <span class="n">Lock</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">gym</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">textworld.gym</span>
+<span class="kn">from</span> <span class="nn">tensorflow.contrib.training</span> <span class="k">import</span> <span class="n">HParams</span>
+<span class="kn">from</span> <span class="nn">termcolor</span> <span class="k">import</span> <span class="n">colored</span>
+<span class="kn">from</span> <span class="nn">watchdog.events</span> <span class="k">import</span> <span class="n">FileSystemEventHandler</span>
+<span class="kn">from</span> <span class="nn">watchdog.observers</span> <span class="k">import</span> <span class="n">Observer</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">INFO_KEY</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.log</span> <span class="k">import</span> <span class="n">Logging</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.stats</span> <span class="k">import</span> <span class="n">mean_confidence_interval</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.utils</span> <span class="k">import</span> <span class="n">agent_name2clazz</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.utils</span> <span class="k">import</span> <span class="n">eprint</span><span class="p">,</span> <span class="n">report_status</span>
+
+
+<div class="viewcode-block" id="EvalResult"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.EvalResult">[docs]</a><span class="k">class</span> <span class="nc">EvalResult</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span>
+        <span class="s2">&quot;EvalResult&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">,</span> <span class="s2">&quot;positive_score&quot;</span><span class="p">,</span> <span class="s2">&quot;negative_score&quot;</span><span class="p">,</span> <span class="s2">&quot;max_score&quot;</span><span class="p">,</span>
+         <span class="s2">&quot;steps&quot;</span><span class="p">,</span> <span class="s2">&quot;won&quot;</span><span class="p">,</span> <span class="s2">&quot;action_list&quot;</span><span class="p">))):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="eval_agent"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.eval_agent">[docs]</a><span class="k">def</span> <span class="nf">eval_agent</span><span class="p">(</span>
+        <span class="n">hp</span><span class="p">:</span> <span class="n">HParams</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">load_best</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">game_files</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gpu_device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">EvalResult</span><span class="p">]],</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Evaluate an agent with given games.</span>
+<span class="sd">    For each game, we run nb_episodes, and max_episode_steps for on episode.</span>
+
+<span class="sd">    Notice that evaluation game running is different with training.</span>
+<span class="sd">    In training, we register all given games to TextWorld structure, and play</span>
+<span class="sd">    them in a random way.</span>
+<span class="sd">    For evaluation, we register one game at a time, and play it for nb_episodes.</span>
+
+<span class="sd">    :param hp: hyperparameter to create the agent</span>
+<span class="sd">    :param model_dir: model dir of the agent</span>
+<span class="sd">    :param load_best: bool, load from best_weights or not (last_weights)</span>
+<span class="sd">    :param restore_from: string, load from a specific model,</span>
+<span class="sd">    e.g. {model_dir}/last_weights/after_epoch-0</span>
+<span class="sd">    :param game_files: game files for evaluation</span>
+<span class="sd">    :param gpu_device: which GPU device to load, in a format of &quot;/device:GPU:i&quot;</span>
+<span class="sd">    :return: eval_results, loaded_ckpt_step</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">eval_results</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">agent_clazz</span> <span class="o">=</span> <span class="n">agent_name2clazz</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">agent_clazz</span><span class="p">)</span>
+    <span class="n">agent</span> <span class="o">=</span> <span class="n">agent_clazz</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">gpu_device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">agent</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">set_d4eval</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">load_best</span><span class="p">:</span>  <span class="c1"># load from best_weights for evaluation</span>
+        <span class="n">agent</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">load_best</span><span class="o">=</span><span class="n">load_best</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c1"># load from last_weights for dev test</span>
+        <span class="n">agent</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">restore_from</span><span class="p">)</span>
+
+    <span class="n">requested_infos</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">select_additional_infos</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">game_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">game_files</span><span class="p">)):</span>
+        <span class="n">game_file</span> <span class="o">=</span> <span class="n">game_files</span><span class="p">[</span><span class="n">game_no</span><span class="p">]</span>
+        <span class="n">game_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">game_file</span><span class="p">)</span>
+        <span class="n">env_id</span> <span class="o">=</span> <span class="n">textworld</span><span class="o">.</span><span class="n">gym</span><span class="o">.</span><span class="n">register_games</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">game_file</span><span class="p">],</span> <span class="n">requested_infos</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">max_episode_steps</span><span class="o">=</span><span class="n">hp</span><span class="o">.</span><span class="n">game_episode_terminal_t</span><span class="p">,</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;eval&quot;</span><span class="p">)</span>
+        <span class="n">game_env</span> <span class="o">=</span> <span class="n">gym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;eval game: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">game_name</span><span class="p">))</span>
+        <span class="k">assert</span> <span class="n">hp</span><span class="o">.</span><span class="n">eval_episode</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;no enough episode to eval&quot;</span>
+        <span class="k">for</span> <span class="n">episode_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">eval_episode</span><span class="p">):</span>
+            <span class="n">action_list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">obs</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">game_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+            <span class="n">dones</span> <span class="o">=</span> <span class="p">[</span><span class="kc">False</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+            <span class="n">steps</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+            <span class="c1"># TODO: make sure verbose won&#39;t affect games other than Zork</span>
+            <span class="c1"># tmp_obs, _, _, _ = game_env.step([&quot;verbose&quot;] * len(obs))</span>
+            <span class="c1"># eprint(&quot;use verbose: {}&quot;.format(tmp_obs[0]))</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">dones</span><span class="p">):</span>
+                <span class="c1"># Increase step counts.</span>
+                <span class="n">steps</span> <span class="o">=</span> <span class="p">([</span><span class="n">step</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="ow">not</span> <span class="n">done</span><span class="p">)</span>
+                          <span class="k">for</span> <span class="n">step</span><span class="p">,</span> <span class="n">done</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">steps</span><span class="p">,</span> <span class="n">dones</span><span class="p">)])</span>
+                <span class="n">commands</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">act</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span><span class="p">)</span>
+                <span class="n">action_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">commands</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">game_env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">commands</span><span class="p">)</span>
+
+            <span class="c1"># Let the agent knows the game is done.</span>
+            <span class="n">agent</span><span class="o">.</span><span class="n">act</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">game_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">eval_results</span><span class="p">:</span>
+                <span class="n">eval_results</span><span class="p">[</span><span class="n">game_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">eval_results</span><span class="p">[</span><span class="n">game_name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">EvalResult</span><span class="p">(</span>
+                <span class="n">score</span><span class="o">=</span><span class="n">scores</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">positive_score</span><span class="o">=</span><span class="n">agent</span><span class="o">.</span><span class="n">positive_scores</span><span class="p">,</span>
+                <span class="n">negative_score</span><span class="o">=</span><span class="n">agent</span><span class="o">.</span><span class="n">negative_scores</span><span class="p">,</span>
+                <span class="n">max_score</span><span class="o">=</span><span class="n">infos</span><span class="p">[</span><span class="n">INFO_KEY</span><span class="o">.</span><span class="n">max_score</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">steps</span><span class="o">=</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">won</span><span class="o">=</span><span class="n">infos</span><span class="p">[</span><span class="n">INFO_KEY</span><span class="o">.</span><span class="n">won</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">action_list</span><span class="o">=</span><span class="n">action_list</span><span class="p">))</span>
+        <span class="n">game_env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">eval_results</span><span class="p">,</span> <span class="n">agent</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">loaded_ckpt_step</span></div>
+
+
+<div class="viewcode-block" id="agent_collect_data"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.agent_collect_data">[docs]</a><span class="k">def</span> <span class="nf">agent_collect_data</span><span class="p">(</span>
+        <span class="n">agent</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">max_episode_steps</span><span class="p">,</span> <span class="n">epoch_size</span><span class="p">,</span> <span class="n">epoch_limit</span><span class="p">):</span>
+    <span class="n">requested_infos</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">select_additional_infos</span><span class="p">()</span>
+    <span class="n">env_id</span> <span class="o">=</span> <span class="n">textworld</span><span class="o">.</span><span class="n">gym</span><span class="o">.</span><span class="n">register_games</span><span class="p">(</span>
+        <span class="n">game_files</span><span class="p">,</span> <span class="n">requested_infos</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">max_episode_steps</span><span class="o">=</span><span class="n">max_episode_steps</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;eval&quot;</span><span class="p">)</span>
+    <span class="n">game_env</span> <span class="o">=</span> <span class="n">gym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span>
+    <span class="n">agent</span><span class="o">.</span><span class="n">eps</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+    <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;new randomness: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">agent</span><span class="o">.</span><span class="n">eps</span><span class="p">))</span>
+
+    <span class="n">obs</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">game_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+    <span class="n">dones</span> <span class="o">=</span> <span class="p">[</span><span class="kc">False</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">epoch_t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epoch_limit</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epoch_size</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">dones</span><span class="p">):</span>
+                <span class="n">commands</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">act</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span><span class="p">)</span>
+                <span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">game_env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">commands</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">agent</span><span class="o">.</span><span class="n">act</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span><span class="p">)</span>
+                <span class="n">obs</span><span class="p">,</span> <span class="n">infos</span> <span class="o">=</span> <span class="n">game_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+                <span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+                <span class="n">dones</span> <span class="o">=</span> <span class="p">[</span><span class="kc">False</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+                <span class="n">agent</span><span class="o">.</span><span class="n">eps</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+                <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;new randomness: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">agent</span><span class="o">.</span><span class="n">eps</span><span class="p">))</span>
+        <span class="n">agent</span><span class="o">.</span><span class="n">save_snapshot</span><span class="p">()</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;save snapshot epoch: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">epoch_t</span><span class="p">))</span>
+    <span class="n">game_env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="agg_eval_results"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.agg_eval_results">[docs]</a><span class="k">def</span> <span class="nf">agg_eval_results</span><span class="p">(</span>
+        <span class="n">eval_results</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">EvalResult</span><span class="p">]],</span>
+        <span class="n">max_steps_per_episode</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">EvalResult</span><span class="p">],</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Aggregate evaluation results.</span>
+<span class="sd">    We run N test games, each with M episodes, each episode has a maximum of</span>
+<span class="sd">    K steps.</span>
+
+<span class="sd">    :param eval_results: evaluation results of text-based games, in the</span>
+<span class="sd">    following format:</span>
+<span class="sd">      dict(game_name, [eval_result1, evaluate_result2, ..., evaluate_resultM])</span>
+<span class="sd">      and the number of eval_results are the same for all games.</span>
+<span class="sd">      evaluate_result:</span>
+<span class="sd">        score, positive_score, negative_score, max_score, steps, won (bool),</span>
+<span class="sd">        used_action_list</span>
+<span class="sd">    :param max_steps_per_episode: i.e. M, default = 100</span>
+
+<span class="sd">    :return:</span>
+<span class="sd">      agg_per_game:</span>
+<span class="sd">        dict(game_name, sum scores, sum max scores, sum steps, # won)</span>
+<span class="sd">      sample_mean: total earned scores / total maximum scores</span>
+<span class="sd">      confidence_interval: confidence interval of sample_mean over M episodes.</span>
+<span class="sd">      steps: total used steps / total maximum steps</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">agg_per_game</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">total_scores_per_episode</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># np array of shape M</span>
+    <span class="n">total_positive_scores</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_negative_scores</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_steps</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">max_scores_per_episode</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_episodes</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_won</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">game_name</span> <span class="ow">in</span> <span class="n">eval_results</span><span class="p">:</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">eval_results</span><span class="p">[</span><span class="n">game_name</span><span class="p">]</span>
+        <span class="n">agg_score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">score</span><span class="p">,</span> <span class="n">res</span><span class="p">)))</span>
+        <span class="n">agg_positive_score</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">positive_score</span><span class="p">,</span> <span class="n">res</span><span class="p">))</span>
+        <span class="n">agg_negative_score</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">negative_score</span><span class="p">,</span> <span class="n">res</span><span class="p">))</span>
+        <span class="c1"># all max scores should be equal, so just pick anyone</span>
+        <span class="n">agg_max_score</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">max_score</span><span class="p">,</span> <span class="n">res</span><span class="p">))</span>
+        <span class="n">max_scores_per_episode</span> <span class="o">+=</span> <span class="n">agg_max_score</span>
+        <span class="n">n_episodes</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+        <span class="n">total_episodes</span> <span class="o">+=</span> <span class="n">n_episodes</span>
+        <span class="n">agg_step</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">steps</span><span class="p">,</span> <span class="n">res</span><span class="p">))</span>
+        <span class="n">agg_nb_won</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">won</span><span class="p">,</span> <span class="n">res</span><span class="p">)))</span>
+        <span class="n">total_won</span> <span class="o">+=</span> <span class="n">agg_nb_won</span>
+        <span class="n">agg_per_game</span><span class="p">[</span><span class="n">game_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">EvalResult</span><span class="p">(</span>
+            <span class="n">score</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">agg_score</span><span class="p">),</span>
+            <span class="n">positive_score</span><span class="o">=</span><span class="n">agg_positive_score</span><span class="p">,</span>
+            <span class="n">negative_score</span><span class="o">=</span><span class="n">agg_negative_score</span><span class="p">,</span>
+            <span class="n">max_score</span><span class="o">=</span><span class="n">agg_max_score</span> <span class="o">*</span> <span class="n">n_episodes</span><span class="p">,</span>
+            <span class="n">steps</span><span class="o">=</span><span class="n">agg_step</span><span class="p">,</span>
+            <span class="n">won</span><span class="o">=</span><span class="n">agg_nb_won</span><span class="p">,</span>
+            <span class="n">action_list</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">total_scores_per_episode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">total_scores_per_episode</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">agg_score</span><span class="p">)</span>
+        <span class="n">total_scores_per_episode</span> <span class="o">+=</span> <span class="n">agg_score</span>
+        <span class="n">total_positive_scores</span> <span class="o">+=</span> <span class="n">agg_positive_score</span>
+        <span class="n">total_negative_scores</span> <span class="o">+=</span> <span class="n">agg_negative_score</span>
+        <span class="n">total_steps</span> <span class="o">+=</span> <span class="n">agg_step</span>
+    <span class="n">max_steps</span> <span class="o">=</span> <span class="n">total_episodes</span> <span class="o">*</span> <span class="n">max_steps_per_episode</span>
+    <span class="n">total_scores_percentage</span><span class="p">,</span> <span class="n">confidence_interval</span> <span class="o">=</span> <span class="n">mean_confidence_interval</span><span class="p">(</span>
+        <span class="n">total_scores_per_episode</span> <span class="o">/</span> <span class="n">max_scores_per_episode</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">agg_per_game</span><span class="p">,</span> <span class="n">total_scores_percentage</span><span class="p">,</span> <span class="n">confidence_interval</span><span class="p">,</span>
+            <span class="n">total_positive_scores</span><span class="p">,</span> <span class="n">total_negative_scores</span><span class="p">,</span>
+            <span class="n">total_steps</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">max_steps</span><span class="p">,</span> <span class="n">total_won</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">total_episodes</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="scores_of_tiers"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.scores_of_tiers">[docs]</a><span class="k">def</span> <span class="nf">scores_of_tiers</span><span class="p">(</span><span class="n">agg_per_game</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">EvalResult</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute scores per tier given aggregated scores per game</span>
+<span class="sd">    :param agg_per_game:</span>
+<span class="sd">    :return: list of tier-name -&gt; scores, starting from tier1 to tier6</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">games</span> <span class="o">=</span> <span class="n">agg_per_game</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+    <span class="n">tiers2games</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;tier1&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe1&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">)),</span>
+        <span class="s2">&quot;tier2&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe2&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">)),</span>
+        <span class="s2">&quot;tier3&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe3&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">)),</span>
+        <span class="s2">&quot;tier4&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go6&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">)),</span>
+        <span class="s2">&quot;tier5&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go9&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">)),</span>
+        <span class="s2">&quot;tier6&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go12&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">games</span><span class="p">))</span>
+    <span class="p">}</span>
+
+    <span class="n">tiers2scores</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">k_tier</span> <span class="ow">in</span> <span class="n">tiers2games</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tiers2games</span><span class="p">[</span><span class="n">k_tier</span><span class="p">]:</span>
+            <span class="k">continue</span>
+        <span class="n">earned</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">tiers2games</span><span class="p">[</span><span class="n">k_tier</span><span class="p">]:</span>
+            <span class="n">earned</span> <span class="o">+=</span> <span class="n">agg_per_game</span><span class="p">[</span><span class="n">g</span><span class="p">]</span><span class="o">.</span><span class="n">score</span>
+            <span class="n">total</span> <span class="o">+=</span> <span class="n">agg_per_game</span><span class="p">[</span><span class="n">g</span><span class="p">]</span><span class="o">.</span><span class="n">max_score</span>
+        <span class="n">tiers2scores</span><span class="p">[</span><span class="n">k_tier</span><span class="p">]</span> <span class="o">=</span> <span class="n">earned</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">total</span>
+    <span class="k">return</span> <span class="n">tiers2scores</span></div>
+
+
+<div class="viewcode-block" id="MultiGPUsEvalPlayer"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.MultiGPUsEvalPlayer">[docs]</a><span class="k">class</span> <span class="nc">MultiGPUsEvalPlayer</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Eval Player that runs on multiple GPUs</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">,</span> <span class="n">load_best</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">MultiGPUsEvalPlayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hp</span> <span class="o">=</span> <span class="n">hp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_scores</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_steps</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span> <span class="o">=</span> <span class="n">model_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gpu_devices</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;/device:GPU:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_gpus</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_files</span> <span class="o">=</span> <span class="n">game_files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">portion_files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_game_files</span><span class="p">(</span><span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_best</span> <span class="o">=</span> <span class="n">load_best</span>
+
+<div class="viewcode-block" id="MultiGPUsEvalPlayer.split_game_files"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.MultiGPUsEvalPlayer.split_game_files">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">split_game_files</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">rnd_seed</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Split game files into k portions for multi GPUs playing</span>
+<span class="sd">        :param game_files:</span>
+<span class="sd">        :param k:</span>
+<span class="sd">        :param rnd_seed:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">game_files</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">game_files</span><span class="p">)</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">rnd_seed</span><span class="p">)</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">game_files</span><span class="p">)</span>
+        <span class="n">n_files</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_files</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">n_files</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;no game files found!&quot;</span><span class="p">)</span>
+
+        <span class="n">portion</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">game_files</span><span class="p">)</span> <span class="o">/</span> <span class="n">k</span><span class="p">)</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">game_files</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">portion</span><span class="p">:</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">game_files</span><span class="p">),</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">portion</span><span class="p">)]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">files</span></div>
+
+<div class="viewcode-block" id="MultiGPUsEvalPlayer.has_better_model"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.MultiGPUsEvalPlayer.has_better_model">[docs]</a>    <span class="k">def</span> <span class="nf">has_better_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">total_scores</span><span class="p">,</span> <span class="n">total_steps</span><span class="p">):</span>
+        <span class="n">has_better_score</span> <span class="o">=</span> <span class="n">total_scores</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_scores</span>
+        <span class="n">has_fewer_steps</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">total_scores</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_scores</span> <span class="ow">and</span>
+                <span class="n">total_steps</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_steps</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">has_better_score</span> <span class="ow">or</span> <span class="n">has_fewer_steps</span></div>
+
+<div class="viewcode-block" id="MultiGPUsEvalPlayer.evaluate"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.MultiGPUsEvalPlayer.evaluate">[docs]</a>    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;start evaluation ...&quot;</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">eval_agent</span><span class="p">(</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_best</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">,</span>
+               <span class="bp">self</span><span class="o">.</span><span class="n">game_files</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpu_devices</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pool</span> <span class="o">=</span> <span class="n">Pool</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">portion_files</span><span class="p">))</span>
+            <span class="n">async_results</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+                    <span class="n">eval_agent</span><span class="p">,</span>
+                    <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_best</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">,</span>
+                     <span class="n">files</span><span class="p">,</span> <span class="n">gpu_device</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">files</span><span class="p">,</span> <span class="n">gpu_device</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">portion_files</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gpu_devices</span><span class="p">)]</span>
+            <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">async_results</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">())</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;evaluation error with </span><span class="si">{}</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">restore_from</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+                    <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+                    <span class="n">traceback</span><span class="o">.</span><span class="n">print_exception</span><span class="p">(</span>
+                        <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                    <span class="n">pool</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;multi-process pool terminated.&quot;</span><span class="p">)</span>
+                    <span class="k">return</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;evaluation pool closed&quot;</span><span class="p">)</span>
+
+        <span class="n">loaded_steps</span> <span class="o">=</span> <span class="p">[</span><span class="n">res</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">loaded_steps</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;load different versions of model&quot;</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+        <span class="c1"># TODO: same key will be updated by ChainMap</span>
+        <span class="n">eval_results</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">ChainMap</span><span class="p">(</span><span class="o">*</span><span class="n">results</span><span class="p">))</span>
+        <span class="p">(</span><span class="n">agg_res</span><span class="p">,</span> <span class="n">total_scores</span><span class="p">,</span> <span class="n">confidence_intervals</span><span class="p">,</span> <span class="n">total_positive_scores</span><span class="p">,</span>
+         <span class="n">total_negative_scores</span><span class="p">,</span> <span class="n">total_steps</span><span class="p">,</span> <span class="n">n_won</span>
+         <span class="p">)</span> <span class="o">=</span> <span class="n">agg_eval_results</span><span class="p">(</span><span class="n">eval_results</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;eval_results: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">eval_results</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;eval aggregated results: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">agg_res</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">report_status</span><span class="p">([</span>
+            <span class="p">(</span><span class="s2">&quot;after-epoch&quot;</span><span class="p">,</span> <span class="n">loaded_steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+            <span class="p">(</span><span class="s2">&quot;scores&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">total_scores</span><span class="p">)),</span>
+            <span class="p">(</span><span class="s2">&quot;confidence&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">confidence_intervals</span><span class="p">)),</span>
+            <span class="p">(</span><span class="s2">&quot;positive scores&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">total_positive_scores</span><span class="p">)),</span>
+            <span class="p">(</span><span class="s2">&quot;negative scores&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">total_negative_scores</span><span class="p">)),</span>
+            <span class="p">(</span><span class="s2">&quot;steps&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">total_steps</span><span class="p">)),</span>
+            <span class="p">(</span><span class="s2">&quot;n_won&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">n_won</span><span class="p">))</span>
+        <span class="p">]))</span>
+        <span class="n">tiers2scores</span> <span class="o">=</span> <span class="n">scores_of_tiers</span><span class="p">(</span><span class="n">agg_res</span><span class="p">)</span>
+        <span class="n">tiers2scores</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">tiers2scores</span><span class="o">.</span><span class="n">items</span><span class="p">()),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;scores per tiers:</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tiers2scores</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_best</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_better_model</span><span class="p">(</span><span class="n">total_scores</span><span class="p">,</span> <span class="n">total_steps</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;found better agent, save model after-epoch-</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">loaded_steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_scores</span> <span class="o">=</span> <span class="n">total_scores</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">prev_best_steps</span> <span class="o">=</span> <span class="n">total_steps</span>
+                <span class="c1"># copy best model so far</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">save_best_model</span><span class="p">(</span><span class="n">loaded_steps</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;save best model error:</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;no better model, pass ...&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MultiGPUsEvalPlayer.save_best_model"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.MultiGPUsEvalPlayer.save_best_model">[docs]</a>    <span class="k">def</span> <span class="nf">save_best_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loaded_ckpt_step</span><span class="p">):</span>
+        <span class="n">ckpt_path</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;last_weights&quot;</span><span class="p">)</span>
+        <span class="n">best_path</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;best_weights&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">best_path</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">best_path</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span>
+                <span class="n">pjoin</span><span class="p">(</span><span class="n">ckpt_path</span><span class="p">,</span> <span class="s2">&quot;after-epoch-</span><span class="si">{}</span><span class="s2">*&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loaded_ckpt_step</span><span class="p">))):</span>
+            <span class="n">dst</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">best_path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;copied: </span><span class="si">{}</span><span class="s2"> -&gt; </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">dst</span><span class="p">))</span>
+        <span class="n">ckpt_file</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="n">ckpt_path</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>
+        <span class="n">dst</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">ckpt_file</span><span class="p">,</span> <span class="n">best_path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;copied: </span><span class="si">{}</span><span class="s2"> -&gt; </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ckpt_file</span><span class="p">,</span> <span class="n">dst</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="NewModelHandler"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.NewModelHandler">[docs]</a><span class="k">class</span> <span class="nc">NewModelHandler</span><span class="p">(</span><span class="n">FileSystemEventHandler</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hp</span> <span class="o">=</span> <span class="n">hp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span> <span class="o">=</span> <span class="n">model_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_files</span> <span class="o">=</span> <span class="n">game_files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_gpus</span> <span class="o">=</span> <span class="n">n_gpus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval_player</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">Lock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">watched_file</span> <span class="o">=</span> <span class="s2">&quot;checkpoint&quot;</span>
+
+<div class="viewcode-block" id="NewModelHandler.run_eval_player"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.NewModelHandler.run_eval_player">[docs]</a>    <span class="k">def</span> <span class="nf">run_eval_player</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">restore_from</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">load_best</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">eval_player</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">eval_player</span> <span class="o">=</span> <span class="n">MultiGPUsEvalPlayer</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_files</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_gpus</span><span class="p">,</span>
+                <span class="n">load_best</span><span class="o">=</span><span class="n">load_best</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>  <span class="c1"># wait until all files of a model has been saved</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="o">.</span><span class="n">locked</span><span class="p">():</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Give up evaluation since model is running.&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">eval_player</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">restore_from</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;evaluation failed with </span><span class="si">{}</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">restore_from</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="NewModelHandler.is_ckpt_file"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.NewModelHandler.is_ckpt_file">[docs]</a>    <span class="k">def</span> <span class="nf">is_ckpt_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src_path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">watched_file</span> <span class="o">==</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">src_path</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NewModelHandler.on_created"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.NewModelHandler.on_created">[docs]</a>    <span class="k">def</span> <span class="nf">on_created</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;create &quot;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">src_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">event</span><span class="o">.</span><span class="n">is_directory</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_ckpt_file</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">src_path</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run_eval_player</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="NewModelHandler.on_modified"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.NewModelHandler.on_modified">[docs]</a>    <span class="k">def</span> <span class="nf">on_modified</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;modify&quot;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">src_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">event</span><span class="o">.</span><span class="n">is_directory</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_ckpt_file</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">src_path</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">run_eval_player</span><span class="p">()</span></div></div>
+
+
+<div class="viewcode-block" id="WatchDogEvalPlayer"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.WatchDogEvalPlayer">[docs]</a><span class="k">class</span> <span class="nc">WatchDogEvalPlayer</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">WatchDogEvalPlayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+<div class="viewcode-block" id="WatchDogEvalPlayer.start"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.WatchDogEvalPlayer.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">):</span>
+        <span class="n">event_handler</span> <span class="o">=</span> <span class="n">NewModelHandler</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">)</span>
+        <span class="n">watched_dir</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;last_weights&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">watched_dir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">watched_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;watch on </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">watched_dir</span><span class="p">))</span>
+        <span class="n">observer</span> <span class="o">=</span> <span class="n">Observer</span><span class="p">()</span>
+        <span class="n">observer</span><span class="o">.</span><span class="n">schedule</span><span class="p">(</span><span class="n">event_handler</span><span class="p">,</span> <span class="n">watched_dir</span><span class="p">,</span> <span class="n">recursive</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">observer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;watching ...&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="n">observer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="n">observer</span><span class="o">.</span><span class="n">join</span><span class="p">()</span></div></div>
+
+
+<div class="viewcode-block" id="LoopDogEvalPlayer"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.LoopDogEvalPlayer">[docs]</a><span class="k">class</span> <span class="nc">LoopDogEvalPlayer</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">LoopDogEvalPlayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_content</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LoopDogEvalPlayer.start"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.LoopDogEvalPlayer.start">[docs]</a>    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">):</span>
+        <span class="n">event_handler</span> <span class="o">=</span> <span class="n">NewModelHandler</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">)</span>
+        <span class="n">watched_file</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;last_weights&quot;</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;watch on </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">watched_file</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;watching ...&quot;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">watched_file</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                        <span class="n">content</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+                    <span class="k">if</span> <span class="n">content</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_content</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                            <span class="s2">&quot;encounter new file </span><span class="si">{}</span><span class="s2"> -&gt; </span><span class="si">{}</span><span class="s2"> for evaluation&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">file_content</span><span class="p">,</span> <span class="n">content</span><span class="p">))</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">file_content</span> <span class="o">=</span> <span class="n">content</span>
+                        <span class="n">event_handler</span><span class="o">.</span><span class="n">run_eval_player</span><span class="p">()</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">pass</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;cannot read watched file: </span><span class="si">{}</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">watched_file</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="k">pass</span></div></div>
+
+
+<div class="viewcode-block" id="FullDirEvalPlayer"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.FullDirEvalPlayer">[docs]</a><span class="k">class</span> <span class="nc">FullDirEvalPlayer</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FullDirEvalPlayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+<div class="viewcode-block" id="FullDirEvalPlayer.start"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.eval_games.FullDirEvalPlayer.start">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span> <span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">,</span>
+            <span class="n">range_min</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">range_max</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">watched_files</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;last_weights&quot;</span><span class="p">,</span> <span class="s2">&quot;after-epoch-*.index&quot;</span><span class="p">)</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">fn</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">watched_files</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="s2">&quot;No checkpoint found!&quot;</span><span class="p">,</span> <span class="s2">&quot;red&quot;</span><span class="p">))</span>
+            <span class="k">return</span>
+        <span class="n">step2ckpt</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">fn</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">fn</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">fn</span><span class="p">),</span> <span class="n">files</span><span class="p">))</span>
+        <span class="n">steps</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">step2ckpt</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="n">range_max</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">range_max</span> <span class="o">=</span> <span class="n">steps</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">range_min</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">range_min</span> <span class="o">=</span> <span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">steps</span> <span class="o">=</span> <span class="p">[</span><span class="n">step</span> <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">steps</span> <span class="k">if</span> <span class="n">range_min</span> <span class="o">&lt;=</span> <span class="n">step</span> <span class="o">&lt;=</span> <span class="n">range_max</span><span class="p">]</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;valid evaluation steps: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">step</span><span class="p">)</span> <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">])))</span>
+
+        <span class="n">event_handler</span> <span class="o">=</span> <span class="n">NewModelHandler</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">game_files</span><span class="p">,</span> <span class="n">n_gpus</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">:</span>
+            <span class="n">event_handler</span><span class="o">.</span><span class="n">run_eval_player</span><span class="p">(</span><span class="n">step2ckpt</span><span class="p">[</span><span class="n">step</span><span class="p">])</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

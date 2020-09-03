@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.tree_memory &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.tree_memory</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.sum_tree</span> <span class="k">import</span> <span class="n">SumTree</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.log</span> <span class="k">import</span> <span class="n">Logging</span>
+
+
+<div class="viewcode-block" id="TreeMemory"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory">[docs]</a><span class="k">class</span> <span class="nc">TreeMemory</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>  <span class="c1"># stored as ( s, a, r, s_ ) in SumTree</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This SumTree code is modified version and the original code is from:</span>
+<span class="sd">    https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">PER_e</span> <span class="o">=</span> <span class="mf">0.01</span>  <span class="c1"># Hyperparameter that we use to avoid some experiences to have 0 probability of being taken</span>
+    <span class="n">PER_a</span> <span class="o">=</span> <span class="mf">0.6</span>  <span class="c1"># Hyperparameter that we use to make a tradeoff between taking only exp with high priority and sampling randomly</span>
+    <span class="n">PER_b</span> <span class="o">=</span> <span class="mf">0.4</span>  <span class="c1"># importance-sampling, from initial value increasing to 1</span>
+
+    <span class="n">PER_b_increment_per_sampling</span> <span class="o">=</span> <span class="mf">0.001</span>
+
+    <span class="n">absolute_error_upper</span> <span class="o">=</span> <span class="mf">1.</span>  <span class="c1"># clipped abs error</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">capacity</span><span class="p">):</span>
+        <span class="c1"># Making the tree</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Remember that our tree is composed of a sum tree that contains the priority scores at his leaf</span>
+<span class="sd">        And also a data array</span>
+<span class="sd">        We don&#39;t use deque because it means that at each timestep our experiences change index by one.</span>
+<span class="sd">        We prefer to use a simple array and to overwrite when the memory is full.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TreeMemory</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tree</span> <span class="o">=</span> <span class="n">SumTree</span><span class="p">(</span><span class="n">capacity</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Store a new experience in our tree</span>
+<span class="sd">    Each new experience have a score of max_prority (it will be then improved when we use this exp to train our DDQN)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="TreeMemory.append"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.append">[docs]</a>    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">experience</span><span class="p">):</span>
+        <span class="c1"># Find the max priority</span>
+        <span class="n">max_priority</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">tree</span><span class="p">[</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">capacity</span><span class="p">:])</span>
+
+        <span class="c1"># If the max priority = 0 we can&#39;t put priority = 0 since this exp will never have a chance to be selected</span>
+        <span class="c1"># So we use a minimum priority</span>
+        <span class="k">if</span> <span class="n">max_priority</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">max_priority</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">absolute_error_upper</span>
+
+        <span class="n">prev_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">max_priority</span><span class="p">,</span> <span class="n">experience</span><span class="p">)</span>  <span class="c1"># set the max p for new p</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">capacity</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">prev_data</span></div>
+
+<div class="viewcode-block" id="TreeMemory.uniform_sample_batch"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.uniform_sample_batch">[docs]</a>    <span class="k">def</span> <span class="nf">uniform_sample_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">data</span><span class="p">[:</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="n">n</span><span class="p">)</span></div>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    - First, to sample a minibatch of k size, the range [0, priority_total] is / into k ranges.</span>
+<span class="sd">    - Then a value is uniformly sampled from each range</span>
+<span class="sd">    - We search in the sumtree, the experience where priority score correspond to sample values are retrieved from.</span>
+<span class="sd">    - Then, we calculate IS weights for each minibatch element</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="TreeMemory.sample_batch"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.sample_batch">[docs]</a>    <span class="k">def</span> <span class="nf">sample_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="c1"># Create a sample array that will contains the minibatch</span>
+        <span class="n">memory_b</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">b_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">n</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+        <span class="n">b_ISWeights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">n</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+        <span class="c1"># Calculate the priority segment</span>
+        <span class="c1"># Here, as explained in the paper, we divide the Range[0, ptotal] into n ranges</span>
+        <span class="n">priority_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">total_priority</span> <span class="o">/</span> <span class="n">n</span>  <span class="c1"># priority segment</span>
+
+        <span class="c1"># Here we increasing the PER_b each time we sample a new minibatch</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">PER_b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span>
+            <span class="p">[</span><span class="mf">1.</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">PER_b</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">PER_b_increment_per_sampling</span><span class="p">])</span>  <span class="c1"># max = 1</span>
+
+        <span class="c1"># Calculating the max_weight</span>
+        <span class="n">p_min</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">tree</span><span class="p">[</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">capacity</span><span class="p">:][:</span><span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span><span class="p">])</span> <span class="o">/</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">total_priority</span><span class="p">)</span>
+        <span class="n">max_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="n">p_min</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">PER_b</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            A value is uniformly sample from each range</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">priority_segment</span> <span class="o">*</span> <span class="n">i</span><span class="p">,</span> <span class="n">priority_segment</span> <span class="o">*</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+            <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Experience that correspond to each value is retrieved</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">index</span><span class="p">,</span> <span class="n">priority</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">get_leaf</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="c1"># P(j)</span>
+            <span class="n">sampling_probabilities</span> <span class="o">=</span> <span class="n">priority</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">total_priority</span>
+
+            <span class="c1">#  IS = (1/N * 1/P(i))**b /max wi == (N*P(i))**-b  /max wi</span>
+            <span class="n">b_ISWeights</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span> <span class="o">*</span> <span class="n">sampling_probabilities</span><span class="p">,</span>
+                <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">PER_b</span><span class="p">)</span> <span class="o">/</span> <span class="n">max_weight</span>
+            <span class="n">b_idx</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">index</span>
+
+            <span class="n">memory_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">b_idx</span><span class="p">,</span> <span class="n">memory_b</span><span class="p">,</span> <span class="n">b_ISWeights</span></div>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Update the priorities on the tree</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="TreeMemory.batch_update"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.batch_update">[docs]</a>    <span class="k">def</span> <span class="nf">batch_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tree_idx</span><span class="p">,</span> <span class="n">abs_errors</span><span class="p">):</span>
+        <span class="n">abs_errors</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">PER_e</span>  <span class="c1"># convert to abs and avoid 0</span>
+        <span class="n">clipped_errors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">abs_errors</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">absolute_error_upper</span><span class="p">)</span>
+        <span class="n">ps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="n">clipped_errors</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">PER_a</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">ti</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">tree_idx</span><span class="p">,</span> <span class="n">ps</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TreeMemory.save_memo"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.save_memo">[docs]</a>    <span class="k">def</span> <span class="nf">save_memo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">savez</span><span class="p">(</span>
+            <span class="n">path</span><span class="p">,</span> <span class="n">tree</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
+            <span class="n">data_pointer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">data_pointer</span><span class="p">,</span>
+            <span class="n">used_buffer_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TreeMemory.load_memo"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.tree_memory.TreeMemory.load_memo">[docs]</a>    <span class="k">def</span> <span class="nf">load_memo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        load memo only apply to a new memo without any appending.</span>
+<span class="sd">        load memo will change previous tree structure.</span>
+<span class="sd">        :param path:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">memo</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">allow_pickle</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">tree</span> <span class="o">=</span> <span class="n">memo</span><span class="p">[</span><span class="s2">&quot;tree&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">memo</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="o">.</span><span class="n">data_pointer</span> <span class="o">=</span> <span class="n">memo</span><span class="p">[</span><span class="s2">&quot;data_pointer&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">used_buffer_size</span> <span class="o">=</span> <span class="n">memo</span><span class="p">[</span><span class="s2">&quot;used_buffer_size&quot;</span><span class="p">]</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

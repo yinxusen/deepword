@@ -1,0 +1,217 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.floor_plan &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.floor_plan</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.log</span> <span class="k">import</span> <span class="n">Logging</span>
+
+
+<div class="viewcode-block" id="FloorPlanCollector"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector">[docs]</a><span class="k">class</span> <span class="nc">FloorPlanCollector</span><span class="p">(</span><span class="n">Logging</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FloorPlanCollector</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># collections of all actions and its indexed vectors</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># current episode actions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="FloorPlanCollector.init"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.init">[docs]</a>    <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.add_new_episode"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.add_new_episode">[docs]</a>    <span class="k">def</span> <span class="nf">add_new_episode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eid</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">eid</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">:</span>
+            <span class="c1"># self.info(&quot;continue current episode: {}&quot;.format(eid))</span>
+            <span class="k">return</span>
+
+        <span class="c1"># self.info(&quot;add new episode in floor plan: {}&quot;.format(eid))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="o">=</span> <span class="n">eid</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;found existing episode: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> floor paths loaded&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> navigation to kitchen paths loaded&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span><span class="p">)))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.extend"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.extend">[docs]</a>    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fps</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">fp</span> <span class="ow">in</span> <span class="n">fps</span><span class="p">:</span>
+            <span class="n">p1</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">p2</span> <span class="o">=</span> <span class="n">fp</span>
+            <span class="k">if</span> <span class="n">p1</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">p1</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">d</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">p1</span><span class="p">]:</span>
+                <span class="c1"># self.info(&quot;find new path: {} + {} -&gt; {}&quot;.format(p1, d, p2))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">p1</span><span class="p">][</span><span class="n">d</span><span class="p">]</span> <span class="o">=</span> <span class="n">p2</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">p2</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">p1</span><span class="p">][</span><span class="n">d</span><span class="p">]:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;mismatch floor plan: </span><span class="si">{}</span><span class="s2"> + </span><span class="si">{}</span><span class="s2"> -&gt; </span><span class="si">{}</span><span class="s2">,&quot;</span>
+                        <span class="s2">&quot; change to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                            <span class="n">p1</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">p1</span><span class="p">][</span><span class="n">d</span><span class="p">],</span> <span class="n">p2</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.get_map"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.get_map">[docs]</a>    <span class="k">def</span> <span class="nf">get_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">room</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">room</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">room</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">[</span><span class="n">room</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.route_to_room"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.route_to_room">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">route_to_room</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ss</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">visited</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        find the fastest route to a target room from a given room using DFS.</span>
+<span class="sd">        :param ss: start room</span>
+<span class="sd">        :param tt: target room</span>
+<span class="sd">        :param fp: floor plan</span>
+<span class="sd">        :param visited: initialized by []</span>
+<span class="sd">        :return: directions, rooms</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">ss</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fp</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">ss</span> <span class="o">==</span> <span class="n">tt</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">d</span><span class="p">,</span> <span class="n">room</span> <span class="ow">in</span> <span class="n">fp</span><span class="p">[</span><span class="n">ss</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">room</span> <span class="o">!=</span> <span class="n">ss</span> <span class="ow">and</span> <span class="n">room</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">visited</span><span class="p">:</span>
+                <span class="n">search_level</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">route_to_room</span><span class="p">(</span>
+                    <span class="n">room</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">visited</span> <span class="o">+</span> <span class="p">[</span><span class="n">ss</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">search_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">+</span> <span class="n">search_level</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="n">room</span><span class="p">]</span> <span class="o">+</span> <span class="n">search_level</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.route_to_kitchen"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.route_to_kitchen">[docs]</a>    <span class="k">def</span> <span class="nf">route_to_kitchen</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">room</span><span class="p">):</span>
+        <span class="n">route</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">route_to_room</span><span class="p">(</span>
+            <span class="n">ss</span><span class="o">=</span><span class="n">room</span><span class="p">,</span> <span class="n">tt</span><span class="o">=</span><span class="s2">&quot;kitchen&quot;</span><span class="p">,</span> <span class="n">fp</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span><span class="p">,</span> <span class="n">visited</span><span class="o">=</span><span class="p">[])</span>
+        <span class="k">if</span> <span class="n">route</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">route</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">route</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.save_fps"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.save_fps">[docs]</a>    <span class="k">def</span> <span class="nf">save_fps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_fp</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_eid</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_navi_to_kitchen</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">savez</span><span class="p">(</span>
+            <span class="n">path</span><span class="p">,</span> <span class="n">fp_base</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="o">.</span><span class="n">items</span><span class="p">()),</span>
+            <span class="n">navi_base</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span></div>
+
+<div class="viewcode-block" id="FloorPlanCollector.load_fps"><a class="viewcode-back" href="../../deeptextworld.html#deeptextworld.floor_plan.FloorPlanCollector.load_fps">[docs]</a>    <span class="k">def</span> <span class="nf">load_fps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="n">saved</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">allow_pickle</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">fp_base</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">saved</span><span class="p">[</span><span class="s2">&quot;fp_base&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fp_base</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">fp_base</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">navi_base</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">saved</span><span class="p">[</span><span class="s2">&quot;navi_base&quot;</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">navi_base</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">navi_base</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;loading navi failed: </span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

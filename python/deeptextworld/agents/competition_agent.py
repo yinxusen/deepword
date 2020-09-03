@@ -6,17 +6,21 @@ from deeptextworld.agents.utils import ACT, ActionDesc, ACT_TYPE
 
 
 class CompetitionAgent(BaseAgent):
+    """
+    The agent built for participant the TextWorld competition.
+    Include action filtering and rule based policies.
+    """
     def __init__(self, hp, model_dir):
         super(CompetitionAgent, self).__init__(hp, model_dir)
         self._theme_words = {}
         self._see_cookbook = False
 
     @classmethod
-    def contain_words(cls, sentence, words):
+    def _contain_words(cls, sentence, words):
         return any(map(lambda w: w in sentence, words))
 
     @classmethod
-    def get_theme_words(cls, recipe):
+    def _get_theme_words(cls, recipe):
         theme_regex = r".*Ingredients:<\|>(.*)<\|>Directions.*"
         theme_words_search = re.search(
             theme_regex, recipe.replace("\n", "<|>"))
@@ -29,21 +33,21 @@ class CompetitionAgent(BaseAgent):
             theme_words = None
         return theme_words
 
-    def contain_theme_words(self, actions):
+    def _contain_theme_words(self, actions):
         if not self._theme_words[self.game_id]:
             self.debug("no theme word found, use all actions")
             return actions, []
         contained = []
         others = []
         for a in actions:
-            if self.contain_words(a, self._theme_words[self.game_id]):
+            if self._contain_words(a, self._theme_words[self.game_id]):
                 contained.append(a)
             else:
                 others.append(a)
 
         return contained, others
 
-    def filter_admissible_actions(self, admissible_actions):
+    def _filter_admissible_actions(self, admissible_actions):
         """
         Filter unnecessary actions.
         TODO: current filtering logic has problem. e.g. when there is no
@@ -54,7 +58,7 @@ class CompetitionAgent(BaseAgent):
         :param admissible_actions: raw action given by the game.
         :return:
         """
-        contained, others = self.contain_theme_words(admissible_actions)
+        contained, others = self._contain_theme_words(admissible_actions)
         actions = [ACT.inventory, ACT.look] + contained
         actions = list(filter(lambda c: not c.startswith("examine"), actions))
         actions = list(filter(lambda c: not c.startswith("close"), actions))
@@ -124,7 +128,7 @@ class CompetitionAgent(BaseAgent):
     def _prepare_actions(self, admissible_actions: List[str]) -> List[str]:
         actions = super(CompetitionAgent, self)._prepare_actions(
             admissible_actions)
-        actions = self.filter_admissible_actions(actions)
+        actions = self._filter_admissible_actions(actions)
         return actions
 
     def _start_episode_impl(self, obs, infos):
@@ -140,7 +144,7 @@ class CompetitionAgent(BaseAgent):
         if (not self._theme_words[self.game_id]
                 and self._last_action is not None
                 and self._last_action.action == ACT.examine_cookbook):
-            self._theme_words[self.game_id] = self.get_theme_words(master)
+            self._theme_words[self.game_id] = self._get_theme_words(master)
             self.debug(
                 "get theme words: {}".format(self._theme_words[self.game_id]))
 

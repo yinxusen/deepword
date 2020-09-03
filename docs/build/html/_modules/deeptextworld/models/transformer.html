@@ -1,0 +1,760 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.models.transformer &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.models.transformer</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Copied from https://www.tensorflow.org/beta/tutorials/text/transformer</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.models.utils</span> <span class="k">import</span> <span class="n">positional_encoding</span>
+
+
+<div class="viewcode-block" id="create_padding_mask"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.create_padding_mask">[docs]</a><span class="k">def</span> <span class="nf">create_padding_mask</span><span class="p">(</span><span class="n">seq</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Padding value should be 0.</span>
+<span class="sd">    :param seq:</span>
+<span class="sd">    :return:</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">seq</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">seq</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="c1"># add extra dimensions to add the padding</span>
+    <span class="c1"># to the attention logits.</span>
+    <span class="c1"># (batch_size, 1, 1, seq_len)</span>
+    <span class="k">return</span> <span class="n">seq</span><span class="p">[:,</span> <span class="n">tf</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span></div>
+
+
+<div class="viewcode-block" id="create_look_ahead_mask"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.create_look_ahead_mask">[docs]</a><span class="k">def</span> <span class="nf">create_look_ahead_mask</span><span class="p">(</span><span class="n">size</span><span class="p">):</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">tf</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">band_part</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">size</span><span class="p">,</span> <span class="n">size</span><span class="p">)),</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="c1"># (seq_len, seq_len)</span>
+    <span class="k">return</span> <span class="n">mask</span></div>
+
+
+<div class="viewcode-block" id="create_decode_masks"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.create_decode_masks">[docs]</a><span class="k">def</span> <span class="nf">create_decode_masks</span><span class="p">(</span><span class="n">tar</span><span class="p">):</span>
+    <span class="c1"># Used in the 1st attention block in the decoder.</span>
+    <span class="c1"># It is used to pad and mask future tokens in the input received by</span>
+    <span class="c1"># the decoder.</span>
+    <span class="n">look_ahead_mask</span> <span class="o">=</span> <span class="n">create_look_ahead_mask</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">tar</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">dec_target_padding_mask</span> <span class="o">=</span> <span class="n">create_padding_mask</span><span class="p">(</span><span class="n">tar</span><span class="p">)</span>
+    <span class="n">combined_mask</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">dec_target_padding_mask</span><span class="p">,</span> <span class="n">look_ahead_mask</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">combined_mask</span></div>
+
+
+<div class="viewcode-block" id="scaled_dot_product_attention"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.scaled_dot_product_attention">[docs]</a><span class="k">def</span> <span class="nf">scaled_dot_product_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calculate the attention weights.</span>
+<span class="sd">    q, k, v must have matching leading dimensions.</span>
+<span class="sd">    k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.</span>
+<span class="sd">    The mask has different shapes depending on its type(padding or look ahead)</span>
+<span class="sd">    but it must be broadcastable for addition.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      q: query shape == (..., seq_len_q, depth)</span>
+<span class="sd">      k: key shape == (..., seq_len_k, depth)</span>
+<span class="sd">      v: value shape == (..., seq_len_v, depth_v)</span>
+<span class="sd">      mask: Float tensor with shape broadcastable</span>
+<span class="sd">            to (..., seq_len_q, seq_len_k). Defaults to None.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">      output (a.k.a. context vectors), scaled_attention_logits</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># (..., seq_len_q, seq_len_k)</span>
+    <span class="n">matmul_qk</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">transpose_b</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># scale matmul_qk</span>
+    <span class="n">dk</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">k</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">scaled_attention_logits</span> <span class="o">=</span> <span class="n">matmul_qk</span> <span class="o">/</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dk</span><span class="p">)</span>
+
+    <span class="c1"># add the mask to the scaled tensor.</span>
+    <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">scaled_attention_logits</span> <span class="o">+=</span> <span class="p">(</span><span class="n">mask</span> <span class="o">*</span> <span class="o">-</span><span class="mf">1e9</span><span class="p">)</span>
+
+    <span class="c1"># (..., seq_len_q, seq_len_k)</span>
+    <span class="n">attention_weights</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">scaled_attention_logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># (..., seq_len_q, depth_v)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">attention_weights</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">scaled_attention_logits</span></div>
+
+
+<div class="viewcode-block" id="point_wise_feed_forward_network"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.point_wise_feed_forward_network">[docs]</a><span class="k">def</span> <span class="nf">point_wise_feed_forward_network</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">dff</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">Sequential</span><span class="p">([</span>
+        <span class="c1"># (batch_size, seq_len, dff)</span>
+        <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">dff</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;relu&#39;</span><span class="p">),</span>
+        <span class="c1"># (batch_size, seq_len, d_model)</span>
+        <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">d_model</span><span class="p">)</span>
+    <span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="MultiHeadAttention"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.MultiHeadAttention">[docs]</a><span class="k">class</span> <span class="nc">MultiHeadAttention</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">MultiHeadAttention</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_heads</span> <span class="o">=</span> <span class="n">num_heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">d_model</span> <span class="o">=</span> <span class="n">d_model</span>
+
+        <span class="k">assert</span> <span class="n">d_model</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_heads</span> <span class="o">==</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">depth</span> <span class="o">=</span> <span class="n">d_model</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_heads</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">wq</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wk</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wv</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">d_model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dense</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">d_model</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MultiHeadAttention.split_heads"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.MultiHeadAttention.split_heads">[docs]</a>    <span class="k">def</span> <span class="nf">split_heads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Split the last dimension into (num_heads, depth).</span>
+<span class="sd">        Transpose the result such that the shape is</span>
+<span class="sd">         (batch_size, num_heads, seq_len, depth)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_heads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">depth</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">perm</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="MultiHeadAttention.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.MultiHeadAttention.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">q</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># (batch_size, seq_len, d_model)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wq</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wk</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wv</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+        <span class="c1"># (batch_size, num_heads, seq_len_q, depth)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_heads</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_heads</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_heads</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+
+        <span class="c1"># (batch_size, num_heads, seq_len_q, depth)</span>
+        <span class="c1"># (batch_size, num_heads, seq_len_q, seq_len_k)</span>
+        <span class="p">(</span><span class="n">scaled_attention</span><span class="p">,</span> <span class="n">scaled_attention_logits</span>
+         <span class="p">)</span> <span class="o">=</span> <span class="n">scaled_dot_product_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+
+        <span class="c1"># (batch_size, seq_len_q, seq_len_k)</span>
+        <span class="n">attn_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">scaled_attention_logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># (batch_size, seq_len_q, num_heads, depth)</span>
+        <span class="n">scaled_attention</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">scaled_attention</span><span class="p">,</span> <span class="n">perm</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+        <span class="c1"># (batch_size, seq_len_q, d_model)</span>
+        <span class="n">concat_attention</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="n">scaled_attention</span><span class="p">,</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">))</span>
+        <span class="c1"># (batch_size, seq_len_q, d_model)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">concat_attention</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">attn_logits</span></div></div>
+
+
+<div class="viewcode-block" id="EncoderLayer"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.EncoderLayer">[docs]</a><span class="k">class</span> <span class="nc">EncoderLayer</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">EncoderLayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mha</span> <span class="o">=</span> <span class="n">MultiHeadAttention</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ffn</span> <span class="o">=</span> <span class="n">point_wise_feed_forward_network</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">dff</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm1</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">LayerNormalization</span><span class="p">(</span><span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm2</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">LayerNormalization</span><span class="p">(</span><span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout1</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout2</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+
+<div class="viewcode-block" id="EncoderLayer.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.EncoderLayer.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+        <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="n">attn_output</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mha</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+        <span class="n">attn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout1</span><span class="p">(</span><span class="n">attn_output</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="n">out1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm1</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn_output</span><span class="p">)</span>
+
+        <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="n">ffn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ffn</span><span class="p">(</span><span class="n">out1</span><span class="p">)</span>
+        <span class="n">ffn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout2</span><span class="p">(</span><span class="n">ffn_output</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="n">out2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm2</span><span class="p">(</span><span class="n">out1</span> <span class="o">+</span> <span class="n">ffn_output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out2</span></div></div>
+
+
+<div class="viewcode-block" id="DecoderLayer"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.DecoderLayer">[docs]</a><span class="k">class</span> <span class="nc">DecoderLayer</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DecoderLayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mha1</span> <span class="o">=</span> <span class="n">MultiHeadAttention</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mha2</span> <span class="o">=</span> <span class="n">MultiHeadAttention</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ffn</span> <span class="o">=</span> <span class="n">point_wise_feed_forward_network</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">dff</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm1</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">LayerNormalization</span><span class="p">(</span><span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm2</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">LayerNormalization</span><span class="p">(</span><span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm3</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">LayerNormalization</span><span class="p">(</span><span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout1</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout2</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout3</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DecoderLayer.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.DecoderLayer.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">look_ahead_mask</span><span class="p">,</span> <span class="n">padding_mask</span><span class="p">):</span>
+        <span class="c1"># enc_output.shape == (batch_size, input_seq_len, d_model)</span>
+
+        <span class="c1"># (batch_size, target_seq_len, d_model)</span>
+        <span class="n">attn1</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mha1</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">look_ahead_mask</span><span class="p">)</span>
+        <span class="n">attn1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout1</span><span class="p">(</span><span class="n">attn1</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="n">out1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm1</span><span class="p">(</span><span class="n">attn1</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span>
+
+        <span class="c1"># attention weights from decoder output to encoder outputs</span>
+        <span class="c1"># attn_logits: (batch_size, target_seq_len, enc_output_seq_len)</span>
+        <span class="c1"># attn2: (batch_size, target_seq_len, d_model)</span>
+        <span class="n">attn2</span><span class="p">,</span> <span class="n">attn_logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mha2</span><span class="p">(</span>
+            <span class="n">enc_output</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">out1</span><span class="p">,</span> <span class="n">padding_mask</span><span class="p">)</span>
+        <span class="n">attn2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout2</span><span class="p">(</span><span class="n">attn2</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="c1"># (batch_size, target_seq_len, d_model)</span>
+        <span class="n">out2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm2</span><span class="p">(</span><span class="n">attn2</span> <span class="o">+</span> <span class="n">out1</span><span class="p">)</span>
+
+        <span class="c1"># (batch_size, target_seq_len, d_model)</span>
+        <span class="n">ffn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ffn</span><span class="p">(</span><span class="n">out2</span><span class="p">)</span>
+        <span class="n">ffn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout3</span><span class="p">(</span><span class="n">ffn_output</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="c1"># (batch_size, target_seq_len, d_model)</span>
+        <span class="n">out3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm3</span><span class="p">(</span><span class="n">ffn_output</span> <span class="o">+</span> <span class="n">out2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">out3</span><span class="p">,</span> <span class="n">attn_logits</span></div></div>
+
+
+<div class="viewcode-block" id="Encoder"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Encoder">[docs]</a><span class="k">class</span> <span class="nc">Encoder</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">input_vocab_size</span><span class="p">,</span>
+            <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Encoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">d_model</span> <span class="o">=</span> <span class="n">d_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="n">input_vocab_size</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_encoding</span> <span class="o">=</span> <span class="n">positional_encoding</span><span class="p">(</span><span class="n">input_vocab_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seg_embeddings</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">tf</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">)],</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;seg_embeddings&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">enc_layers</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">EncoderLayer</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_layers</span><span class="p">)]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout_rate</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Encoder.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Encoder.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">x_seg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">create_padding_mask</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="n">seq_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="c1"># adding embedding and position encoding.</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="n">x</span> <span class="o">*=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+        <span class="n">x</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_encoding</span><span class="p">[:,</span> <span class="p">:</span><span class="n">seq_len</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="k">if</span> <span class="n">x_seg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">+=</span> <span class="n">tf</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">embedding_lookup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg_embeddings</span><span class="p">,</span> <span class="n">x_seg</span><span class="p">)</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="p">):</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">enc_layers</span><span class="p">[</span><span class="n">i</span><span class="p">](</span><span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+        <span class="c1"># (batch_size, input_seq_len, d_model)</span>
+        <span class="k">return</span> <span class="n">x</span></div></div>
+
+
+<div class="viewcode-block" id="get_sparse_idx_tar_for_copy"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.get_sparse_idx_tar_for_copy">[docs]</a><span class="k">def</span> <span class="nf">get_sparse_idx_tar_for_copy</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">src_seq_len</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">):</span>
+    <span class="c1"># (target_seq_len)</span>
+    <span class="c1"># [0, 1, 2, ..., target_seq_len-1]</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">target_seq_len</span><span class="p">)</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">idx_tar</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># (target_seq_len, src_seq_len)</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">idx_tar</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">src_seq_len</span><span class="p">])</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">idx_tar</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="c1"># (batch_size, target_seq_len, src_seq_len)</span>
+    <span class="c1"># e.g. (2, 3, 2), we have</span>
+    <span class="c1"># [[[0, 0],</span>
+    <span class="c1">#   [1, 1],</span>
+    <span class="c1">#   [2, 2]],</span>
+    <span class="c1">#  [[0, 0],</span>
+    <span class="c1">#   [1, 1],</span>
+    <span class="c1">#   [2, 2]]]</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">idx_tar</span><span class="p">,</span> <span class="p">[</span><span class="n">batch_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">idx_tar</span></div>
+
+
+<div class="viewcode-block" id="get_sparse_idx_src_for_copy"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.get_sparse_idx_src_for_copy">[docs]</a><span class="k">def</span> <span class="nf">get_sparse_idx_src_for_copy</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">):</span>
+    <span class="c1"># e.g. enc_x: [[a, a], [b, c]], we have</span>
+    <span class="c1"># [[[a, a],</span>
+    <span class="c1">#   [a, a],</span>
+    <span class="c1">#   [a, a]],</span>
+    <span class="c1">#  [[b, c],</span>
+    <span class="c1">#   [b, c],</span>
+    <span class="c1">#   [b, c]]]</span>
+    <span class="n">idx_src</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">idx_src</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">idx_src</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">idx_src</span></div>
+
+
+<div class="viewcode-block" id="get_sparse_idx_for_copy"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.get_sparse_idx_for_copy">[docs]</a><span class="k">def</span> <span class="nf">get_sparse_idx_for_copy</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">):</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">src</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">src_seq_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">src</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">idx_src</span> <span class="o">=</span> <span class="n">get_sparse_idx_src_for_copy</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">)</span>
+    <span class="n">idx_tar</span> <span class="o">=</span> <span class="n">get_sparse_idx_tar_for_copy</span><span class="p">(</span>
+        <span class="n">batch_size</span><span class="p">,</span> <span class="n">src_seq_len</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="p">)</span>
+    <span class="n">idx_tar_src</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">idx_tar</span><span class="p">,</span> <span class="n">idx_src</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">idx_tar_src</span></div>
+
+
+<div class="viewcode-block" id="Decoder"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Decoder">[docs]</a><span class="k">class</span> <span class="nc">Decoder</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">tgt_vocab_size</span><span class="p">,</span>
+            <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">with_pointer</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Decoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">d_model</span> <span class="o">=</span> <span class="n">d_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tgt_vocab_size</span> <span class="o">=</span> <span class="n">tgt_vocab_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">with_pointer</span> <span class="o">=</span> <span class="n">with_pointer</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_encoding</span> <span class="o">=</span> <span class="n">positional_encoding</span><span class="p">(</span><span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="n">d_model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dec_layers</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">DecoderLayer</span><span class="p">(</span><span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_layers</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout_rate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logit_gen_layer</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span><span class="n">units</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">final_layer</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">Dense</span><span class="p">(</span>
+            <span class="n">units</span><span class="o">=</span><span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Decoder.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Decoder.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">enc_x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span>
+            <span class="n">look_ahead_mask</span><span class="p">,</span> <span class="n">padding_mask</span><span class="p">,</span> <span class="n">tj_master_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        decode with pointer</span>
+<span class="sd">        :param x: decoder input</span>
+<span class="sd">        :param enc_x: encoder input</span>
+<span class="sd">        :param enc_output: encoder encoded result</span>
+<span class="sd">        :param training:</span>
+<span class="sd">        :param look_ahead_mask:</span>
+<span class="sd">        :param padding_mask:</span>
+<span class="sd">        :param tj_master_mask: select master from tj</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">seq_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">attention_logits</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">*=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_model</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+        <span class="n">x</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_encoding</span><span class="p">[:,</span> <span class="p">:</span><span class="n">seq_len</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">raw_x</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span><span class="p">):</span>
+            <span class="n">x</span><span class="p">,</span> <span class="n">attn_logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dec_layers</span><span class="p">[</span><span class="n">i</span><span class="p">](</span>
+                <span class="n">x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">look_ahead_mask</span><span class="p">,</span> <span class="n">padding_mask</span><span class="p">)</span>
+            <span class="n">attention_logits</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">attn_logits</span><span class="p">)</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="n">gen_logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">final_layer</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">gen_logits</span> <span class="o">=</span> <span class="n">gen_logits</span> <span class="o">-</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_logsumexp</span><span class="p">(</span>
+            <span class="n">gen_logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">idx_tar_src</span> <span class="o">=</span> <span class="n">get_sparse_idx_for_copy</span><span class="p">(</span><span class="n">enc_x</span><span class="p">,</span> <span class="n">target_seq_len</span><span class="o">=</span><span class="n">seq_len</span><span class="p">)</span>
+        <span class="c1"># (batch_size, target_seq_len, src_seq_len)</span>
+        <span class="n">attn_weights</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">attention_logits</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">tj_master_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attn_weights</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span>
+                <span class="n">attn_weights</span><span class="p">,</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">tj_master_mask</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+
+        <span class="c1"># [batch_size, target_seq_len, tgt_vocab_size]</span>
+        <span class="n">copy_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">map_fn</span><span class="p">(</span>
+            <span class="n">fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">scatter_nd</span><span class="p">(</span>
+                <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="n">seq_len</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tgt_vocab_size</span><span class="p">]),</span>
+            <span class="n">elems</span><span class="o">=</span><span class="p">(</span><span class="n">idx_tar_src</span><span class="p">,</span> <span class="n">attn_weights</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-10</span><span class="p">)</span>
+        <span class="n">copy_logits</span> <span class="o">=</span> <span class="n">copy_logits</span> <span class="o">-</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_logsumexp</span><span class="p">(</span>
+            <span class="n">copy_logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># the combined features is different with LSTM-PGN</span>
+        <span class="c1"># LSTM-PGN uses three features, decoder input, decoder state, and</span>
+        <span class="c1"># context vectors. but for transformer, the decoder state and context</span>
+        <span class="c1"># vectors are highly correlated, so we use one of them.</span>
+        <span class="n">combined_features</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">raw_x</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">combined_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">combined_features</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">)</span>
+        <span class="c1"># (batch_size, dec_t, 1)</span>
+        <span class="n">logit_gen</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logit_gen_layer</span><span class="p">(</span><span class="n">combined_features</span><span class="p">)</span>
+        <span class="c1"># normalized logit of gen</span>
+        <span class="n">n_logit_gen</span> <span class="o">=</span> <span class="o">-</span><span class="n">tf</span><span class="o">.</span><span class="n">reduce_logsumexp</span><span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">tf</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">logit_gen</span><span class="p">),</span> <span class="o">-</span><span class="n">logit_gen</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">n_logit_copy</span> <span class="o">=</span> <span class="o">-</span><span class="n">logit_gen</span> <span class="o">+</span> <span class="n">n_logit_gen</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">with_pointer</span><span class="p">:</span>
+            <span class="n">total_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_logsumexp</span><span class="p">(</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">n_logit_gen</span> <span class="o">+</span> <span class="n">gen_logits</span><span class="p">,</span> <span class="n">n_logit_copy</span> <span class="o">+</span> <span class="n">copy_logits</span><span class="p">],</span>
+                    <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+                <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">total_logits</span> <span class="o">=</span> <span class="n">gen_logits</span>
+
+        <span class="k">return</span> <span class="n">total_logits</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">n_logit_gen</span><span class="p">),</span> <span class="n">gen_logits</span><span class="p">,</span> <span class="n">copy_logits</span></div></div>
+
+
+<div class="viewcode-block" id="Transformer"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer">[docs]</a><span class="k">class</span> <span class="nc">Transformer</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">input_vocab_size</span><span class="p">,</span>
+            <span class="n">target_vocab_size</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">with_pointer</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Transformer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span>
+            <span class="n">num_layers</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">input_vocab_size</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span> <span class="o">=</span> <span class="n">Decoder</span><span class="p">(</span>
+            <span class="n">num_layers</span><span class="p">,</span> <span class="n">d_model</span><span class="p">,</span> <span class="n">num_heads</span><span class="p">,</span> <span class="n">dff</span><span class="p">,</span> <span class="n">target_vocab_size</span><span class="p">,</span>
+            <span class="n">dropout_rate</span><span class="p">,</span> <span class="n">with_pointer</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Transformer.call"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">tar</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">tj_master_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">enc_padding_mask</span> <span class="o">=</span> <span class="n">create_padding_mask</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+        <span class="n">dec_padding_mask</span> <span class="o">=</span> <span class="n">enc_padding_mask</span>
+        <span class="c1"># (batch_size, inp_seq_len, d_model)</span>
+        <span class="n">enc_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">enc_padding_mask</span><span class="p">,</span> <span class="n">x_seg</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">look_ahead_mask</span> <span class="o">=</span> <span class="n">create_decode_masks</span><span class="p">(</span><span class="n">tar</span><span class="p">)</span>
+        <span class="n">final_output</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">,</span> <span class="n">gen_logits</span><span class="p">,</span> <span class="n">copy_logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span><span class="p">(</span>
+            <span class="n">tar</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">look_ahead_mask</span><span class="p">,</span> <span class="n">dec_padding_mask</span><span class="p">,</span>
+            <span class="n">tj_master_mask</span><span class="o">=</span><span class="n">tj_master_mask</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">final_output</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">,</span> <span class="n">gen_logits</span><span class="p">,</span> <span class="n">copy_logits</span></div>
+
+<div class="viewcode-block" id="Transformer.categorical_without_replacement"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.categorical_without_replacement">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">categorical_without_replacement</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">logits</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Courtesy of https://github.com/tensorflow/tensorflow/issues/\</span>
+<span class="sd">        9260#issuecomment-437875125</span>
+<span class="sd">        also cite here:</span>
+<span class="sd">        @misc{vieira2014gumbel,</span>
+<span class="sd">            title = {Gumbel-max trick and weighted reservoir sampling},</span>
+<span class="sd">            author = {Tim Vieira},</span>
+<span class="sd">            url = {http://timvieira.github.io/blog/post/2014/08/01/\</span>
+<span class="sd">            gumbel-max-trick-and-weighted-reservoir-sampling/},</span>
+<span class="sd">            year = {2014}</span>
+<span class="sd">        }</span>
+<span class="sd">        Notice that the logits represent unnormalized log probabilities,</span>
+<span class="sd">        in the citation above, there is no need to normalized them first to add</span>
+<span class="sd">        the Gumbel random variant, which surprises me! since I thought it should</span>
+<span class="sd">        be `logits - tf.reduce_logsumexp(logits) + z`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="o">-</span><span class="n">tf</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="o">-</span><span class="n">tf</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">random_uniform</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">logits</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">top_k</span><span class="p">(</span><span class="n">logits</span> <span class="o">+</span> <span class="n">z</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">indices</span></div>
+
+<div class="viewcode-block" id="Transformer.categorical_with_replacement"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.categorical_with_replacement">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">categorical_with_replacement</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">logits</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">categorical</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">num_samples</span><span class="o">=</span><span class="n">k</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Transformer.dec_step"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.dec_step">[docs]</a>    <span class="k">def</span> <span class="nf">dec_step</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span>
+            <span class="n">enc_x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">tj_master_mask</span><span class="p">,</span>
+            <span class="n">dec_padding_mask</span><span class="p">,</span> <span class="n">padding_logit_mask</span><span class="p">,</span> <span class="n">eos_logit_mask</span><span class="p">,</span>
+            <span class="n">batch_size</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="p">,</span> <span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="n">eos_id</span><span class="p">,</span>
+            <span class="n">beam_size</span><span class="p">,</span> <span class="n">use_greedy</span><span class="p">,</span> <span class="n">temperature</span><span class="p">,</span>
+            <span class="n">inc_tar</span><span class="p">,</span> <span class="n">inc_continue</span><span class="p">,</span> <span class="n">inc_logits</span><span class="p">,</span> <span class="n">inc_valid_len</span><span class="p">,</span> <span class="n">inc_p_gen</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        decode one step with beam search</span>
+<span class="sd">        given inc_tar as the current decoded target sequence</span>
+<span class="sd">        (batch_size * beam_size), first decode one step with decoder to get</span>
+<span class="sd">        decoded_logits.</span>
+<span class="sd">        then mask the decoded_logits:</span>
+<span class="sd">          1) if continue to decode (i.e. eos never reached) and current time</span>
+<span class="sd">             reach the max_tar_len, then only EOS is allowed to choose;</span>
+<span class="sd">          2) if not continue to decode, only PAD is allowed to choose;</span>
+<span class="sd">          3) default, we don&#39;t mask the decoded_logits.</span>
+<span class="sd">        After get predicted_id, either by sampling method or greedy method,</span>
+<span class="sd">        we compute 1) beam_id and 2) token_id from predicted_id.</span>
+<span class="sd">        beam_id indicates which beam to choose, token_id indicates under that</span>
+<span class="sd">        beam, which token to choose.</span>
+
+<span class="sd">        for loop variables, inc_tar, inc_continue, inc_logits, inc_valid_len,</span>
+<span class="sd">        and inc_p_gen, we first select rows according to beam_id, then pad</span>
+<span class="sd">        the token_id related info to the end. e.g. given beam_size = 2,</span>
+<span class="sd">        batch_size = 2, we have inc_tar:</span>
+
+<span class="sd">        [[[1, 2, 3],</span>
+<span class="sd">          [2, 3, 4]],  # --&gt; this beam row will be deleted</span>
+<span class="sd">         [[9, 8, 7],</span>
+<span class="sd">          [8, 7, 6]]]</span>
+<span class="sd">        if beam_id = [[0, 0], [0, 1]], then we choose [1, 2, 3] twice, and</span>
+<span class="sd">        [9, 8, 7] once, and [8, 7, 6] once, then make the inc_tar to be</span>
+<span class="sd">        [[[1, 2, 3],</span>
+<span class="sd">          [1, 2, 3]],</span>
+<span class="sd">         [[9, 8, 7],</span>
+<span class="sd">          [8, 7, 6]]]</span>
+<span class="sd">        then pad new token_id to the end.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">combined_mask</span> <span class="o">=</span> <span class="n">create_decode_masks</span><span class="p">(</span><span class="n">inc_tar</span><span class="p">)</span>
+        <span class="c1"># decoded_logits:</span>
+        <span class="c1"># (batch_size * beam_size, target_seq_len, tgt_vocab_size)</span>
+        <span class="c1"># p_gen: (batch_size * beam_size, target_seq_len, 1)</span>
+        <span class="n">decoded_logits</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span><span class="p">(</span>
+            <span class="n">inc_tar</span><span class="p">,</span> <span class="n">enc_x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">combined_mask</span><span class="p">,</span>
+            <span class="n">dec_padding_mask</span><span class="p">,</span> <span class="n">tj_master_mask</span><span class="o">=</span><span class="n">tj_master_mask</span><span class="p">)</span>
+        <span class="n">logit_mask</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">map_fn</span><span class="p">(</span>
+            <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">case</span><span class="p">(</span>
+                <span class="p">[(</span><span class="n">tf</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">tf</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="p">)),</span>
+                  <span class="k">lambda</span><span class="p">:</span> <span class="n">eos_logit_mask</span><span class="p">),</span>
+                 <span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">logical_not</span><span class="p">(</span><span class="n">c</span><span class="p">),</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">padding_logit_mask</span><span class="p">)],</span>
+                <span class="n">default</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">padding_logit_mask</span><span class="p">),</span>
+                <span class="n">exclusive</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">inc_continue</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="c1"># (batch_size * beam_size, tgt_vocab_size)</span>
+        <span class="n">curr_logits</span> <span class="o">=</span> <span class="n">decoded_logits</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">curr_p_gen</span> <span class="o">=</span> <span class="n">p_gen</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">masked_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">curr_logits</span> <span class="o">+</span> <span class="n">logit_mask</span><span class="p">,</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="c1"># for the first token decoding, the beam size is 1.</span>
+        <span class="n">beam_tgt_len</span> <span class="o">=</span> <span class="n">tgt_vocab_size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="n">time</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">beam_size</span><span class="p">)</span>
+
+        <span class="c1"># notice that when use greedy, choose the tokens that maximizes</span>
+        <span class="c1"># \sum p(t_i), while for not using greedy, choose the tokens ~ p(t)</span>
+        <span class="c1"># predicted_id: (batch_size, beam_size)</span>
+        <span class="n">predicted_id</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span>
+            <span class="n">use_greedy</span><span class="p">,</span>
+            <span class="n">true_fn</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">top_k</span><span class="p">(</span>
+                <span class="nb">input</span><span class="o">=</span><span class="n">masked_logits</span><span class="p">[:,</span> <span class="p">:</span><span class="n">beam_tgt_len</span><span class="p">],</span>
+                <span class="n">k</span><span class="o">=</span><span class="n">beam_size</span><span class="p">)[</span><span class="mi">1</span><span class="p">],</span>
+            <span class="n">false_fn</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">categorical_without_replacement</span><span class="p">(</span>
+                <span class="n">logits</span><span class="o">=</span><span class="n">masked_logits</span><span class="p">[:,</span> <span class="p">:</span><span class="n">beam_tgt_len</span><span class="p">]</span> <span class="o">/</span> <span class="n">temperature</span><span class="p">,</span>
+                <span class="n">k</span><span class="o">=</span><span class="n">beam_size</span><span class="p">))</span>
+
+        <span class="c1"># (batch_size, beam_size)</span>
+        <span class="n">beam_id</span> <span class="o">=</span> <span class="n">predicted_id</span> <span class="o">//</span> <span class="n">tgt_vocab_size</span>
+        <span class="c1"># (batch_size * beam_size, 1)</span>
+        <span class="n">token_id</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="n">predicted_id</span> <span class="o">%</span> <span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="p">(</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="c1"># (batch_size * beam_size, )</span>
+        <span class="n">gather_beam_idx</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">beam_size</span> <span class="o">+</span> <span class="n">beam_id</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="p">))</span>
+        <span class="c1"># create inc tensors according to which beam to choose</span>
+        <span class="n">inc_tar_beam</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">inc_tar</span><span class="p">,</span> <span class="n">gather_beam_idx</span><span class="p">)</span>
+        <span class="n">inc_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">inc_tar_beam</span><span class="p">,</span> <span class="n">token_id</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">inc_continue_beam</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">inc_continue</span><span class="p">,</span> <span class="n">gather_beam_idx</span><span class="p">)</span>
+        <span class="n">inc_continue</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">not_equal</span><span class="p">(</span><span class="n">token_id</span><span class="p">,</span> <span class="n">eos_id</span><span class="p">),</span> <span class="n">inc_continue_beam</span><span class="p">)</span>
+        <span class="n">inc_valid_len_beam</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">inc_valid_len</span><span class="p">,</span> <span class="n">gather_beam_idx</span><span class="p">)</span>
+        <span class="n">inc_valid_len</span> <span class="o">=</span> <span class="n">inc_valid_len_beam</span> <span class="o">+</span> <span class="n">tf</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span>
+            <span class="n">inc_continue</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+        <span class="n">inc_p_gen_beam</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">inc_p_gen</span><span class="p">,</span> <span class="n">gather_beam_idx</span><span class="p">)</span>
+        <span class="n">inc_p_gen</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">inc_p_gen_beam</span><span class="p">,</span> <span class="n">curr_p_gen</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">inc_logits_beam</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">inc_logits</span><span class="p">,</span> <span class="n">gather_beam_idx</span><span class="p">)</span>
+        <span class="n">inc_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">inc_logits_beam</span><span class="p">,</span> <span class="n">curr_logits</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">time</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">inc_tar</span><span class="p">,</span> <span class="n">inc_continue</span><span class="p">,</span> <span class="n">inc_logits</span><span class="p">,</span> <span class="n">inc_valid_len</span><span class="p">,</span>
+            <span class="n">inc_p_gen</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Transformer.token_logit_masking"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.token_logit_masking">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">token_logit_masking</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">token_id</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate logits to choose the token_id. e.g. with vocab_size = 10,</span>
+<span class="sd">        token_id = 0, we have</span>
+<span class="sd">        [  0., -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf]</span>
+<span class="sd">        plus this mask with normal logits, only token_id=0 can be chose</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">token_id</span> <span class="o">&lt;</span> <span class="n">vocab_size</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">token_id</span><span class="p">],</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">),</span>
+             <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">([</span><span class="mf">0.</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+             <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">vocab_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">token_id</span><span class="p">],</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)],</span>
+            <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mask</span></div>
+
+<div class="viewcode-block" id="Transformer.decode"><a class="viewcode-back" href="../../../deeptextworld.models.html#deeptextworld.models.transformer.Transformer.decode">[docs]</a>    <span class="k">def</span> <span class="nf">decode</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">enc_x</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="p">,</span> <span class="n">sos_id</span><span class="p">,</span> <span class="n">eos_id</span><span class="p">,</span>
+            <span class="n">tj_master_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_greedy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">beam_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">1.</span><span class="p">):</span>
+        <span class="c1"># ======= encoding input sentences =======</span>
+        <span class="n">enc_padding_mask</span> <span class="o">=</span> <span class="n">create_padding_mask</span><span class="p">(</span><span class="n">enc_x</span><span class="p">)</span>
+        <span class="c1"># (batch_size, inp_seq_len, d_model)</span>
+        <span class="n">enc_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="p">(</span><span class="n">enc_x</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">enc_padding_mask</span><span class="p">,</span> <span class="n">x_seg</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># ======= end of encoding ======</span>
+
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">enc_x</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">src_seq_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">enc_x</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">tgt_vocab_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decoder</span><span class="o">.</span><span class="n">tgt_vocab_size</span>
+        <span class="n">init_time</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">inc_tar</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">sos_id</span><span class="p">)</span>
+        <span class="n">inc_continue</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">inc_logits</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tgt_vocab_size</span><span class="p">],</span> <span class="mf">0.</span><span class="p">)</span>
+        <span class="n">inc_valid_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">inc_p_gen</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">fill</span><span class="p">([</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mf">0.</span><span class="p">)</span>
+
+        <span class="c1"># repeat enc_output and inp w.r.t. beam size</span>
+        <span class="c1"># (batch_size * beam_size, inp_seq_len, d_model)</span>
+        <span class="n">enc_output</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">enc_output</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:],</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+            <span class="p">(</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="n">src_seq_len</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">enc_x</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">enc_x</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:],</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">beam_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+            <span class="p">(</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">beam_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">dec_padding_mask</span> <span class="o">=</span> <span class="n">create_padding_mask</span><span class="p">(</span><span class="n">enc_x</span><span class="p">)</span>
+
+        <span class="c1"># whenever a decoded seq reaches to &lt;/S&gt;, stop fan-out the paths with</span>
+        <span class="c1"># new target tokens by making the 0th token 0, and others -inf.</span>
+        <span class="n">padding_logit_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_logit_masking</span><span class="p">(</span>
+            <span class="n">token_id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vocab_size</span><span class="o">=</span><span class="n">tgt_vocab_size</span><span class="p">)</span>
+        <span class="n">eos_logit_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_logit_masking</span><span class="p">(</span>
+            <span class="n">token_id</span><span class="o">=</span><span class="n">eos_id</span><span class="p">,</span> <span class="n">vocab_size</span><span class="o">=</span><span class="n">tgt_vocab_size</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">dec_step_with</span><span class="p">(</span>
+                <span class="n">time</span><span class="p">,</span> <span class="n">target_seq</span><span class="p">,</span> <span class="n">is_continue</span><span class="p">,</span> <span class="n">logits</span><span class="p">,</span> <span class="n">valid_len</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dec_step</span><span class="p">(</span>
+                <span class="n">time</span><span class="p">,</span>
+                <span class="n">enc_x</span><span class="p">,</span> <span class="n">enc_output</span><span class="p">,</span> <span class="n">training</span><span class="p">,</span> <span class="n">tj_master_mask</span><span class="p">,</span>
+                <span class="n">dec_padding_mask</span><span class="p">,</span> <span class="n">padding_logit_mask</span><span class="p">,</span> <span class="n">eos_logit_mask</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="p">,</span> <span class="n">tgt_vocab_size</span><span class="p">,</span> <span class="n">eos_id</span><span class="p">,</span>
+                <span class="n">beam_size</span><span class="p">,</span> <span class="n">use_greedy</span><span class="p">,</span> <span class="n">temperature</span><span class="p">,</span>
+                <span class="n">target_seq</span><span class="p">,</span> <span class="n">is_continue</span><span class="p">,</span> <span class="n">logits</span><span class="p">,</span> <span class="n">valid_len</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">dec_cond</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">target_seq</span><span class="p">,</span> <span class="n">is_continue</span><span class="p">,</span> <span class="n">logits</span><span class="p">,</span> <span class="n">valid_len</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">tf</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">less_equal</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="p">),</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_any</span><span class="p">(</span><span class="n">is_continue</span><span class="p">))</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">while_loop</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="n">dec_cond</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="n">dec_step_with</span><span class="p">,</span>
+            <span class="n">loop_vars</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">init_time</span><span class="p">,</span>
+                <span class="n">inc_tar</span><span class="p">,</span>
+                <span class="n">inc_continue</span><span class="p">,</span>
+                <span class="n">inc_logits</span><span class="p">,</span>
+                <span class="n">inc_valid_len</span><span class="p">,</span>
+                <span class="n">inc_p_gen</span><span class="p">),</span>
+            <span class="n">shape_invariants</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">init_time</span><span class="o">.</span><span class="n">get_shape</span><span class="p">(),</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">TensorShape</span><span class="p">([</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]),</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">TensorShape</span><span class="p">([</span><span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">TensorShape</span><span class="p">([</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]),</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">TensorShape</span><span class="p">([</span><span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span>
+                <span class="n">tf</span><span class="o">.</span><span class="n">TensorShape</span><span class="p">([</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">])))</span>
+
+        <span class="n">decoded_idx</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">1</span><span class="p">:]</span>
+        <span class="n">decoded_logits</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">3</span><span class="p">][:,</span> <span class="mi">1</span><span class="p">:]</span>
+        <span class="c1"># valid_len includes the final EOS</span>
+        <span class="n">decoded_valid_len</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">decoded_p_gen</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">5</span><span class="p">][:,</span> <span class="mi">1</span><span class="p">:]</span>
+        <span class="k">return</span> <span class="n">decoded_idx</span><span class="p">,</span> <span class="n">decoded_logits</span><span class="p">,</span> <span class="n">decoded_p_gen</span><span class="p">,</span> <span class="n">decoded_valid_len</span></div></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">test</span><span class="p">():</span>
+        <span class="n">txf</span> <span class="o">=</span> <span class="n">Transformer</span><span class="p">(</span>
+            <span class="n">num_layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">d_model</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dff</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+            <span class="n">input_vocab_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">target_vocab_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="n">inp</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span> <span class="p">[</span><span class="mi">8</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">res_logits</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">,</span> <span class="n">inc_valid_len</span> <span class="o">=</span> <span class="n">txf</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span>
+            <span class="n">inp</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">sos_id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="n">use_greedy</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="kc">False</span><span class="p">),</span> <span class="n">beam_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">eos_id</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
+
+        <span class="n">res2</span><span class="p">,</span> <span class="n">res_logits2</span><span class="p">,</span> <span class="n">p_gen2</span><span class="p">,</span> <span class="n">inc_valid_len2</span> <span class="o">=</span> <span class="n">txf</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span>
+            <span class="n">inp</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">max_tar_len</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">sos_id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="n">use_greedy</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="kc">False</span><span class="p">),</span> <span class="n">beam_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">eos_id</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
+
+        <span class="n">sess</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+        <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">global_variables_initializer</span><span class="p">())</span>
+        <span class="p">(</span><span class="n">res_t</span><span class="p">,</span> <span class="n">res_logits_t</span><span class="p">,</span> <span class="n">p_gen_t</span><span class="p">,</span> <span class="n">inc_valid_len_t</span><span class="p">,</span>
+         <span class="n">res2_t</span><span class="p">,</span> <span class="n">res_logits2_t</span><span class="p">,</span> <span class="n">p_gen2_t</span><span class="p">,</span> <span class="n">inc_valid_len2_t</span><span class="p">)</span> <span class="o">=</span> <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">res</span><span class="p">,</span> <span class="n">res_logits</span><span class="p">,</span> <span class="n">p_gen</span><span class="p">,</span> <span class="n">inc_valid_len</span><span class="p">,</span>
+             <span class="n">res2</span><span class="p">,</span> <span class="n">res_logits2</span><span class="p">,</span> <span class="n">p_gen2</span><span class="p">,</span> <span class="n">inc_valid_len2</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">res_t</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">inc_valid_len_t</span><span class="p">)</span>
+        <span class="c1"># print(res_logits_t)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">res_logits_t</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">res2_t</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">inc_valid_len2_t</span><span class="p">)</span>
+        <span class="c1"># print(res_logits2_t)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">res_logits2_t</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">test</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

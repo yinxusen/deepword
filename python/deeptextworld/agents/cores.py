@@ -15,7 +15,6 @@ from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 from termcolor import colored
 
-from deeptextworld.agents.base_agent import BaseAgent
 from deeptextworld.agents.utils import ActionMaster, ObsInventory
 from deeptextworld.agents.utils import GenSummary
 from deeptextworld.agents.utils import Tokenizer
@@ -25,6 +24,7 @@ from deeptextworld.agents.utils import dqn_input
 from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.agents.utils import get_best_1d_q
 from deeptextworld.agents.utils import get_best_batch_ids
+from deeptextworld.agents.utils import get_path_tags
 from deeptextworld.agents.utils import id_real2batch
 from deeptextworld.log import Logging
 from deeptextworld.models.dqn_model import DQNModel
@@ -50,6 +50,14 @@ class BaseCore(Logging, ABC):
     """
     def __init__(
             self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+        """
+        Initialize A Core for an agent.
+
+        Args:
+            hp: hyper-parameters, see :py:mod:`deeptextworld.hparams`
+            model_dir: path to save or load model
+            tokenizer: tokenizer, see :py:mod:`deeptextworld.tokenizers`
+        """
         super(BaseCore, self).__init__()
         self.hp = hp
         self.model_dir = model_dir
@@ -64,14 +72,43 @@ class BaseCore(Logging, ABC):
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
+        """
+        Infer from policy.
+
+        Args:
+            trajectory: a list of ActionMaster
+            state: the current game state of observation + inventory
+            action_matrix: a matrix of all actions for the game, 2D array,
+             each row represents a tokenized and indexed action.
+            action_len: 1D array, length for each action.
+            action_mask: 1D array, indices of admissible actions from
+             all actions of the game.
+
+        Returns:
+            Q-values for actions in the action_matrix
+        """
         raise NotImplementedError()
 
     def save_model(self, t: Optional[int] = None) -> None:
+        """
+        Save current model with training steps
+
+        Args:
+            t: training steps, `None` falls back to default global steps
+        """
         raise NotImplementedError()
 
     def init(
             self, is_training: bool, load_best: bool = False,
             restore_from: Optional[str] = None) -> None:
+        """
+        Initialize models of the core.
+
+        Args:
+            is_training: training or evaluation
+            load_best: load from best weights, otherwise last weights
+            restore_from: path to restore
+        """
         raise NotImplementedError()
 
     def train_one_batch(
@@ -89,16 +126,53 @@ class BaseCore(Logging, ABC):
             action_idx: List[int],
             b_weight: np.ndarray,
             step: int, others: Any) -> np.ndarray:
+        """
+        Train the core with one batch of data.
+
+        Args:
+            pre_trajectories: previous trajectories
+            post_trajectories: post trajectories
+            pre_states: previous states
+            post_states: post states
+            action_matrix: all actions for each of previous trajectories
+            action_len: length of actions
+            pre_action_mask: action masks for each of previous trajectories
+            post_action_mask: action masks for each of post trajectories
+            dones: game terminated or not for post trajectories
+            rewards: rewards received for reaching post trajectories
+            action_idx: actions used for reaching post trajectories
+            b_weight: 1D array, weight for each data point
+            step: current training step
+            others: other information passed for training purpose
+
+        Returns: Absolute loss between expected Q-value and predicted Q-value
+         for each data point
+        """
         raise NotImplementedError()
 
     def create_or_reload_target_model(
             self, restore_from: Optional[str] = None) -> None:
+        """
+        Create (if not exist) or reload weights for the target model
+
+        Args:
+            restore_from: the path to restore weights
+        """
         raise NotImplementedError()
 
 
 class TFCore(BaseCore, ABC):
+    """
+    Agent core implemented through Tensorflow.
+    """
     def __init__(
             self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+        """
+        Args:
+            hp: hyper-parameters
+            model_dir: path to model dir
+            tokenizer: tokenizer see :py:mod:`deeptextworld.tokenizers`
+        """
         super(TFCore, self).__init__(hp, model_dir, tokenizer)
         self.hp: HParams = hp
         self.model_dir: str = model_dir
@@ -113,11 +187,11 @@ class TFCore(BaseCore, ABC):
         self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
         self.saver: Optional[Saver] = None
         self.target_saver: Optional[Saver] = None
-        self.d4train, self.d4eval, self.d4target = self.init_devices()
+        self.d4train, self.d4eval, self.d4target = self._init_devices()
         self.tokenizer = tokenizer
 
     @classmethod
-    def init_devices(cls):
+    def _init_devices(cls):
         all_devices = device_lib.list_local_devices()
         eprint("number of all devices: {}".format(len(all_devices)))
         eprint(all_devices)
@@ -140,12 +214,18 @@ class TFCore(BaseCore, ABC):
         return d4train, d4eval, d4target
 
     def save_model(self, t: Optional[int] = None) -> None:
+        """
+        Save model to model_dir with the number of training steps.
+
+        Args:
+            t: number of training steps, `None` falls back to global step
+        """
         self.info('save model')
         if t is None:
             t = tf.train.get_or_create_global_step(graph=self.model.graph)
         self.saver.save(self.sess, self.ckpt_prefix, global_step=t)
 
-    def get_target_model(self) -> Tuple[Any, Session]:
+    def _get_target_model(self) -> Tuple[Any, Session]:
         if self.target_model is None:
             target_model = self.model
             target_sess = self.sess
@@ -164,11 +244,15 @@ class TFCore(BaseCore, ABC):
 
         This method is useful when saved model lacks of training part, e.g.
         Adam optimizer.
-        :param model:
-        :param sess:
-        :param saver:
-        :param restore_from:
-        :return: trained steps
+
+        Args:
+            model: A tensorflow model
+            sess: A tensorflow session
+            saver: A tensorflow saver
+            restore_from: the path to restore the model
+
+        Returns:
+            training steps
         """
         self.info(
             colored(
@@ -199,28 +283,28 @@ class TFCore(BaseCore, ABC):
             trained_steps = sess.run(global_step)
         return trained_steps
 
-    def create_model_instance(self, device):
+    def _create_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
         self.debug(
             "try to create train model: {}".format(self.hp.model_creator))
         return model_creator.get_train_model(self.hp, device)
 
-    def create_eval_model_instance(self, device):
+    def _create_eval_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
         self.debug(
             "try to create eval model: {}".format(self.hp.model_creator))
         return model_creator.get_eval_model(self.hp, device)
 
-    def create_model(
+    def _create_model(
             self, is_training=True,
             device: Optional[str] = None) -> Tuple[Session, Any, Saver]:
         if is_training:
             device = device if device else self.d4train
-            model = self.create_model_instance(device)
+            model = self._create_model_instance(device)
             self.info("create train model on device {}".format(device))
         else:
             device = device if device else self.d4eval
-            model = self.create_eval_model_instance(device)
+            model = self._create_eval_model_instance(device)
             self.info("create eval model on device {}".format(device))
 
         conf = tf.ConfigProto(
@@ -234,9 +318,16 @@ class TFCore(BaseCore, ABC):
         return sess, model, saver
 
     def set_d4eval(self, device: str) -> None:
+        """
+        Set the device for evaluation, e.g. "/device:CPU:0", "/device:GPU:1"
+        Otherwise, a default device allocation will be used.
+
+        Args:
+            device: device name
+        """
         self.d4eval = device
 
-    def load_model(
+    def _load_model(
             self, sess: Session, model: DQNModel, saver: Saver,
             restore_from: Optional[str] = None, load_best=False) -> int:
         if restore_from is None:
@@ -277,11 +368,23 @@ class TFCore(BaseCore, ABC):
     def init(
             self, is_training: bool, load_best: bool = False,
             restore_from: Optional[str] = None) -> None:
+        """
+        Initialize the core.
+
+        1. create the model
+        2. load the model if there are saved models
+        3. create target model for training
+
+        Args:
+            is_training: True for training, False for evaluation
+            load_best: load best model, otherwise load last weights
+            restore_from: specify the load path, `load_best` will be disabled
+        """
         self.is_training = is_training
         if self.model is None:
-            self.sess, self.model, self.saver = self.create_model(
+            self.sess, self.model, self.saver = self._create_model(
                 self.is_training)
-        self.loaded_ckpt_step = self.load_model(
+        self.loaded_ckpt_step = self._load_model(
             self.sess, self.model, self.saver, restore_from, load_best)
 
         if self.is_training:
@@ -293,6 +396,9 @@ class TFCore(BaseCore, ABC):
                 train_summary_dir, self.sess.graph)
 
     def save_best_model(self) -> None:
+        """
+        Save current model to the best weights dir
+        """
         self.info("save the best model so far")
         self.saver.save(
             self.sess, self.best_ckpt_prefix,
@@ -305,16 +411,18 @@ class TFCore(BaseCore, ABC):
         """
         Create the target model if not exists, then load model from the most
         recent saved weights.
-        :param restore_from:
-        :return:
+
+        Args:
+            restore_from: path to load target model, `None` falls back to
+             default.
         """
         if self.target_sess is None:
             self.debug("create target model ...")
             (self.target_sess, self.target_model, self.target_saver
-             ) = self.create_model(is_training=False, device=self.d4target)
+             ) = self._create_model(is_training=False, device=self.d4target)
         else:
             pass
-        trained_step = self.load_model(
+        trained_step = self._load_model(
             self.target_sess, self.target_model, self.target_saver,
             restore_from, load_best=False)
         self.debug(
@@ -435,7 +543,7 @@ class DQNCore(TFCore):
         """
 
         src, src_len, _ = self.batch_trajectory2input(trajectories)
-        target_model, target_sess = self.get_target_model()
+        target_model, target_sess = self._get_target_model()
         # target network provides the value used as expected q-values
         qs_target = target_sess.run(
             target_model.q_actions,
@@ -569,7 +677,7 @@ class TabularCore(BaseCore):
         self.is_training = is_training
         try:
             if not restore_from:
-                tags = BaseAgent._get_path_tags(
+                tags = get_path_tags(
                     self.ckpt_path, self.ckpt_prefix)
                 self.loaded_ckpt_step = max(tags)
                 restore_from = pjoin(
@@ -679,7 +787,7 @@ class DRRNCore(TFCore):
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
-        target_model, target_sess = self.get_target_model()
+        target_model, target_sess = self._get_target_model()
         post_qs_target = target_sess.run(
             target_model.q_actions,
             feed_dict={
@@ -1035,7 +1143,7 @@ class GenDQNCore(TFCore):
         """
 
         src, src_len, master_mask = self.batch_trajectory2input(trajectories)
-        target_model, target_sess = self.get_target_model()
+        target_model, target_sess = self._get_target_model()
         # target network provides the value used as expected q-values
         qs_target = target_sess.run(
             target_model.decoded_logits_infer,

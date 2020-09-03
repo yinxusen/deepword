@@ -4,6 +4,12 @@ from deeptextworld.utils import load_actions
 
 
 class ZorkAgent(BaseAgent):
+    """
+    The agent to run Zork.
+
+    TextWorld will not provide admissible actions like cooking games, so a
+     loaded action file is required.
+    """
     def __init__(self, hp, model_dir):
         super(ZorkAgent, self).__init__(hp, model_dir)
         assert self.hp.action_file is not None, "action file is needed"

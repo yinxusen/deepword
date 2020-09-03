@@ -1,10 +1,3 @@
-"""
-We generate admissible actions at every step, and then use DRRN to choose
-the best action to play.
-
-This agent can be compared with previous template-gen agent.
-"""
-
 import os
 from os.path import join as pjoin
 
@@ -22,6 +15,13 @@ gen_model_dir = pjoin(
 
 
 class GenDRRNAgent(BaseAgent):
+    """
+    We generate admissible actions at every step, and then use DRRN to choose
+    the best action to play.
+
+    This agent can be compared with previous template-gen agent.
+    """
+
     def __init__(self, hp, model_dir):
         super(GenDRRNAgent, self).__init__(hp, model_dir)
         gen_hp = load_hparams(

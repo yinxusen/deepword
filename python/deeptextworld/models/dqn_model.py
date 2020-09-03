@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 import deeptextworld.models.utils as dqn
-from deeptextworld.agents.utils import conventions
+from deeptextworld.hparams import conventions
 from deeptextworld.models.export_models import DQNModel
 
 

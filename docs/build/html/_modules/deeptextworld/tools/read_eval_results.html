@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.tools.read_eval_results &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.tools.read_eval_results</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.stats</span> <span class="k">import</span> <span class="n">mean_confidence_interval</span>
+
+
+<div class="viewcode-block" id="summary_from_keys"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.read_eval_results.summary_from_keys">[docs]</a><span class="k">def</span> <span class="nf">summary_from_keys</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">eval_results</span><span class="p">):</span>
+    <span class="n">total_steps</span><span class="p">,</span> <span class="n">total_max_scores</span><span class="p">,</span> <span class="n">total_win</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="n">total_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">game_name</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+        <span class="n">game_res</span> <span class="o">=</span> <span class="n">eval_results</span><span class="p">[</span><span class="n">game_name</span><span class="p">]</span>
+        <span class="n">max_scores</span> <span class="o">=</span> <span class="n">game_res</span><span class="p">[</span><span class="s2">&quot;max_scores&quot;</span><span class="p">]</span>
+        <span class="n">earned_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">],</span> <span class="n">game_res</span><span class="p">[</span><span class="s2">&quot;runs&quot;</span><span class="p">])))</span>
+        <span class="n">used_steps</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s2">&quot;steps&quot;</span><span class="p">],</span> <span class="n">game_res</span><span class="p">[</span><span class="s2">&quot;runs&quot;</span><span class="p">]))</span>
+        <span class="n">has_won</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s2">&quot;has_won&quot;</span><span class="p">],</span> <span class="n">game_res</span><span class="p">[</span><span class="s2">&quot;runs&quot;</span><span class="p">])))</span>
+        <span class="n">total_win</span> <span class="o">+=</span> <span class="n">has_won</span>
+        <span class="n">total_scores</span> <span class="o">+=</span> <span class="n">earned_scores</span>
+        <span class="n">total_steps</span> <span class="o">+=</span> <span class="n">used_steps</span>
+        <span class="n">total_max_scores</span> <span class="o">+=</span> <span class="n">max_scores</span>
+    <span class="n">total_max_steps</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">100</span>
+    <span class="k">if</span> <span class="n">total_max_steps</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="n">sample_mean</span><span class="p">,</span> <span class="n">confidence_interval</span> <span class="o">=</span> <span class="n">mean_confidence_interval</span><span class="p">(</span>
+        <span class="n">total_scores</span> <span class="o">/</span> <span class="n">total_max_scores</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">sample_mean</span><span class="p">,</span>
+            <span class="n">confidence_interval</span><span class="p">,</span>
+            <span class="n">total_steps</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">total_max_steps</span><span class="p">,</span>
+            <span class="n">total_win</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="merge_eval_results"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.read_eval_results.merge_eval_results">[docs]</a><span class="k">def</span> <span class="nf">merge_eval_results</span><span class="p">(</span><span class="n">j_res1</span><span class="p">,</span> <span class="n">j_res2</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">eval_res</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">eval_res</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">j_res1</span><span class="p">[</span><span class="s1">&#39;games&#39;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">j_res2</span><span class="p">:</span>
+        <span class="n">eval_res</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">j_res2</span><span class="p">[</span><span class="s1">&#39;games&#39;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">eval_res</span></div>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.read_eval_results.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">f_result</span><span class="p">,</span> <span class="n">f_result2</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">f_result</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">j_result</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">f_result2</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">f_result2</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">j_result2</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">j_result2</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="n">eval_results</span> <span class="o">=</span> <span class="n">merge_eval_results</span><span class="p">(</span><span class="n">j_result</span><span class="p">,</span> <span class="n">j_result2</span><span class="p">)</span>
+
+    <span class="n">all_keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">eval_results</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+    <span class="n">k_tier1</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe1&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_tier2</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe2&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_tier3</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span> <span class="ow">and</span> <span class="s2">&quot;recipe3&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_tier4</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go6&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_tier5</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go9&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_tier6</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;go12&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="c1"># k_tier4_1 = list(filter(lambda k: &quot;go6&quot; in k and &quot;recipe1&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier4_2 = list(filter(lambda k: &quot;go6&quot; in k and &quot;recipe2&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier4_3 = list(filter(lambda k: &quot;go6&quot; in k and &quot;recipe3&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier5_1 = list(filter(lambda k: &quot;go9&quot; in k and &quot;recipe1&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier5_2 = list(filter(lambda k: &quot;go9&quot; in k and &quot;recipe2&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier5_3 = list(filter(lambda k: &quot;go9&quot; in k and &quot;recipe3&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier6_1 = list(filter(lambda k: &quot;go12&quot; in k and &quot;recipe1&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier6_2 = list(filter(lambda k: &quot;go12&quot; in k and &quot;recipe2&quot; in k, all_keys))</span>
+    <span class="c1"># k_tier6_3 = list(filter(lambda k: &quot;go12&quot; in k and &quot;recipe3&quot; in k, all_keys))</span>
+
+    <span class="n">k_wo_drop</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;drop&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+    <span class="n">k_w_drop</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;drop&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+
+    <span class="n">k_r1</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="s2">&quot;recipe1&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">,</span> <span class="n">all_keys</span><span class="p">))</span>
+
+    <span class="n">all_tiers_keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">k_tier1</span><span class="p">,</span> <span class="n">k_tier2</span><span class="p">,</span> <span class="n">k_tier3</span><span class="p">,</span>
+                      <span class="n">k_tier4</span><span class="p">,</span>
+                      <span class="n">k_tier5</span><span class="p">,</span>
+                      <span class="n">k_tier6</span><span class="p">,</span>
+                      <span class="n">all_keys</span><span class="p">,</span> <span class="n">k_wo_drop</span><span class="p">,</span> <span class="n">k_w_drop</span><span class="p">]</span>
+    <span class="n">all_tiers_names</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;tier1&quot;</span><span class="p">,</span> <span class="s2">&quot;tier2&quot;</span><span class="p">,</span> <span class="s2">&quot;tier3&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;tier4&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;tier5&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;tier6&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;all-tiers&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;w/o drop&quot;</span><span class="p">,</span> <span class="s2">&quot;w/ drop&quot;</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">nn</span><span class="p">,</span> <span class="n">kk</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">all_tiers_names</span><span class="p">,</span> <span class="n">all_tiers_keys</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="s2">&quot;</span><span class="si">{:.2f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="p">),</span>
+                <span class="n">summary_from_keys</span><span class="p">(</span><span class="n">kk</span><span class="p">,</span> <span class="n">eval_results</span><span class="p">)))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:&gt;15}</span><span class="s2">:  </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nn</span><span class="p">,</span> <span class="n">res</span><span class="p">))</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="kc">None</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

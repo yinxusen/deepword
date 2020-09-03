@@ -8,6 +8,9 @@ from deeptextworld.agents.utils import Memolet
 
 
 class GenDQNAgent(BaseAgent):
+    """
+    GenDQNAgent works with :py:class:`deeptextworld.agents.cores.GenDQNCore`.
+    """
     def __init__(self, hp, model_dir):
         super(GenDQNAgent, self).__init__(hp, model_dir)
 

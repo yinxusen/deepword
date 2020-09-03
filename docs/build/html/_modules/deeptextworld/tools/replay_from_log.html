@@ -1,0 +1,199 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.tools.replay_from_log &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.tools.replay_from_log</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">ast</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">import</span> <span class="nn">fire</span>
+<span class="kn">from</span> <span class="nn">textworld</span> <span class="k">import</span> <span class="n">EnvInfos</span>
+<span class="kn">from</span> <span class="nn">termcolor</span> <span class="k">import</span> <span class="n">colored</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.tools.collect_game_elements</span> <span class="k">import</span> <span class="n">CollectorAgent</span><span class="p">,</span> <span class="n">run_games</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">INFO_KEY</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.utils</span> <span class="k">import</span> <span class="n">eprint</span>
+
+
+<div class="viewcode-block" id="ReplayAgent"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent">[docs]</a><span class="k">class</span> <span class="nc">ReplayAgent</span><span class="p">(</span><span class="n">CollectorAgent</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_game</span><span class="p">,</span> <span class="n">fn_log</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval_results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_eval_results</span><span class="p">(</span><span class="n">fn_log</span><span class="p">)</span>
+        <span class="c1"># eprint(self.eval_results[0].keys())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">episode_has_started</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fn_game</span> <span class="o">=</span> <span class="n">fn_game</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_episode</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="ReplayAgent.extract_eval_results"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.extract_eval_results">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">extract_eval_results</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">fn_log</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fn_log</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">lines</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="n">eval_result_regex</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;^INFO - eval_results: (.*)$&quot;</span>
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+            <span class="n">eval_result_search</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">eval_result_regex</span><span class="p">,</span> <span class="n">l</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">eval_result_search</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">room_name</span> <span class="o">=</span> <span class="n">eval_result_search</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span>
+                        <span class="n">room_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;false&quot;</span><span class="p">,</span> <span class="s2">&quot;False&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+                            <span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="s2">&quot;True&quot;</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">matched</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.request_infos"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.request_infos">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">request_infos</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="n">request_infos</span> <span class="o">=</span> <span class="n">EnvInfos</span><span class="p">()</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">inventory</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">entities</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">verbs</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">command_templates</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">max_score</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">won</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">lost</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">extras</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;recipe&quot;</span><span class="p">]</span>
+        <span class="n">request_infos</span><span class="o">.</span><span class="n">admissible_commands</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">request_infos</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.pre_run"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.pre_run">[docs]</a>    <span class="k">def</span> <span class="nf">pre_run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.post_run"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.post_run">[docs]</a>    <span class="k">def</span> <span class="nf">post_run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.start_episode"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.start_episode">[docs]</a>    <span class="k">def</span> <span class="nf">start_episode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">episode_has_started</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.end_episode"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.end_episode">[docs]</a>    <span class="k">def</span> <span class="nf">end_episode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">episode_has_started</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">curr_episode</span> <span class="o">+=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="ReplayAgent.act"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.ReplayAgent.act">[docs]</a>    <span class="k">def</span> <span class="nf">act</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">dones</span><span class="p">,</span> <span class="n">infos</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">episode_has_started</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">start_episode</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">dones</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">end_episode</span><span class="p">()</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;cyan&quot;</span><span class="p">))</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;won: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">infos</span><span class="p">[</span><span class="n">INFO_KEY</span><span class="o">.</span><span class="n">won</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;lost: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">infos</span><span class="p">[</span><span class="n">INFO_KEY</span><span class="o">.</span><span class="n">lost</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;final score: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;total steps: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span><span class="p">))</span>
+            <span class="k">return</span>
+
+        <span class="n">eprint</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;cyan&#39;</span><span class="p">))</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;score: </span><span class="si">{}</span><span class="s2">, step: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span><span class="p">))</span>
+        <span class="n">eprint</span><span class="p">()</span>
+        <span class="c1"># eprint(&quot;\t&quot;+&quot;\n\t&quot;.join(infos[INFO_KEY.actions][0]))</span>
+        <span class="n">eprint</span><span class="p">()</span>
+
+        <span class="n">action</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">eval_results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="bp">self</span><span class="o">.</span><span class="n">fn_game</span><span class="p">][</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_episode</span> <span class="o">%</span> <span class="mi">2</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span><span class="p">])</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="s2">&quot;&gt; &quot;</span> <span class="o">+</span> <span class="n">action</span><span class="p">,</span> <span class="s2">&quot;red&quot;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">in_game_t</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">action</span></div></div>
+
+
+<div class="viewcode-block" id="play"><a class="viewcode-back" href="../../../deeptextworld.tools.html#deeptextworld.tools.replay_from_log.play">[docs]</a><span class="k">def</span> <span class="nf">play</span><span class="p">(</span><span class="n">game_file</span><span class="p">,</span> <span class="n">log_file</span><span class="p">,</span> <span class="n">nb_episodes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">max_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">agent</span> <span class="o">=</span> <span class="n">ReplayAgent</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">game_file</span><span class="p">),</span> <span class="n">log_file</span><span class="p">)</span>
+    <span class="n">run_games</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="p">[</span><span class="n">game_file</span><span class="p">],</span> <span class="n">nb_episodes</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">fire</span><span class="o">.</span><span class="n">Fire</span><span class="p">(</span><span class="n">play</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

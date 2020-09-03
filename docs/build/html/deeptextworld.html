@@ -1,0 +1,1529 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>deeptextworld package &mdash; deep-textworld v4.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> deep-textworld
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">deeptextworld package</a><ul>
+<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.action">deeptextworld.action module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.dependency_parser">deeptextworld.dependency_parser module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.eval_games">deeptextworld.eval_games module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.floor_plan">deeptextworld.floor_plan module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.hparams">deeptextworld.hparams module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.log">deeptextworld.log module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.main">deeptextworld.main module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.stats">deeptextworld.stats module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.sum_tree">deeptextworld.sum_tree module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.tokenizers">deeptextworld.tokenizers module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.trajectory">deeptextworld.trajectory module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.tree_memory">deeptextworld.tree_memory module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld.utils">deeptextworld.utils module</a></li>
+<li><a class="reference internal" href="#module-deeptextworld">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">deep-textworld</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>deeptextworld package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/deeptextworld.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="deeptextworld-package">
+<h1>deeptextworld package<a class="headerlink" href="#deeptextworld-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.agents.html">deeptextworld.agents package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.base_agent">deeptextworld.agents.base_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.competition_agent">deeptextworld.agents.competition_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.cores">deeptextworld.agents.cores module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.dsqn_agent">deeptextworld.agents.dsqn_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.gen_agent">deeptextworld.agents.gen_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.gen_drrn_agent">deeptextworld.agents.gen_drrn_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.utils">deeptextworld.agents.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents.zork_agent">deeptextworld.agents.zork_agent module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.agents.html#module-deeptextworld.agents">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.features.html">deeptextworld.features package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.features.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.features.html#deeptextworld-features-get-features-module">deeptextworld.features.get_features module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.features.html#module-deeptextworld.features">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.models.html">deeptextworld.models package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.commonsense_model">deeptextworld.models.commonsense_model module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.dqn_model">deeptextworld.models.dqn_model module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.drrn_model">deeptextworld.models.drrn_model module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.dsqn_model">deeptextworld.models.dsqn_model module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.export_models">deeptextworld.models.export_models module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.gen_model">deeptextworld.models.gen_model module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.transformer">deeptextworld.models.transformer module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models.utils">deeptextworld.models.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.models.html#module-deeptextworld.models">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.students.html">deeptextworld.students package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.students.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.students.html#module-deeptextworld.students.bert_swag">deeptextworld.students.bert_swag module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.students.html#module-deeptextworld.students.student_learner">deeptextworld.students.student_learner module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.students.html#module-deeptextworld.students">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.tests.html">deeptextworld.tests package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tests.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tests.html#module-deeptextworld.tests.test_agent_input">deeptextworld.tests.test_agent_input module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tests.html#module-deeptextworld.tests.test_utils">deeptextworld.tests.test_utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tests.html#module-deeptextworld.tests">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deeptextworld.tools.html">deeptextworld.tools package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.build_test_set">deeptextworld.tools.build_test_set module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.clean_hs2tj">deeptextworld.tools.clean_hs2tj module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.collect_game_elements">deeptextworld.tools.collect_game_elements module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.compare_eval_results">deeptextworld.tools.compare_eval_results module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.diff_train_w_test">deeptextworld.tools.diff_train_w_test module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.play_game">deeptextworld.tools.play_game module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.read_eval_failed_reason">deeptextworld.tools.read_eval_failed_reason module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.read_eval_results">deeptextworld.tools.read_eval_results module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools.replay_from_log">deeptextworld.tools.replay_from_log module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deeptextworld.tools.html#module-deeptextworld.tools">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-deeptextworld.action">
+<span id="deeptextworld-action-module"></span><h2>deeptextworld.action module<a class="headerlink" href="#module-deeptextworld.action" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.action.ActionCollector">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.action.</code><code class="sig-name descname">ActionCollector</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">n_tokens</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">unk_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.action.ActionCollector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.action2idx">
+<em class="property">property </em><code class="sig-name descname">action2idx</code><a class="headerlink" href="#deeptextworld.action.ActionCollector.action2idx" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.action_len">
+<em class="property">property </em><code class="sig-name descname">action_len</code><a class="headerlink" href="#deeptextworld.action.ActionCollector.action_len" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.action_matrix">
+<em class="property">property </em><code class="sig-name descname">action_matrix</code><a class="headerlink" href="#deeptextworld.action.ActionCollector.action_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.actions">
+<em class="property">property </em><code class="sig-name descname">actions</code><a class="headerlink" href="#deeptextworld.action.ActionCollector.actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.add_new_episode">
+<code class="sig-name descname">add_new_episode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">gid</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.action.ActionCollector.add_new_episode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.extend">
+<code class="sig-name descname">extend</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">actions</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deeptextworld.action.ActionCollector.extend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extend actions into ActionCollector.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.get_action_len">
+<code class="sig-name descname">get_action_len</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">gid</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deeptextworld.action.ActionCollector.get_action_len" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.get_action_matrix">
+<code class="sig-name descname">get_action_matrix</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">gid</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deeptextworld.action.ActionCollector.get_action_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.get_actions">
+<code class="sig-name descname">get_actions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">gid</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#deeptextworld.action.ActionCollector.get_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.get_game_ids">
+<code class="sig-name descname">get_game_ids</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#deeptextworld.action.ActionCollector.get_game_ids" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.load_actions">
+<code class="sig-name descname">load_actions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.action.ActionCollector.load_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.action.ActionCollector.save_actions">
+<code class="sig-name descname">save_actions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.action.ActionCollector.save_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.dependency_parser">
+<span id="deeptextworld-dependency-parser-module"></span><h2>deeptextworld.dependency_parser module<a class="headerlink" href="#module-deeptextworld.dependency_parser" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.dependency_parser.DependencyParserReorder">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.dependency_parser.</code><code class="sig-name descname">DependencyParserReorder</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">padding_val</span></em>, <em class="sig-param"><span class="n">stride_len</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.dependency_parser.DependencyParserReorder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<p>Use dependency parser to reorder master sentences.
+Make sure to open Stanford CoreNLP server first.</p>
+<dl class="py method">
+<dt id="deeptextworld.dependency_parser.DependencyParserReorder.reorder">
+<code class="sig-name descname">reorder</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">master</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.dependency_parser.DependencyParserReorder.reorder" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.dependency_parser.DependencyParserReorder.reorder_block">
+<code class="sig-name descname">reorder_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">master</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.dependency_parser.DependencyParserReorder.reorder_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Notice that four padding letters ” O O O O ” can only work up to 5-gram
+:param master:
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.dependency_parser.DependencyParserReorder.reorder_sent">
+<code class="sig-name descname">reorder_sent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sent</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.dependency_parser.DependencyParserReorder.reorder_sent" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.eval_games">
+<span id="deeptextworld-eval-games-module"></span><h2>deeptextworld.eval_games module<a class="headerlink" href="#module-deeptextworld.eval_games" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.eval_games.EvalResult">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">EvalResult</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">score</span></em>, <em class="sig-param"><span class="n">positive_score</span></em>, <em class="sig-param"><span class="n">negative_score</span></em>, <em class="sig-param"><span class="n">max_score</span></em>, <em class="sig-param"><span class="n">steps</span></em>, <em class="sig-param"><span class="n">won</span></em>, <em class="sig-param"><span class="n">action_list</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.EvalResult" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.eval_games.EvalResult" title="deeptextworld.eval_games.EvalResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.eval_games.EvalResult</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.eval_games.FullDirEvalPlayer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">FullDirEvalPlayer</code><a class="headerlink" href="#deeptextworld.eval_games.FullDirEvalPlayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.eval_games.FullDirEvalPlayer.start">
+<em class="property">classmethod </em><code class="sig-name descname">start</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">n_gpus</span></em>, <em class="sig-param"><span class="n">range_min</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">range_max</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.FullDirEvalPlayer.start" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.eval_games.LoopDogEvalPlayer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">LoopDogEvalPlayer</code><a class="headerlink" href="#deeptextworld.eval_games.LoopDogEvalPlayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.eval_games.LoopDogEvalPlayer.start">
+<code class="sig-name descname">start</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">n_gpus</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.LoopDogEvalPlayer.start" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.eval_games.MultiGPUsEvalPlayer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">MultiGPUsEvalPlayer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">n_gpus</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.MultiGPUsEvalPlayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<p>Eval Player that runs on multiple GPUs</p>
+<dl class="py method">
+<dt id="deeptextworld.eval_games.MultiGPUsEvalPlayer.evaluate">
+<code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span></em>, <em class="sig-param"><span class="n">debug</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.MultiGPUsEvalPlayer.evaluate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.MultiGPUsEvalPlayer.has_better_model">
+<code class="sig-name descname">has_better_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">total_scores</span></em>, <em class="sig-param"><span class="n">total_steps</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.MultiGPUsEvalPlayer.has_better_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.MultiGPUsEvalPlayer.save_best_model">
+<code class="sig-name descname">save_best_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">loaded_ckpt_step</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.MultiGPUsEvalPlayer.save_best_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.MultiGPUsEvalPlayer.split_game_files">
+<em class="property">classmethod </em><code class="sig-name descname">split_game_files</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">k</span></em>, <em class="sig-param"><span class="n">rnd_seed</span><span class="o">=</span><span class="default_value">42</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.MultiGPUsEvalPlayer.split_game_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split game files into k portions for multi GPUs playing
+:param game_files:
+:param k:
+:param rnd_seed:
+:return:</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.eval_games.NewModelHandler">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">NewModelHandler</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">n_gpus</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.NewModelHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">watchdog.events.FileSystemEventHandler</span></code></p>
+<dl class="py method">
+<dt id="deeptextworld.eval_games.NewModelHandler.is_ckpt_file">
+<code class="sig-name descname">is_ckpt_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src_path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.NewModelHandler.is_ckpt_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.NewModelHandler.on_created">
+<code class="sig-name descname">on_created</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">event</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.NewModelHandler.on_created" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called when a file or directory is created.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>event</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">DirCreatedEvent</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">FileCreatedEvent</span></code>) – Event representing file/directory creation.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.NewModelHandler.on_modified">
+<code class="sig-name descname">on_modified</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">event</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.NewModelHandler.on_modified" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called when a file or directory is modified.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>event</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">DirModifiedEvent</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">FileModifiedEvent</span></code>) – Event representing file/directory modification.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.eval_games.NewModelHandler.run_eval_player">
+<code class="sig-name descname">run_eval_player</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.NewModelHandler.run_eval_player" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.eval_games.WatchDogEvalPlayer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">WatchDogEvalPlayer</code><a class="headerlink" href="#deeptextworld.eval_games.WatchDogEvalPlayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.eval_games.WatchDogEvalPlayer.start">
+<code class="sig-name descname">start</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">n_gpus</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.WatchDogEvalPlayer.start" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.eval_games.agent_collect_data">
+<code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">agent_collect_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">agent</span></em>, <em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">max_episode_steps</span></em>, <em class="sig-param"><span class="n">epoch_size</span></em>, <em class="sig-param"><span class="n">epoch_limit</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.eval_games.agent_collect_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.eval_games.agg_eval_results">
+<code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">agg_eval_results</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">eval_results</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>List<span class="p">[</span><a class="reference internal" href="#deeptextworld.eval_games.EvalResult" title="deeptextworld.eval_games.EvalResult">deeptextworld.eval_games.EvalResult</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">max_steps_per_episode</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">100</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span><a class="reference internal" href="#deeptextworld.eval_games.EvalResult" title="deeptextworld.eval_games.EvalResult">deeptextworld.eval_games.EvalResult</a><span class="p">]</span><span class="p">, </span>float<span class="p">, </span>float<span class="p">, </span>float<span class="p">, </span>float<span class="p">, </span>float<span class="p">, </span>float<span class="p">]</span><a class="headerlink" href="#deeptextworld.eval_games.agg_eval_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>Aggregate evaluation results.
+We run N test games, each with M episodes, each episode has a maximum of
+K steps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>eval_results</strong> – evaluation results of text-based games, in the</p>
+</dd>
+</dl>
+<dl>
+<dt>following format:</dt><dd><p>dict(game_name, [eval_result1, evaluate_result2, …, evaluate_resultM])
+and the number of eval_results are the same for all games.
+evaluate_result:</p>
+<blockquote>
+<div><p>score, positive_score, negative_score, max_score, steps, won (bool),
+used_action_list</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>max_steps_per_episode</strong> – i.e. M, default = 100</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>agg_per_game:</dt><dd><p>dict(game_name, sum scores, sum max scores, sum steps, # won)</p>
+</dd>
+</dl>
+<p>sample_mean: total earned scores / total maximum scores
+confidence_interval: confidence interval of sample_mean over M episodes.
+steps: total used steps / total maximum steps</p>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.eval_games.eval_agent">
+<code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">eval_agent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="p">:</span> <span class="n">bool</span></em>, <em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">game_files</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">gpu_device</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>List<span class="p">[</span><a class="reference internal" href="#deeptextworld.eval_games.EvalResult" title="deeptextworld.eval_games.EvalResult">deeptextworld.eval_games.EvalResult</a><span class="p">]</span><span class="p">]</span><span class="p">, </span>int<span class="p">]</span><a class="headerlink" href="#deeptextworld.eval_games.eval_agent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate an agent with given games.
+For each game, we run nb_episodes, and max_episode_steps for on episode.</p>
+<p>Notice that evaluation game running is different with training.
+In training, we register all given games to TextWorld structure, and play
+them in a random way.
+For evaluation, we register one game at a time, and play it for nb_episodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – hyperparameter to create the agent</p></li>
+<li><p><strong>model_dir</strong> – model dir of the agent</p></li>
+<li><p><strong>load_best</strong> – bool, load from best_weights or not (last_weights)</p></li>
+<li><p><strong>restore_from</strong> – string, load from a specific model,</p></li>
+</ul>
+</dd>
+</dl>
+<p>e.g. {model_dir}/last_weights/after_epoch-0
+:param game_files: game files for evaluation
+:param gpu_device: which GPU device to load, in a format of “/device:GPU:i”
+:return: eval_results, loaded_ckpt_step</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.eval_games.scores_of_tiers">
+<code class="sig-prename descclassname">deeptextworld.eval_games.</code><code class="sig-name descname">scores_of_tiers</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">agg_per_game</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span><a class="reference internal" href="#deeptextworld.eval_games.EvalResult" title="deeptextworld.eval_games.EvalResult">deeptextworld.eval_games.EvalResult</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Dict<span class="p">[</span>str<span class="p">, </span>float<span class="p">]</span><a class="headerlink" href="#deeptextworld.eval_games.scores_of_tiers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute scores per tier given aggregated scores per game
+:param agg_per_game:
+:return: list of tier-name -&gt; scores, starting from tier1 to tier6</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.floor_plan">
+<span id="deeptextworld-floor-plan-module"></span><h2>deeptextworld.floor_plan module<a class="headerlink" href="#module-deeptextworld.floor_plan" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.floor_plan.</code><code class="sig-name descname">FloorPlanCollector</code><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.add_new_episode">
+<code class="sig-name descname">add_new_episode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">eid</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.add_new_episode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.extend">
+<code class="sig-name descname">extend</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fps</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.extend" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.get_map">
+<code class="sig-name descname">get_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">room</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.get_map" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.init">
+<code class="sig-name descname">init</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.init" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.load_fps">
+<code class="sig-name descname">load_fps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.load_fps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.route_to_kitchen">
+<code class="sig-name descname">route_to_kitchen</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">room</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.route_to_kitchen" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.route_to_room">
+<em class="property">classmethod </em><code class="sig-name descname">route_to_room</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ss</span></em>, <em class="sig-param"><span class="n">tt</span></em>, <em class="sig-param"><span class="n">fp</span></em>, <em class="sig-param"><span class="n">visited</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.route_to_room" title="Permalink to this definition">¶</a></dt>
+<dd><p>find the fastest route to a target room from a given room using DFS.
+:param ss: start room
+:param tt: target room
+:param fp: floor plan
+:param visited: initialized by []
+:return: directions, rooms</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.floor_plan.FloorPlanCollector.save_fps">
+<code class="sig-name descname">save_fps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.floor_plan.FloorPlanCollector.save_fps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.hparams">
+<span id="deeptextworld-hparams-module"></span><h2>deeptextworld.hparams module<a class="headerlink" href="#module-deeptextworld.hparams" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.hparams.Conventions">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">Conventions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">bert_ckpt_dir</span></em>, <em class="sig-param"><span class="n">bert_vocab_file</span></em>, <em class="sig-param"><span class="n">nltk_vocab_file</span></em>, <em class="sig-param"><span class="n">glove_vocab_file</span></em>, <em class="sig-param"><span class="n">glove_emb_file</span></em>, <em class="sig-param"><span class="n">legacy_zork_vocab_file</span></em>, <em class="sig-param"><span class="n">albert_ckpt_dir</span></em>, <em class="sig-param"><span class="n">albert_vocab_file</span></em>, <em class="sig-param"><span class="n">albert_spm_path</span></em>, <em class="sig-param"><span class="n">bert_cls_token</span></em>, <em class="sig-param"><span class="n">bert_unk_token</span></em>, <em class="sig-param"><span class="n">bert_padding_token</span></em>, <em class="sig-param"><span class="n">bert_sep_token</span></em>, <em class="sig-param"><span class="n">bert_mask_token</span></em>, <em class="sig-param"><span class="n">bert_sos_token</span></em>, <em class="sig-param"><span class="n">bert_eos_token</span></em>, <em class="sig-param"><span class="n">albert_cls_token</span></em>, <em class="sig-param"><span class="n">albert_unk_token</span></em>, <em class="sig-param"><span class="n">albert_padding_token</span></em>, <em class="sig-param"><span class="n">albert_sep_token</span></em>, <em class="sig-param"><span class="n">albert_mask_token</span></em>, <em class="sig-param"><span class="n">nltk_unk_token</span></em>, <em class="sig-param"><span class="n">nltk_padding_token</span></em>, <em class="sig-param"><span class="n">nltk_sos_token</span></em>, <em class="sig-param"><span class="n">nltk_eos_token</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.hparams.Conventions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.hparams.Conventions" title="deeptextworld.hparams.Conventions"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.hparams.Conventions</span></code></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.copy_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">copy_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.copy_hparams" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.get_model_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">get_model_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model_creator</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.get_model_hparams" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.has_valid_val">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">has_valid_val</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dict_args</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">key</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#deeptextworld.hparams.has_valid_val" title="Permalink to this definition">¶</a></dt>
+<dd><ol class="arabic simple">
+<li><p>if dict_args exists</p></li>
+<li><p>if key in dict_args</p></li>
+<li><p>if dict_args[key] is not None</p></li>
+</ol>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.load_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">load_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fn_model_config</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cmd_args</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fn_pre_config</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.load_hparams" title="Permalink to this definition">¶</a></dt>
+<dd><p>load hyper-parameters
+priority(file_args) &gt; priority(cmd_args) except arg in allowed_to_change
+priority(cmd_args) &gt; priority(pre_config)
+priority(pre_config) &gt; priority(default)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.output_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">output_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deeptextworld.hparams.output_hparams" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.save_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">save_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">file_path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.hparams.save_hparams" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.update_hparams_from_dict">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">update_hparams_from_dict</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">cmd_args</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">allowed_to_change</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Iterable<span class="p">[</span>str<span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.update_hparams_from_dict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.update_hparams_from_file">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">update_hparams_from_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">file_args</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.update_hparams_from_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.hparams.update_hparams_from_hparams">
+<code class="sig-prename descclassname">deeptextworld.hparams.</code><code class="sig-name descname">update_hparams_from_hparams</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">hp2</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.hparams.update_hparams_from_hparams" title="Permalink to this definition">¶</a></dt>
+<dd><p>hp should not have same keys with hp2</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.log">
+<span id="deeptextworld-log-module"></span><h2>deeptextworld.log module<a class="headerlink" href="#module-deeptextworld.log" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.log.Logging">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.log.</code><code class="sig-name descname">Logging</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.log.Logging" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt id="deeptextworld.log.Logging.debug">
+<code class="sig-name descname">debug</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">msg</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.log.Logging.debug" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.log.Logging.error">
+<code class="sig-name descname">error</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">msg</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.log.Logging.error" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.log.Logging.info">
+<code class="sig-name descname">info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">msg</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.log.Logging.info" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.log.Logging.warning">
+<code class="sig-name descname">warning</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">msg</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.log.Logging.warning" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.main">
+<span id="deeptextworld-main-module"></span><h2>deeptextworld.main module<a class="headerlink" href="#module-deeptextworld.main" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="deeptextworld.main.eval_one_ckpt">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">eval_one_ckpt</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">data_path</span></em>, <em class="sig-param"><span class="n">learner_clazz</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">ckpt_path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.eval_one_ckpt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.get_parser">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">get_parser</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; argparse.ArgumentParser<a class="headerlink" href="#deeptextworld.main.get_parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.hp_parser">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">hp_parser</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; argparse.ArgumentParser<a class="headerlink" href="#deeptextworld.main.hp_parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.main">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">main</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_eval_dqn">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_eval_dqn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.process_eval_dqn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_eval_student">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_eval_student</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.process_eval_student" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_gen_data">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_gen_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.process_gen_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_hp">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_hp</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span> &#x2192; tensorflow.contrib.training.python.training.hparam.HParams<a class="headerlink" href="#deeptextworld.main.process_hp" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_train_dqn">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_train_dqn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.process_train_dqn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.process_train_student">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">process_train_student</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.process_train_student" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.run_agent">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">run_agent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">agent</span></em>, <em class="sig-param"><span class="n">game_env</span></em>, <em class="sig-param"><span class="n">nb_games</span></em>, <em class="sig-param"><span class="n">nb_epochs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.run_agent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run a train agent on given games.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>agent</strong> – </p></li>
+<li><p><strong>game_env</strong> – </p></li>
+<li><p><strong>nb_games</strong> – </p></li>
+<li><p><strong>nb_epochs</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.run_agent_v2">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">run_agent_v2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">agent</span></em>, <em class="sig-param"><span class="n">game_env</span></em>, <em class="sig-param"><span class="n">nb_games</span></em>, <em class="sig-param"><span class="n">nb_epochs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.run_agent_v2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run a train agent on given games.
+Proactively request <cite>look</cite> and <cite>inventory</cite> results from games to substitute
+the description and inventory parts of infos.
+This is useful when games don’t provide description and inventory, e.g. for
+Z-machine games.</p>
+<p>NB: This will incur extra steps for game playing, remember to use 3-times of
+previous step quota. E.g. previously use 100 max steps, now you need 100 * 3
+max steps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>agent</strong> – </p></li>
+<li><p><strong>game_env</strong> – </p></li>
+<li><p><strong>nb_games</strong> – </p></li>
+<li><p><strong>nb_epochs</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.train">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">train</code><span class="sig-paren">(</span><em class="sig-param">hp</em>, <em class="sig-param">model_dir</em>, <em class="sig-param">game_dir</em>, <em class="sig-param">f_games=None</em>, <em class="sig-param">func_run_agent=&lt;function run_agent&gt;</em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.train" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.main.train_v2">
+<code class="sig-prename descclassname">deeptextworld.main.</code><code class="sig-name descname">train_v2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">game_dir</span></em>, <em class="sig-param"><span class="n">f_games</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.main.train_v2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train DQN agents by proactively requesting description and inventory</p>
+<p>max step per episode will be enlarged by 3-times.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>model_dir</strong> – </p></li>
+<li><p><strong>game_dir</strong> – </p></li>
+<li><p><strong>f_games</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.stats">
+<span id="deeptextworld-stats-module"></span><h2>deeptextworld.stats module<a class="headerlink" href="#module-deeptextworld.stats" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.stats.UCBComputer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.stats.</code><code class="sig-name descname">UCBComputer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_states</span></em>, <em class="sig-param"><span class="n">d_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.UCBComputer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Compute the Upper Confidence Bound actions during game playing at inference
+time only, when hidden states are fixed.</p>
+<dl>
+<dt>The Abbasi-Yadkori, Pal, and Szepesvari bound for LinUCB.</dt><dd><dl class="simple">
+<dt>Cite: Improved Algorithms for Linear Stochastic Bandits,</dt><dd><p>(Abbasi-Yadkori, Pal, and Szepesvari, 2011)</p>
+</dd>
+</dl>
+<p>See also: Learn What Not to Learn, (Tom Zahavy et al., 2019)</p>
+</dd>
+</dl>
+<p>We use the APS bound.</p>
+<dl class="py method">
+<dt id="deeptextworld.stats.UCBComputer.APS_bound">
+<code class="sig-name descname">APS_bound</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em>, <em class="sig-param"><span class="n">h_state</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.UCBComputer.APS_bound" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q_actions</strong> – Q-vector of actions</p></li>
+<li><p><strong>h_state</strong> – hidden state of a game state</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>upper confidence bound of q_actions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.stats.UCBComputer.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_states</span></em>, <em class="sig-param"><span class="n">d_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.UCBComputer.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>V: covariance matrix for each action a
+lam: lambda to control parameter size in ridge regression
+r: R-sub-Gaussian
+s: bound for <a href="#id1"><span class="problematic" id="id2">|</span></a>theta_a|_2
+delta: with probability of 1 - delta, we have the bound
+:param d_states:
+:param d_actions:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.stats.UCBComputer.collect_sample">
+<code class="sig-name descname">collect_sample</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_idx</span></em>, <em class="sig-param"><span class="n">h_state</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.UCBComputer.collect_sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.stats.UCBComputer.reset">
+<code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.UCBComputer.reset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.stats.mean_confidence_interval">
+<code class="sig-prename descclassname">deeptextworld.stats.</code><code class="sig-name descname">mean_confidence_interval</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">confidence</span><span class="o">=</span><span class="default_value">0.95</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.stats.mean_confidence_interval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given data, 1D np array, compute the mean and confidence intervals given
+confidence level.
+:param data: 1D np array
+:param confidence: confidence level
+:return: mean and confidence interval</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.sum_tree">
+<span id="deeptextworld-sum-tree-module"></span><h2>deeptextworld.sum_tree module<a class="headerlink" href="#module-deeptextworld.sum_tree" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.sum_tree.SumTree">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.sum_tree.</code><code class="sig-name descname">SumTree</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.sum_tree.SumTree" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This SumTree code is modified version of Morvan Zhou:
+<a class="reference external" href="https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/5.2_Prioritized_Replay_DQN/RL_brain.py">https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/5.2_Prioritized_Replay_DQN/RL_brain.py</a></p>
+<dl class="py method">
+<dt id="deeptextworld.sum_tree.SumTree.add">
+<code class="sig-name descname">add</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">priority</span></em>, <em class="sig-param"><span class="n">data</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.add" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.sum_tree.SumTree.data_pointer">
+<code class="sig-name descname">data_pointer</code><em class="property"> = 0</em><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.data_pointer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Here we initialize the tree with all nodes = 0, and initialize the data with all values = 0</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.sum_tree.SumTree.get_leaf">
+<code class="sig-name descname">get_leaf</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">v</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.get_leaf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tree structure and array storage:
+Tree index:</p>
+<blockquote>
+<div><blockquote>
+<div><blockquote>
+<div><p>0         -&gt; storing priority sum</p>
+</div></blockquote>
+<p>/           1     2</p>
+</div></blockquote>
+<p>/   /         3   4 5   6    -&gt; storing priority for experiences</p>
+</div></blockquote>
+<p>Array type for storing:
+[0,1,2,3,4,5,6]</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.sum_tree.SumTree.total_priority">
+<em class="property">property </em><code class="sig-name descname">total_priority</code><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.total_priority" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.sum_tree.SumTree.tree">
+<code class="sig-name descname">tree</code><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.tree" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>tree:</dt><dd><blockquote>
+<div><p>0</p>
+</div></blockquote>
+<p>/           0   0</p>
+</dd>
+</dl>
+<p>/ /         0  0 0  0  [Size: capacity] it’s at this line that there is the priorities score (aka pi)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.sum_tree.SumTree.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_index</span></em>, <em class="sig-param"><span class="n">priority</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.sum_tree.SumTree.update" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.tokenizers">
+<span id="deeptextworld-tokenizers-module"></span><h2>deeptextworld.tokenizers module<a class="headerlink" href="#module-deeptextworld.tokenizers" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.tokenizers.AlbertTokenizer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">AlbertTokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vocab_file</span></em>, <em class="sig-param"><span class="n">do_lower_case</span></em>, <em class="sig-param"><span class="n">spm_model_file</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.AlbertTokenizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.tokenizers.BertTokenizer" title="deeptextworld.tokenizers.BertTokenizer"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.tokenizers.BertTokenizer</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.AlbertTokenizer.de_tokenize">
+<code class="sig-name descname">de_tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.AlbertTokenizer.de_tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.tokenizers.BertTokenizer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">BertTokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vocab_file</span></em>, <em class="sig-param"><span class="n">do_lower_case</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.tokenizers.Tokenizer</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.convert_ids_to_tokens">
+<code class="sig-name descname">convert_ids_to_tokens</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.convert_ids_to_tokens" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.convert_tokens_to_ids">
+<code class="sig-name descname">convert_tokens_to_ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tokens</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.convert_tokens_to_ids" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.de_tokenize">
+<code class="sig-name descname">de_tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.de_tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.inv_vocab">
+<em class="property">property </em><code class="sig-name descname">inv_vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.inv_vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.tokenize">
+<code class="sig-name descname">tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.BertTokenizer.vocab">
+<em class="property">property </em><code class="sig-name descname">vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.BertTokenizer.vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.tokenizers.LegacyZorkTokenizer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">LegacyZorkTokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vocab_file</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.LegacyZorkTokenizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.tokenizers.NLTKTokenizer" title="deeptextworld.tokenizers.NLTKTokenizer"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.tokenizers.NLTKTokenizer</span></code></a></p>
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.LegacyZorkTokenizer.tokenize">
+<code class="sig-name descname">tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.LegacyZorkTokenizer.tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">NLTKTokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vocab_file</span></em>, <em class="sig-param"><span class="n">do_lower_case</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.tokenizers.Tokenizer</span></code></a></p>
+<p>Vocab is token2idx, inv_vocab is idx2token</p>
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.convert_ids_to_tokens">
+<code class="sig-name descname">convert_ids_to_tokens</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.convert_ids_to_tokens" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.convert_tokens_to_ids">
+<code class="sig-name descname">convert_tokens_to_ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tokens</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.convert_tokens_to_ids" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.de_tokenize">
+<code class="sig-name descname">de_tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.de_tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.inv_vocab">
+<em class="property">property </em><code class="sig-name descname">inv_vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.inv_vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.tokenize">
+<code class="sig-name descname">tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.NLTKTokenizer.vocab">
+<em class="property">property </em><code class="sig-name descname">vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.NLTKTokenizer.vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deeptextworld.tokenizers.Tokenizer">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">Tokenizer</code><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.convert_ids_to_tokens">
+<code class="sig-name descname">convert_ids_to_tokens</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.convert_ids_to_tokens" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.convert_tokens_to_ids">
+<code class="sig-name descname">convert_tokens_to_ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tokens</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.convert_tokens_to_ids" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.de_tokenize">
+<code class="sig-name descname">de_tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.de_tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.inv_vocab">
+<em class="property">property </em><code class="sig-name descname">inv_vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.inv_vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.tokenize">
+<code class="sig-name descname">tokenize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.tokenize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tokenizers.Tokenizer.vocab">
+<em class="property">property </em><code class="sig-name descname">vocab</code><a class="headerlink" href="#deeptextworld.tokenizers.Tokenizer.vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.tokenizers.get_albert_tokenizer">
+<code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">get_albert_tokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>tensorflow.contrib.training.python.training.hparam.HParams<span class="p">, </span><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a><span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.get_albert_tokenizer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.tokenizers.get_bert_tokenizer">
+<code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">get_bert_tokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>tensorflow.contrib.training.python.training.hparam.HParams<span class="p">, </span><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a><span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.get_bert_tokenizer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.tokenizers.get_nltk_tokenizer">
+<code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">get_nltk_tokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">vocab_file</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'/Users/xusenyin/git-store/deep-textworld/python/deeptextworld/../../resources/vocab.txt'</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>tensorflow.contrib.training.python.training.hparam.HParams<span class="p">, </span><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a><span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.get_nltk_tokenizer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.tokenizers.get_zork_tokenizer">
+<code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">get_zork_tokenizer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">vocab_file</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'/Users/xusenyin/local/opt/legacy-zork-vocab.txt'</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>tensorflow.contrib.training.python.training.hparam.HParams<span class="p">, </span><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a><span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.get_zork_tokenizer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.tokenizers.init_tokens">
+<code class="sig-prename descclassname">deeptextworld.tokenizers.</code><code class="sig-name descname">init_tokens</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>tensorflow.contrib.training.python.training.hparam.HParams<span class="p">, </span><a class="reference internal" href="#deeptextworld.tokenizers.Tokenizer" title="deeptextworld.tokenizers.Tokenizer">deeptextworld.tokenizers.Tokenizer</a><span class="p">]</span><a class="headerlink" href="#deeptextworld.tokenizers.init_tokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Note that BERT must use bert vocabulary.
+:param hp:
+:return:</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.trajectory">
+<span id="deeptextworld-trajectory-module"></span><h2>deeptextworld.trajectory module<a class="headerlink" href="#module-deeptextworld.trajectory" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.trajectory.Trajectory">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.trajectory.</code><code class="sig-name descname">Trajectory</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwds</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.trajectory.Trajectory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">typing.Generic</span></code></p>
+<p>BaseTrajectory only takes care of interacting with Agent on collecting
+game scripts.
+Fetching data from Trajectory feeding into Encoder should be implemented
+in extended classes.</p>
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_turns</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">size_per_turn</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take the ActionMaster (AM) as an example,
+Trajectory(AM1, AM2, AM3, AM4, AM5), and last_sid points to AM5;
+num_turns = 1 means we choose [AM4, AM5];</p>
+<p>size_per_turn only controls the way we separate pre- and post-trajectory
+default with size_per_turn = 1, AM4 is the pre-trajectory of AM5.</p>
+<p>Sometimes we need to change it, e.g. with legacy data where we store
+trajectory as Trajectory(M1, A1, M2, A2, M3, A3, M4), and the last
+sid points to M4, then the pre-trajectory of [A3, M4] is [A2, M3],
+that’s why the size_per_turn should set to 2.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_turns</strong> – how many turns to choose other than current turn</p></li>
+<li><p><strong>size_per_turn</strong> – how many cells count as one turn</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.add_new_tj">
+<code class="sig-name descname">add_new_tj</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tid</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.add_new_tj" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.append">
+<code class="sig-name descname">append</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">content</span><span class="p">:</span> <span class="n">T</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use generic type for content
+the trajectory class doesn’t care what has been stored
+and also doesn’t process them</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>content</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.fetch_batch_pre_states">
+<code class="sig-name descname">fetch_batch_pre_states</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">b_tid</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_sid</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>List<span class="p">[</span>T<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deeptextworld.trajectory.Trajectory.fetch_batch_pre_states" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.fetch_batch_states">
+<code class="sig-name descname">fetch_batch_states</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">b_tid</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_sid</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>List<span class="p">[</span>T<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deeptextworld.trajectory.Trajectory.fetch_batch_states" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.fetch_last_state">
+<code class="sig-name descname">fetch_last_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>T<span class="p">]</span><a class="headerlink" href="#deeptextworld.trajectory.Trajectory.fetch_last_state" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.fetch_state_by_idx">
+<code class="sig-name descname">fetch_state_by_idx</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tid</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">sid</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>T<span class="p">]</span><a class="headerlink" href="#deeptextworld.trajectory.Trajectory.fetch_state_by_idx" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.get_current_tid">
+<code class="sig-name descname">get_current_tid</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.get_current_tid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.get_last_sid">
+<code class="sig-name descname">get_last_sid</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.get_last_sid" title="Permalink to this definition">¶</a></dt>
+<dd><p>A state is defined as a series of interactions between a game and an
+agent ended with the game’s last response.
+e.g. “G0, A1, G2, A3, G4” is a state ended with the game’s last response
+named “G4”.
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.load_tjs">
+<code class="sig-name descname">load_tjs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.load_tjs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.request_delete_keys">
+<code class="sig-name descname">request_delete_keys</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ks</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.request_delete_keys" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.trajectory.Trajectory.save_tjs">
+<code class="sig-name descname">save_tjs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deeptextworld.trajectory.Trajectory.save_tjs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.tree_memory">
+<span id="deeptextworld-tree-memory-module"></span><h2>deeptextworld.tree_memory module<a class="headerlink" href="#module-deeptextworld.tree_memory" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deeptextworld.tree_memory.TreeMemory">
+<em class="property">class </em><code class="sig-prename descclassname">deeptextworld.tree_memory.</code><code class="sig-name descname">TreeMemory</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deeptextworld.log.Logging" title="deeptextworld.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deeptextworld.log.Logging</span></code></a></p>
+<p>This SumTree code is modified version and the original code is from:
+<a class="reference external" href="https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py">https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py</a></p>
+<dl class="py attribute">
+<dt id="deeptextworld.tree_memory.TreeMemory.PER_a">
+<code class="sig-name descname">PER_a</code><em class="property"> = 0.6</em><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.PER_a" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.tree_memory.TreeMemory.PER_b">
+<code class="sig-name descname">PER_b</code><em class="property"> = 0.4</em><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.PER_b" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.tree_memory.TreeMemory.PER_b_increment_per_sampling">
+<code class="sig-name descname">PER_b_increment_per_sampling</code><em class="property"> = 0.001</em><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.PER_b_increment_per_sampling" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.tree_memory.TreeMemory.PER_e">
+<code class="sig-name descname">PER_e</code><em class="property"> = 0.01</em><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.PER_e" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remember that our tree is composed of a sum tree that contains the priority scores at his leaf
+And also a data array
+We don’t use deque because it means that at each timestep our experiences change index by one.
+We prefer to use a simple array and to overwrite when the memory is full.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="deeptextworld.tree_memory.TreeMemory.absolute_error_upper">
+<code class="sig-name descname">absolute_error_upper</code><em class="property"> = 1.0</em><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.absolute_error_upper" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.append">
+<code class="sig-name descname">append</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">experience</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.append" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.batch_update">
+<code class="sig-name descname">batch_update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_idx</span></em>, <em class="sig-param"><span class="n">abs_errors</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.batch_update" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.load_memo">
+<code class="sig-name descname">load_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.load_memo" title="Permalink to this definition">¶</a></dt>
+<dd><p>load memo only apply to a new memo without any appending.
+load memo will change previous tree structure.
+:param path:
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.sample_batch">
+<code class="sig-name descname">sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.sample_batch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.save_memo">
+<code class="sig-name descname">save_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.save_memo" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deeptextworld.tree_memory.TreeMemory.uniform_sample_batch">
+<code class="sig-name descname">uniform_sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.tree_memory.TreeMemory.uniform_sample_batch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld.utils">
+<span id="deeptextworld-utils-module"></span><h2>deeptextworld.utils module<a class="headerlink" href="#module-deeptextworld.utils" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="deeptextworld.utils.agent_name2clazz">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">agent_name2clazz</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.agent_name2clazz" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the class given the model name in this package.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.bytes2array">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">bytes2array</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">byte_action_masks</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.bytes2array" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a list of byte-array masks to a list of np-array masks.
+TODO: last bit set as False to represent the end of the bit-string, i.e.</p>
+<blockquote>
+<div><p>‘' in c/c++.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.bytes2idx">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">bytes2idx</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">byte_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bytes<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">size</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deeptextworld.utils.bytes2idx" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.col">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">col</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">memory</span></em>, <em class="sig-param"><span class="n">idx</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.col" title="Permalink to this definition">¶</a></dt>
+<dd><p>get column from index of a memory list, or a mini-batch of memory list</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.core_name2clazz">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">core_name2clazz</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.core_name2clazz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.ctime">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">ctime</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.ctime" title="Permalink to this definition">¶</a></dt>
+<dd><p>current time in millisecond</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.eprint">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">eprint</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.eprint" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.flatmap">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">flatmap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">f</span></em>, <em class="sig-param"><span class="n">items</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.flatmap" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.flatten">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">flatten</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">items</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.flatten" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.get_hash">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">get_hash</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">txt</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deeptextworld.utils.get_hash" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute hash value for a text as a label
+:param txt:
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.get_token2idx">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">get_token2idx</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tokens</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.get_token2idx" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.learner_name2clazz">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">learner_name2clazz</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.learner_name2clazz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.load_actions">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">load_actions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_file</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.load_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.load_and_split">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">load_and_split</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game_path</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">f_games</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>str<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>str<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deeptextworld.utils.load_and_split" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load games and split train dev set
+:param game_path:
+:param f_games:
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.load_game_files">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">load_game_files</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game_path</span></em>, <em class="sig-param"><span class="n">f_games</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.load_game_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load a dir of games, or a single game.
+if game_path represents a file, then return a list of the file;
+if game_path is a dir, then return a list of files in the dir suffixed with</p>
+<blockquote>
+<div><p>.ulx;</p>
+</div></blockquote>
+<dl class="simple">
+<dt>if f_games is set, then load files in the game_path with names listed in</dt><dd><p>f_games.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game_path</strong> – a dir, or a single file</p></li>
+<li><p><strong>f_games</strong> – a file of game names, without suffix, default suffix .ulx</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of game files</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.load_uniq_lines">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">load_uniq_lines</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fname</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.load_uniq_lines" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.load_vocab">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">load_vocab</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vocab_file</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.load_vocab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.model_name2clazz">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">model_name2clazz</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.model_name2clazz" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the class given the model name in this package.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.report_status">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">report_status</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lst_of_status</span><span class="p">:</span> <span class="n">List<span class="p">[</span>Tuple<span class="p">[</span>str<span class="p">, </span>object<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deeptextworld.utils.report_status" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.setup_eval_log">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">setup_eval_log</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">log_filename</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.setup_eval_log" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.setup_logging">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">setup_logging</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">default_path</span><span class="o">=</span><span class="default_value">'logging.yaml'</span></em>, <em class="sig-param"><span class="n">default_level</span><span class="o">=</span><span class="default_value">20</span></em>, <em class="sig-param"><span class="n">env_key</span><span class="o">=</span><span class="default_value">'LOG_CFG'</span></em>, <em class="sig-param"><span class="n">local_log_filename</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.setup_logging" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.setup_train_log">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">setup_train_log</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.setup_train_log" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.softmax">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">softmax</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.softmax" title="Permalink to this definition">¶</a></dt>
+<dd><p>numerical stability softmax</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.split_train_dev">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">split_train_dev</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game_files</span></em>, <em class="sig-param"><span class="n">train_ratio</span><span class="o">=</span><span class="default_value">0.9</span></em>, <em class="sig-param"><span class="n">rnd_seed</span><span class="o">=</span><span class="default_value">42</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.split_train_dev" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split train/dev sets from given game files
+sort - shuffle w/ Random(42) - split</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game_files</strong> – game files</p></li>
+<li><p><strong>train_ratio</strong> – the percentage of training files.</p></li>
+<li><p><strong>rnd_seed</strong> – for randomly shuffle files, default = 42</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>train_games, dev_games</p>
+</dd>
+<dt class="field-odd">Exception</dt>
+<dd class="field-odd"><p>empty game_files</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deeptextworld.utils.uniq">
+<code class="sig-prename descclassname">deeptextworld.utils.</code><code class="sig-name descname">uniq</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lst</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deeptextworld.utils.uniq" title="Permalink to this definition">¶</a></dt>
+<dd><p>this is an order-preserving unique</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deeptextworld">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-deeptextworld" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Xusen Yin
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

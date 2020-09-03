@@ -123,6 +123,7 @@ def get_parser() -> ArgumentParser:
 def run_agent(agent, game_env, nb_games, nb_epochs):
     """
     Run a train agent on given games.
+
     :param agent:
     :param game_env:
     :param nb_games:

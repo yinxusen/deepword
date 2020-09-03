@@ -1,0 +1,837 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deeptextworld.students.student_learner &#8212; deep-textworld v4.0 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for deeptextworld.students.student_learner</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="k">import</span> <span class="n">join</span> <span class="k">as</span> <span class="n">pjoin</span>
+<span class="kn">from</span> <span class="nn">queue</span> <span class="k">import</span> <span class="n">Queue</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="k">import</span> <span class="n">Thread</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="k">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow</span> <span class="k">import</span> <span class="n">Session</span>
+<span class="kn">from</span> <span class="nn">tensorflow.contrib.training</span> <span class="k">import</span> <span class="n">HParams</span>
+<span class="kn">from</span> <span class="nn">tensorflow.summary</span> <span class="k">import</span> <span class="n">FileWriter</span>
+<span class="kn">from</span> <span class="nn">tensorflow.train</span> <span class="k">import</span> <span class="n">Saver</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="k">import</span> <span class="n">trange</span>
+
+<span class="kn">from</span> <span class="nn">deeptextworld.action</span> <span class="k">import</span> <span class="n">ActionCollector</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.base_agent</span> <span class="k">import</span> <span class="n">DRRNMemoTeacher</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">ActionMaster</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">Memolet</span><span class="p">,</span> <span class="n">align_batch_str</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">batch_dqn_input</span><span class="p">,</span> <span class="n">batch_drrn_action_input</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">bert_commonsense_input</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">get_action_idx_pair</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">get_best_batch_ids</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">get_path_tags</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.agents.utils</span> <span class="k">import</span> <span class="n">sample_batch_ids</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.hparams</span> <span class="k">import</span> <span class="n">save_hparams</span><span class="p">,</span> <span class="n">output_hparams</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.tokenizers</span> <span class="k">import</span> <span class="n">init_tokens</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.trajectory</span> <span class="k">import</span> <span class="n">Trajectory</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.utils</span> <span class="k">import</span> <span class="n">eprint</span><span class="p">,</span> <span class="n">flatten</span><span class="p">,</span> <span class="n">softmax</span>
+<span class="kn">from</span> <span class="nn">deeptextworld.utils</span> <span class="k">import</span> <span class="n">model_name2clazz</span><span class="p">,</span> <span class="n">bytes2idx</span>
+
+
+<div class="viewcode-block" id="CMD"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.CMD">[docs]</a><span class="k">class</span> <span class="nc">CMD</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CMD.set"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.CMD.set">[docs]</a>    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span></div>
+
+<div class="viewcode-block" id="CMD.get"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.CMD.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">[</span><span class="n">key</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="StudentLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner">[docs]</a><span class="k">class</span> <span class="nc">StudentLearner</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">:</span> <span class="n">HParams</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">train_data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+            <span class="n">eval_data_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># prefix should match BaseAgent</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tjs_prefix</span> <span class="o">=</span> <span class="s2">&quot;trajectories&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">action_prefix</span> <span class="o">=</span> <span class="s2">&quot;actions&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">memo_prefix</span> <span class="o">=</span> <span class="s2">&quot;memo&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span> <span class="o">=</span> <span class="n">model_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span> <span class="o">=</span> <span class="n">train_data_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval_data_path</span> <span class="o">=</span> <span class="n">eval_data_path</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_from</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;last_weights&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ckpt_prefix</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_from</span><span class="p">,</span> <span class="s2">&quot;after-epoch&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">init_tokens</span><span class="p">(</span><span class="n">hp</span><span class="p">)</span>
+        <span class="n">save_hparams</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span> <span class="n">pjoin</span><span class="p">(</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;hparams.json&quot;</span><span class="p">))</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="n">output_hparams</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sess</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">saver</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sw</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train_steps</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">_get_compatible_snapshot_tag</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+        <span class="n">action_tags</span> <span class="o">=</span> <span class="n">get_path_tags</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_prefix</span><span class="p">)</span>
+        <span class="n">memo_tags</span> <span class="o">=</span> <span class="n">get_path_tags</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">memo_prefix</span><span class="p">)</span>
+        <span class="n">tjs_tags</span> <span class="o">=</span> <span class="n">get_path_tags</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tjs_prefix</span><span class="p">)</span>
+
+        <span class="n">valid_tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">action_tags</span><span class="p">)</span>
+        <span class="n">valid_tags</span><span class="o">.</span><span class="n">intersection_update</span><span class="p">(</span><span class="n">memo_tags</span><span class="p">)</span>
+        <span class="n">valid_tags</span><span class="o">.</span><span class="n">intersection_update</span><span class="p">(</span><span class="n">tjs_tags</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">valid_tags</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_combined_data_path</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">valid_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_compatible_snapshot_tag</span><span class="p">()</span>
+        <span class="n">combined_data_path</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">valid_tags</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()):</span>
+            <span class="n">combined_data_path</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">pjoin</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">-</span><span class="si">{}</span><span class="s2">.npz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tjs_prefix</span><span class="p">,</span> <span class="n">tag</span><span class="p">)),</span>
+                 <span class="n">pjoin</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">-</span><span class="si">{}</span><span class="s2">.npz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">action_prefix</span><span class="p">,</span> <span class="n">tag</span><span class="p">)),</span>
+                 <span class="n">pjoin</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">-</span><span class="si">{}</span><span class="s2">.npz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">memo_prefix</span><span class="p">,</span> <span class="n">tag</span><span class="p">))))</span>
+        <span class="k">return</span> <span class="n">combined_data_path</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_model</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">device_placement</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Session</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Saver</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        create and load model from restore_from</span>
+<span class="sd">        if restore_from is None, use the latest checkpoint from last_weights</span>
+<span class="sd">        if model_dir</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_clazz</span> <span class="o">=</span> <span class="n">model_name2clazz</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">model_creator</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_clazz</span><span class="o">.</span><span class="n">get_train_student_model</span><span class="p">(</span>
+            <span class="n">hp</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span>
+            <span class="n">device_placement</span><span class="o">=</span><span class="n">device_placement</span><span class="p">)</span>
+        <span class="n">conf</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">ConfigProto</span><span class="p">(</span>
+            <span class="n">log_device_placement</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">allow_soft_placement</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">sess</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">conf</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">as_default</span><span class="p">():</span>
+            <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">global_variables_initializer</span><span class="p">())</span>
+            <span class="n">saver</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">Saver</span><span class="p">(</span>
+                <span class="n">max_to_keep</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_snapshot_to_keep</span><span class="p">,</span>
+                <span class="n">save_relative_paths</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">global_step</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">get_or_create_global_step</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">restore_from</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">restore_from</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">latest_checkpoint</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_from</span><span class="p">)</span>
+            <span class="n">saver</span><span class="o">.</span><span class="n">restore</span><span class="p">(</span><span class="n">sess</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">)</span>
+            <span class="n">trained_steps</span> <span class="o">=</span> <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">global_step</span><span class="p">)</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load student from ckpt: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">restore_from</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load model failed: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            <span class="n">trained_steps</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">trained_steps</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_eval_model</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">device_placement</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Session</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Saver</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        create and load model from restore_from</span>
+<span class="sd">        if restore_from is None, use the latest checkpoint from last_weights</span>
+<span class="sd">        if model_dir</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_clazz</span> <span class="o">=</span> <span class="n">model_name2clazz</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">model_creator</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_clazz</span><span class="o">.</span><span class="n">get_eval_student_model</span><span class="p">(</span>
+            <span class="n">hp</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="p">,</span>
+            <span class="n">device_placement</span><span class="o">=</span><span class="n">device_placement</span><span class="p">)</span>
+        <span class="n">conf</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">ConfigProto</span><span class="p">(</span>
+            <span class="n">log_device_placement</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">allow_soft_placement</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">sess</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">conf</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">as_default</span><span class="p">():</span>
+            <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">global_variables_initializer</span><span class="p">())</span>
+            <span class="n">saver</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">Saver</span><span class="p">(</span>
+                <span class="n">max_to_keep</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_snapshot_to_keep</span><span class="p">,</span>
+                <span class="n">save_relative_paths</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">global_step</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">get_or_create_global_step</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">restore_from</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">restore_from</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">latest_checkpoint</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_from</span><span class="p">)</span>
+            <span class="n">saver</span><span class="o">.</span><span class="n">restore</span><span class="p">(</span><span class="n">sess</span><span class="p">,</span> <span class="n">restore_from</span><span class="p">)</span>
+            <span class="n">trained_steps</span> <span class="o">=</span> <span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">global_step</span><span class="p">)</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load student from ckpt: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">restore_from</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load model failed: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            <span class="n">trained_steps</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">trained_steps</span>
+
+<div class="viewcode-block" id="StudentLearner.lst_str2am"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner.lst_str2am">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">lst_str2am</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span> <span class="n">tj</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">allow_unfinished_tj</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">]:</span>
+        <span class="n">tj</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">tj</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">allow_unfinished_tj</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">tj</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;wrong old trajectory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tj</span><span class="p">))</span>
+
+        <span class="n">res_tj</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">tj</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">res_tj</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ActionMaster</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="n">tj</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">],</span> <span class="n">master</span><span class="o">=</span><span class="n">tj</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]))</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">res_tj</span></div>
+
+<div class="viewcode-block" id="StudentLearner.tjs_str2am"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner.tjs_str2am">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">tjs_str2am</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">old_tjs</span><span class="p">:</span> <span class="n">Trajectory</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Trajectory</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">]:</span>
+        <span class="n">tjs</span> <span class="o">=</span> <span class="n">Trajectory</span><span class="p">(</span><span class="n">num_turns</span><span class="o">=</span><span class="n">old_tjs</span><span class="o">.</span><span class="n">num_turns</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">size_per_turn</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">tjs</span><span class="o">.</span><span class="n">curr_tj</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">lst_str2am</span><span class="p">(</span><span class="n">old_tjs</span><span class="o">.</span><span class="n">curr_tj</span><span class="p">,</span> <span class="n">allow_unfinished_tj</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">tjs</span><span class="o">.</span><span class="n">curr_tid</span> <span class="o">=</span> <span class="n">old_tjs</span><span class="o">.</span><span class="n">curr_tid</span>
+        <span class="n">tjs</span><span class="o">.</span><span class="n">trajectories</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([</span>
+            <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="bp">cls</span><span class="o">.</span><span class="n">lst_str2am</span><span class="p">(</span><span class="n">v</span><span class="p">))</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">old_tjs</span><span class="o">.</span><span class="n">trajectories</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+        <span class="k">return</span> <span class="n">tjs</span></div>
+
+<div class="viewcode-block" id="StudentLearner.memo_old2new"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner.memo_old2new">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">memo_old2new</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">old_memo</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DRRNMemoTeacher</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Memolet</span><span class="p">]:</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">old_memo</span><span class="p">:</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">bytes2idx</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+            <span class="n">next_mask</span> <span class="o">=</span> <span class="n">bytes2idx</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">next_action_mask</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Memolet</span><span class="p">(</span>
+                <span class="n">tid</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span><span class="p">,</span> <span class="n">sid</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">gid</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span><span class="p">,</span> <span class="n">aid</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">aid</span><span class="p">,</span>
+                <span class="n">token_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">a_len</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">a_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">reward</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">reward</span><span class="p">,</span> <span class="n">is_terminal</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">,</span>
+                <span class="n">action_mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span> <span class="n">sys_action_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">next_action_mask</span><span class="o">=</span><span class="n">next_mask</span><span class="p">,</span> <span class="n">next_sys_action_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">q_actions</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">[</span><span class="n">mask</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+    <span class="k">def</span> <span class="nf">_load_snapshot</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">memo_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tjs_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">action_path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">],</span> <span class="n">Trajectory</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">],</span> <span class="n">ActionCollector</span><span class="p">]:</span>
+        <span class="n">memory</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">memo_path</span><span class="p">,</span> <span class="n">allow_pickle</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">DRRNMemoTeacher</span><span class="p">):</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load old data with DRRNMemoTeacher&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_snapshot_v1</span><span class="p">(</span><span class="n">memo_path</span><span class="p">,</span> <span class="n">tjs_path</span><span class="p">,</span> <span class="n">action_path</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">Memolet</span><span class="p">):</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;load new data with Memolet&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_snapshot_v2</span><span class="p">(</span><span class="n">memo_path</span><span class="p">,</span> <span class="n">tjs_path</span><span class="p">,</span> <span class="n">action_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Unrecognized memory type: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="mi">0</span><span class="p">])))</span>
+
+    <span class="k">def</span> <span class="nf">_load_snapshot_v1</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">memo_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tjs_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">action_path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">],</span> <span class="n">Trajectory</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">],</span> <span class="n">ActionCollector</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;load snapshot for old data&quot;&quot;&quot;</span>
+        <span class="n">old_memory</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">memo_path</span><span class="p">,</span> <span class="n">allow_pickle</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+        <span class="n">old_memory</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span>
+            <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">DRRNMemoTeacher</span><span class="p">),</span> <span class="n">old_memory</span><span class="p">))</span>
+        <span class="n">memory</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">memo_old2new</span><span class="p">(</span><span class="n">old_memory</span><span class="p">)</span>
+
+        <span class="n">old_tjs</span> <span class="o">=</span> <span class="n">Trajectory</span><span class="p">(</span>
+            <span class="n">num_turns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_turns</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size_per_turn</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">old_tjs</span><span class="o">.</span><span class="n">load_tjs</span><span class="p">(</span><span class="n">tjs_path</span><span class="p">)</span>
+        <span class="n">tjs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tjs_str2am</span><span class="p">(</span><span class="n">old_tjs</span><span class="p">)</span>
+
+        <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionCollector</span><span class="p">(</span>
+            <span class="n">tokenizer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span>
+            <span class="n">n_tokens</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">n_tokens_per_action</span><span class="p">,</span>
+            <span class="n">unk_val_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">unk_val_id</span><span class="p">,</span>
+            <span class="n">padding_val_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">actions</span><span class="o">.</span><span class="n">load_actions</span><span class="p">(</span><span class="n">action_path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">actions</span>
+
+    <span class="k">def</span> <span class="nf">_load_snapshot_v2</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">memo_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tjs_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">action_path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">],</span> <span class="n">Trajectory</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">],</span> <span class="n">ActionCollector</span><span class="p">]:</span>
+        <span class="n">memory</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">memo_path</span><span class="p">,</span> <span class="n">allow_pickle</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+        <span class="n">memory</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Memolet</span><span class="p">),</span> <span class="n">memory</span><span class="p">))</span>
+
+        <span class="n">tjs</span> <span class="o">=</span> <span class="n">Trajectory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_turns</span><span class="p">)</span>
+        <span class="n">tjs</span><span class="o">.</span><span class="n">load_tjs</span><span class="p">(</span><span class="n">tjs_path</span><span class="p">)</span>
+
+        <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionCollector</span><span class="p">(</span>
+            <span class="n">tokenizer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span>
+            <span class="n">n_tokens</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">n_tokens_per_action</span><span class="p">,</span>
+            <span class="n">unk_val_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">unk_val_id</span><span class="p">,</span>
+            <span class="n">padding_val_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">actions</span><span class="o">.</span><span class="n">load_actions</span><span class="p">(</span><span class="n">action_path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">actions</span>
+
+    <span class="k">def</span> <span class="nf">_add_batch</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">combined_data_path</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+            <span class="n">queue</span><span class="p">:</span> <span class="n">Queue</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">append_new_data</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param combined_data_path:</span>
+<span class="sd">        :param queue:</span>
+<span class="sd">        :param training:</span>
+<span class="sd">        :param append_new_data: scan train_data_dir for new data after every</span>
+<span class="sd">            epoch of training.</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;try to add batch data: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">combined_data_path</span><span class="p">))</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">training</span> <span class="ow">and</span> <span class="n">append_new_data</span><span class="p">:</span>
+                <span class="n">new_combined_data_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_combined_data_path</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">new_combined_data_path</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span><span class="n">combined_data_path</span><span class="p">):</span>
+                    <span class="n">eprint</span><span class="p">(</span>
+                        <span class="s2">&quot;update training data: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">combined_data_path</span><span class="p">))</span>
+                    <span class="n">combined_data_path</span> <span class="o">=</span> <span class="n">new_combined_data_path</span>
+            <span class="k">for</span> <span class="n">tp</span><span class="p">,</span> <span class="n">ap</span><span class="p">,</span> <span class="n">mp</span><span class="p">,</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span>
+                    <span class="n">combined_data_path</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()):</span>
+                <span class="n">memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_snapshot</span><span class="p">(</span><span class="n">mp</span><span class="p">,</span> <span class="n">tp</span><span class="p">,</span> <span class="n">ap</span><span class="p">)</span>
+                <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">memory</span><span class="p">)</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">memory</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1.</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">batch_size</span><span class="p">)):</span>
+                    <span class="n">ss</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">batch_size</span>
+                    <span class="n">ee</span> <span class="o">=</span> <span class="nb">min</span><span class="p">((</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">memory</span><span class="p">))</span>
+                    <span class="n">batch_memory</span> <span class="o">=</span> <span class="n">memory</span><span class="p">[</span><span class="n">ss</span><span class="p">:</span><span class="n">ee</span><span class="p">]</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_prepare_data</span><span class="p">(</span>
+                            <span class="n">batch_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">),</span>
+                        <span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;add_batch error: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                        <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__traceback__</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">()</span>
+                    <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">b_memory</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">,</span> <span class="n">Memolet</span><span class="p">]],</span>
+            <span class="n">tjs</span><span class="p">:</span> <span class="n">Trajectory</span><span class="p">[</span><span class="n">ActionMaster</span><span class="p">],</span>
+            <span class="n">action_collector</span><span class="p">:</span> <span class="n">ActionCollector</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Given a batch of memory, tjs, and action collector, create a tuple</span>
+<span class="sd">        of data for training.</span>
+
+<span class="sd">        :param b_memory:</span>
+<span class="sd">        :param tjs:</span>
+<span class="sd">        :param action_collector:</span>
+<span class="sd">        :return: Tuple of data, the train_impl knows the details</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_training</span><span class="p">(</span>
+            <span class="bp">self</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Session</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Saver</span><span class="p">,</span> <span class="n">FileWriter</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Queue</span><span class="p">]:</span>
+        <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">train_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_model</span><span class="p">(</span><span class="s2">&quot;/device:GPU:0&quot;</span><span class="p">)</span>
+
+        <span class="c1"># save the very first model to verify weight has been loaded</span>
+        <span class="k">if</span> <span class="n">train_steps</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">saver</span><span class="o">.</span><span class="n">save</span><span class="p">(</span>
+                <span class="n">sess</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ckpt_prefix</span><span class="p">,</span>
+                <span class="n">global_step</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">get_or_create_global_step</span><span class="p">(</span>
+                    <span class="n">graph</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">sw_path</span> <span class="o">=</span> <span class="n">pjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="s2">&quot;summaries&quot;</span><span class="p">,</span> <span class="s2">&quot;train&quot;</span><span class="p">)</span>
+        <span class="n">sw</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">FileWriter</span><span class="p">(</span><span class="n">sw_path</span><span class="p">,</span> <span class="n">sess</span><span class="o">.</span><span class="n">graph</span><span class="p">)</span>
+
+        <span class="n">queue</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+        <span class="n">t</span> <span class="o">=</span> <span class="n">Thread</span><span class="p">(</span>
+            <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_add_batch</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_combined_data_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_data_dir</span><span class="p">),</span> <span class="n">queue</span><span class="p">))</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">sw</span><span class="p">,</span> <span class="n">train_steps</span><span class="p">,</span> <span class="n">queue</span>
+
+<div class="viewcode-block" id="StudentLearner.train"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner.train">[docs]</a>    <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sess</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">saver</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sw</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_steps</span><span class="p">,</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_training</span><span class="p">()</span>
+
+        <span class="n">wait_times</span> <span class="o">=</span> <span class="mi">10</span>
+        <span class="k">while</span> <span class="n">wait_times</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;waiting data ... (retry times: </span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">wait_times</span><span class="p">))</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+            <span class="n">wait_times</span> <span class="o">-=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;No data received. exit&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="n">epoch_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">save_gap_t</span>
+
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;start training&quot;</span><span class="p">)</span>
+        <span class="n">data_in_queue</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">et</span> <span class="ow">in</span> <span class="n">trange</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">,</span> <span class="n">ascii</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;epoch&quot;</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">trange</span><span class="p">(</span><span class="n">epoch_size</span><span class="p">,</span> <span class="n">ascii</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;step&quot;</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_train_impl</span><span class="p">(</span>
+                        <span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_steps</span> <span class="o">+</span> <span class="n">et</span> <span class="o">*</span> <span class="n">epoch_size</span> <span class="o">+</span> <span class="n">it</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">data_in_queue</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;no more data: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                    <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+                    <span class="n">traceback</span><span class="o">.</span><span class="n">print_exception</span><span class="p">(</span>
+                        <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+                    <span class="k">break</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">saver</span><span class="o">.</span><span class="n">save</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ckpt_prefix</span><span class="p">,</span>
+                <span class="n">global_step</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">get_or_create_global_step</span><span class="p">(</span>
+                    <span class="n">graph</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">graph</span><span class="p">))</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;finish and save </span><span class="si">{}</span><span class="s2"> epoch&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">et</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">data_in_queue</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">return</span></div>
+
+    <span class="k">def</span> <span class="nf">_train_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">train_step</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Train the model one time given data.</span>
+
+<span class="sd">        :param data:</span>
+<span class="sd">        :param train_step:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_test</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Session</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Saver</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Queue</span><span class="p">]:</span>
+        <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">train_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_eval_model</span><span class="p">(</span>
+            <span class="n">device_placement</span><span class="o">=</span><span class="s2">&quot;/device:GPU:0&quot;</span><span class="p">)</span>
+        <span class="n">queue</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">Thread</span><span class="p">(</span>
+            <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_add_batch</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_combined_data_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">eval_data_path</span><span class="p">),</span>
+                  <span class="n">queue</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">setDaemon</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">sess</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">saver</span><span class="p">,</span> <span class="n">train_steps</span><span class="p">,</span> <span class="n">queue</span>
+
+<div class="viewcode-block" id="StudentLearner.test"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.StudentLearner.test">[docs]</a>    <span class="k">def</span> <span class="nf">test</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">pass</span></div></div>
+
+
+<div class="viewcode-block" id="DRRNLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.DRRNLearner">[docs]</a><span class="k">class</span> <span class="nc">DRRNLearner</span><span class="p">(</span><span class="n">StudentLearner</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">hp</span><span class="p">:</span> <span class="n">HParams</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">train_data_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DRRNLearner</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span> <span class="n">train_data_dir</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_train_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">train_step</span><span class="p">):</span>
+        <span class="p">(</span><span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">expected_qs</span>
+         <span class="p">)</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">summaries</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_summary_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">loss</span><span class="p">],</span>
+            <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_</span><span class="p">:</span> <span class="n">p_states</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_len_</span><span class="p">:</span> <span class="n">p_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">actions_</span><span class="p">:</span> <span class="n">actions</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">actions_len_</span><span class="p">:</span> <span class="n">action_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">actions_repeats_</span><span class="p">:</span> <span class="n">actions_repeats</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_idx_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">expected_qs</span><span class="p">)),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">expected_q_</span><span class="p">:</span> <span class="n">expected_qs</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">b_weight_</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.</span><span class="p">]})</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">loss: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loss</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sw</span><span class="o">.</span><span class="n">add_summary</span><span class="p">(</span><span class="n">summaries</span><span class="p">,</span> <span class="n">train_step</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">expected_qs</span> <span class="o">=</span> <span class="n">flatten</span><span class="p">([</span><span class="nb">list</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">])</span>
+
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">action_len</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_len</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">action_matrix</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_matrix</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_drrn_action_input</span><span class="p">(</span>
+            <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">expected_qs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GenLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.GenLearner">[docs]</a><span class="k">class</span> <span class="nc">GenLearner</span><span class="p">(</span><span class="n">StudentLearner</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_train_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">train_step</span><span class="p">):</span>
+        <span class="p">(</span><span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span><span class="p">,</span> <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span>
+         <span class="n">b_weight</span><span class="p">)</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">summaries</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_summary_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">loss</span><span class="p">],</span>
+            <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_</span><span class="p">:</span> <span class="n">p_states</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_len_</span><span class="p">:</span> <span class="n">p_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_seg_</span><span class="p">:</span> <span class="n">master_mask</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_idx_</span><span class="p">:</span> <span class="n">actions_in</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_idx_out_</span><span class="p">:</span> <span class="n">actions_out</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_len_</span><span class="p">:</span> <span class="n">action_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">b_weight_</span><span class="p">:</span> <span class="n">b_weight</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sw</span><span class="o">.</span><span class="n">add_summary</span><span class="p">(</span><span class="n">summaries</span><span class="p">,</span> <span class="n">train_step</span><span class="p">)</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">loss: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loss</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">expected_qs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">flatten</span><span class="p">([</span><span class="nb">list</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]))</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">action_len</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_len</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">action_matrix</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_matrix</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_drrn_action_input</span><span class="p">(</span>
+            <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">)</span>
+        <span class="n">best_q_idx</span> <span class="o">=</span> <span class="n">get_best_batch_ids</span><span class="p">(</span><span class="n">expected_qs</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">)</span>
+        <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span> <span class="o">=</span> <span class="n">get_action_idx_pair</span><span class="p">(</span>
+            <span class="n">actions</span><span class="p">[</span><span class="n">best_q_idx</span><span class="p">],</span> <span class="n">action_len</span><span class="p">[</span><span class="n">best_q_idx</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">sos_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">eos_id</span><span class="p">)</span>
+        <span class="n">b_weight</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span><span class="p">,</span> <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span>
+            <span class="n">b_weight</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GenMixActionsLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.GenMixActionsLearner">[docs]</a><span class="k">class</span> <span class="nc">GenMixActionsLearner</span><span class="p">(</span><span class="n">GenLearner</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="n">n_classes</span> <span class="o">=</span> <span class="mi">4</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="c1"># b_weight is softmax(q-values)</span>
+        <span class="c1"># TODO: since every trajectory has different size of admissible actions,</span>
+        <span class="c1">#   the softmax version of q-values could have different range for each</span>
+        <span class="c1">#   trajectory. But it&#39;s fine for now, since we only need the weight</span>
+        <span class="c1">#   inside admissible actions for each trajectory.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">gen_loss_weighted_by_qs</span><span class="p">:</span>
+            <span class="n">b_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">flatten</span><span class="p">(</span>
+                <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">softmax</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">))</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">b_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">flatten</span><span class="p">(</span>
+                <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">softmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">)))</span>
+                 <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]))</span>
+
+        <span class="n">action_len</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_len</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">action_matrix</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_matrix</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_drrn_action_input</span><span class="p">(</span>
+            <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">)</span>
+
+        <span class="n">batch_q_idx</span> <span class="o">=</span> <span class="n">sample_batch_ids</span><span class="p">(</span>
+            <span class="n">b_weight</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+        <span class="n">selected_b_weights</span> <span class="o">=</span> <span class="n">b_weight</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">]</span>
+
+        <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span> <span class="o">=</span> <span class="n">get_action_idx_pair</span><span class="p">(</span>
+            <span class="n">actions</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">],</span> <span class="n">action_len</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">sos_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">eos_id</span><span class="p">)</span>
+
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">p_states</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">p_states</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">p_len</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">p_len</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">master_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">master_mask</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span><span class="p">,</span> <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span>
+            <span class="n">selected_b_weights</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="GenConcatActionsLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.GenConcatActionsLearner">[docs]</a><span class="k">class</span> <span class="nc">GenConcatActionsLearner</span><span class="p">(</span><span class="n">GenLearner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    TODO: we choose action_mask in memory; however, when all admissible actions</span>
+<span class="sd">      are required, e.g. in pre-training without using q-values, we can use</span>
+<span class="sd">      sys_action_mask.</span>
+<span class="sd">      Notice that sys_action_mask won&#39;t compatible with q-values, since the</span>
+<span class="sd">      q-values are computed against action_mask.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="GenConcatActionsLearner.concat_actions"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.GenConcatActionsLearner.concat_actions">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">concat_actions</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span>
+            <span class="n">action_ids</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span>
+            <span class="n">action_len</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+            <span class="n">action_weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+            <span class="n">sep_val_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">sort_by_weight</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;concat given action_ids into one output str&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">sort_by_weight</span><span class="p">:</span>
+            <span class="n">sorted_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="o">-</span><span class="n">action_weight</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">action_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">take_along_axis</span><span class="p">(</span><span class="n">action_ids</span><span class="p">,</span> <span class="n">sorted_idx</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">action_len</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">take_along_axis</span><span class="p">(</span><span class="n">action_len</span><span class="p">,</span> <span class="n">sorted_idx</span><span class="p">)</span>
+            <span class="n">action_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">take_along_axis</span><span class="p">(</span>
+                <span class="n">action_weight</span><span class="p">,</span> <span class="n">sorted_idx</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">action_ids</span> <span class="o">=</span> <span class="n">flatten</span><span class="p">(</span>
+            <span class="p">[(</span><span class="n">x</span><span class="p">[:</span><span class="n">l</span><span class="p">],</span> <span class="p">[</span><span class="n">sep_val_id</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">action_ids</span><span class="p">,</span> <span class="n">action_len</span><span class="p">)])</span>
+        <span class="n">concat_action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">action_ids</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">token_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">action_weight</span><span class="p">,</span> <span class="n">repeats</span><span class="o">=</span><span class="n">action_len</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">concat_action</span><span class="p">,</span> <span class="n">token_weight</span></div>
+
+    <span class="k">def</span> <span class="nf">_prepare_data_v2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;prepare concat actions without using q-values to weigh&quot;&quot;&quot;</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">admissible_action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sys_action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+
+        <span class="n">actions</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot; ; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_actions</span><span class="p">(</span><span class="n">gid</span><span class="p">))[</span><span class="n">mid</span><span class="p">])))</span>
+            <span class="k">for</span> <span class="n">gid</span><span class="p">,</span> <span class="n">mid</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_id</span><span class="p">,</span> <span class="n">admissible_action_mask</span><span class="p">)]</span>
+        <span class="n">action_idx</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">convert_tokens_to_ids</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">tokenize</span><span class="p">(</span><span class="n">concat_actions</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">concat_actions</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">]</span>
+
+        <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span> <span class="o">=</span> <span class="n">align_batch_str</span><span class="p">(</span>
+            <span class="n">ids</span><span class="o">=</span><span class="n">action_idx</span><span class="p">,</span> <span class="n">str_len_allowance</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span><span class="p">,</span>
+            <span class="n">padding_val_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">,</span>
+            <span class="n">valid_len</span><span class="o">=</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">action_idx</span><span class="p">])</span>
+
+        <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span> <span class="o">=</span> <span class="n">get_action_idx_pair</span><span class="p">(</span>
+            <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">sos_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">eos_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span><span class="p">,</span> <span class="n">actions_in</span><span class="p">,</span> <span class="n">actions_out</span><span class="p">,</span> <span class="n">action_len</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;prepare concat action weighted by q-values&quot;&quot;&quot;</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">expected_qs</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+
+        <span class="n">batch_concat_action_in</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">batch_concat_action_out</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">batch_token_weight</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">batch_concat_action_len</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">gid</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">q_vals</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_id</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">,</span> <span class="n">expected_qs</span><span class="p">):</span>
+            <span class="n">action_len</span> <span class="o">=</span> <span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_len</span><span class="p">(</span><span class="n">gid</span><span class="p">)[</span><span class="n">mask</span><span class="p">]</span>
+            <span class="n">action_ids</span> <span class="o">=</span> <span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_matrix</span><span class="p">(</span><span class="n">gid</span><span class="p">)[</span><span class="n">mask</span><span class="p">]</span>
+
+            <span class="c1"># step 1: concat actions</span>
+            <span class="n">concat_action</span><span class="p">,</span> <span class="n">token_weight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">concat_actions</span><span class="p">(</span>
+                <span class="n">action_ids</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">softmax</span><span class="p">(</span><span class="n">q_vals</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">vocab</span><span class="p">[</span><span class="s2">&quot;;&quot;</span><span class="p">],</span> <span class="n">sort_by_weight</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="c1"># step 2: padding or trimming to max allowance</span>
+            <span class="n">concat_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">concat_action</span><span class="p">)</span>
+            <span class="n">padding_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span> <span class="o">-</span> <span class="n">concat_len</span>
+            <span class="k">if</span> <span class="n">padding_size</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">concat_action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
+                    <span class="n">concat_action</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">padding_size</span><span class="p">),</span>
+                    <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;constant&#39;</span><span class="p">,</span> <span class="n">constant_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+                <span class="n">token_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
+                    <span class="n">token_weight</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">padding_size</span><span class="p">),</span>
+                    <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;constant&#39;</span><span class="p">,</span> <span class="n">constant_values</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">concat_action</span> <span class="o">=</span> <span class="n">concat_action</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span><span class="p">]</span>
+                <span class="n">token_weight</span> <span class="o">=</span> <span class="n">token_weight</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span><span class="p">]</span>
+            <span class="n">concat_len</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">concat_len</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span><span class="p">)</span>
+
+            <span class="c1"># step 3: create in/out format for PGN</span>
+            <span class="n">action_id_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
+                <span class="n">concat_action</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,),</span>
+                <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;constant&#39;</span><span class="p">,</span> <span class="n">constant_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">sos_id</span><span class="p">)</span>
+            <span class="c1"># make sure original action_matrix is untouched.</span>
+            <span class="n">action_id_out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">concat_action</span><span class="p">)</span>
+            <span class="n">new_action_len</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">concat_len</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">max_decoding_size</span><span class="p">)</span>
+            <span class="n">action_id_out</span><span class="p">[</span><span class="n">new_action_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">eos_id</span>
+            <span class="n">token_weight</span><span class="p">[</span><span class="n">new_action_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">token_weight</span><span class="p">[</span><span class="n">new_action_len</span> <span class="o">-</span> <span class="mi">2</span><span class="p">]</span>
+
+            <span class="c1"># step 4: collect results</span>
+            <span class="n">batch_concat_action_in</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action_id_in</span><span class="p">)</span>
+            <span class="n">batch_concat_action_out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action_id_out</span><span class="p">)</span>
+            <span class="n">batch_token_weight</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token_weight</span><span class="p">)</span>
+            <span class="n">batch_concat_action_len</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_action_len</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">master_mask</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_concat_action_in</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_concat_action_out</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_concat_action_len</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_token_weight</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="BertLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.BertLearner">[docs]</a><span class="k">class</span> <span class="nc">BertLearner</span><span class="p">(</span><span class="n">StudentLearner</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_train_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">train_step</span><span class="p">):</span>
+        <span class="n">inp</span><span class="p">,</span> <span class="n">seg_tj_action</span><span class="p">,</span> <span class="n">inp_len</span><span class="p">,</span> <span class="n">selected_qs</span><span class="p">,</span> <span class="n">swag_labels</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">summaries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">train_summary_op</span><span class="p">],</span>
+            <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_</span><span class="p">:</span> <span class="n">inp</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_len_</span><span class="p">:</span> <span class="n">inp_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">seg_tj_action_</span><span class="p">:</span> <span class="n">seg_tj_action</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">expected_q_</span><span class="p">:</span> <span class="n">selected_qs</span>
+                <span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sw</span><span class="o">.</span><span class="n">add_summary</span><span class="p">(</span><span class="n">summaries</span><span class="p">,</span> <span class="n">train_step</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_memory</span><span class="p">,</span> <span class="n">tjs</span><span class="p">,</span> <span class="n">action_collector</span><span class="p">):</span>
+        <span class="n">n_classes</span> <span class="o">=</span> <span class="mi">4</span>
+        <span class="n">trajectory_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">tid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">state_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">sid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">game_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">gid</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">action_mask</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]</span>
+        <span class="n">expected_qs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">flatten</span><span class="p">([</span><span class="nb">list</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">q_actions</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">b_memory</span><span class="p">]))</span>
+
+        <span class="n">action_len</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_len</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">action_matrix</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[</span><span class="n">action_collector</span><span class="o">.</span><span class="n">get_action_matrix</span><span class="p">(</span><span class="n">gid</span><span class="p">)</span> <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">game_id</span><span class="p">])</span>
+        <span class="n">actions</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_drrn_action_input</span><span class="p">(</span>
+            <span class="n">action_matrix</span><span class="p">,</span> <span class="n">action_len</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">)</span>
+
+        <span class="n">batch_q_idx</span> <span class="o">=</span> <span class="n">sample_batch_ids</span><span class="p">(</span>
+            <span class="n">expected_qs</span><span class="p">,</span> <span class="n">actions_repeats</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+        <span class="n">selected_qs</span> <span class="o">=</span> <span class="n">expected_qs</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">]</span>
+
+        <span class="c1"># [CLS] + [trajectory] + [SEP] + [action] + [SEP]</span>
+        <span class="n">max_allowed_trajectory_size</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span> <span class="o">-</span> <span class="mi">3</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">n_tokens_per_action</span><span class="p">)</span>
+        <span class="c1"># fetch pre-trajectory</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">tjs</span><span class="o">.</span><span class="n">fetch_batch_pre_states</span><span class="p">(</span><span class="n">trajectory_id</span><span class="p">,</span> <span class="n">state_id</span><span class="p">)</span>
+        <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">batch_dqn_input</span><span class="p">(</span>
+            <span class="n">states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="n">max_allowed_trajectory_size</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">padding_val_id</span><span class="p">)</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">p_states</span><span class="p">)</span>
+
+        <span class="n">action_len</span> <span class="o">=</span> <span class="n">action_len</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">))</span>
+        <span class="n">actions</span> <span class="o">=</span> <span class="n">actions</span><span class="p">[</span><span class="n">batch_q_idx</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">swag_labels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">actions</span><span class="p">),</span> <span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+        <span class="n">processed_input</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">bert_commonsense_input</span><span class="p">(</span>
+                <span class="n">am</span><span class="p">,</span> <span class="n">al</span><span class="p">,</span> <span class="n">tj</span><span class="p">,</span> <span class="n">tj_len</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">sep_val_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">cls_val_id</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hp</span><span class="o">.</span><span class="n">num_tokens</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">am</span><span class="p">,</span> <span class="n">al</span><span class="p">,</span> <span class="n">tj</span><span class="p">,</span> <span class="n">tj_len</span>
+            <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">actions</span><span class="p">),</span> <span class="nb">list</span><span class="p">(</span><span class="n">action_len</span><span class="p">),</span> <span class="n">p_states</span><span class="p">,</span> <span class="n">p_len</span><span class="p">)]</span>
+
+        <span class="n">inp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">processed_input</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">seg_tj_action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">processed_input</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">inp_len</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">a</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">processed_input</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">inp</span><span class="p">,</span> <span class="n">seg_tj_action</span><span class="p">,</span> <span class="n">inp_len</span><span class="p">,</span> <span class="n">selected_qs</span><span class="p">,</span> <span class="n">swag_labels</span></div>
+
+
+<div class="viewcode-block" id="BertSoftmaxLearner"><a class="viewcode-back" href="../../../deeptextworld.students.html#deeptextworld.students.student_learner.BertSoftmaxLearner">[docs]</a><span class="k">class</span> <span class="nc">BertSoftmaxLearner</span><span class="p">(</span><span class="n">BertLearner</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_train_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">train_step</span><span class="p">):</span>
+        <span class="n">inp</span><span class="p">,</span> <span class="n">seg_tj_action</span><span class="p">,</span> <span class="n">inp_len</span><span class="p">,</span> <span class="n">selected_qs</span><span class="p">,</span> <span class="n">swag_labels</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">summaries</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">swag_train_op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">swag_train_summary_op</span><span class="p">,</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">swag_loss</span><span class="p">],</span>
+            <span class="n">feed_dict</span><span class="o">=</span><span class="p">{</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_</span><span class="p">:</span> <span class="n">inp</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">src_len_</span><span class="p">:</span> <span class="n">inp_len</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">seg_tj_action_</span><span class="p">:</span> <span class="n">seg_tj_action</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">swag_labels_</span><span class="p">:</span> <span class="n">swag_labels</span>
+                <span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sw</span><span class="o">.</span><span class="n">add_summary</span><span class="p">(</span><span class="n">summaries</span><span class="p">,</span> <span class="n">train_step</span><span class="p">)</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">loss: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loss</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">deep-textworld</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Xusen Yin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
