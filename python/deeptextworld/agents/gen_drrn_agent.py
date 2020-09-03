@@ -13,6 +13,7 @@ from deeptextworld.agents.competition_agent import CompetitionAgent
 from deeptextworld.agents.cores import PGNCore
 from deeptextworld.agents.utils import ACT
 from deeptextworld.hparams import load_hparams
+from deeptextworld.tokenizers import init_tokens
 
 home_dir = os.path.expanduser("~")
 gen_model_dir = pjoin(
@@ -25,7 +26,7 @@ class GenDRRNAgent(BaseAgent):
         super(GenDRRNAgent, self).__init__(hp, model_dir)
         gen_hp = load_hparams(
             fn_model_config="{}/hparams.json".format(gen_model_dir))
-        gen_hp, gen_tokenizer = self.init_tokens(gen_hp)
+        gen_hp, gen_tokenizer = init_tokens(gen_hp)
         self.gen_core = PGNCore(gen_hp, gen_model_dir, gen_tokenizer)
 
     def _init_impl(self, load_best=False, restore_from=None) -> None:
@@ -35,7 +36,7 @@ class GenDRRNAgent(BaseAgent):
         self.gen_core.init(
             is_training=False, load_best=False, restore_from=None)
 
-    def get_admissible_actions(self, infos):
+    def _get_admissible_actions(self, infos):
         trajectory = self.tjs.fetch_last_state()
         actions = self.gen_core.generate_admissible_actions(trajectory)
         actions = list(set(actions + [ACT.look, ACT.inventory]))
@@ -47,7 +48,7 @@ class GenCompetitionDRRNAgent(CompetitionAgent):
         super(GenCompetitionDRRNAgent, self).__init__(hp, model_dir)
         gen_hp = load_hparams(
             fn_model_config="{}/hparams.json".format(gen_model_dir))
-        gen_hp, gen_tokenizer = self.init_tokens(gen_hp)
+        gen_hp, gen_tokenizer = init_tokens(gen_hp)
         self.gen_core = PGNCore(gen_hp, gen_model_dir, gen_tokenizer)
 
     def _init_impl(self, load_best=False, restore_from=None) -> None:
@@ -57,7 +58,7 @@ class GenCompetitionDRRNAgent(CompetitionAgent):
         self.gen_core.init(
             is_training=False, load_best=False, restore_from=None)
 
-    def get_admissible_actions(self, infos):
+    def _get_admissible_actions(self, infos):
         trajectory = self.tjs.fetch_last_state()
         actions = self.gen_core.generate_admissible_actions(trajectory)
         actions = list(set(actions + [ACT.look, ACT.inventory]))

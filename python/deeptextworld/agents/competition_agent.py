@@ -1,7 +1,8 @@
 import re
+from typing import List
 
 from deeptextworld.agents.base_agent import BaseAgent
-from deeptextworld.agents.utils import *
+from deeptextworld.agents.utils import ACT, ActionDesc, ACT_TYPE
 
 
 class CompetitionAgent(BaseAgent):
@@ -87,7 +88,7 @@ class CompetitionAgent(BaseAgent):
         actions = list(set(actions))
         return actions
 
-    def rule_based_policy(self, actions, instant_reward):
+    def _rule_based_policy(self, actions, instant_reward):
         # TODO: use see cookbook again if gain one reward
         if instant_reward > 0:
             self._see_cookbook = False
@@ -120,8 +121,8 @@ class CompetitionAgent(BaseAgent):
         else:
             return None
 
-    def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
-        actions = super(CompetitionAgent, self).prepare_actions(
+    def _prepare_actions(self, admissible_actions: List[str]) -> List[str]:
+        actions = super(CompetitionAgent, self)._prepare_actions(
             admissible_actions)
         actions = self.filter_admissible_actions(actions)
         return actions
@@ -132,8 +133,8 @@ class CompetitionAgent(BaseAgent):
             self._theme_words[self.game_id] = []
         self._see_cookbook = False
 
-    def update_status(self, obs, scores, dones, infos):
-        master, instant_reward = super(CompetitionAgent, self).update_status(
+    def _update_status(self, obs, scores, dones, infos):
+        master, instant_reward = super(CompetitionAgent, self)._update_status(
             obs, scores, dones, infos)
 
         if (not self._theme_words[self.game_id]

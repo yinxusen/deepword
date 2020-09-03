@@ -1,15 +1,12 @@
-import string
+import glob
+import os
 from collections import namedtuple
 from typing import List, Dict, Tuple, Optional, Iterator
 
 import numpy as np
-from albert.tokenization import FullTokenizer as AlbertTok
-from bert.tokenization import FullTokenizer as BertTok
-from nltk import word_tokenize
 
-from deeptextworld.hparams import conventions
 from deeptextworld.log import Logging
-from deeptextworld.utils import load_vocab, get_token2idx
+from deeptextworld.tokenizers import Tokenizer
 
 
 class Memolet(namedtuple(
@@ -67,163 +64,6 @@ class GenSummary(namedtuple(
         return (" ".join(["{}[{:.2f}]".format(t, p)
                           for t, p in zip(self.tokens, self.gens)])
                 + "\t{}".format(self.q_action))
-
-
-class Tokenizer(object):
-    @property
-    def vocab(self) -> Dict[str, int]:
-        raise NotImplementedError()
-
-    @property
-    def inv_vocab(self) -> Dict[int, str]:
-        raise NotImplementedError()
-
-    def tokenize(self, text: str) -> List[str]:
-        raise NotImplementedError()
-
-    def de_tokenize(self, ids: List[int]) -> str:
-        raise NotImplementedError()
-
-    def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
-        raise NotImplementedError()
-
-    def convert_ids_to_tokens(self, ids: List[int]) -> List[str]:
-        raise NotImplementedError()
-
-
-class NLTKTokenizer(Tokenizer):
-    """
-    Vocab is token2idx, inv_vocab is idx2token
-    """
-
-    def __init__(self, vocab_file, do_lower_case):
-        self._special_tokens = [
-            conventions.nltk_unk_token,
-            conventions.nltk_padding_token,
-            conventions.nltk_sos_token,
-            conventions.nltk_eos_token]
-        self._inv_vocab = load_vocab(vocab_file)
-        if do_lower_case:
-            self._inv_vocab = [
-                w.lower() if w not in self._special_tokens else w
-                for w in self._inv_vocab]
-        self._do_lower_case = do_lower_case
-        self._vocab = get_token2idx(self._inv_vocab)
-        self._inv_vocab = dict([(v, k) for k, v in self._vocab.items()])
-        self._unk_val_id = self._vocab[conventions.nltk_unk_token]
-        self._s2c = {
-            conventions.nltk_unk_token: "U",
-            conventions.nltk_padding_token: "O",
-            conventions.nltk_sos_token: "S",
-            conventions.nltk_eos_token: "E"}
-        self._c2s = dict(zip(self._s2c.values(), self._s2c.keys()))
-
-    @property
-    def vocab(self):
-        return self._vocab
-
-    @property
-    def inv_vocab(self):
-        return self._inv_vocab
-
-    def convert_tokens_to_ids(self, tokens):
-        indexed = [self._vocab.get(t, self._unk_val_id) for t in tokens]
-        return indexed
-
-    def convert_ids_to_tokens(self, ids):
-        tokens = [self._inv_vocab[i] for i in ids]
-        return tokens
-
-    def tokenize(self, text):
-        if any([sc in text for sc in self._special_tokens]):
-            new_txt = text
-            for sc in self._special_tokens:
-                new_txt = new_txt.replace(sc, self._s2c[sc])
-            tokens = word_tokenize(new_txt)
-            tokens = [self._c2s[t] if t in self._c2s else t for t in tokens]
-        else:
-            tokens = word_tokenize(text)
-
-        if self._do_lower_case:
-            return [
-                t.lower() if t not in self._special_tokens else t
-                for t in tokens]
-        else:
-            return tokens
-
-    def de_tokenize(self, ids: List[int]) -> str:
-        res = " ".join(
-            filter(lambda t: t not in self._special_tokens,
-                   self.convert_ids_to_tokens(ids)))
-        return res
-
-
-class LegacyZorkTokenizer(NLTKTokenizer):
-    def __init__(self, vocab_file):
-        super(LegacyZorkTokenizer, self).__init__(
-            vocab_file, do_lower_case=True)
-        self.empty_trans_table = str.maketrans("", "", string.punctuation)
-
-    def tokenize(self, text):
-        tokens = super(LegacyZorkTokenizer, self).tokenize(
-            text.translate(self.empty_trans_table))
-        return list(filter(lambda t: t.isalpha(), tokens))
-
-
-class BertTokenizer(Tokenizer):
-    def __init__(self, vocab_file, do_lower_case):
-        self.tokenizer = BertTok(vocab_file, do_lower_case)
-        self._special_tokens = [
-            conventions.bert_unk_token,
-            conventions.bert_padding_token,
-            conventions.bert_cls_token,
-            conventions.bert_sep_token,
-            conventions.bert_mask_token,
-            conventions.bert_sos_token,
-            conventions.bert_eos_token]
-
-    @property
-    def vocab(self):
-        return self.tokenizer.vocab
-
-    @property
-    def inv_vocab(self):
-        return self.tokenizer.inv_vocab
-
-    def convert_tokens_to_ids(self, tokens):
-        return self.tokenizer.convert_tokens_to_ids(tokens)
-
-    def convert_ids_to_tokens(self, ids):
-        return self.tokenizer.convert_ids_to_tokens(ids)
-
-    def de_tokenize(self, ids):
-        res = " ".join(
-            filter(lambda t: t not in self._special_tokens,
-                   self.convert_ids_to_tokens(ids)))
-        res = res.replace(" ##", "")
-        return res
-
-    def tokenize(self, text):
-        return self.tokenizer.tokenize(text)
-
-
-class AlbertTokenizer(BertTokenizer):
-    def __init__(self, vocab_file, do_lower_case, spm_model_file):
-        super(AlbertTokenizer, self).__init__(vocab_file, do_lower_case)
-        self.tokenizer = AlbertTok(vocab_file, do_lower_case, spm_model_file)
-        self._special_tokens = [
-            conventions.albert_unk_token,
-            conventions.albert_padding_token,
-            conventions.albert_cls_token,
-            conventions.albert_sep_token,
-            conventions.albert_mask_token]
-
-    def de_tokenize(self, ids):
-        res = " ".join(
-            filter(lambda t: t not in self._special_tokens,
-                   self.convert_ids_to_tokens(ids)))
-        res = res.replace(u"\u2581", " ")
-        return res
 
 
 class CommonActs(namedtuple(
@@ -332,6 +172,23 @@ class ScannerDecayEPS(ScheduledEPS):
             range_idx, range_t, self.range_init[range_idx],
             self.decay_speed[range_idx], eps_t))
         return eps_t
+
+
+def get_path_tags(path: str, prefix: str) -> List[int]:
+    """
+    Get tag from a path of saved objects. E.g. actions-100.npz
+    100 will be extracted
+    Make sure the item to be extracted is saved with suffix of npz.
+    :param path:
+    :param prefix:
+    :return:
+    """
+    all_paths = glob.glob(
+        os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
+    tags = list(
+        map(lambda fn: int(os.path.splitext(fn)[0].split("-")[-1]),
+            map(lambda p: os.path.basename(p), all_paths)))
+    return tags
 
 
 def align_batch_str(

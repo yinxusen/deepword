@@ -15,7 +15,7 @@ class GenDQNAgent(BaseAgent):
         action_token_ids = [m.token_id for m in b_memory]
         return action_token_ids
 
-    def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
+    def _get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
         gen_res = self.core.decode_action(trajectory)
         action = self.tokenizer.de_tokenize(gen_res.ids)

@@ -17,15 +17,17 @@ from tensorflow.train import Saver
 from tqdm import trange
 
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents.base_agent import BaseAgent, DRRNMemoTeacher
+from deeptextworld.agents.base_agent import DRRNMemoTeacher
 from deeptextworld.agents.utils import ActionMaster
 from deeptextworld.agents.utils import Memolet, align_batch_str
 from deeptextworld.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deeptextworld.agents.utils import bert_commonsense_input
 from deeptextworld.agents.utils import get_action_idx_pair
 from deeptextworld.agents.utils import get_best_batch_ids
+from deeptextworld.agents.utils import get_path_tags
 from deeptextworld.agents.utils import sample_batch_ids
 from deeptextworld.hparams import save_hparams, output_hparams
+from deeptextworld.tokenizers import init_tokens
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.utils import eprint, flatten, softmax
 from deeptextworld.utils import model_name2clazz, bytes2idx
@@ -57,7 +59,7 @@ class StudentLearner(object):
 
         self.load_from = pjoin(self.model_dir, "last_weights")
         self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
-        self.hp, self.tokenizer = BaseAgent.init_tokens(hp)
+        self.hp, self.tokenizer = init_tokens(hp)
         save_hparams(self.hp, pjoin(model_dir, "hparams.json"))
         eprint(output_hparams(self.hp))
 
@@ -69,13 +71,9 @@ class StudentLearner(object):
         self.queue = None
 
     def _get_compatible_snapshot_tag(self) -> List[int]:
-
-        action_tags = BaseAgent.get_path_tags(
-            self.train_data_dir, self.action_prefix)
-        memo_tags = BaseAgent.get_path_tags(
-            self.train_data_dir, self.memo_prefix)
-        tjs_tags = BaseAgent.get_path_tags(
-            self.train_data_dir, self.tjs_prefix)
+        action_tags = get_path_tags(self.train_data_dir, self.action_prefix)
+        memo_tags = get_path_tags(self.train_data_dir, self.memo_prefix)
+        tjs_tags = get_path_tags(self.train_data_dir, self.tjs_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
@@ -182,8 +180,7 @@ class StudentLearner(object):
 
     @classmethod
     def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMaster]:
-        tjs = Trajectory[ActionMaster](
-            num_turns=old_tjs.num_turns // 2, size_per_turn=1)
+        tjs = Trajectory(num_turns=old_tjs.num_turns // 2, size_per_turn=1)
         tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
         tjs.curr_tid = old_tjs.curr_tid
         tjs.trajectories = dict([
@@ -228,7 +225,7 @@ class StudentLearner(object):
             lambda x: isinstance(x, DRRNMemoTeacher), old_memory))
         memory = self.memo_old2new(old_memory)
 
-        old_tjs = Trajectory[str](
+        old_tjs = Trajectory(
             num_turns=self.hp.num_turns * 2 + 1, size_per_turn=2)
         old_tjs.load_tjs(tjs_path)
         tjs = self.tjs_str2am(old_tjs)
@@ -247,7 +244,7 @@ class StudentLearner(object):
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
-        tjs = Trajectory[ActionMaster](self.hp.num_turns)
+        tjs = Trajectory(self.hp.num_turns)
         tjs.load_tjs(tjs_path)
 
         actions = ActionCollector(

@@ -8,9 +8,7 @@ import time
 import traceback
 from collections import ChainMap
 from collections import namedtuple
-from functools import reduce
 from multiprocessing import Pool
-from operator import and_
 from os.path import join as pjoin
 from threading import Lock
 from typing import List, Dict, Optional, Tuple

@@ -2,21 +2,25 @@ import glob
 import os
 import random
 import re
+from collections import namedtuple
 from os import remove as prm
 from os.path import join as pjoin
-from typing import Any
+from typing import List, Dict, Tuple, Optional, Any
 
+import numpy as np
+from scipy.stats import entropy
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 from textworld import EnvInfos
-from scipy.special import logsumexp
-from scipy.stats import entropy
 
 from deeptextworld.action import ActionCollector
-from deeptextworld.agents.utils import *
+from deeptextworld.agents.utils import ACT, ObsInventory, INFO_KEY, \
+    ActionDesc, ACT_TYPE, Memolet, ActionMaster, Logging, LinearDecayedEPS
+from deeptextworld.agents.utils import categorical_without_replacement, \
+    get_best_1d_q, remove_zork_version_info, get_path_tags
 from deeptextworld.floor_plan import FloorPlanCollector
-from deeptextworld.hparams import conventions
-from deeptextworld.hparams import save_hparams, output_hparams, copy_hparams
+from deeptextworld.hparams import save_hparams, output_hparams
+from deeptextworld.tokenizers import init_tokens, Tokenizer
 from deeptextworld.trajectory import Trajectory
 from deeptextworld.tree_memory import TreeMemory
 from deeptextworld.utils import get_hash, core_name2clazz
@@ -53,7 +57,7 @@ class BaseAgent(Logging):
             ACT.gs: ACT.gn, ACT.gn: ACT.gs,
             ACT.ge: ACT.gw, ACT.gw: ACT.ge}
 
-        self.hp, self.tokenizer = self.init_tokens(hp)
+        self.hp, self.tokenizer = init_tokens(hp)
         self.info(output_hparams(self.hp))
 
         core_class = core_name2clazz(self.hp.core_clazz)
@@ -95,29 +99,12 @@ class BaseAgent(Logging):
         self._negative_scores = 0
 
     @classmethod
-    def get_path_tags(cls, path: str, prefix: str) -> List[int]:
-        """
-        Get tag from a path of saved objects. E.g. actions-100.npz
-        100 will be extracted
-        Make sure the item to be extracted is saved with suffix of npz.
-        :param path:
-        :param prefix:
-        :return:
-        """
-        all_paths = glob.glob(
-            os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
-        tags = list(
-            map(lambda fn: int(os.path.splitext(fn)[0].split("-")[-1]),
-                map(lambda p: os.path.basename(p), all_paths)))
-        return tags
-
-    @classmethod
-    def clip_reward(cls, reward: float) -> float:
+    def _clip_reward(cls, reward: float) -> float:
         """clip reward into [-1, 1]"""
         return max(min(reward, 1), -1)
 
     @classmethod
-    def get_room_name(cls, master: str) -> Optional[str]:
+    def _get_room_name(cls, master: str) -> Optional[str]:
         """
         Extract and lower room name.
         Return None if not exist.
@@ -146,138 +133,7 @@ class BaseAgent(Logging):
             lost=True,
             admissible_commands=True)
 
-    @classmethod
-    def get_bert_tokenizer(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
-        tokenizer = BertTokenizer(
-            vocab_file=conventions.bert_vocab_file, do_lower_case=True)
-        new_hp = copy_hparams(hp)
-        # set vocab info
-        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
-        new_hp.set_hparam("padding_val", conventions.bert_padding_token)
-        new_hp.set_hparam("unk_val", conventions.bert_unk_token)
-        new_hp.set_hparam("cls_val", conventions.bert_cls_token)
-        new_hp.set_hparam("sep_val", conventions.bert_sep_token)
-        new_hp.set_hparam("mask_val", conventions.bert_mask_token)
-        new_hp.set_hparam("sos", conventions.bert_sos_token)
-        new_hp.set_hparam("eos", conventions.bert_eos_token)
-
-        # set special token ids
-        new_hp.set_hparam(
-            'padding_val_id', tokenizer.vocab[conventions.bert_padding_token])
-        assert new_hp.padding_val_id == 0, "padding should be indexed as 0"
-        new_hp.set_hparam(
-            'unk_val_id', tokenizer.vocab[conventions.bert_unk_token])
-        # bert specific tokens
-        new_hp.set_hparam(
-            'cls_val_id', tokenizer.vocab[conventions.bert_cls_token])
-        new_hp.set_hparam(
-            'sep_val_id', tokenizer.vocab[conventions.bert_sep_token])
-        new_hp.set_hparam(
-            'mask_val_id', tokenizer.vocab[conventions.bert_mask_token])
-        new_hp.set_hparam(
-            "sos_id", tokenizer.vocab[conventions.bert_sos_token])
-        new_hp.set_hparam(
-            "eos_id", tokenizer.vocab[conventions.bert_eos_token])
-        return new_hp, tokenizer
-
-    @classmethod
-    def get_albert_tokenizer(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
-        tokenizer = AlbertTokenizer(
-            vocab_file=conventions.albert_vocab_file,
-            do_lower_case=True,
-            spm_model_file=conventions.albert_spm_path)
-        new_hp = copy_hparams(hp)
-        # make sure that padding_val is indexed as 0.
-        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
-        new_hp.set_hparam("padding_val", conventions.albert_padding_token)
-        new_hp.set_hparam("unk_val", conventions.albert_unk_token)
-        new_hp.set_hparam("cls_val", conventions.albert_cls_token)
-        new_hp.set_hparam("sep_val", conventions.albert_sep_token)
-        new_hp.set_hparam("mask_val", conventions.albert_mask_token)
-
-        new_hp.set_hparam(
-            'padding_val_id', tokenizer.vocab[conventions.albert_padding_token])
-        assert new_hp.padding_val_id == 0, "padding should be indexed as 0"
-        new_hp.set_hparam(
-            'unk_val_id', tokenizer.vocab[conventions.albert_unk_token])
-        new_hp.set_hparam(
-            'cls_val_id', tokenizer.vocab[conventions.albert_cls_token])
-        new_hp.set_hparam(
-            'sep_val_id', tokenizer.vocab[conventions.albert_sep_token])
-        new_hp.set_hparam(
-            'mask_val_id', tokenizer.vocab[conventions.albert_mask_token])
-        return new_hp, tokenizer
-
-    @classmethod
-    def get_nltk_tokenizer(
-            cls, hp: HParams, vocab_file: str = conventions.nltk_vocab_file
-    ) -> Tuple[HParams, Tokenizer]:
-        tokenizer = NLTKTokenizer(vocab_file=vocab_file, do_lower_case=True)
-        new_hp = copy_hparams(hp)
-        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
-        new_hp.set_hparam("padding_val", conventions.nltk_padding_token)
-        new_hp.set_hparam("unk_val", conventions.nltk_unk_token)
-        new_hp.set_hparam("sos", conventions.nltk_sos_token)
-        new_hp.set_hparam("eos", conventions.nltk_eos_token)
-
-        new_hp.set_hparam(
-            'padding_val_id', tokenizer.vocab[conventions.nltk_padding_token])
-        assert new_hp.padding_val_id == 0, "padding should be indexed as 0"
-        new_hp.set_hparam(
-            'unk_val_id', tokenizer.vocab[conventions.nltk_unk_token])
-        new_hp.set_hparam('sos_id', tokenizer.vocab[conventions.nltk_sos_token])
-        new_hp.set_hparam('eos_id', tokenizer.vocab[conventions.nltk_eos_token])
-        return new_hp, tokenizer
-
-    @classmethod
-    def get_zork_tokenizer(
-            cls,
-            hp: HParams,
-            vocab_file: str = conventions.legacy_zork_vocab_file
-    ) -> Tuple[HParams, Tokenizer]:
-        tokenizer = LegacyZorkTokenizer(vocab_file=vocab_file)
-        new_hp = copy_hparams(hp)
-        new_hp.set_hparam('vocab_size', len(tokenizer.vocab))
-        new_hp.set_hparam("padding_val", conventions.nltk_padding_token)
-        new_hp.set_hparam("unk_val", conventions.nltk_unk_token)
-        new_hp.set_hparam("sos", conventions.nltk_sos_token)
-        new_hp.set_hparam("eos", conventions.nltk_eos_token)
-
-        new_hp.set_hparam(
-            'padding_val_id', tokenizer.vocab[conventions.nltk_padding_token])
-        new_hp.set_hparam(
-            'unk_val_id', tokenizer.vocab[conventions.nltk_unk_token])
-        new_hp.set_hparam('sos_id', tokenizer.vocab[conventions.nltk_sos_token])
-        new_hp.set_hparam('eos_id', tokenizer.vocab[conventions.nltk_eos_token])
-        return new_hp, tokenizer
-
-    @classmethod
-    def init_tokens(cls, hp: HParams) -> Tuple[HParams, Tokenizer]:
-        """
-        Note that BERT must use bert vocabulary.
-        :param hp:
-        :return:
-        """
-        if hp.tokenizer_type.lower() == "bert":
-            new_hp, tokenizer = cls.get_bert_tokenizer(hp)
-        elif hp.tokenizer_type.lower() == "albert":
-            new_hp, tokenizer = cls.get_albert_tokenizer(hp)
-        elif hp.tokenizer_type.lower() == "nltk":
-            if hp.use_glove_emb:
-                # the glove vocab file has been modified to have special tokens
-                # i.e. [PAD] [UNK] <S> </S>
-                new_hp, tokenizer = cls.get_nltk_tokenizer(
-                    hp, vocab_file=conventions.glove_vocab_file)
-            else:
-                new_hp, tokenizer = cls.get_nltk_tokenizer(hp)
-        elif hp.tokenizer_type.lower() == "zork":
-            new_hp, tokenizer = cls.get_zork_tokenizer(hp)
-        else:
-            raise ValueError(
-                "Unknown tokenizer type: {}".format(hp.tokenizer_type))
-        return new_hp, tokenizer
-
-    def get_admissible_actions(
+    def _get_admissible_actions(
             self, infos: Dict[str, List[Any]]) -> List[str]:
         """
         We add inventory and look, in case that the game doesn't provide these
@@ -296,7 +152,7 @@ class BaseAgent(Logging):
             infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0])
         return get_hash(starter)
 
-    def init_actions(
+    def _init_actions(
             self, hp: HParams, tokenizer: Tokenizer, action_path: str,
             with_loading=True) -> ActionCollector:
         action_collector = ActionCollector(
@@ -311,9 +167,9 @@ class BaseAgent(Logging):
                 self.info("load actions error: \n{}".format(e))
         return action_collector
 
-    def init_trajectory(
+    def _init_trajectory(
             self, hp: HParams, tjs_path: str, with_loading=True) -> Trajectory:
-        tjs = Trajectory[ActionMaster](num_turns=hp.num_turns)
+        tjs = Trajectory(num_turns=hp.num_turns)
         if with_loading:
             try:
                 tjs.load_tjs(tjs_path)
@@ -321,9 +177,9 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return tjs
 
-    def init_state_text(self, state_text_path, with_loading=True):
+    def _init_state_text(self, state_text_path, with_loading=True):
         # num_turns = 0, we only need the most recent ObsInventory
-        stc = Trajectory[ObsInventory](num_turns=0)
+        stc = Trajectory(num_turns=0)
         if with_loading:
             try:
                 stc.load_tjs(state_text_path)
@@ -331,7 +187,7 @@ class BaseAgent(Logging):
                 self.info("load trajectory error: \n{}".format(e))
         return stc
 
-    def init_memo(
+    def _init_memo(
             self, hp: HParams, memo_path: str, with_loading=True) -> TreeMemory:
         memory = TreeMemory(capacity=hp.replay_mem)
         if with_loading:
@@ -341,7 +197,7 @@ class BaseAgent(Logging):
                 self.info("load memory error: \n{}".format(e))
         return memory
 
-    def init_floor_plan(
+    def _init_floor_plan(
             self, fp_path: str, with_loading=True) -> FloorPlanCollector:
         fp = FloorPlanCollector()
         if with_loading:
@@ -351,7 +207,7 @@ class BaseAgent(Logging):
                 self.info("load floor plan error: \n{}".format(e))
         return fp
 
-    def get_a_random_action(self, action_mask: np.ndarray) -> ActionDesc:
+    def _get_a_random_action(self, action_mask: np.ndarray) -> ActionDesc:
         """
         Select a random action according to action mask
         :param action_mask:
@@ -415,7 +271,7 @@ class BaseAgent(Logging):
         return self._get_context_obj_path_w_tag(prefix, self.total_t)
 
     def _load_context_objs(self) -> None:
-        valid_tags = self.get_compatible_snapshot_tag()
+        valid_tags = self._get_compatible_snapshot_tag()
         self._largest_valid_tag = max(valid_tags) if len(valid_tags) != 0 else 0
         self.info("try to load from tag: {}".format(self._largest_valid_tag))
 
@@ -426,17 +282,17 @@ class BaseAgent(Logging):
         stc_path = self._get_context_obj_path(self.stc_prefix)
 
         # always loading actions to avoid different action index for DQN
-        self.actor = self.init_actions(
+        self.actor = self._init_actions(
             self.hp, self.tokenizer, action_path,
             with_loading=self.is_training)
-        self.tjs = self.init_trajectory(
+        self.tjs = self._init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
-        self.memo = self.init_memo(
+        self.memo = self._init_memo(
             self.hp, memo_path, with_loading=self.is_training)
-        self.floor_plan = self.init_floor_plan(
+        self.floor_plan = self._init_floor_plan(
             fp_path, with_loading=self.is_training)
         # load stc
-        self.stc = self.init_state_text(stc_path, with_loading=True)
+        self.stc = self._init_state_text(stc_path, with_loading=True)
 
     def _init_impl(
             self, load_best: bool = False,
@@ -529,7 +385,7 @@ class BaseAgent(Logging):
         self._prev_master = None
 
     def _delete_stale_context_objs(self) -> None:
-        valid_tags = self.get_compatible_snapshot_tag()
+        valid_tags = self._get_compatible_snapshot_tag()
         if len(valid_tags) > self.hp.max_snapshot_to_keep:
             self._stale_tags = list(reversed(sorted(
                 valid_tags)))[self.hp.max_snapshot_to_keep:]
@@ -560,12 +416,12 @@ class BaseAgent(Logging):
         self._delete_stale_context_objs()
         self._clean_stale_context(self._stale_tids)
 
-    def get_compatible_snapshot_tag(self) -> List[int]:
-        action_tags = self.get_path_tags(self.model_dir, self.action_prefix)
-        memo_tags = self.get_path_tags(self.model_dir, self.memo_prefix)
-        tjs_tags = self.get_path_tags(self.model_dir, self.tjs_prefix)
-        fp_tags = self.get_path_tags(self.model_dir, self.fp_prefix)
-        stc_tags = self.get_path_tags(self.model_dir, self.stc_prefix)
+    def _get_compatible_snapshot_tag(self) -> List[int]:
+        action_tags = get_path_tags(self.model_dir, self.action_prefix)
+        memo_tags = get_path_tags(self.model_dir, self.memo_prefix)
+        tjs_tags = get_path_tags(self.model_dir, self.tjs_prefix)
+        fp_tags = get_path_tags(self.model_dir, self.fp_prefix)
+        stc_tags = get_path_tags(self.model_dir, self.stc_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
@@ -575,11 +431,11 @@ class BaseAgent(Logging):
 
         return list(valid_tags)
 
-    def is_time_to_save(self) -> bool:
+    def _is_time_to_save(self) -> bool:
         trained_steps = self.total_t - self.hp.observation_t + 1
         return (trained_steps % self.hp.save_gap_t == 0) and (trained_steps > 0)
 
-    def go_with_floor_plan(self, actions: List[str]) -> List[str]:
+    def _go_with_floor_plan(self, actions: List[str]) -> List[str]:
         """
         Update go-cardinal actions into go-room actions, if floor plan exists
         :param actions:
@@ -590,7 +446,7 @@ class BaseAgent(Logging):
             ["{} to {}".format(a, local_map.get(a))
              if a in local_map else a for a in actions])
 
-    def random_walk_for_collecting_fp(
+    def _random_walk_for_collecting_fp(
             self, actions: List[str]) -> Optional[ActionDesc]:
         cardinal_go = list(filter(
             lambda a: a.startswith("go") and len(a.split()) == 2, actions))
@@ -616,7 +472,7 @@ class BaseAgent(Logging):
         else:
             return None
 
-    def get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
+    def _get_policy_action(self, action_mask: np.ndarray) -> ActionDesc:
         trajectory = self.tjs.fetch_last_state()
         state = self.stc.fetch_last_state()[-1]
 
@@ -653,33 +509,33 @@ class BaseAgent(Logging):
             q_actions=q_actions)
         return action_desc
 
-    def rule_based_policy(
+    def _rule_based_policy(
             self, actions: List[str], instant_reward: float
     ) -> Optional[ActionDesc]:
         return None
 
-    def choose_action(
+    def _choose_action(
             self,
             actions: List[str],
             action_mask: np.ndarray,
             instant_reward: float) -> ActionDesc:
         # when q_actions is required to get, this should be True
         if self.hp.always_compute_policy:
-            policy_action_desc = self.get_policy_action(action_mask)
+            policy_action_desc = self._get_policy_action(action_mask)
         else:
             policy_action_desc = None
 
-        action_desc = self.rule_based_policy(actions, instant_reward)
+        action_desc = self._rule_based_policy(actions, instant_reward)
         if not action_desc:
-            action_desc = self.random_walk_for_collecting_fp(actions)
+            action_desc = self._random_walk_for_collecting_fp(actions)
             if not action_desc:
                 if random.random() < self.eps:
-                    action_desc = self.get_a_random_action(action_mask)
+                    action_desc = self._get_a_random_action(action_mask)
                 else:
                     if policy_action_desc:
                         action_desc = policy_action_desc
                     else:
-                        action_desc = self.get_policy_action(action_mask)
+                        action_desc = self._get_policy_action(action_mask)
 
         final_action_desc = ActionDesc(
             action_type=action_desc.action_type,
@@ -692,13 +548,13 @@ class BaseAgent(Logging):
                 if self.hp.always_compute_policy else action_desc.q_actions))
         return final_action_desc
 
-    def get_raw_instant_reward(self, score: float) -> float:
+    def _get_raw_instant_reward(self, score: float) -> float:
         """raw instant reward between two consecutive scores"""
         instant_reward = score - self._cumulative_score
         self._cumulative_score = score
         return instant_reward
 
-    def get_repetition_penalty(
+    def _get_repetition_penalty(
             self, master: str, raw_instant_reward: float) -> float:
         """
         add a penalty of self._cumulative_penalty if the current Action-Master
@@ -716,14 +572,14 @@ class BaseAgent(Logging):
             self._cumulative_penalty = 0.
         return self._cumulative_penalty
 
-    def get_instant_reward(
+    def _get_instant_reward(
             self, score: float, master: str, is_terminal: bool,
             won: bool, lost: bool) -> float:
         # there are three scenarios of game termination
         # 1. you won      --> encourage this action
         # 2. you lost     --> discourage this action
         # 3. out of step  --> do nothing
-        raw_instant_reward = self.get_raw_instant_reward(score)
+        raw_instant_reward = self._get_raw_instant_reward(score)
         if raw_instant_reward >= 0:
             self._positive_scores += raw_instant_reward
         else:
@@ -738,10 +594,10 @@ class BaseAgent(Logging):
                 pass
         # add repetition penalty and per-step penalty
         if self.hp.use_step_wise_reward:
-            curr_cumulative_penalty = self.get_repetition_penalty(
+            curr_cumulative_penalty = self._get_repetition_penalty(
                 master, raw_instant_reward)
             instant_reward += (curr_cumulative_penalty + (-0.1))
-        instant_reward = self.clip_reward(instant_reward)
+        instant_reward = self._clip_reward(instant_reward)
         return instant_reward
 
     @property
@@ -752,7 +608,7 @@ class BaseAgent(Logging):
     def negative_scores(self):
         return self._negative_scores
 
-    def collect_floor_plan(self, master: str, prev_place: str) -> str:
+    def _collect_floor_plan(self, master: str, prev_place: str) -> str:
         """
         collect floor plan with latest master.
         if the current place doesn't match the previous place, and a go action
@@ -762,7 +618,7 @@ class BaseAgent(Logging):
         :param prev_place: the name of previous place
         :return: the name of current place
         """
-        room_name = self.get_room_name(master)
+        room_name = self._get_room_name(master)
         curr_place = room_name if room_name is not None else prev_place
 
         if (curr_place != prev_place and
@@ -777,7 +633,7 @@ class BaseAgent(Logging):
     def _prepare_other_train_data(self, b_memory: List[Memolet]) -> Any:
         return None
 
-    def train_one_batch(self) -> None:
+    def _train_one_batch(self) -> None:
         """
         Train one batch of samples.
         Load target model if not exist, save current model when necessary.
@@ -830,7 +686,7 @@ class BaseAgent(Logging):
 
         self.memo.batch_update(b_idx, b_weight)
 
-        if self.is_time_to_save():
+        if self._is_time_to_save():
             self.save_snapshot()
             self.core.save_model()
             self.core.create_or_reload_target_model()
@@ -839,13 +695,13 @@ class BaseAgent(Logging):
         self.tjs.request_delete_keys(tids)
         self.stc.request_delete_keys(tids)
 
-    def update_status(
+    def _update_status(
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, float]:
         desc = infos[INFO_KEY.desc][0]
         master = (remove_zork_version_info(desc)
                   if self.in_game_t == 0 and desc else obs[0])
-        instant_reward = self.get_instant_reward(
+        instant_reward = self._get_instant_reward(
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
@@ -873,18 +729,19 @@ class BaseAgent(Logging):
 
         if self.hp.collect_floor_plan:
             self._prev_place = self._curr_place
-            self._curr_place = self.collect_floor_plan(master, self._prev_place)
+            self._curr_place = self._collect_floor_plan(
+                master, self._prev_place)
 
         return master, instant_reward
 
-    def prepare_actions(self, admissible_actions: List[str]) -> List[str]:
+    def _prepare_actions(self, admissible_actions: List[str]) -> List[str]:
         if self.hp.collect_floor_plan:
-            effective_actions = self.go_with_floor_plan(admissible_actions)
+            effective_actions = self._go_with_floor_plan(admissible_actions)
         else:
             effective_actions = admissible_actions
         return effective_actions
 
-    def collect_new_sample(
+    def _collect_new_sample(
             self, master: str, instant_reward: float, dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[
             List[str], np.ndarray, np.ndarray, float]:
@@ -898,9 +755,9 @@ class BaseAgent(Logging):
             inventory=infos[INFO_KEY.inventory][0])
         self.stc.append(state)
 
-        admissible_actions = self.get_admissible_actions(infos)
+        admissible_actions = self._get_admissible_actions(infos)
         sys_action_mask = self.actor.extend(admissible_actions)
-        effective_actions = self.prepare_actions(admissible_actions)
+        effective_actions = self._prepare_actions(admissible_actions)
         action_mask = self.actor.extend(effective_actions)
 
         if self.tjs.get_last_sid() > 0:
@@ -927,7 +784,7 @@ class BaseAgent(Logging):
 
         return effective_actions, action_mask, sys_action_mask, instant_reward
 
-    def next_step_action(
+    def _next_step_action(
             self,
             actions: List[str],
             instant_reward: float,
@@ -938,7 +795,7 @@ class BaseAgent(Logging):
             self.eps = self.eps_getter.eps(self.total_t - self.hp.observation_t)
         else:
             pass
-        self._last_action = self.choose_action(
+        self._last_action = self._choose_action(
             actions, action_mask, instant_reward)
         action = self._last_action.action
         action_idx = self._last_action.action_idx
@@ -978,19 +835,19 @@ class BaseAgent(Logging):
             self._start_episode(obs, infos)
 
         assert len(obs) == 1, "cannot handle batch game training"
-        master, instant_reward = self.update_status(obs, scores, dones, infos)
+        master, instant_reward = self._update_status(obs, scores, dones, infos)
         (actions, action_mask, sys_action_mask, instant_reward
-         ) = self.collect_new_sample(master, instant_reward, dones, infos)
+         ) = self._collect_new_sample(master, instant_reward, dones, infos)
         # notice the position of all(dones)
         # make sure add the last action-master pair into memory
         if all(dones):
             self._end_episode(obs, scores, infos)
             return None
 
-        player_t = self.next_step_action(
+        player_t = self._next_step_action(
             actions, instant_reward, action_mask, sys_action_mask)
         if self.is_training and self.total_t >= self.hp.observation_t:
-            self.train_one_batch()
+            self._train_one_batch()
         self.total_t += 1
         self.in_game_t += 1
         return [player_t] * len(obs)

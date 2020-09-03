@@ -10,7 +10,7 @@ class ZorkAgent(BaseAgent):
         self.loaded_actions: List[str] = [
             a.lower() for a in load_actions(self.hp.action_file)]
 
-    def get_admissible_actions(self, infos):
+    def _get_admissible_actions(self, infos):
         """
         We add inventory and look, in case that the game doesn't provide these
         two key actions.

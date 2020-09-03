@@ -569,7 +569,7 @@ class TabularCore(BaseCore):
         self.is_training = is_training
         try:
             if not restore_from:
-                tags = BaseAgent.get_path_tags(
+                tags = BaseAgent._get_path_tags(
                     self.ckpt_path, self.ckpt_prefix)
                 self.loaded_ckpt_step = max(tags)
                 restore_from = pjoin(

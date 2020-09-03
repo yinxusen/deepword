@@ -51,12 +51,12 @@ class DSQNAgent(BaseAgent):
         hs2tj_path = self._get_context_obj_new_path(self.hs2tj_prefix)
         np.savez(hs2tj_path, hs2tj=[self.hash_states2tjs])
 
-    def get_compatible_snapshot_tag(self):
+    def _get_compatible_snapshot_tag(self):
         # get parent valid tags
-        valid_tags = super(DSQNAgent, self).get_compatible_snapshot_tag()
+        valid_tags = super(DSQNAgent, self)._get_compatible_snapshot_tag()
         valid_tags = set(valid_tags)
         # mix valid tags w/ context objs
-        hs2tj_tags = self.get_path_tags(self.model_dir, self.hs2tj_prefix)
+        hs2tj_tags = self._get_path_tags(self.model_dir, self.hs2tj_prefix)
         valid_tags.intersection_update(hs2tj_tags)
         return list(valid_tags)
 
@@ -80,10 +80,10 @@ class DSQNAgent(BaseAgent):
                 self.debug("remove key {} from hs2tj".format(k))
         self.hash_states2tjs = hs2tj_cleaned
 
-    def collect_new_sample(
+    def _collect_new_sample(
             self, master, instant_reward, dones, infos):
         (actions, actions_mask, sys_actions_mask, instant_reward
-         ) = super(DSQNAgent, self).collect_new_sample(
+         ) = super(DSQNAgent, self)._collect_new_sample(
             master, instant_reward, dones, infos)
 
         if not dones[0]:
