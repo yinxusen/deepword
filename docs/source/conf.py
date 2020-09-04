@@ -19,7 +19,7 @@ import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------
 
-project = 'deep-textworld'
+project = 'DeepWord'
 copyright = '2020, Xusen Yin'
 author = 'Xusen Yin'
 

@@ -57,7 +57,7 @@ F_GAMES=$4
 
 
 pushd "$PDIR"
-./sbin/run.sh python/deeptextworld/main.py \
+./sbin/run.sh python/deepword/main.py \
     --config-file "$PRE_CONF_FILE" \
     --model-dir "$MODELHOME" \
     train-dqn \

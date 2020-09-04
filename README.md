@@ -1,4 +1,4 @@
-# deeptextworld
+# DeepWord
 
 Create auto-agent to play text-based games
 

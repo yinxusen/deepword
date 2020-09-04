@@ -1,0 +1,1321 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>deepword.models package &mdash; DeepWord v4.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> DeepWord
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">deepword.models package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-deepword.models.commonsense_model">deepword.models.commonsense_model module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.dqn_model">deepword.models.dqn_model module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.drrn_model">deepword.models.drrn_model module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.dsqn_model">deepword.models.dsqn_model module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.export_models">deepword.models.export_models module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.gen_model">deepword.models.gen_model module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.transformer">deepword.models.transformer module</a></li>
+<li><a class="reference internal" href="#module-deepword.models.utils">deepword.models.utils module</a></li>
+<li><a class="reference internal" href="#module-deepword.models">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">DeepWord</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>deepword.models package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/deepword.models.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="deepword-models-package">
+<h1>deepword.models package<a class="headerlink" href="#deepword-models-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-deepword.models.commonsense_model">
+<span id="deepword-models-commonsense-model-module"></span><h2>deepword.models.commonsense_model module<a class="headerlink" href="#module-deepword.models.commonsense_model" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.commonsense_model.AlbertCommonsense">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.commonsense_model.</code><code class="sig-name descname">AlbertCommonsense</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.AlbertCommonsense" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.commonsense_model.BertCommonsense" title="deepword.models.commonsense_model.BertCommonsense"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.commonsense_model.BertCommonsense</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.AlbertCommonsense.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.AlbertCommonsense.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><dl class="simple">
+<dt>src: source sentences to encode,</dt><dd><p>has paddings, [CLS], and [SEP] prepared</p>
+</dd>
+</dl>
+<p>src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id1"><span class="problematic" id="id2">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.AlbertCommonsense.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.AlbertCommonsense.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.commonsense_model.BertCommonsense">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.commonsense_model.</code><code class="sig-name descname">BertCommonsense</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><dl class="simple">
+<dt>src: source sentences to encode,</dt><dd><p>has paddings, [CLS], and [SEP] prepared</p>
+</dd>
+</dl>
+<p>src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id3"><span class="problematic" id="id4">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_eval_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_eval_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_swag_train_op">
+<code class="sig-name descname">get_swag_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_swag_train_op" title="Permalink to this definition">¶</a></dt>
+<dd><p>q_actions: [batch_size, 1]
+in this case, when we want to compute classification error, we need
+the batch_size = src batch size * num classes
+which means that number of classes for each src should be equal
+:param q_actions:
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.commonsense_model.BertCommonsense.get_train_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.BertCommonsense.get_train_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.commonsense_model.create_eval_bert_commonsense_model">
+<code class="sig-prename descclassname">deepword.models.commonsense_model.</code><code class="sig-name descname">create_eval_bert_commonsense_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model_creator</span></em>, <em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.create_eval_bert_commonsense_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.commonsense_model.create_train_bert_commonsense_model">
+<code class="sig-prename descclassname">deepword.models.commonsense_model.</code><code class="sig-name descname">create_train_bert_commonsense_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model_creator</span></em>, <em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.commonsense_model.create_train_bert_commonsense_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.dqn_model">
+<span id="deepword-models-dqn-model-module"></span><h2>deepword.models.dqn_model module<a class="headerlink" href="#module-deepword.models.dqn_model" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.dqn_model.BaseDQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dqn_model.</code><code class="sig-name descname">BaseDQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.dqn_model.BaseDQN.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.BaseDQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.BaseDQN.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.BaseDQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.BaseDQN.init_glove">
+<em class="property">classmethod </em><code class="sig-name descname">init_glove</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">glove_path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.BaseDQN.init_glove" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.dqn_model.CnnDQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dqn_model.</code><code class="sig-name descname">CnnDQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.CnnDQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.dqn_model.CnnDQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.CnnDQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.CnnDQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.CnnDQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.dqn_model.LstmDQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dqn_model.</code><code class="sig-name descname">LstmDQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.LstmDQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.dqn_model.LstmDQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.LstmDQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dqn_model.LstmDQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dqn_model.LstmDQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.drrn_model">
+<span id="deepword-models-drrn-model-module"></span><h2>deepword.models.drrn_model module<a class="headerlink" href="#module-deepword.models.drrn_model" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.drrn_model.BertDRRN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.drrn_model.</code><code class="sig-name descname">BertDRRN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.BertDRRN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.drrn_model.CnnDRRN" title="deepword.models.drrn_model.CnnDRRN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.drrn_model.CnnDRRN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.drrn_model.BertDRRN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.BertDRRN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id5"><span class="problematic" id="id6">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.BertDRRN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.BertDRRN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.drrn_model.CnnDRRN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.drrn_model.</code><code class="sig-name descname">CnnDRRN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_eval_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_eval_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.CnnDRRN.get_train_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.CnnDRRN.get_train_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.drrn_model.LegacyCnnDRRN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.drrn_model.</code><code class="sig-name descname">LegacyCnnDRRN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.LegacyCnnDRRN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.drrn_model.CnnDRRN" title="deepword.models.drrn_model.CnnDRRN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.drrn_model.CnnDRRN</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.drrn_model.TransformerDRRN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.drrn_model.</code><code class="sig-name descname">TransformerDRRN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.TransformerDRRN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.drrn_model.CnnDRRN" title="deepword.models.drrn_model.CnnDRRN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.drrn_model.CnnDRRN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.drrn_model.TransformerDRRN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.TransformerDRRN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id7"><span class="problematic" id="id8">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>src_embeddings</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.drrn_model.TransformerDRRN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.drrn_model.TransformerDRRN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.dsqn_model">
+<span id="deepword-models-dsqn-model-module"></span><h2>deepword.models.dsqn_model module<a class="headerlink" href="#module-deepword.models.dsqn_model" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.dsqn_model.CnnDSQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dsqn_model.</code><code class="sig-name descname">CnnDSQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_merged_train_op">
+<code class="sig-name descname">get_merged_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">loss</span></em>, <em class="sig-param"><span class="n">snn_loss</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_merged_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_snn_train_op">
+<code class="sig-name descname">get_snn_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">semantic_same</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_snn_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.get_train_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.get_train_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnDSQN.is_semantic_same">
+<code class="sig-name descname">is_semantic_same</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnDSQN.is_semantic_same" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dsqn_model.</code><code class="sig-name descname">CnnZorkDSQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dsqn_model.CnnDSQN" title="deepword.models.dsqn_model.CnnDSQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dsqn_model.CnnDSQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id9"><span class="problematic" id="id10">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.get_h_state">
+<code class="sig-name descname">get_h_state</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.get_h_state" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.CnnZorkDSQN.is_semantic_same">
+<code class="sig-name descname">is_semantic_same</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.CnnZorkDSQN.is_semantic_same" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.dsqn_model.TransformerDSQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.dsqn_model.</code><code class="sig-name descname">TransformerDSQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.TransformerDSQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dsqn_model.CnnDSQN" title="deepword.models.dsqn_model.CnnDSQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dsqn_model.CnnDSQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.TransformerDSQN.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">src_embeddings</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.TransformerDSQN.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl>
+<dt>inputs:</dt><dd><p>src: source sentences to encode
+src_len: length of source sentences
+action_idx: the action chose to run
+expected_q: E(q) computed from the iterative equation of DQN
+actions: all possible actions
+actions_len: length of actions
+actions_mask: a 0-1 vector of size <a href="#id11"><span class="problematic" id="id12">|actions|</span></a>, using 0 to eliminate</p>
+<blockquote>
+<div><p>some actions for a certain state.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.TransformerDSQN.get_h_state">
+<code class="sig-name descname">get_h_state</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.TransformerDSQN.get_h_state" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.TransformerDSQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.TransformerDSQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd><p>compute the Q-vector from the relevance of hidden state
+and hidden actions
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.dsqn_model.TransformerDSQN.is_semantic_same">
+<code class="sig-name descname">is_semantic_same</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.dsqn_model.TransformerDSQN.is_semantic_same" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.export_models">
+<span id="deepword-models-export-models-module"></span><h2>deepword.models.export_models module<a class="headerlink" href="#module-deepword.models.export_models" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.export_models.CommonsenseModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">CommonsenseModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">swag_train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">seg_tj_action_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">swag_labels_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">swag_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">swag_train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.CommonsenseModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.export_models.DQNModel" title="deepword.models.export_models.DQNModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.export_models.DQNModel</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.export_models.DQNModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">DQNModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.DQNModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.export_models.DRRNModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">DRRNModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">actions_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">actions_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">actions_repeats_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.DRRNModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.export_models.DQNModel" title="deepword.models.export_models.DQNModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.export_models.DQNModel</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.export_models.DSQNModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">DSQNModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">actions_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">actions_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">actions_repeats_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">snn_train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">weighted_train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">semantic_same</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">snn_src_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src_len_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src2_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src2_len_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">labels_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">weighted_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">merged_train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_states_diff</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.DSQNModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.export_models.DRRNModel" title="deepword.models.export_models.DRRNModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.export_models.DRRNModel</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.export_models.DSQNZorkModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">DSQNZorkModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">weighted_train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">semantic_same</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">snn_src_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src_len_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src2_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_src2_len_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">labels_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">weighted_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">merged_train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">snn_train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_states_diff</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.DSQNZorkModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.export_models.DQNModel" title="deepword.models.export_models.DQNModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.export_models.DQNModel</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.export_models.GenDQNModel">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.export_models.</code><code class="sig-name descname">GenDQNModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Graph</span></em>, <em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">src_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">src_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_idx_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">expected_q_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">train_summary_op</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Operation<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">abs_loss</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">src_seg_</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.ops.array_ops.placeholder<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">h_state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tensorflow.python.framework.ops.Tensor<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">decoded_idx_infer</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">action_idx_out_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">action_len_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">temperature_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">p_gen</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">p_gen_infer</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">beam_size_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">use_greedy_</span><span class="p">:</span> <span class="n">tensorflow.python.ops.array_ops.placeholder</span></em>, <em class="sig-param"><span class="n">col_eos_idx</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em>, <em class="sig-param"><span class="n">decoded_logits_infer</span><span class="p">:</span> <span class="n">tensorflow.python.framework.ops.Tensor</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.export_models.GenDQNModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.export_models.DQNModel" title="deepword.models.export_models.DQNModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.export_models.DQNModel</span></code></a></p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.gen_model">
+<span id="deepword-models-gen-model-module"></span><h2>deepword.models.gen_model module<a class="headerlink" href="#module-deepword.models.gen_model" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.models.gen_model.TransformerGenDQN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.gen_model.</code><code class="sig-name descname">TransformerGenDQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.dqn_model.BaseDQN" title="deepword.models.dqn_model.BaseDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.dqn_model.BaseDQN</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.decode">
+<code class="sig-name descname">decode</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.decode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.get_eval_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_eval_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.get_eval_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.get_q_actions">
+<code class="sig-name descname">get_q_actions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.get_q_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.get_train_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.get_train_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerGenDQN.get_train_student_model">
+<em class="property">classmethod </em><code class="sig-name descname">get_train_student_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">device_placement</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerGenDQN.get_train_student_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.gen_model.TransformerPGN">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.gen_model.</code><code class="sig-name descname">TransformerPGN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerPGN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.models.gen_model.TransformerGenDQN" title="deepword.models.gen_model.TransformerGenDQN"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.models.gen_model.TransformerGenDQN</span></code></a></p>
+<p>TransformerPGN is similar with TransformerGenDQN, the only difference is
+the former uses cross entropy loss, while the latter uses MSE.
+Thus, TransformerPGN is not allowed training with the DQN framework.
+It can only be trained with supervised learning, e.g. imitation learning.</p>
+<dl class="py method">
+<dt id="deepword.models.gen_model.TransformerPGN.get_train_op">
+<code class="sig-name descname">get_train_op</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.gen_model.TransformerPGN.get_train_op" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>b_weight could be</dt><dd><ol class="arabic simple">
+<li><p>per instance, i.e. [batch_size, 1]</p></li>
+<li><p>per token, i.e. [batch_size, n_tokens]</p></li>
+</ol>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.transformer">
+<span id="deepword-models-transformer-module"></span><h2>deepword.models.transformer module<a class="headerlink" href="#module-deepword.models.transformer" title="Permalink to this headline">¶</a></h2>
+<p>Copied from <a class="reference external" href="https://www.tensorflow.org/beta/tutorials/text/transformer">https://www.tensorflow.org/beta/tutorials/text/transformer</a></p>
+<dl class="py class">
+<dt id="deepword.models.transformer.Decoder">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">Decoder</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em>, <em class="sig-param"><span class="n">dff</span></em>, <em class="sig-param"><span class="n">tgt_vocab_size</span></em>, <em class="sig-param"><span class="n">dropout_rate</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">with_pointer</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Decoder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.base_layer.Layer</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.Decoder.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">enc_x</span></em>, <em class="sig-param"><span class="n">enc_output</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">look_ahead_mask</span></em>, <em class="sig-param"><span class="n">padding_mask</span></em>, <em class="sig-param"><span class="n">tj_master_mask</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Decoder.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>decode with pointer
+:param x: decoder input
+:param enc_x: encoder input
+:param enc_output: encoder encoded result
+:param training:
+:param look_ahead_mask:
+:param padding_mask:
+:param tj_master_mask: select master from tj
+:return:</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.transformer.DecoderLayer">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">DecoderLayer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em>, <em class="sig-param"><span class="n">dff</span></em>, <em class="sig-param"><span class="n">rate</span><span class="o">=</span><span class="default_value">0.1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.DecoderLayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.base_layer.Layer</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.DecoderLayer.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">enc_output</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">look_ahead_mask</span></em>, <em class="sig-param"><span class="n">padding_mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.DecoderLayer.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is where the layer’s logic lives.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> – Input tensor, or list/tuple of input tensors.</p></li>
+<li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tensor or list/tuple of tensors.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.transformer.Encoder">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">Encoder</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em>, <em class="sig-param"><span class="n">dff</span></em>, <em class="sig-param"><span class="n">input_vocab_size</span></em>, <em class="sig-param"><span class="n">dropout_rate</span><span class="o">=</span><span class="default_value">0.1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Encoder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.base_layer.Layer</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.Encoder.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">training</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">x_seg</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Encoder.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is where the layer’s logic lives.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> – Input tensor, or list/tuple of input tensors.</p></li>
+<li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tensor or list/tuple of tensors.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.transformer.EncoderLayer">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">EncoderLayer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em>, <em class="sig-param"><span class="n">dff</span></em>, <em class="sig-param"><span class="n">rate</span><span class="o">=</span><span class="default_value">0.1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.EncoderLayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.base_layer.Layer</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.EncoderLayer.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.EncoderLayer.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is where the layer’s logic lives.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> – Input tensor, or list/tuple of input tensors.</p></li>
+<li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tensor or list/tuple of tensors.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.transformer.MultiHeadAttention">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">MultiHeadAttention</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.MultiHeadAttention" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.base_layer.Layer</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.MultiHeadAttention.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">v</span></em>, <em class="sig-param"><span class="n">k</span></em>, <em class="sig-param"><span class="n">q</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.MultiHeadAttention.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is where the layer’s logic lives.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> – Input tensor, or list/tuple of input tensors.</p></li>
+<li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tensor or list/tuple of tensors.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.MultiHeadAttention.split_heads">
+<code class="sig-name descname">split_heads</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">batch_size</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.MultiHeadAttention.split_heads" title="Permalink to this definition">¶</a></dt>
+<dd><p>Split the last dimension into (num_heads, depth).
+Transpose the result such that the shape is</p>
+<blockquote>
+<div><p>(batch_size, num_heads, seq_len, depth)</p>
+</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.models.transformer.Transformer">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">Transformer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_layers</span></em>, <em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">num_heads</span></em>, <em class="sig-param"><span class="n">dff</span></em>, <em class="sig-param"><span class="n">input_vocab_size</span></em>, <em class="sig-param"><span class="n">target_vocab_size</span></em>, <em class="sig-param"><span class="n">dropout_rate</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">with_pointer</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.engine.training.Model</span></code></p>
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.call">
+<code class="sig-name descname">call</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inp</span></em>, <em class="sig-param"><span class="n">tar</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">tj_master_mask</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.call" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calls the model on new inputs.</p>
+<p>In this case <cite>call</cite> just reapplies
+all ops in the graph to the new inputs
+(e.g. build a new computational graph from the provided inputs).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> – A tensor or list of tensors.</p></li>
+<li><p><strong>training</strong> – Boolean or boolean scalar tensor, indicating whether to run
+the <cite>Network</cite> in training mode or inference mode.</p></li>
+<li><p><strong>mask</strong> – A mask or list of masks. A mask can be
+either a tensor or None (no mask).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tensor if there is a single output, or
+a list of tensors if there are more than one outputs.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.categorical_with_replacement">
+<em class="property">classmethod </em><code class="sig-name descname">categorical_with_replacement</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logits</span></em>, <em class="sig-param"><span class="n">k</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.categorical_with_replacement" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.categorical_without_replacement">
+<em class="property">classmethod </em><code class="sig-name descname">categorical_without_replacement</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logits</span></em>, <em class="sig-param"><span class="n">k</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.categorical_without_replacement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Courtesy of <a class="reference external" href="https://github.com/tensorflow/tensorflow/issues/">https://github.com/tensorflow/tensorflow/issues/</a>        9260#issuecomment-437875125
+also cite here:
+&#64;misc{vieira2014gumbel,</p>
+<blockquote>
+<div><p>title = {Gumbel-max trick and weighted reservoir sampling},
+author = {Tim Vieira},
+url = {<a class="reference external" href="http://timvieira.github.io/blog/post/2014/08/01/">http://timvieira.github.io/blog/post/2014/08/01/</a>            gumbel-max-trick-and-weighted-reservoir-sampling/},
+year = {2014}</p>
+</div></blockquote>
+<p>}
+Notice that the logits represent unnormalized log probabilities,
+in the citation above, there is no need to normalized them first to add
+the Gumbel random variant, which surprises me! since I thought it should
+be <cite>logits - tf.reduce_logsumexp(logits) + z</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.dec_step">
+<code class="sig-name descname">dec_step</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">time</span></em>, <em class="sig-param"><span class="n">enc_x</span></em>, <em class="sig-param"><span class="n">enc_output</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">tj_master_mask</span></em>, <em class="sig-param"><span class="n">dec_padding_mask</span></em>, <em class="sig-param"><span class="n">padding_logit_mask</span></em>, <em class="sig-param"><span class="n">eos_logit_mask</span></em>, <em class="sig-param"><span class="n">batch_size</span></em>, <em class="sig-param"><span class="n">max_tar_len</span></em>, <em class="sig-param"><span class="n">tgt_vocab_size</span></em>, <em class="sig-param"><span class="n">eos_id</span></em>, <em class="sig-param"><span class="n">beam_size</span></em>, <em class="sig-param"><span class="n">use_greedy</span></em>, <em class="sig-param"><span class="n">temperature</span></em>, <em class="sig-param"><span class="n">inc_tar</span></em>, <em class="sig-param"><span class="n">inc_continue</span></em>, <em class="sig-param"><span class="n">inc_logits</span></em>, <em class="sig-param"><span class="n">inc_valid_len</span></em>, <em class="sig-param"><span class="n">inc_p_gen</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.dec_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>decode one step with beam search
+given inc_tar as the current decoded target sequence
+(batch_size * beam_size), first decode one step with decoder to get
+decoded_logits.
+then mask the decoded_logits:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>if continue to decode (i.e. eos never reached) and current time
+reach the max_tar_len, then only EOS is allowed to choose;</p></li>
+<li><p>if not continue to decode, only PAD is allowed to choose;</p></li>
+<li><p>default, we don’t mask the decoded_logits.</p></li>
+</ol>
+</div></blockquote>
+<p>After get predicted_id, either by sampling method or greedy method,
+we compute 1) beam_id and 2) token_id from predicted_id.
+beam_id indicates which beam to choose, token_id indicates under that
+beam, which token to choose.</p>
+<p>for loop variables, inc_tar, inc_continue, inc_logits, inc_valid_len,
+and inc_p_gen, we first select rows according to beam_id, then pad
+the token_id related info to the end. e.g. given beam_size = 2,
+batch_size = 2, we have inc_tar:</p>
+<dl>
+<dt>[[[1, 2, 3],</dt><dd><blockquote>
+<div><p>[2, 3, 4]],  # –&gt; this beam row will be deleted</p>
+</div></blockquote>
+<dl class="simple">
+<dt>[[9, 8, 7],</dt><dd><p>[8, 7, 6]]]</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>if beam_id = [[0, 0], [0, 1]], then we choose [1, 2, 3] twice, and
+[9, 8, 7] once, and [8, 7, 6] once, then make the inc_tar to be
+[[[1, 2, 3],</p>
+<blockquote>
+<div><blockquote>
+<div><p>[1, 2, 3]],</p>
+</div></blockquote>
+<dl class="simple">
+<dt>[[9, 8, 7],</dt><dd><p>[8, 7, 6]]]</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>then pad new token_id to the end.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.decode">
+<code class="sig-name descname">decode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">enc_x</span></em>, <em class="sig-param"><span class="n">training</span></em>, <em class="sig-param"><span class="n">max_tar_len</span></em>, <em class="sig-param"><span class="n">sos_id</span></em>, <em class="sig-param"><span class="n">eos_id</span></em>, <em class="sig-param"><span class="n">tj_master_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">use_greedy</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">beam_size</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">temperature</span><span class="o">=</span><span class="default_value">1.0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.decode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.models.transformer.Transformer.token_logit_masking">
+<em class="property">classmethod </em><code class="sig-name descname">token_logit_masking</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">token_id</span></em>, <em class="sig-param"><span class="n">vocab_size</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.Transformer.token_logit_masking" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate logits to choose the token_id. e.g. with vocab_size = 10,
+token_id = 0, we have
+[  0., -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf]
+plus this mask with normal logits, only token_id=0 can be chose</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.create_decode_masks">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">create_decode_masks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tar</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.create_decode_masks" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.create_look_ahead_mask">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">create_look_ahead_mask</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.create_look_ahead_mask" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.create_padding_mask">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">create_padding_mask</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seq</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.create_padding_mask" title="Permalink to this definition">¶</a></dt>
+<dd><p>Padding value should be 0.
+:param seq:
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.get_sparse_idx_for_copy">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">get_sparse_idx_for_copy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em>, <em class="sig-param"><span class="n">target_seq_len</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.get_sparse_idx_for_copy" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.get_sparse_idx_src_for_copy">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">get_sparse_idx_src_for_copy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em>, <em class="sig-param"><span class="n">target_seq_len</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.get_sparse_idx_src_for_copy" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.get_sparse_idx_tar_for_copy">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">get_sparse_idx_tar_for_copy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch_size</span></em>, <em class="sig-param"><span class="n">src_seq_len</span></em>, <em class="sig-param"><span class="n">target_seq_len</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.get_sparse_idx_tar_for_copy" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.point_wise_feed_forward_network">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">point_wise_feed_forward_network</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">d_model</span></em>, <em class="sig-param"><span class="n">dff</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.point_wise_feed_forward_network" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.transformer.scaled_dot_product_attention">
+<code class="sig-prename descclassname">deepword.models.transformer.</code><code class="sig-name descname">scaled_dot_product_attention</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q</span></em>, <em class="sig-param"><span class="n">k</span></em>, <em class="sig-param"><span class="n">v</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.transformer.scaled_dot_product_attention" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the attention weights.
+q, k, v must have matching leading dimensions.
+k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.
+The mask has different shapes depending on its type(padding or look ahead)
+but it must be broadcastable for addition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q</strong> – query shape == (…, seq_len_q, depth)</p></li>
+<li><p><strong>k</strong> – key shape == (…, seq_len_k, depth)</p></li>
+<li><p><strong>v</strong> – value shape == (…, seq_len_v, depth_v)</p></li>
+<li><p><strong>mask</strong> – Float tensor with shape broadcastable
+to (…, seq_len_q, seq_len_k). Defaults to None.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>output (a.k.a. context vectors), scaled_attention_logits</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models.utils">
+<span id="deepword-models-utils-module"></span><h2>deepword.models.utils module<a class="headerlink" href="#module-deepword.models.utils" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="deepword.models.utils.encoder_cnn">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">encoder_cnn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em>, <em class="sig-param"><span class="n">src_embeddings</span></em>, <em class="sig-param"><span class="n">pos_embeddings</span></em>, <em class="sig-param"><span class="n">filter_sizes</span></em>, <em class="sig-param"><span class="n">num_filters</span></em>, <em class="sig-param"><span class="n">embedding_size</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">num_channels</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'tanh'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.encoder_cnn" title="Permalink to this definition">¶</a></dt>
+<dd><p>encode state with CNN, refer to
+Convolutional Neural Networks for Sentence Classification
+:param src: placeholder, (tf.int32, [None, None])
+:param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+:param pos_embeddings:</p>
+<blockquote>
+<div><p>position embedding, (tf.float32, [src_len, embedding_size])</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filter_sizes</strong> – list of ints, e.g. [3, 4, 5]</p></li>
+<li><p><strong>num_filters</strong> – number of filters of each filter_size</p></li>
+<li><p><strong>embedding_size</strong> – embedding size</p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+<li><p><strong>num_channels</strong> – 1 or 2.</p></li>
+<li><p><strong>activation</strong> – tanh (default) or relu</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.encoder_cnn_base">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">encoder_cnn_base</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_tensor</span></em>, <em class="sig-param"><span class="n">filter_sizes</span></em>, <em class="sig-param"><span class="n">num_filters</span></em>, <em class="sig-param"><span class="n">num_channels</span></em>, <em class="sig-param"><span class="n">embedding_size</span></em>, <em class="sig-param"><span class="n">is_infer</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'tanh'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.encoder_cnn_base" title="Permalink to this definition">¶</a></dt>
+<dd><p>We pad input_tensor in the head for each string to generate equal-size
+output. E.g.</p>
+<p>go north forest path this is a path …
+given conv-filter size 3, it will be padded in the head with two tokens
+&lt;S&gt; &lt;S&gt; go north forest path this is a path … OR
+[PAD] [PAD] go north forest path this is a path …</p>
+<p>the type of padding values doesn’t matter only if it is a special token, and
+be identical for each model.</p>
+<p>We use constant value 0 here, so make sure index-0 is a special token
+that can be used to pad in your vocabulary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_tensor</strong> – </p></li>
+<li><p><strong>filter_sizes</strong> – </p></li>
+<li><p><strong>num_filters</strong> – </p></li>
+<li><p><strong>num_channels</strong> – </p></li>
+<li><p><strong>embedding_size</strong> – </p></li>
+<li><p><strong>is_infer</strong> – </p></li>
+<li><p><strong>activation</strong> – choose from “tanh” or “relu”. Notice that if choose relu,
+make sure adding an extra dense layer, otherwise the output is all
+non-negative values.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.encoder_lstm">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">encoder_lstm</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">src</span></em>, <em class="sig-param"><span class="n">src_len</span></em>, <em class="sig-param"><span class="n">src_embeddings</span></em>, <em class="sig-param"><span class="n">num_units</span></em>, <em class="sig-param"><span class="n">num_layers</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.encoder_lstm" title="Permalink to this definition">¶</a></dt>
+<dd><p>encode state with LSTM
+:param src: placeholder, (tf.int32, [None, None])
+:param src_len: placeholder, (tf.float32, [None])
+:param src_embeddings: (tf.float32, [vocab_size, embedding_size])
+:param num_units: number of LSTM units
+:param num_layers: number of LSTM layers</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.get_angles">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">get_angles</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pos</span></em>, <em class="sig-param"><span class="n">i</span></em>, <em class="sig-param"><span class="n">d_model</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.get_angles" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.l2_loss_1d_action">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">l2_loss_1d_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em>, <em class="sig-param"><span class="n">action_idx</span></em>, <em class="sig-param"><span class="n">expected_q</span></em>, <em class="sig-param"><span class="n">b_weight</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.l2_loss_1d_action" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>l2 loss for 1D action space. only q values in q_actions</dt><dd><p>selected by action_idx will be computed against expected_q</p>
+</dd>
+</dl>
+<p>e.g. “go east” would be one whole action.
+action_idx should have the same dimension as expected_q
+:param q_actions: q-values
+:param action_idx: placeholder, the action chose for the state,</p>
+<blockquote>
+<div><p>in a format of (tf.int32, [None])</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expected_q</strong> – placeholder, the expected reward gained from the step,
+in a format of (tf.float32, [None])</p></li>
+<li><p><strong>b_weight</strong> – weights for each data point</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.l2_loss_1d_action_v2">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">l2_loss_1d_action_v2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em>, <em class="sig-param"><span class="n">action_idx</span></em>, <em class="sig-param"><span class="n">expected_q</span></em>, <em class="sig-param"><span class="n">n_actions</span></em>, <em class="sig-param"><span class="n">b_weight</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.l2_loss_1d_action_v2" title="Permalink to this definition">¶</a></dt>
+<dd><p>l2 loss for 1D action space.
+e.g. “go east” would be one whole action.
+:param q_actions: Q-vector of a state for all actions
+:param action_idx: placeholder, the action chose for the state,</p>
+<blockquote>
+<div><p>in a format of (tf.int32, [None])</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expected_q</strong> – placeholder, the expected reward gained from the step,
+in a format of (tf.float32, [None])</p></li>
+<li><p><strong>n_actions</strong> – number of total actions</p></li>
+<li><p><strong>b_weight</strong> – weights for each data point</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.l2_loss_2d_action">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">l2_loss_2d_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span></em>, <em class="sig-param"><span class="n">action_idx</span></em>, <em class="sig-param"><span class="n">expected_q</span></em>, <em class="sig-param"><span class="n">vocab_size</span></em>, <em class="sig-param"><span class="n">action_len</span></em>, <em class="sig-param"><span class="n">max_action_len</span></em>, <em class="sig-param"><span class="n">b_weight</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.l2_loss_2d_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>l2 loss for 2D action space.
+e.g. “go east” is an action composed by “go” and “east”.
+:param q_actions: Q-matrix of a state for all action-components, e.g. tokens
+:param action_idx: placeholder, the action-components chose for the state,</p>
+<blockquote>
+<div><p>in a format of (tf.int32, [None, None])</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expected_q</strong> – placeholder, the expected reward gained from the step,
+in a format of (tf.float32, [None])</p></li>
+<li><p><strong>vocab_size</strong> – number of action-components</p></li>
+<li><p><strong>action_len</strong> – length of each action in a format of (tf.int32, [None])</p></li>
+<li><p><strong>max_action_len</strong> – maximum length of action</p></li>
+<li><p><strong>b_weight</strong> – weights for each data point</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.positional_encoding">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">positional_encoding</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">position</span></em>, <em class="sig-param"><span class="n">d_model</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.positional_encoding" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.models.utils.repeat">
+<code class="sig-prename descclassname">deepword.models.utils.</code><code class="sig-name descname">repeat</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">repeats</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.models.utils.repeat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Repeat data with repeats. The function uses the same method as
+tf.repeat in tensorflow version &gt;= 1.15.2
+For tensorflow version &gt;= 1.15.2, you can use tf.repeat directly</p>
+<p>This function only works for 2D matrix, e.g.
+[[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+repeats [1, 1, 2] times, then we get
+[[1, 2, 3], [2, 3, 4], [3, 4, 5], [3, 4, 5]].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 2D matrix, [batch_size, hidden_size]</p></li>
+<li><p><strong>repeats</strong> – 1D int vector, [batch_size]</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>2D matrix, [sum(repeats), hidden_size]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.models">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-deepword.models" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Xusen Yin
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

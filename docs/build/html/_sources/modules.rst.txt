@@ -1,7 +1,7 @@
-deeptextworld
-=============
+deepword
+========
 
 .. toctree::
    :maxdepth: 4
 
-   deeptextworld
+   deepword

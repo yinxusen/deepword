@@ -1,0 +1,1560 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>deepword.agents package &mdash; DeepWord v4.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> DeepWord
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">deepword.agents package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.base_agent">deepword.agents.base_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.competition_agent">deepword.agents.competition_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.cores">deepword.agents.cores module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.dsqn_agent">deepword.agents.dsqn_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.gen_agent">deepword.agents.gen_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.gen_drrn_agent">deepword.agents.gen_drrn_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.utils">deepword.agents.utils module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents.zork_agent">deepword.agents.zork_agent module</a></li>
+<li><a class="reference internal" href="#module-deepword.agents">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">DeepWord</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>deepword.agents package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/deepword.agents.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="deepword-agents-package">
+<h1>deepword.agents package<a class="headerlink" href="#deepword-agents-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-deepword.agents.base_agent">
+<span id="deepword-agents-base-agent-module"></span><h2>deepword.agents.base_agent module<a class="headerlink" href="#module-deepword.agents.base_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.base_agent.BaseAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.base_agent.</code><code class="sig-name descname">BaseAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.base_agent.BaseAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="deepword.html#deepword.log.Logging" title="deepword.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.log.Logging</span></code></a></p>
+<dl class="simple">
+<dt>Base agent class that using</dt><dd><ol class="arabic simple">
+<li><p>action collector</p></li>
+<li><p>trajectory collector</p></li>
+<li><p>floor plan collector</p></li>
+<li><p>tree memory storage and sampling</p></li>
+</ol>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize a base agent</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – hyper-parameters, refer to <a class="reference internal" href="deepword.html#module-deepword.hparams" title="deepword.hparams"><code class="xref py py-mod docutils literal notranslate"><span class="pre">deepword.hparams</span></code></a></p></li>
+<li><p><strong>model_dir</strong> – path to model dir</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.act">
+<code class="sig-name descname">act</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">scores</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">infos</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>List<span class="p">[</span>Any<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Optional<span class="p">[</span>List<span class="p">[</span>str<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.act" title="Permalink to this definition">¶</a></dt>
+<dd><p>Acts upon the current list of observations.
+One text command must be returned for each observation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> – observed texts for each game</p></li>
+<li><p><strong>scores</strong> – score obtained so far for each game</p></li>
+<li><p><strong>dones</strong> – whether a game is finished</p></li>
+<li><p><strong>infos</strong> – extra information requested from TextWorld</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>if all dones, return None, else return actions</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Commands returned for games marked as <cite>done</cite> have no effect.
+The states for finished games are simply copy over until all
+games are done.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.eval">
+<code class="sig-name descname">eval</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">load_best</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>call eval() before performing evaluation</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>load_best</strong> – load from the best weights, otherwise from last weights</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.negative_scores">
+<em class="property">property </em><code class="sig-name descname">negative_scores</code><a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.negative_scores" title="Permalink to this definition">¶</a></dt>
+<dd><p>Total negative scores</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.positive_scores">
+<em class="property">property </em><code class="sig-name descname">positive_scores</code><a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.positive_scores" title="Permalink to this definition">¶</a></dt>
+<dd><p>Total positive scores earned</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.reset">
+<code class="sig-name descname">reset</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>reset is only used for evaluation during training
+do not use it at anywhere else.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>restore_from</strong> – where to restore the model, <cite>None</cite> goes to default</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.save_snapshot">
+<code class="sig-name descname">save_snapshot</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.save_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.select_additional_infos">
+<em class="property">classmethod </em><code class="sig-name descname">select_additional_infos</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; textworld.core.EnvInfos<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.select_additional_infos" title="Permalink to this definition">¶</a></dt>
+<dd><p>additional information needed when playing the game
+requested infos here are required to run the Agent</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.base_agent.BaseAgent.train">
+<code class="sig-name descname">train</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.base_agent.BaseAgent.train" title="Permalink to this definition">¶</a></dt>
+<dd><p>call train() before performing training</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.base_agent.DRRNMemoTeacher">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.base_agent.</code><code class="sig-name descname">DRRNMemoTeacher</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tid</span></em>, <em class="sig-param"><span class="n">sid</span></em>, <em class="sig-param"><span class="n">gid</span></em>, <em class="sig-param"><span class="n">aid</span></em>, <em class="sig-param"><span class="n">reward</span></em>, <em class="sig-param"><span class="n">is_terminal</span></em>, <em class="sig-param"><span class="n">action_mask</span></em>, <em class="sig-param"><span class="n">next_action_mask</span></em>, <em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.base_agent.DRRNMemoTeacher" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.DRRNMemoTeacher" title="deepword.agents.base_agent.DRRNMemoTeacher"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.DRRNMemoTeacher</span></code></a></p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.competition_agent">
+<span id="deepword-agents-competition-agent-module"></span><h2>deepword.agents.competition_agent module<a class="headerlink" href="#module-deepword.agents.competition_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.competition_agent.CompetitionAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.competition_agent.</code><code class="sig-name descname">CompetitionAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.competition_agent.CompetitionAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.BaseAgent" title="deepword.agents.base_agent.BaseAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.BaseAgent</span></code></a></p>
+<p>The agent built for participant the TextWorld competition.
+Include action filtering and rule based policies.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.cores">
+<span id="deepword-agents-cores-module"></span><h2>deepword.agents.cores module<a class="headerlink" href="#module-deepword.agents.cores" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.cores.BaseCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">BaseCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.BaseCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="deepword.html#deepword.log.Logging" title="deepword.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.log.Logging</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">abc.ABC</span></code></p>
+<p>Core: used for agents to compute policy.
+Core objects are isolated with games and gaming platforms. They work with
+agents, receiving trajectories, actions, and then compute a policy for
+agents.</p>
+<p>How to get trajectories, actions, and how to choose actions given policies
+are decided by agents.</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.BaseCore.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize A Core for an agent.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – hyper-parameters, see <a class="reference internal" href="deepword.html#module-deepword.hparams" title="deepword.hparams"><code class="xref py py-mod docutils literal notranslate"><span class="pre">deepword.hparams</span></code></a></p></li>
+<li><p><strong>model_dir</strong> – path to save or load model</p></li>
+<li><p><strong>tokenizer</strong> – tokenizer, see <a class="reference internal" href="deepword.html#module-deepword.tokenizers" title="deepword.tokenizers"><code class="xref py py-mod docutils literal notranslate"><span class="pre">deepword.tokenizers</span></code></a></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.create_or_reload_target_model">
+<code class="sig-name descname">create_or_reload_target_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.BaseCore.create_or_reload_target_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create (if not exist) or reload weights for the target model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>restore_from</strong> – the path to restore weights</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.init">
+<code class="sig-name descname">init</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">is_training</span><span class="p">:</span> <span class="n">bool</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.BaseCore.init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize models of the core.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>is_training</strong> – training or evaluation</p></li>
+<li><p><strong>load_best</strong> – load from best weights, otherwise last weights</p></li>
+<li><p><strong>restore_from</strong> – path to restore</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.BaseCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer from policy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trajectory</strong> – a list of ActionMaster</p></li>
+<li><p><strong>state</strong> – the current game state of observation + inventory</p></li>
+<li><p><strong>action_matrix</strong> – a matrix of all actions for the game, 2D array,
+each row represents a tokenized and indexed action.</p></li>
+<li><p><strong>action_len</strong> – 1D array, length for each action.</p></li>
+<li><p><strong>action_mask</strong> – 1D array, indices of admissible actions from
+all actions of the game.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Q-values for actions in the action_matrix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.save_model">
+<code class="sig-name descname">save_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.BaseCore.save_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save current model with training steps</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>t</strong> – training steps, <cite>None</cite> falls back to default global steps</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BaseCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.BaseCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.BertCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">BertCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.BertCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.TFCore" title="deepword.agents.cores.TFCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.TFCore</span></code></a></p>
+<p>The agent that explores commonsense ability of BERT models.
+This agent combines each trajectory with all its actions together, separated
+with [SEP] in the middle. Then feeds the sentence into BERT to get a score
+from the [CLS] token.
+refer to <a class="reference external" href="https://arxiv.org/pdf/1810.04805.pdf">https://arxiv.org/pdf/1810.04805.pdf</a> for fine-tuning and evaluation</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.BertCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.BertCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer from policy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trajectory</strong> – a list of ActionMaster</p></li>
+<li><p><strong>state</strong> – the current game state of observation + inventory</p></li>
+<li><p><strong>action_matrix</strong> – a matrix of all actions for the game, 2D array,
+each row represents a tokenized and indexed action.</p></li>
+<li><p><strong>action_len</strong> – 1D array, length for each action.</p></li>
+<li><p><strong>action_mask</strong> – 1D array, indices of admissible actions from
+all actions of the game.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Q-values for actions in the action_matrix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BertCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.BertCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.BertCore.trajectory2input">
+<code class="sig-name descname">trajectory2input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>int<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.BertCore.trajectory2input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.DQNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">DQNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.DQNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.TFCore" title="deepword.agents.cores.TFCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.TFCore</span></code></a></p>
+<p>DQNAgent that treats actions as types</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.DQNCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DQNCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>get either an random action index with action string
+or the best predicted action index with action string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.DQNCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DQNCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.DRRNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">DRRNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.DRRNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.TFCore" title="deepword.agents.cores.TFCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.TFCore</span></code></a></p>
+<p>DRRN agent that treats actions as meaningful sentences</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.DRRNCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DRRNCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>get either an random action index with action string
+or the best predicted action index with action string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.DRRNCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DRRNCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.DSQNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">DSQNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.DSQNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.DRRNCore" title="deepword.agents.cores.DRRNCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.DRRNCore</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.cores.DSQNCore.eval_snn">
+<code class="sig-name descname">eval_snn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">snn_data</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">32</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#deepword.agents.cores.DSQNCore.eval_snn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.DSQNCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DSQNCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.DSQNZorkCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">DSQNZorkCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.DSQNZorkCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.DQNCore" title="deepword.agents.cores.DQNCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.DQNCore</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.cores.DSQNZorkCore.eval_snn">
+<code class="sig-name descname">eval_snn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">snn_data</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">32</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#deepword.agents.cores.DSQNZorkCore.eval_snn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.DSQNZorkCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.DSQNZorkCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.GenDQNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">GenDQNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.GenDQNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.TFCore" title="deepword.agents.cores.TFCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.TFCore</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.cores.GenDQNCore.decode_action">
+<code class="sig-name descname">decode_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#deepword.agents.utils.GenSummary" title="deepword.agents.utils.GenSummary">deepword.agents.utils.GenSummary</a><a class="headerlink" href="#deepword.agents.cores.GenDQNCore.decode_action" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.GenDQNCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.GenDQNCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer from policy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trajectory</strong> – a list of ActionMaster</p></li>
+<li><p><strong>state</strong> – the current game state of observation + inventory</p></li>
+<li><p><strong>action_matrix</strong> – a matrix of all actions for the game, 2D array,
+each row represents a tokenized and indexed action.</p></li>
+<li><p><strong>action_len</strong> – 1D array, length for each action.</p></li>
+<li><p><strong>action_mask</strong> – 1D array, indices of admissible actions from
+all actions of the game.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Q-values for actions in the action_matrix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.GenDQNCore.summary">
+<code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">col_eos_idx</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">decoded_logits</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">p_gen</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">beam_size</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.GenSummary" title="deepword.agents.utils.GenSummary">deepword.agents.utils.GenSummary</a><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.GenDQNCore.summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return [ids, tokens, generation probabilities of each token, q_action]
+sorted by q_action (from larger to smaller)
+q_action: the average of decoded logits of selected tokens</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.GenDQNCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.GenDQNCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.LegacyDRRNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">LegacyDRRNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.LegacyDRRNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.DRRNCore" title="deepword.agents.cores.DRRNCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.DRRNCore</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.cores.LegacyDRRNCore.trajectory2input">
+<code class="sig-name descname">trajectory2input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>int<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.LegacyDRRNCore.trajectory2input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.PGNCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">PGNCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.PGNCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.TFCore" title="deepword.agents.cores.TFCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.TFCore</span></code></a></p>
+<p>Generate admissible actions for games, given only trajectory</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.PGNCore.decode">
+<code class="sig-name descname">decode</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">beam_size</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">temperature</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">use_greedy</span><span class="p">:</span> <span class="n">bool</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.GenSummary" title="deepword.agents.utils.GenSummary">deepword.agents.utils.GenSummary</a><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.PGNCore.decode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.PGNCore.generate_admissible_actions">
+<code class="sig-name descname">generate_admissible_actions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.PGNCore.generate_admissible_actions" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.PGNCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.PGNCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer from policy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trajectory</strong> – a list of ActionMaster</p></li>
+<li><p><strong>state</strong> – the current game state of observation + inventory</p></li>
+<li><p><strong>action_matrix</strong> – a matrix of all actions for the game, 2D array,
+each row represents a tokenized and indexed action.</p></li>
+<li><p><strong>action_len</strong> – 1D array, length for each action.</p></li>
+<li><p><strong>action_mask</strong> – 1D array, indices of admissible actions from
+all actions of the game.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Q-values for actions in the action_matrix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.PGNCore.summary">
+<code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">col_eos_idx</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">decoded_logits</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">p_gen</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">beam_size</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.GenSummary" title="deepword.agents.utils.GenSummary">deepword.agents.utils.GenSummary</a><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.PGNCore.summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return [ids, tokens, generation probabilities of each token, q_action]
+sorted by q_action (from larger to smaller)
+q_action: the average of decoded logits of selected tokens</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.PGNCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.PGNCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.TFCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">TFCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.TFCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.BaseCore" title="deepword.agents.cores.BaseCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.BaseCore</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">abc.ABC</span></code></p>
+<p>Agent core implemented through Tensorflow.</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.__init__">
+<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span><span class="p">:</span> <span class="n">tensorflow.contrib.training.python.training.hparam.HParams</span></em>, <em class="sig-param"><span class="n">model_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hp</strong> – hyper-parameters</p></li>
+<li><p><strong>model_dir</strong> – path to model dir</p></li>
+<li><p><strong>tokenizer</strong> – tokenizer see <a class="reference internal" href="deepword.html#module-deepword.tokenizers" title="deepword.tokenizers"><code class="xref py py-mod docutils literal notranslate"><span class="pre">deepword.tokenizers</span></code></a></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.batch_trajectory2input">
+<code class="sig-name descname">batch_trajectory2input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.TFCore.batch_trajectory2input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.create_or_reload_target_model">
+<code class="sig-name descname">create_or_reload_target_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.create_or_reload_target_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the target model if not exists, then load model from the most
+recent saved weights.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>restore_from</strong> – path to load target model, <cite>None</cite> falls back to
+default.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.init">
+<code class="sig-name descname">init</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">is_training</span><span class="p">:</span> <span class="n">bool</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize the core.</p>
+<ol class="arabic simple">
+<li><p>create the model</p></li>
+<li><p>load the model if there are saved models</p></li>
+<li><p>create target model for training</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>is_training</strong> – True for training, False for evaluation</p></li>
+<li><p><strong>load_best</strong> – load best model, otherwise load last weights</p></li>
+<li><p><strong>restore_from</strong> – specify the load path, <cite>load_best</cite> will be disabled</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.safe_loading">
+<code class="sig-name descname">safe_loading</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.models.html#deepword.models.export_models.DQNModel" title="deepword.models.export_models.DQNModel">deepword.models.export_models.DQNModel</a></span></em>, <em class="sig-param"><span class="n">sess</span><span class="p">:</span> <span class="n">tensorflow.python.client.session.Session</span></em>, <em class="sig-param"><span class="n">saver</span><span class="p">:</span> <span class="n">tensorflow.python.training.saver.Saver</span></em>, <em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#deepword.agents.cores.TFCore.safe_loading" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load weights from restore_from to model.
+If weights in loaded model are incompatible with current model,
+try to load those weights that have the same name.</p>
+<p>This method is useful when saved model lacks of training part, e.g.
+Adam optimizer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> – A tensorflow model</p></li>
+<li><p><strong>sess</strong> – A tensorflow session</p></li>
+<li><p><strong>saver</strong> – A tensorflow saver</p></li>
+<li><p><strong>restore_from</strong> – the path to restore the model</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>training steps</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.save_best_model">
+<code class="sig-name descname">save_best_model</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.save_best_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save current model to the best weights dir</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.save_model">
+<code class="sig-name descname">save_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.save_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save model to model_dir with the number of training steps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>t</strong> – number of training steps, <cite>None</cite> falls back to global step</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.set_d4eval">
+<code class="sig-name descname">set_d4eval</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">device</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TFCore.set_d4eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the device for evaluation, e.g. “/device:CPU:0”, “/device:GPU:1”
+Otherwise, a default device allocation will be used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>device</strong> – device name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TFCore.trajectory2input">
+<code class="sig-name descname">trajectory2input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>int<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.cores.TFCore.trajectory2input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.cores.TabularCore">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.cores.</code><code class="sig-name descname">TabularCore</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em>, <em class="sig-param"><span class="n">tokenizer</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.cores.TabularCore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.cores.BaseCore" title="deepword.agents.cores.BaseCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.BaseCore</span></code></a></p>
+<p>Tabular-wise DQN agent that uses matrix to store q-vectors and uses
+hashed values of observation + inventory as game states</p>
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.create_or_reload_target_model">
+<code class="sig-name descname">create_or_reload_target_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TabularCore.create_or_reload_target_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create (if not exist) or reload weights for the target model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>restore_from</strong> – the path to restore weights</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.get_state_hash">
+<code class="sig-name descname">get_state_hash</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a></span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#deepword.agents.cores.TabularCore.get_state_hash" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.init">
+<code class="sig-name descname">init</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">is_training</span><span class="p">:</span> <span class="n">bool</span></em>, <em class="sig-param"><span class="n">load_best</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">restore_from</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TabularCore.init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize models of the core.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>is_training</strong> – training or evaluation</p></li>
+<li><p><strong>load_best</strong> – load from best weights, otherwise last weights</p></li>
+<li><p><strong>restore_from</strong> – path to restore</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.policy">
+<code class="sig-name descname">policy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">state</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.TabularCore.policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer from policy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trajectory</strong> – a list of ActionMaster</p></li>
+<li><p><strong>state</strong> – the current game state of observation + inventory</p></li>
+<li><p><strong>action_matrix</strong> – a matrix of all actions for the game, 2D array,
+each row represents a tokenized and indexed action.</p></li>
+<li><p><strong>action_len</strong> – 1D array, length for each action.</p></li>
+<li><p><strong>action_mask</strong> – 1D array, indices of admissible actions from
+all actions of the game.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Q-values for actions in the action_matrix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.save_model">
+<code class="sig-name descname">save_model</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.cores.TabularCore.save_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save current model with training steps</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>t</strong> – training steps, <cite>None</cite> falls back to default global steps</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.cores.TabularCore.train_one_batch">
+<code class="sig-name descname">train_one_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pre_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_states</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory">deepword.agents.utils.ObsInventory</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">pre_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">post_action_mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dones</span><span class="p">:</span> <span class="n">List<span class="p">[</span>bool<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rewards</span><span class="p">:</span> <span class="n">List<span class="p">[</span>float<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_idx</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">b_weight</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">step</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">others</span><span class="p">:</span> <span class="n">Any</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.agents.cores.TabularCore.train_one_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the core with one batch of data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre_trajectories</strong> – previous trajectories</p></li>
+<li><p><strong>post_trajectories</strong> – post trajectories</p></li>
+<li><p><strong>pre_states</strong> – previous states</p></li>
+<li><p><strong>post_states</strong> – post states</p></li>
+<li><p><strong>action_matrix</strong> – all actions for each of previous trajectories</p></li>
+<li><p><strong>action_len</strong> – length of actions</p></li>
+<li><p><strong>pre_action_mask</strong> – action masks for each of previous trajectories</p></li>
+<li><p><strong>post_action_mask</strong> – action masks for each of post trajectories</p></li>
+<li><p><strong>dones</strong> – game terminated or not for post trajectories</p></li>
+<li><p><strong>rewards</strong> – rewards received for reaching post trajectories</p></li>
+<li><p><strong>action_idx</strong> – actions used for reaching post trajectories</p></li>
+<li><p><strong>b_weight</strong> – 1D array, weight for each data point</p></li>
+<li><p><strong>step</strong> – current training step</p></li>
+<li><p><strong>others</strong> – other information passed for training purpose</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: Absolute loss between expected Q-value and predicted Q-value</dt><dd><p>for each data point</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.dsqn_agent">
+<span id="deepword-agents-dsqn-agent-module"></span><h2>deepword.agents.dsqn_agent module<a class="headerlink" href="#module-deepword.agents.dsqn_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.dsqn_agent.DSQNAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.dsqn_agent.</code><code class="sig-name descname">DSQNAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.dsqn_agent.DSQNAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.BaseAgent" title="deepword.agents.base_agent.BaseAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.BaseAgent</span></code></a></p>
+<p>BaseAgent with hs2tj: hash states point to trajectories
+for SNN training</p>
+<dl class="py method">
+<dt id="deepword.agents.dsqn_agent.DSQNAgent.get_snn_pairs">
+<code class="sig-name descname">get_snn_pairs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch_size</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.agents.dsqn_agent.DSQNAgent.get_snn_pairs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sample SNN pairs for SNN part training</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>batch_size</strong> – how many data points to generate. Notice that
+batch_size * 2 data points will be generated, one half for
+trajectory pairs with the same states; the other half for
+trajectory pairs with different states.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>trajectories
+src_len: length of them
+src2: the paired trajectories
+src2_len: length of them
+labels: <cite>0</cite> for same states; <cite>1</cite> for different states</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>src</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="deepword.agents.dsqn_agent.DSQNAgent.save_train_pairs">
+<code class="sig-name descname">save_train_pairs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">src</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">src_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">src2</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">src2_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">labels</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.agents.dsqn_agent.DSQNAgent.save_train_pairs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save SNN pairs for verification.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>t</strong> – current training steps</p></li>
+<li><p><strong>src</strong> – trajectories</p></li>
+<li><p><strong>src_len</strong> – length of trajectories</p></li>
+<li><p><strong>src2</strong> – paired trajectories</p></li>
+<li><p><strong>src2_len</strong> – length of paired trajectories</p></li>
+<li><p><strong>labels</strong> – <cite>0</cite> or <cite>1</cite> for same or different states</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.dsqn_agent.DSQNCompetitionAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.dsqn_agent.</code><code class="sig-name descname">DSQNCompetitionAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.dsqn_agent.DSQNCompetitionAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.dsqn_agent.DSQNAgent" title="deepword.agents.dsqn_agent.DSQNAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.dsqn_agent.DSQNAgent</span></code></a>, <a class="reference internal" href="#deepword.agents.competition_agent.CompetitionAgent" title="deepword.agents.competition_agent.CompetitionAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.competition_agent.CompetitionAgent</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.dsqn_agent.DSQNZorkAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.dsqn_agent.</code><code class="sig-name descname">DSQNZorkAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.dsqn_agent.DSQNZorkAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.dsqn_agent.DSQNAgent" title="deepword.agents.dsqn_agent.DSQNAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.dsqn_agent.DSQNAgent</span></code></a>, <a class="reference internal" href="#deepword.agents.zork_agent.ZorkAgent" title="deepword.agents.zork_agent.ZorkAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.zork_agent.ZorkAgent</span></code></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.dsqn_agent.npc">
+<code class="sig-prename descclassname">deepword.agents.dsqn_agent.</code><code class="sig-name descname">npc</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.dsqn_agent.npc" title="Permalink to this definition">¶</a></dt>
+<dd><p>choice(a, size=None, replace=True, p=None)</p>
+<p>Generates a random sample from a given 1-D array</p>
+<blockquote>
+<div><div class="versionadded">
+<p><span class="versionmodified added">New in version 1.7.0.</span></p>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>New code should use the <code class="docutils literal notranslate"><span class="pre">choice</span></code> method of a <code class="docutils literal notranslate"><span class="pre">default_rng()</span></code>
+instance instead; see <cite>random-quick-start</cite>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<em>1-D array-like</em><em> or </em><em>int</em>) – If an ndarray, a random sample is generated from its elements.
+If an int, the random sample is generated as if a were np.arange(a)</p></li>
+<li><p><strong>size</strong> (<em>int</em><em> or </em><em>tuple of ints</em><em>, </em><em>optional</em>) – Output shape.  If the given shape is, e.g., <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">n,</span> <span class="pre">k)</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">m</span> <span class="pre">*</span> <span class="pre">n</span> <span class="pre">*</span> <span class="pre">k</span></code> samples are drawn.  Default is None, in which case a
+single value is returned.</p></li>
+<li><p><strong>replace</strong> (<em>boolean</em><em>, </em><em>optional</em>) – Whether the sample is with or without replacement</p></li>
+<li><p><strong>p</strong> (<em>1-D array-like</em><em>, </em><em>optional</em>) – The probabilities associated with each entry in a.
+If not given the sample assumes a uniform distribution over all
+entries in a.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>samples</strong> – The generated random samples</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>single item or ndarray</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If a is an int and less than zero, if a or p are not 1-dimensional,
+    if a is an array-like of size 0, if p is not a vector of
+    probabilities, if a and p have different lengths, or if
+    replace=False and the sample size is greater than the population
+    size</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">randint()</span></code>, <code class="xref py py-func docutils literal notranslate"><span class="pre">shuffle()</span></code>, <code class="xref py py-func docutils literal notranslate"><span class="pre">permutation()</span></code></p>
+<dl class="simple">
+<dt><code class="xref py py-func docutils literal notranslate"><span class="pre">Generator.choice()</span></code></dt><dd><p>which should be used in new code</p>
+</dd>
+</dl>
+</div>
+<p class="rubric">Examples</p>
+<p>Generate a uniform random sample from np.arange(5) of size 3:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="go">array([0, 3, 4]) # random</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1">#This is equivalent to np.random.randint(0,5,3)</span>
+</pre></div>
+</div>
+<p>Generate a non-uniform random sample from np.arange(5) of size 3:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="go">array([3, 3, 0]) # random</span>
+</pre></div>
+</div>
+<p>Generate a uniform random sample from np.arange(5) of size 3 without
+replacement:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="go">array([3,1,0]) # random</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1">#This is equivalent to np.random.permutation(np.arange(5))[:3]</span>
+</pre></div>
+</div>
+<p>Generate a non-uniform random sample from np.arange(5) of size
+3 without replacement:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="go">array([2, 3, 0]) # random</span>
+</pre></div>
+</div>
+<p>Any of the above can be repeated with an arbitrary array-like
+instead of just integers. For instance:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">aa_milne_arr</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;pooh&#39;</span><span class="p">,</span> <span class="s1">&#39;rabbit&#39;</span><span class="p">,</span> <span class="s1">&#39;piglet&#39;</span><span class="p">,</span> <span class="s1">&#39;Christopher&#39;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">aa_milne_arr</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">])</span>
+<span class="go">array([&#39;pooh&#39;, &#39;pooh&#39;, &#39;pooh&#39;, &#39;Christopher&#39;, &#39;piglet&#39;], # random</span>
+<span class="go">      dtype=&#39;&lt;U11&#39;)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.gen_agent">
+<span id="deepword-agents-gen-agent-module"></span><h2>deepword.agents.gen_agent module<a class="headerlink" href="#module-deepword.agents.gen_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.gen_agent.GenDQNAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.gen_agent.</code><code class="sig-name descname">GenDQNAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.gen_agent.GenDQNAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.BaseAgent" title="deepword.agents.base_agent.BaseAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.BaseAgent</span></code></a></p>
+<p>GenDQNAgent works with <a class="reference internal" href="#deepword.agents.cores.GenDQNCore" title="deepword.agents.cores.GenDQNCore"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.cores.GenDQNCore</span></code></a>.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.gen_drrn_agent">
+<span id="deepword-agents-gen-drrn-agent-module"></span><h2>deepword.agents.gen_drrn_agent module<a class="headerlink" href="#module-deepword.agents.gen_drrn_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.gen_drrn_agent.GenCompetitionDRRNAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.gen_drrn_agent.</code><code class="sig-name descname">GenCompetitionDRRNAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.gen_drrn_agent.GenCompetitionDRRNAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.competition_agent.CompetitionAgent" title="deepword.agents.competition_agent.CompetitionAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.competition_agent.CompetitionAgent</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.gen_drrn_agent.GenDRRNAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.gen_drrn_agent.</code><code class="sig-name descname">GenDRRNAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.gen_drrn_agent.GenDRRNAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.BaseAgent" title="deepword.agents.base_agent.BaseAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.BaseAgent</span></code></a></p>
+<p>We generate admissible actions at every step, and then use DRRN to choose
+the best action to play.</p>
+<p>This agent can be compared with previous template-gen agent.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.utils">
+<span id="deepword-agents-utils-module"></span><h2>deepword.agents.utils module<a class="headerlink" href="#module-deepword.agents.utils" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.utils.ActType">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ActType</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">rnd</span></em>, <em class="sig-param"><span class="n">rule</span></em>, <em class="sig-param"><span class="n">rnd_walk</span></em>, <em class="sig-param"><span class="n">policy_drrn</span></em>, <em class="sig-param"><span class="n">policy_gen</span></em>, <em class="sig-param"><span class="n">jitter</span></em>, <em class="sig-param"><span class="n">policy_tbl</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ActType" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ActType" title="deepword.agents.utils.ActType"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ActType</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.ActionDesc">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ActionDesc</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_type</span></em>, <em class="sig-param"><span class="n">action_idx</span></em>, <em class="sig-param"><span class="n">token_idx</span></em>, <em class="sig-param"><span class="n">action_len</span></em>, <em class="sig-param"><span class="n">action</span></em>, <em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ActionDesc" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ActionDesc" title="deepword.agents.utils.ActionDesc"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ActionDesc</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.ActionMaster">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ActionMaster</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span></em>, <em class="sig-param"><span class="n">master</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ActionMaster" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ActionMaster</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.CommonActs">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">CommonActs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">examine_cookbook</span></em>, <em class="sig-param"><span class="n">prepare_meal</span></em>, <em class="sig-param"><span class="n">eat_meal</span></em>, <em class="sig-param"><span class="n">look</span></em>, <em class="sig-param"><span class="n">inventory</span></em>, <em class="sig-param"><span class="n">gn</span></em>, <em class="sig-param"><span class="n">gs</span></em>, <em class="sig-param"><span class="n">ge</span></em>, <em class="sig-param"><span class="n">gw</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.CommonActs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.CommonActs" title="deepword.agents.utils.CommonActs"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.CommonActs</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.EnvInfosKey">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">EnvInfosKey</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">recipe</span></em>, <em class="sig-param"><span class="n">desc</span></em>, <em class="sig-param"><span class="n">inventory</span></em>, <em class="sig-param"><span class="n">max_score</span></em>, <em class="sig-param"><span class="n">won</span></em>, <em class="sig-param"><span class="n">lost</span></em>, <em class="sig-param"><span class="n">actions</span></em>, <em class="sig-param"><span class="n">templates</span></em>, <em class="sig-param"><span class="n">verbs</span></em>, <em class="sig-param"><span class="n">entities</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.EnvInfosKey" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.KeyInfo</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.GenSummary">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">GenSummary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span></em>, <em class="sig-param"><span class="n">tokens</span></em>, <em class="sig-param"><span class="n">gens</span></em>, <em class="sig-param"><span class="n">q_action</span></em>, <em class="sig-param"><span class="n">len</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.GenSummary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.GenSummary" title="deepword.agents.utils.GenSummary"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.GenSummary</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.LinearDecayedEPS">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">LinearDecayedEPS</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">decay_step</span></em>, <em class="sig-param"><span class="n">init_eps</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">final_eps</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.LinearDecayedEPS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ScheduledEPS" title="deepword.agents.utils.ScheduledEPS"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ScheduledEPS</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.utils.LinearDecayedEPS.eps">
+<code class="sig-name descname">eps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.LinearDecayedEPS.eps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.Memolet">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">Memolet</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tid</span></em>, <em class="sig-param"><span class="n">sid</span></em>, <em class="sig-param"><span class="n">gid</span></em>, <em class="sig-param"><span class="n">aid</span></em>, <em class="sig-param"><span class="n">token_id</span></em>, <em class="sig-param"><span class="n">a_len</span></em>, <em class="sig-param"><span class="n">a_type</span></em>, <em class="sig-param"><span class="n">reward</span></em>, <em class="sig-param"><span class="n">is_terminal</span></em>, <em class="sig-param"><span class="n">action_mask</span></em>, <em class="sig-param"><span class="n">sys_action_mask</span></em>, <em class="sig-param"><span class="n">next_action_mask</span></em>, <em class="sig-param"><span class="n">next_sys_action_mask</span></em>, <em class="sig-param"><span class="n">q_actions</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.Memolet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.Memolet" title="deepword.agents.utils.Memolet"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.Memolet</span></code></a></p>
+<p>end_of_episode: game stops by 1) winning, 2) losing, or 3) exceeding
+maximum number of steps.
+is_terminal: is current step reaches the terminal game state by winning
+or losing. is_terminal = True means for the current step, q value equals
+to the instant reward.</p>
+<dl class="simple">
+<dt>TODO: Notice that end_of_episode doesn’t imply is_terminal. Only winning</dt><dd><p>or losing means is_terminal = True.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.ObsInventory">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ObsInventory</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span></em>, <em class="sig-param"><span class="n">inventory</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ObsInventory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ObsInventory" title="deepword.agents.utils.ObsInventory"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ObsInventory</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.ScannerDecayEPS">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ScannerDecayEPS</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">decay_step</span></em>, <em class="sig-param"><span class="n">decay_range</span></em>, <em class="sig-param"><span class="n">next_init_eps_rate</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">init_eps</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">final_eps</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ScannerDecayEPS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.utils.ScheduledEPS" title="deepword.agents.utils.ScheduledEPS"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.utils.ScheduledEPS</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.utils.ScannerDecayEPS.eps">
+<code class="sig-name descname">eps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ScannerDecayEPS.eps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="deepword.agents.utils.ScheduledEPS">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">ScheduledEPS</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ScheduledEPS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="deepword.html#deepword.log.Logging" title="deepword.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.log.Logging</span></code></a></p>
+<dl class="py method">
+<dt id="deepword.agents.utils.ScheduledEPS.eps">
+<code class="sig-name descname">eps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">t</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.ScheduledEPS.eps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.align_batch_str">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">align_batch_str</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">str_len_allowance</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">valid_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.align_batch_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>Align a batch of string indexes.
+The maximum length will not exceed str_len_allowance.
+Each array of ids will be either padded or trimmed to reach
+the maximum length, notice that padded length won’t be counted in as valid
+length.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ids</strong> – a list of array of index (int)</p></li>
+<li><p><strong>str_len_allowance</strong> – </p></li>
+<li><p><strong>padding_val_id</strong> – </p></li>
+<li><p><strong>valid_len</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>aligned ids and aligned length</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.batch_dqn_input">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">batch_dqn_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">num_tokens</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.batch_dqn_input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.batch_drrn_action_input">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">batch_drrn_action_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_matrices</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_lens</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">action_masks</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>Dict<span class="p">[</span>int<span class="p">, </span>int<span class="p">]</span><span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.batch_drrn_action_input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.bert_commonsense_input">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">bert_commonsense_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">trajectory_len</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">sep_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">cls_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">num_tokens</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.bert_commonsense_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given one trajectory and its admissible actions, create a training
+set of input for Bert.</p>
+<p>Notice: the trajectory_len and action_len need to be confirmed that to have
+special tokens e.g. [CLS], [SEP] positions to be reserved.</p>
+<p>E.g. input: [1, 2, 3], and action_matrix [[1, 3], [2, PAD], [4, PAD]]
+suppose we need length to be 10.
+output:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>[[CLS, 1, 2, 3, SEP, 1, 3,   SEP, PAD, PAD, PAD],</dt><dd><p>[CLS, 1, 2, 3, SEP, 2, SEP, PAD, PAD, PAD, PAD],
+[CLS, 1, 2, 3, SEP, 4, SEP, PAD, PAD, PAD, PAD]]</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>segment of trajectory and actions:
+[[0, 0, 0, 0, 0, 1, 1, 1],</p>
+<blockquote>
+<div><p>[0, 0, 0, 0, 0, 1, 1, 0],
+[0, 0, 0, 0, 0, 1, 1, 0]]</p>
+</div></blockquote>
+<p>input size:
+[8, 7, 7]</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>trajectory + action; segmentation ids; sizes</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.categorical_without_replacement">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">categorical_without_replacement</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logits</span></em>, <em class="sig-param"><span class="n">k</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.categorical_without_replacement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Courtesy of <a class="reference external" href="https://github.com/tensorflow/tensorflow/issues/">https://github.com/tensorflow/tensorflow/issues/</a>    9260#issuecomment-437875125
+also cite here:
+&#64;misc{vieira2014gumbel,</p>
+<blockquote>
+<div><p>title = {Gumbel-max trick and weighted reservoir sampling},
+author = {Tim Vieira},
+url = {<a class="reference external" href="http://timvieira.github.io/blog/post/2014/08/01/">http://timvieira.github.io/blog/post/2014/08/01/</a>        gumbel-max-trick-and-weighted-reservoir-sampling/},
+year = {2014}</p>
+</div></blockquote>
+<p>}
+Notice that the logits represent unnormalized log probabilities,
+in the citation above, there is no need to normalized them first to add
+the Gumbel random variant, which surprises me! since I thought it should
+be <cite>logits - tf.reduce_logsumexp(logits) + z</cite></p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.dqn_input">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">dqn_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">num_tokens</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>int<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.dqn_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a trajectory (a list of ActionMaster), get trajectory indexes, length
+and master mask (master marked as 1 while action marked as 0).
+Pad the trajectory to num_tokens.
+Pad actions if required.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.drrn_action_input">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">drrn_action_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_mask</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>int<span class="p">, </span>Dict<span class="p">[</span>int<span class="p">, </span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.drrn_action_input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.get_action_idx_pair">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">get_action_idx_pair</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action_matrix</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">action_len</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">sos_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">eos_id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.get_action_idx_pair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create action index pair for seq2seq training.
+Given action index, e.g. [1, 2, 3, 4, pad, pad, pad, pad],
+with 0 as sos_id, and -1 as eos_id,
+we create training pair: [0, 1, 2, 3, 4, pad, pad, pad]
+as the input sentence, and [1, 2, 3, 4, -1, pad, pad, pad]
+as the output sentence.</p>
+<p>Notice that we remove the final pad to keep the action length unchanged.
+Notice 2. pad should be indexed as 0.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>action_matrix</strong> – np array of action index of N * K, there are N,
+and each of them has a length of K (with paddings).</p></li>
+<li><p><strong>action_len</strong> – length of each action (remove paddings).</p></li>
+<li><p><strong>sos_id</strong> – </p></li>
+<li><p><strong>eos_id</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>action index as input, action index as output, new action len</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.get_best_1d_q">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">get_best_1d_q</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>int<span class="p">, </span>float<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.get_best_1d_q" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.get_best_batch_ids">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">get_best_batch_ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">actions_repeats</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.get_best_batch_ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>get a batch of best action index of q-values
+actions_repeats indicates how many elements are in the same group.
+e.g. q_actions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+actions_repeats = [3, 4, 3]
+then q_actions can be split into three groups:
+[1, 2, 3], [4, 5, 6, 7], [8, 9, 10];
+we compute the best idx for each group</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.get_path_tags">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">get_path_tags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.get_path_tags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get tag from a path of saved objects. E.g. actions-100.npz
+100 will be extracted
+Make sure the item to be extracted is saved with suffix of npz.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> – path to find files with prefix</p></li>
+<li><p><strong>prefix</strong> – prefix</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list of all tags</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.id_real2batch">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">id_real2batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">real_id</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">id_real2mask</span><span class="p">:</span> <span class="n">List<span class="p">[</span>Dict<span class="p">[</span>int<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">actions_repeats</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.id_real2batch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.remove_zork_version_info">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">remove_zork_version_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.utils.remove_zork_version_info" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.sample_batch_ids">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">sample_batch_ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">q_actions</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">actions_repeats</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">k</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.sample_batch_ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>get a batch of sampled action index of q-values
+actions_repeats indicates how many elements are in the same group.
+e.g. q_actions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+actions_repeats = [3, 4, 3]
+then q_actions can be split into three groups:
+[1, 2, 3], [4, 5, 6, 7], [8, 9, 10];</p>
+<p>we sample from the indexes, we get the best idx in each group as the first
+one in that group, then sample another k - 1 elements for each group.
+If the number of elements in that group smaller than k - 1, we choose sample
+with replacement.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.agents.utils.tj2ids">
+<code class="sig-prename descclassname">deepword.agents.utils.</code><code class="sig-name descname">tj2ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">0</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.agents.utils.tj2ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a trajectory (list of ActionMaster) into ids
+Compute segmentation ids for masters (1) and actions (0)
+pad actions if required.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents.zork_agent">
+<span id="deepword-agents-zork-agent-module"></span><h2>deepword.agents.zork_agent module<a class="headerlink" href="#module-deepword.agents.zork_agent" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.agents.zork_agent.ZorkAgent">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.agents.zork_agent.</code><code class="sig-name descname">ZorkAgent</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hp</span></em>, <em class="sig-param"><span class="n">model_dir</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.agents.zork_agent.ZorkAgent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.agents.base_agent.BaseAgent" title="deepword.agents.base_agent.BaseAgent"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.agents.base_agent.BaseAgent</span></code></a></p>
+<p>The agent to run Zork.</p>
+<dl class="simple">
+<dt>TextWorld will not provide admissible actions like cooking games, so a</dt><dd><p>loaded action file is required.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.agents">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-deepword.agents" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Xusen Yin
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
