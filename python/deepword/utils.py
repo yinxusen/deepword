@@ -12,71 +12,84 @@ import sys
 import time
 from itertools import chain
 from os.path import join as pjoin
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Optional, Any
 
 import numpy as np
 import ruamel.yaml
 from bitarray import bitarray
+from tabulate import tabulate
 
 
 def get_hash(txt: str) -> str:
     """
-    Compute hash value for a text as a label
-    :param txt:
-    :return:
+    get hex hash value for a string
     """
     return hashlib.md5(txt.encode("utf-8")).hexdigest()
 
 
 def eprint(*args, **kwargs):
+    """
+    print to stderr
+    """
     print(*args, file=sys.stderr, **kwargs)
 
 
 def flatmap(f, items):
+    """
+    flatmap for python
+    """
     return list(chain.from_iterable(map(f, items)))
 
 
 def flatten(items):
+    """
+    flatten a list of lists to a list
+    """
     return list(chain.from_iterable(items))
 
 
 def uniq(lst):
     """
-    this is an order-preserving unique
+    order-preserving unique
     """
     seen = set()
     seen_add = seen.add
     return [x for x in lst if not (x in seen or seen_add(x))]
 
 
-def load_uniq_lines(fname):
+def load_uniq_lines(fname: str) -> List[str]:
+    """
+    Load unique lines from a file, line order preserved
+    """
     with open(fname, 'r') as f:
         lines = map(lambda l: l.strip(), f.readlines())
     return uniq(lines)
 
 
-def load_vocab(vocab_file):
+def load_vocab(vocab_file: str) -> List[str]:
+    """
+    Load unique words from a vocabulary
+    """
     return load_uniq_lines(vocab_file)
 
 
-def load_actions(action_file):
+def load_actions(action_file: str) -> List[str]:
+    """
+    Load unique actions from an action file
+    """
     return load_uniq_lines(action_file)
 
 
-def get_token2idx(tokens):
+def get_token2idx(tokens: List[str]) -> Dict[str, int]:
+    """
+    From a list of tokens to a dict of token to position
+    """
     uniq_tokens = uniq(tokens)
     return dict(map(
         lambda idx_token: (idx_token[1], idx_token[0]), enumerate(uniq_tokens)))
 
 
-def col(memory, idx):
-    """
-    get column from index of a memory list, or a mini-batch of memory list
-    """
-    return list(map(lambda m: m[idx], memory))
-
-
-def ctime():
+def ctime() -> int:
     """
     current time in millisecond
     """
@@ -84,10 +97,19 @@ def ctime():
 
 
 def setup_logging(
-        default_path='logging.yaml',
-        default_level=logging.INFO,
-        env_key='LOG_CFG',
-        local_log_filename=None):
+        default_path: str = 'logging.yaml',
+        default_level: int = logging.INFO,
+        env_key: str = 'LOG_CFG',
+        local_log_filename: Optional[str] = None) -> None:
+
+    """
+    Setup logging for python project
+
+    Load YAML config file from `default_path`, or from the environment variable
+    set by `env_key`. Falls back to default config if file not exist.
+
+    if `local_log_filename` set, add a local rotating log file.
+    """
 
     path = default_path
     value = os.getenv(env_key, None)
@@ -111,13 +133,17 @@ def setup_logging(
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 
-def model_name2clazz(name):
+def model_name2clazz(name: str):
     """
     Find the class given the model name in this package.
 
-    :param name:
-    :return:
+    Args:
+        name: Model name from :py:mod:`deepword.models`
+
+    Returns:
+        the class w.r.t. the model name
     """
+
     from deepword.models import dqn_model, drrn_model, dsqn_model, \
         gen_model, commonsense_model
 
@@ -128,7 +154,17 @@ def model_name2clazz(name):
     raise ValueError("{} not found in models".format(name))
 
 
-def learner_name2clazz(name):
+def learner_name2clazz(name: str):
+    """
+    Find the class given the learner name in this package.
+
+    Args:
+        name: Learner name from :py:mod:`deepword.students`
+
+    Returns:
+        the class w.r.t. the learner name
+    """
+
     from deepword.students import student_learner, bert_swag
 
     for namespace in [student_learner, bert_swag]:
@@ -137,13 +173,17 @@ def learner_name2clazz(name):
     raise ValueError("{} not found in student learners".format(name))
 
 
-def agent_name2clazz(name):
+def agent_name2clazz(name: str):
     """
-    Find the class given the model name in this package.
+    Find the class given the agent name in this package.
 
-    :param name:
-    :return:
+    Args:
+        name: Agent name from :py:mod:`deepword.agents`
+
+    Returns:
+        the class w.r.t. the agent name
     """
+
     from deepword.agents import base_agent, dsqn_agent, \
         gen_agent, competition_agent, gen_drrn_agent, \
         zork_agent
@@ -156,7 +196,17 @@ def agent_name2clazz(name):
     raise ValueError("{} not found in agents".format(name))
 
 
-def core_name2clazz(name):
+def core_name2clazz(name: str):
+    """
+    Find the class given the core name in this package.
+
+    Args:
+        name: Agent name from :py:mod:`deepword.agents.cores`
+
+    Returns:
+        the class w.r.t. the core name
+    """
+
     from deepword.agents import cores
 
     if hasattr(cores, name):
@@ -164,17 +214,25 @@ def core_name2clazz(name):
     raise ValueError("{} not found in agents".format(name))
 
 
-def split_train_dev(game_files, train_ratio=0.9, rnd_seed=42):
+def split_train_dev(
+        game_files: List[str], train_ratio: float = 0.9, rnd_seed: int = 42
+) -> Tuple[List[str], List[str]]:
     """
     Split train/dev sets from given game files
     sort - shuffle w/ Random(42) - split
 
-    :param game_files: game files
-    :param train_ratio: the percentage of training files.
-    :param rnd_seed: for randomly shuffle files, default = 42
-    :return: train_games, dev_games
-    :exception: empty game_files
+    Args:
+        game_files: game files
+        train_ratio: the percentage of training files
+        rnd_seed: for randomly shuffle files, default = 42
+
+    Returns:
+        train_games, dev_games
+
+    Exception:
+        empty game_files
     """
+
     # have to sort first, otherwise after shuffling the result is different
     # on different platforms, e.g. Linux VS MacOS.
     game_files = sorted(game_files)
@@ -191,7 +249,7 @@ def split_train_dev(game_files, train_ratio=0.9, rnd_seed=42):
     return train_games, dev_games
 
 
-def load_game_files(game_path, f_games=None):
+def load_game_files(game_path: str, f_games: Optional[str] = None) -> List[str]:
     """
     Load a dir of games, or a single game.
     if game_path represents a file, then return a list of the file;
@@ -199,10 +257,15 @@ def load_game_files(game_path, f_games=None):
       .ulx;
     if f_games is set, then load files in the game_path with names listed in
       f_games.
-    :param game_path: a dir, or a single file
-    :param f_games: a file of game names, without suffix, default suffix .ulx
-    :return: a list of game files
+
+    Args:
+        game_path: a dir, or a single file
+        f_games: a file of game names, without suffix, default suffix .ulx
+
+    Returns:
+        a list of game files
     """
+
     if os.path.isfile(game_path):
         game_files = [game_path]
     elif os.path.isdir(game_path):
@@ -222,10 +285,16 @@ def load_game_files(game_path, f_games=None):
 def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     """
     Load games and split train dev set
-    :param game_path:
-    :param f_games:
-    :return:
+
+    Args:
+        game_path: game dir
+        f_games: a file with list of games, each game name per line, without the
+        suffix of ulx
+
+    Returns:
+        train_games, dev_games
     """
+
     game_files = load_game_files(game_path, f_games)
     train_games, dev_games = split_train_dev(game_files)
     return train_games, dev_games
@@ -237,34 +306,38 @@ fn_log = pjoin(project_path, "conf/logging.yaml")
 fn_log_eval = pjoin(project_path, "conf/logging-eval.yaml")
 
 
-def setup_train_log(model_dir):
+def setup_train_log(model_dir: str):
+    """
+    Setup log for training by putting a `game_script.log` in `model_dir`.
+    """
     assert os.path.isfile(fn_log)
     setup_logging(
         default_path=fn_log,
         local_log_filename=pjoin(model_dir, 'game_script.log'))
 
 
-def setup_eval_log(log_filename):
+def setup_eval_log(log_filename: str):
+    """
+    Setup log for evaluation
+
+    Args:
+        log_filename: the path to log file
+    """
     assert os.path.isfile(fn_log_eval)
     setup_logging(default_path=fn_log_eval, local_log_filename=log_filename)
 
 
-def bytes2array(byte_action_masks):
-    """
-    Convert a list of byte-array masks to a list of np-array masks.
-    TODO: last bit set as False to represent the end of the bit-string, i.e.
-        '\0' in c/c++.
-    """
-    vec_action_masks = []
-    for mask in byte_action_masks:
-        bit_mask = bitarray(endian='little')
-        bit_mask.frombytes(mask)
-        bit_mask[-1] = False
-        vec_action_masks.append(bit_mask.tolist())
-    return np.asarray(vec_action_masks, dtype=np.int32)
-
-
 def bytes2idx(byte_mask: List[bytes], size: int) -> np.ndarray:
+    """
+    load a list of bytes to choose `1` for selected actions
+
+    Args:
+        byte_mask: a list of bytes
+        size: the size of total actions
+
+    Returns:
+        an np array of indices
+    """
     bit_mask = bitarray(endian='little')
     bit_mask.frombytes(byte_mask)
     bit_mask = bit_mask[:size]
@@ -273,12 +346,22 @@ def bytes2idx(byte_mask: List[bytes], size: int) -> np.ndarray:
     return np.where(np_mask == 1)[0]
 
 
-def softmax(x):
-    """numerical stability softmax"""
+def softmax(x: np.ndarray) -> np.ndarray:
+    """
+    numerical stability softmax
+    """
     e_x = np.exp(x - np.sum(x))
     return e_x / np.sum(e_x)
 
 
-def report_status(lst_of_status: List[Tuple[str, object]]) -> str:
-    return ', '.join(
-        map(lambda k_v: '{}: {}'.format(k_v[0], k_v[1]), lst_of_status))
+def report_status(lst_of_status: List[Tuple[str, Any]]) -> str:
+    """
+    Pretty print a series of k-v pairs
+
+    Args:
+        lst_of_status: A list of k-v pairs
+
+    Returns:
+        a string to print
+    """
+    return tabulate(lst_of_status, headers=("key", "value"))

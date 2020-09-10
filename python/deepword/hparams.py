@@ -8,6 +8,8 @@ from typing import Optional, Dict, Any, Iterable
 import ruamel.yaml
 from tensorflow.contrib.training import HParams
 
+from deepword.utils import report_status
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 home_dir = os.path.expanduser("~")
 project_path = pjoin(dir_path, "../..")
@@ -288,12 +290,10 @@ default_config = {
 
 def output_hparams(hp: HParams) -> str:
     out_str = ['------------hparams---------------']
-    hp_dict = hp.values()
-    keys = sorted(hp_dict.keys())
-    for k in keys:
-        out_str.append('{} -> {}'.format(k, hp_dict[k]))
+    hp_dict = sorted(list(hp.values().items()), key=lambda x: x[0])
+    out_str.append(report_status(hp_dict))
     out_str.append('-----------------------------------')
-    return "\n".join(out_str)
+    return "\n" + "\n".join(out_str) + "\n"
 
 
 def update_hparams_from_dict(
