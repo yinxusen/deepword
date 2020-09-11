@@ -8,7 +8,6 @@ Subpackages
    :maxdepth: 4
 
    deepword.agents
-   deepword.features
    deepword.models
    deepword.students
    deepword.tests

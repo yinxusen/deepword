@@ -1,8 +1,7 @@
 import json
-import os
 import sys
 from collections import namedtuple
-from os.path import join as pjoin
+from os import path
 from typing import Optional, Dict, Any, Iterable
 
 import ruamel.yaml
@@ -10,9 +9,9 @@ from tensorflow.contrib.training import HParams
 
 from deepword.utils import report_status
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-home_dir = os.path.expanduser("~")
-project_path = pjoin(dir_path, "../..")
+dir_path = path.dirname(path.realpath(__file__))
+home_dir = path.expanduser("~")
+project_path = path.join(dir_path, "../..")
 
 
 class Conventions(namedtuple(
@@ -47,22 +46,23 @@ class Conventions(namedtuple(
 
 
 conventions = Conventions(
-    logo_file=pjoin(project_path, "resources/logo.txt"),
-    bert_ckpt_dir=pjoin(
+    logo_file=path.join(project_path, "resources/logo.txt"),
+    bert_ckpt_dir=path.join(
         home_dir, "local/opt/bert-models/bert-model"),
-    bert_vocab_file=pjoin(
+    bert_vocab_file=path.join(
         home_dir, "local/opt/bert-models/bert-model/vocab.txt"),
-    nltk_vocab_file=pjoin(project_path, "resources/vocab.txt"),
-    glove_vocab_file=pjoin(
+    nltk_vocab_file=path.join(project_path, "resources/vocab.txt"),
+    glove_vocab_file=path.join(
         home_dir, "local/opt/glove-models/glove.6B/vocab.glove.6B.4more.txt"),
-    glove_emb_file=pjoin(
+    glove_emb_file=path.join(
         home_dir, "local/opt/glove-models/glove.6B/glove.6B.50d.4more.txt"),
-    legacy_zork_vocab_file=pjoin(home_dir, "local/opt/legacy-zork-vocab.txt"),
-    albert_ckpt_dir=pjoin(
+    legacy_zork_vocab_file=path.join(
+        home_dir, "local/opt/legacy-zork-vocab.txt"),
+    albert_ckpt_dir=path.join(
         home_dir, "local/opt/bert-models/albert-model"),
-    albert_vocab_file=pjoin(
+    albert_vocab_file=path.join(
         home_dir, "local/opt/bert-models/albert-model/30k-clean.vocab"),
-    albert_spm_path=pjoin(
+    albert_spm_path=path.join(
         home_dir, "local/opt/bert-models/albert-model/30k-clean.model"),
     bert_cls_token="[CLS]",
     bert_unk_token="[UNK]",
@@ -289,6 +289,9 @@ default_config = {
 
 
 def output_hparams(hp: HParams) -> str:
+    """
+    pretty print str in a table style for hp
+    """
     out_str = ['------------hparams---------------']
     hp_dict = sorted(list(hp.values().items()), key=lambda x: x[0])
     out_str.append(report_status(hp_dict))
@@ -299,6 +302,16 @@ def output_hparams(hp: HParams) -> str:
 def update_hparams_from_dict(
         hp: HParams, cmd_args: Dict[str, Any],
         allowed_to_change: Optional[Iterable[str]] = None) -> HParams:
+    """
+    update hp from a dict
+    Args:
+        hp: hyperparameters
+        cmd_args: command line arguments
+        allowed_to_change: keys that are allowed to update
+
+    Returns:
+        a hp
+    """
     for hp_key in cmd_args:
         if (hp_key in hp and cmd_args[hp_key] is not None and
                 (hp_key in allowed_to_change if allowed_to_change else True)):
@@ -307,7 +320,10 @@ def update_hparams_from_dict(
 
 
 def update_hparams_from_hparams(hp: HParams, hp2: HParams) -> HParams:
-    """hp should not have same keys with hp2"""
+    """
+    update hp from hp2
+    hp should not have same keys with hp2
+    """
     dict_hp2 = hp2.values()
     for k in dict_hp2:
         if k not in hp:
@@ -318,6 +334,9 @@ def update_hparams_from_hparams(hp: HParams, hp2: HParams) -> HParams:
 
 
 def update_hparams_from_file(hp: HParams, file_args: str) -> HParams:
+    """
+    update hp from a json file
+    """
     with open(file_args, 'r') as f:
         json_val = json.load(f)
         for k in json_val:
@@ -329,6 +348,9 @@ def update_hparams_from_file(hp: HParams, file_args: str) -> HParams:
 
 
 def copy_hparams(hp: HParams) -> HParams:
+    """
+    Deepcopy for hp
+    """
     hp2 = HParams()
     dict_hp = hp.values()
     for k in dict_hp:
@@ -355,6 +377,14 @@ def load_hparams(
     priority(file_args) > priority(cmd_args) except arg in allowed_to_change
     priority(cmd_args) > priority(pre_config)
     priority(pre_config) > priority(default)
+
+    Args:
+        fn_model_config: hyperparameter config file in `model_dir`
+        cmd_args: command line arguments
+        fn_pre_config: pre config file for model
+
+    Returns:
+        hp
     """
     allowed_to_change = [
         "model_dir", "eval_episode", "game_episode_terminal_t",
@@ -418,6 +448,9 @@ def load_hparams(
 
 
 def save_hparams(hp: HParams, file_path: str) -> None:
+    """
+    Save hyperparameters to a json file
+    """
     with open(file_path, 'w') as f:
         new_hp = copy_hparams(hp)
         new_hp.set_hparam("model_dir", ".")

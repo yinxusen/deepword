@@ -3,7 +3,7 @@ import random
 import time
 import traceback
 from csv import reader
-from os.path import join as pjoin
+from os import path
 from queue import Queue
 from threading import Thread
 from typing import Tuple, List, Any, Optional
@@ -108,7 +108,7 @@ class SwagLearner(BertSoftmaxLearner):
         else:
             pass
 
-        sw_path = pjoin(self.model_dir, "summaries", "train")
+        sw_path = path.join(self.model_dir, "summaries", "train")
         sw = tf.summary.FileWriter(sw_path, sess.graph)
 
         queue = Queue(maxsize=100)

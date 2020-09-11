@@ -9,7 +9,7 @@ import traceback
 from collections import ChainMap
 from collections import namedtuple
 from multiprocessing import Pool
-from os.path import join as pjoin
+from os import path
 from threading import Lock
 from typing import List, Dict, Optional, Tuple
 
@@ -73,7 +73,7 @@ def eval_agent(
     requested_infos = agent.select_additional_infos()
     for game_no in range(len(game_files)):
         game_file = game_files[game_no]
-        game_name = os.path.basename(game_file)
+        game_name = path.basename(game_file)
         env_id = textworld.gym.register_games(
             [game_file], requested_infos, batch_size=1,
             max_episode_steps=hp.game_episode_terminal_t,
@@ -396,15 +396,16 @@ class MultiGPUsEvalPlayer(Logging):
         Args:
             loaded_ckpt_step: which model to copy
         """
-        ckpt_path = pjoin(self.model_dir, "last_weights")
-        best_path = pjoin(self.model_dir, "best_weights")
-        if not os.path.exists(best_path):
+        ckpt_path = path.join(self.model_dir, "last_weights")
+        best_path = path.join(self.model_dir, "best_weights")
+        if not path.exists(best_path):
             os.mkdir(best_path)
         for file in glob.glob(
-                pjoin(ckpt_path, "after-epoch-{}*".format(loaded_ckpt_step))):
+                path.join(
+                    ckpt_path, "after-epoch-{}*".format(loaded_ckpt_step))):
             dst = shutil.copy(file, best_path)
             self.debug("copied: {} -> {}".format(file, dst))
-        ckpt_file = pjoin(ckpt_path, "checkpoint")
+        ckpt_file = path.join(ckpt_path, "checkpoint")
         dst = shutil.copy(ckpt_file, best_path)
         self.debug("copied: {} -> {}".format(ckpt_file, dst))
 
@@ -436,7 +437,7 @@ class NewModelHandler(FileSystemEventHandler):
         self.lock.release()
 
     def is_ckpt_file(self, src_path):
-        return self.watched_file == os.path.basename(src_path)
+        return self.watched_file == path.basename(src_path)
 
     def on_created(self, event):
         eprint("create ", event.src_path)
@@ -455,8 +456,8 @@ class WatchDogEvalPlayer(Logging):
 
     def start(self, hp, model_dir, game_files, n_gpus):
         event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        watched_dir = pjoin(model_dir, "last_weights")
-        if not os.path.exists(watched_dir):
+        watched_dir = path.join(model_dir, "last_weights")
+        if not path.exists(watched_dir):
             os.mkdir(watched_dir)
         self.debug("watch on {}".format(watched_dir))
         observer = Observer()
@@ -478,7 +479,7 @@ class LoopDogEvalPlayer(Logging):
 
     def start(self, hp, model_dir, game_files, n_gpus):
         event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        watched_file = pjoin(model_dir, "last_weights", "checkpoint")
+        watched_file = path.join(model_dir, "last_weights", "checkpoint")
         self.debug("watch on {}".format(watched_file))
         try:
             while True:
@@ -510,8 +511,9 @@ class FullDirEvalPlayer(Logging):
     def start(
             cls, hp, model_dir, game_files, n_gpus,
             range_min=None, range_max=None):
-        watched_files = pjoin(model_dir, "last_weights", "after-epoch-*.index")
-        files = [os.path.splitext(fn)[0] for fn in glob.glob(watched_files)]
+        watched_files = path.join(
+            model_dir, "last_weights", "after-epoch-*.index")
+        files = [path.splitext(fn)[0] for fn in glob.glob(watched_files)]
         if len(files) == 0:
             eprint(colored("No checkpoint found!", "red"))
             return

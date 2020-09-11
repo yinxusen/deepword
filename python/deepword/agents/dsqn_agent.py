@@ -1,10 +1,9 @@
 from bisect import bisect_left
 from multiprocessing.pool import ThreadPool
-from os import remove as prm
+from os import remove
 from typing import Dict, Tuple, List, Any
 
 import numpy as np
-from numpy.random import choice as npc
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
@@ -65,7 +64,7 @@ class DSQNAgent(BaseAgent):
         super(DSQNAgent, self)._delete_stale_context_objs()
         if self._stale_tags is not None:
             for tag in self._stale_tags:
-                prm(self._get_context_obj_path_w_tag(self.hs2tj_prefix, tag))
+                remove(self._get_context_obj_path_w_tag(self.hs2tj_prefix, tag))
 
     def _clean_stale_context(self, tids):
         super(DSQNAgent, self)._clean_stale_context(tids)
@@ -126,9 +125,9 @@ class DSQNAgent(BaseAgent):
                    self.hash_states2tjs.keys()))
         self.debug(
             "choose from {} keys for SNN target".format(len(target_key_set)))
-        hs_keys = npc(target_key_set, size=batch_size)
+        hs_keys = np.random.choice(target_key_set, size=batch_size)
 
-        diff_keys_duo = npc(
+        diff_keys_duo = np.random.choice(
             list(self.hash_states2tjs.keys()), replace=False,
             size=(batch_size, 2))
         diff_keys = diff_keys_duo[:, 0]
@@ -139,12 +138,13 @@ class DSQNAgent(BaseAgent):
         same_set = []
         diff_set = []
         for hk, dk in zip(hs_keys, diff_keys):
-            samples_ids = npc(
+            samples_ids = np.random.choice(
                 len(self.hash_states2tjs[hk]), size=2, replace=False)
             tgt_set.append(self.hash_states2tjs[hk][samples_ids[0]])
             same_set.append(self.hash_states2tjs[hk][samples_ids[1]])
             diff_set.append(
-                self.hash_states2tjs[dk][npc(len(self.hash_states2tjs[dk]))])
+                self.hash_states2tjs[dk][np.random.choice(
+                    len(self.hash_states2tjs[dk]))])
 
         trajectories = [
             self.tjs.fetch_state_by_idx(tid, sid) for tid, sid in

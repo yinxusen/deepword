@@ -1,8 +1,7 @@
 import math
-import os
 from abc import ABC
 from copy import deepcopy
-from os.path import join as pjoin
+from os import path
 from typing import Dict
 from typing import Optional, List, Any, Tuple
 
@@ -181,10 +180,10 @@ class TFCore(BaseCore, ABC):
         self.sess: Optional[Session] = None
         self.target_sess: Optional[Session] = None
         self.train_summary_writer: Optional[FileWriter] = None
-        self.ckpt_path = os.path.join(self.model_dir, 'last_weights')
-        self.best_ckpt_path = os.path.join(self.model_dir, 'best_weights')
-        self.ckpt_prefix = os.path.join(self.ckpt_path, 'after-epoch')
-        self.best_ckpt_prefix = os.path.join(self.best_ckpt_path, 'after-epoch')
+        self.ckpt_path = path.join(self.model_dir, 'last_weights')
+        self.best_ckpt_path = path.join(self.model_dir, 'best_weights')
+        self.ckpt_prefix = path.join(self.ckpt_path, 'after-epoch')
+        self.best_ckpt_prefix = path.join(self.best_ckpt_path, 'after-epoch')
         self.saver: Optional[Saver] = None
         self.target_saver: Optional[Saver] = None
         self.d4train, self.d4eval, self.d4target = self._init_devices()
@@ -390,7 +389,7 @@ class TFCore(BaseCore, ABC):
         if self.is_training:
             if self.loaded_ckpt_step > 0:
                 self.create_or_reload_target_model(restore_from)
-            train_summary_dir = os.path.join(
+            train_summary_dir = path.join(
                 self.model_dir, "summaries", "train")
             self.train_summary_writer = tf.summary.FileWriter(
                 train_summary_dir, self.sess.graph)
@@ -621,7 +620,7 @@ class TabularCore(BaseCore):
         self.tokenizer = tokenizer
         self.model_dir = model_dir
         self.ckpt_prefix = "after-epoch"
-        self.ckpt_path = pjoin(self.model_dir, self.q_mat_prefix)
+        self.ckpt_path = path.join(self.model_dir, self.q_mat_prefix)
 
     def train_one_batch(
             self,
@@ -680,7 +679,7 @@ class TabularCore(BaseCore):
                 tags = get_path_tags(
                     self.ckpt_path, self.ckpt_prefix)
                 self.loaded_ckpt_step = max(tags)
-                restore_from = pjoin(
+                restore_from = path.join(
                     self.ckpt_path, "{}-{}.npz".format(
                         self.ckpt_prefix, self.loaded_ckpt_step))
             else:
@@ -698,7 +697,7 @@ class TabularCore(BaseCore):
         pass
 
     def save_model(self, t: Optional[int] = None) -> None:
-        q_mat_path = pjoin(
+        q_mat_path = path.join(
             self.ckpt_path, "{}-{}.npz".format(self.ckpt_prefix, t))
         np.savez(
             q_mat_path,

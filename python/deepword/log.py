@@ -1,10 +1,19 @@
 import logging
 import logging.config
+from typing import Optional
 
 
 class Logging(object):
+    """
+    Logging utils for classes
+    """
 
-    def __init__(self, name=None):
+    def __init__(self, name: Optional[str] = None):
+        """
+        Args:
+            name: name for logging, default module_name.class_name
+        """
+
         if name is None:
             cls_name = self.__class__.__name__
             module_name = self.__module__

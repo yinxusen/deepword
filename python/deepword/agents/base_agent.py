@@ -1,8 +1,8 @@
 import random
 import re
 from collections import namedtuple
-from os import remove as prm
-from os.path import join as pjoin
+from os import path
+from os import remove
 from typing import List, Dict, Tuple, Optional, Any
 
 import numpy as np
@@ -269,7 +269,7 @@ class BaseAgent(Logging):
         self._initialized = True
 
     def _get_context_obj_path_w_tag(self, prefix: str, tag: int) -> str:
-        return pjoin(
+        return path.join(
             self.model_dir, "{}-{}.npz".format(prefix, tag))
 
     def _get_context_obj_path(self, prefix: str) -> str:
@@ -312,7 +312,7 @@ class BaseAgent(Logging):
 
         if self.is_training:
             # save hparams if training
-            save_hparams(self.hp, pjoin(self.model_dir, 'hparams.json'))
+            save_hparams(self.hp, path.join(self.model_dir, 'hparams.json'))
             if self.hp.start_t_ignore_model_t:
                 self.total_t = min(
                     self.hp.observation_t,
@@ -338,7 +338,7 @@ class BaseAgent(Logging):
         """
         Prepare the agent for the upcoming episode.
         :param obs: initial feedback from each game
-        :param infos: additional infors of each game
+        :param infos: additional infos of each game
         :return:
         """
         if not self._initialized:
@@ -399,11 +399,12 @@ class BaseAgent(Logging):
                 valid_tags)))[self.hp.max_snapshot_to_keep:]
             self.info("tags to be deleted: {}".format(self._stale_tags))
             for tag in self._stale_tags:
-                prm(self._get_context_obj_path_w_tag(self.memo_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.action_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
-                prm(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
+                remove(self._get_context_obj_path_w_tag(self.memo_prefix, tag))
+                remove(self._get_context_obj_path_w_tag(self.tjs_prefix, tag))
+                remove(
+                    self._get_context_obj_path_w_tag(self.action_prefix, tag))
+                remove(self._get_context_obj_path_w_tag(self.fp_prefix, tag))
+                remove(self._get_context_obj_path_w_tag(self.stc_prefix, tag))
 
     def _save_context_objs(self) -> None:
         action_path = self._get_context_obj_new_path(self.action_prefix)

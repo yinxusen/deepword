@@ -3,7 +3,7 @@ import random
 import sys
 import time
 import traceback
-from os.path import join as pjoin
+from os import path
 from queue import Queue
 from threading import Thread
 from typing import Tuple, List, Union, Any, Optional
@@ -57,10 +57,10 @@ class StudentLearner(object):
         self.train_data_dir = train_data_dir
         self.eval_data_path = eval_data_path
 
-        self.load_from = pjoin(self.model_dir, "last_weights")
-        self.ckpt_prefix = pjoin(self.load_from, "after-epoch")
+        self.load_from = path.join(self.model_dir, "last_weights")
+        self.ckpt_prefix = path.join(self.load_from, "after-epoch")
         self.hp, self.tokenizer = init_tokens(hp)
-        save_hparams(self.hp, pjoin(model_dir, "hparams.json"))
+        save_hparams(self.hp, path.join(model_dir, "hparams.json"))
         eprint(output_hparams(self.hp))
 
         self.sess = None
@@ -87,12 +87,12 @@ class StudentLearner(object):
         combined_data_path = []
         for tag in sorted(valid_tags, key=lambda k: random.random()):
             combined_data_path.append(
-                (pjoin(data_dir,
-                       "{}-{}.npz".format(self.tjs_prefix, tag)),
-                 pjoin(data_dir,
-                       "{}-{}.npz".format(self.action_prefix, tag)),
-                 pjoin(data_dir,
-                       "{}-{}.npz".format(self.memo_prefix, tag))))
+                (path.join(
+                    data_dir, "{}-{}.npz".format(self.tjs_prefix, tag)),
+                 path.join(
+                     data_dir, "{}-{}.npz".format(self.action_prefix, tag)),
+                 path.join(
+                     data_dir, "{}-{}.npz".format(self.memo_prefix, tag))))
         return combined_data_path
 
     def _prepare_model(
@@ -325,7 +325,7 @@ class StudentLearner(object):
         else:
             pass
 
-        sw_path = pjoin(self.model_dir, "summaries", "train")
+        sw_path = path.join(self.model_dir, "summaries", "train")
         sw = tf.summary.FileWriter(sw_path, sess.graph)
 
         queue = Queue(maxsize=100)

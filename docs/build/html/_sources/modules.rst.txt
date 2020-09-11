@@ -1,5 +1,5 @@
-deepword
-========
+python
+======
 
 .. toctree::
    :maxdepth: 4

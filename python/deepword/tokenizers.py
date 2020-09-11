@@ -12,30 +12,88 @@ from deepword.utils import load_vocab, get_token2idx
 
 
 class Tokenizer(object):
+    """
+    A wrapper of tokenizer
+    """
+
     @property
     def vocab(self) -> Dict[str, int]:
+        """
+        get the vocabulary
+
+        Returns:
+            map from tokens to positions (ids)
+        """
+
         raise NotImplementedError()
 
     @property
     def inv_vocab(self) -> Dict[int, str]:
+        """
+        inverse of vocabulary
+
+        Returns:
+            map from positions (ids) to tokens
+        """
+
         raise NotImplementedError()
 
     def tokenize(self, text: str) -> List[str]:
+        """
+        tokenize a text into a list of tokens
+
+        Args:
+            text: a string to tokenize
+
+        Returns:
+            a list of tokens
+        """
+
         raise NotImplementedError()
 
     def de_tokenize(self, ids: List[int]) -> str:
+        """
+        turn a list of ids
+
+        Args:
+            ids: ids of tokens
+
+        Returns:
+            a string
+        """
+
         raise NotImplementedError()
 
     def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
+        """
+        convert tokens into ids
+
+        Args:
+            tokens: a list of tokens
+
+        Returns:
+            a list of ids
+        """
+
         raise NotImplementedError()
 
     def convert_ids_to_tokens(self, ids: List[int]) -> List[str]:
+        """
+        convert ids to tokens
+
+        Args:
+            ids: a list of ids
+
+        Returns:
+            a list of tokens
+        """
+
         raise NotImplementedError()
 
 
 class NLTKTokenizer(Tokenizer):
     """
-    Vocab is token2idx, inv_vocab is idx2token
+    wrapper of the tokenizer from NLTK package
     """
 
     def __init__(self, vocab_file, do_lower_case):
@@ -101,6 +159,11 @@ class NLTKTokenizer(Tokenizer):
 
 
 class LegacyZorkTokenizer(NLTKTokenizer):
+    """
+    the NLTK tokenizer but keep only alphabetic strings by removing all other
+    tokens w/ non-alphabetic characters.
+    """
+
     def __init__(self, vocab_file):
         super(LegacyZorkTokenizer, self).__init__(
             vocab_file, do_lower_case=True)
@@ -113,6 +176,10 @@ class LegacyZorkTokenizer(NLTKTokenizer):
 
 
 class BertTokenizer(Tokenizer):
+    """
+    The tokenizer from BERT
+    """
+
     def __init__(self, vocab_file, do_lower_case):
         self.tokenizer = BertTok(vocab_file, do_lower_case)
         self._special_tokens = [
@@ -150,6 +217,10 @@ class BertTokenizer(Tokenizer):
 
 
 class AlbertTokenizer(BertTokenizer):
+    """
+    The tokenizer from Albert
+    """
+
     def __init__(self, vocab_file, do_lower_case, spm_model_file):
         super(AlbertTokenizer, self).__init__(vocab_file, do_lower_case)
         self.tokenizer = AlbertTok(vocab_file, do_lower_case, spm_model_file)
@@ -274,10 +345,15 @@ def get_zork_tokenizer(
 
 def init_tokens(hp: HParams) -> Tuple[HParams, Tokenizer]:
     """
-    Note that BERT must use bert vocabulary.
-    :param hp:
-    :return:
+    Initialize a tokenizer given hyperparameters
+
+    Args:
+        hp: hyperparameters, see :py:mod:`deepword.hparams`
+
+    Returns:
+        updated hp, tokenizer
     """
+
     if hp.tokenizer_type.lower() == "bert":
         new_hp, tokenizer = get_bert_tokenizer(hp)
     elif hp.tokenizer_type.lower() == "albert":

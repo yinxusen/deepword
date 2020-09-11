@@ -1,5 +1,4 @@
-import os
-from os.path import join as pjoin
+from os import path
 from threading import Thread
 
 import fire
@@ -61,7 +60,7 @@ def load_snapshot(raw_tjs_path, hs2tj_path):
 
 def clean_data(tp, hs):
     eprint("cleaning\n{}\n{}".format(tp, hs))
-    hs_prefix = os.path.splitext(hs)[0]
+    hs_prefix = path.splitext(hs)[0]
     tjs, hs2tj = load_snapshot(tp, hs)
     cleaned_hs2tj = clean_hs2tj(hs2tj, tjs)
     np.savez("{}.clean.npz".format(hs_prefix), hs2tj=[cleaned_hs2tj])
@@ -74,8 +73,8 @@ def main(data_path, n_data):
     combined_data_path = []
     for i in range(n_data):
         combined_data_path.append(
-            (pjoin(data_path, "{}-{}.npz".format(tjs_prefix, i)),
-             pjoin(data_path, "{}-{}.npz".format(hs2tj_prefix, i))))
+            (path.join(data_path, "{}-{}.npz".format(tjs_prefix, i)),
+             path.join(data_path, "{}-{}.npz".format(hs2tj_prefix, i))))
 
     threads = [
         Thread(target=clean_data, args=(tp, hs))

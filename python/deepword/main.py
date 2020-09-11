@@ -6,15 +6,18 @@ import time
 import traceback
 from argparse import ArgumentParser
 from multiprocessing import Pool
-from os.path import join as pjoin
+from os import path
+from typing import Optional, Callable
 
 import gym
 import tensorflow as tf
 import textworld.gym
+from gym.core import Env
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 from tqdm import trange
 
+from deepword.agents.base_agent import BaseAgent
 from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
     FullDirEvalPlayer, agent_collect_data
 from deepword.hparams import load_hparams, conventions
@@ -27,6 +30,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 
 
 def hp_parser() -> ArgumentParser:
+    """
+    Arg parser for hyper-parameters
+    """
+
     # TODO: "store_true" defaults to be False, so use an explict default=None
     parser = ArgumentParser(argument_default=None)
     parser.add_argument('--model-creator', type=str)
@@ -67,6 +74,10 @@ def hp_parser() -> ArgumentParser:
 
 
 def get_parser() -> ArgumentParser:
+    """
+    Get arg parser for different modules
+    """
+
     parser = ArgumentParser(
         argument_default=None, parents=[hp_parser()],
         conflict_handler='resolve')
@@ -121,16 +132,20 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-def run_agent(agent, game_env, nb_games, nb_epochs):
+def run_agent(
+        agent: BaseAgent, game_env: Env, nb_games: int, nb_epochs: int
+) -> None:
     """
     Run a train agent on given games.
 
-    :param agent:
-    :param game_env:
-    :param nb_games:
-    :param nb_epochs:
-    :return:
+    Args:
+        agent: an agent extends the base agent,
+         see :py:class:`deepword.agents.base_agent.BaseAgent`.
+        game_env: game Env, from gym
+        nb_games: number of games
+        nb_epochs: number of epochs for training
     """
+
     logger = logging.getLogger("train")
     for epoch_no in trange(nb_epochs):
         for game_no in trange(nb_games):
@@ -159,7 +174,9 @@ def run_agent(agent, game_env, nb_games, nb_epochs):
             return
 
 
-def run_agent_v2(agent, game_env, nb_games, nb_epochs):
+def run_agent_v2(
+        agent: BaseAgent, game_env: Env, nb_games: int, nb_epochs: int
+) -> None:
     """
     Run a train agent on given games.
     Proactively request `look` and `inventory` results from games to substitute
@@ -171,12 +188,9 @@ def run_agent_v2(agent, game_env, nb_games, nb_epochs):
     previous step quota. E.g. previously use 100 max steps, now you need 100 * 3
     max steps.
 
-    :param agent:
-    :param game_env:
-    :param nb_games:
-    :param nb_epochs:
-    :return:
+    See :py:func:`deepword.main.run_agent`
     """
+
     logger = logging.getLogger("train")
     for epoch_no in trange(nb_epochs):
         for game_no in trange(nb_games):
@@ -217,7 +231,23 @@ def run_agent_v2(agent, game_env, nb_games, nb_epochs):
             return
 
 
-def train(hp, model_dir, game_dir, f_games=None, func_run_agent=run_agent):
+def train(
+        hp: HParams, model_dir: str,
+        game_dir: str, f_games: Optional[str] = None,
+        func_run_agent: Callable[[BaseAgent, Env, int, int], None] = run_agent
+) -> None:
+    """
+    train an agent
+
+    Args:
+        hp: hyper-parameters see :py:mod:`deepword.hparams`
+        model_dir: model dir
+        game_dir: game dir with ulx games
+        f_games: game name to select from `game_dir`
+        func_run_agent: how to run the agent and games,
+         see :py:func:`deepword.main.run_agent`
+    """
+
     logger = logging.getLogger('train')
     train_games, _ = load_and_split(game_dir, f_games)
     logger.info("load {} game files".format(len(train_games)))
@@ -250,12 +280,9 @@ def train_v2(hp, model_dir, game_dir, f_games=None):
 
     max step per episode will be enlarged by 3-times.
 
-    :param hp:
-    :param model_dir:
-    :param game_dir:
-    :param f_games:
-    :return:
+    see :py:func:`deepword.main.train`
     """
+
     assert "game_episode_terminal_t" in hp, \
         "cannot find game_episode_terminal_t in hp"
     eprint("Requested game_episode_terminal_t: {}".format(
@@ -268,6 +295,19 @@ def train_v2(hp, model_dir, game_dir, f_games=None):
 
 
 def process_hp(args) -> HParams:
+    """
+    Load hyperparameters from three location
+    1. config file in `model_dir`
+    2. pre config files
+    3. cmd line args
+
+    Args:
+        args: cmd line args
+
+    Returns:
+        hyperparameters
+    """
+
     fn_hparams = os.path.join(args.model_dir, "hparams.json")
     if os.path.isfile(fn_hparams):
         model_config_file = fn_hparams
@@ -288,6 +328,10 @@ new agent from scratch!
 
 
 def process_train_dqn(args):
+    """
+    Train DQN models
+    """
+
     fn_hparams = os.path.join(args.model_dir, "hparams.json")
     if os.path.isfile(fn_hparams):
         eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
@@ -302,6 +346,10 @@ def process_train_dqn(args):
 
 
 def process_train_student(args):
+    """
+    Train student models
+    """
+
     fn_hparams = os.path.join(args.model_dir, "hparams.json")
     if os.path.isfile(fn_hparams):
         eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
@@ -320,13 +368,17 @@ def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
 
 
 def process_eval_student(args):
+    """
+    Evaluate student models
+    """
+
     hp = process_hp(args)
     assert hp.learner_clazz == "SwagLearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
     n_gpus = args.n_gpus
     gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
-    watched_file_regex = pjoin(
+    watched_file_regex = path.join(
         args.model_dir, "last_weights", "after-epoch-*.index")
     files = glob.glob(watched_file_regex)
     ckpt_files = [os.path.splitext(f)[0] for f in files]
@@ -357,6 +409,10 @@ def process_eval_student(args):
 
 
 def process_eval_dqn(args):
+    """
+    Evaluate dqn models
+    """
+
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
     if args.load_dev_data and not args.load_train_data:
@@ -388,6 +444,10 @@ def process_eval_dqn(args):
 
 
 def process_gen_data(args):
+    """
+    Generate training data from a teacher model
+    """
+
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
     train_games, dev_games = load_and_split(args.game_path, args.f_games)

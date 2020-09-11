@@ -11,7 +11,7 @@ import random
 import sys
 import time
 from itertools import chain
-from os.path import join as pjoin
+from os import path
 from typing import List, Tuple, Dict, Optional, Any
 
 import numpy as np
@@ -111,12 +111,12 @@ def setup_logging(
     if `local_log_filename` set, add a local rotating log file.
     """
 
-    path = default_path
+    config_path = default_path
     value = os.getenv(env_key, None)
     if value:
-        path = value
-    if os.path.exists(path):
-        with open(path, 'rt') as f:
+        config_path = value
+    if path.exists(config_path):
+        with open(config_path, 'rt') as f:
             config = ruamel.yaml.safe_load(f.read())
             logging.config.dictConfig(config)
     else:
@@ -266,17 +266,17 @@ def load_game_files(game_path: str, f_games: Optional[str] = None) -> List[str]:
         a list of game files
     """
 
-    if os.path.isfile(game_path):
+    if path.isfile(game_path):
         game_files = [game_path]
-    elif os.path.isdir(game_path):
+    elif path.isdir(game_path):
         if f_games is not None:
             with open(f_games, "r") as f:
                 selected_games = map(lambda x: x.strip(), f.readlines())
             game_files = list(map(
-                lambda x: pjoin(game_path, "{}.ulx".format(x)),
+                lambda x: path.join(game_path, "{}.ulx".format(x)),
                 selected_games))
         else:
-            game_files = glob.glob(pjoin(game_path, "*.ulx"))
+            game_files = glob.glob(path.join(game_path, "*.ulx"))
     else:
         raise ValueError("game path {} doesn't exist".format(game_path))
     return game_files
@@ -300,20 +300,20 @@ def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     return train_games, dev_games
 
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-project_path = pjoin(dir_path, "../..")
-fn_log = pjoin(project_path, "conf/logging.yaml")
-fn_log_eval = pjoin(project_path, "conf/logging-eval.yaml")
+dir_path = path.dirname(path.realpath(__file__))
+project_path = path.join(dir_path, "../..")
+fn_log = path.join(project_path, "conf/logging.yaml")
+fn_log_eval = path.join(project_path, "conf/logging-eval.yaml")
 
 
 def setup_train_log(model_dir: str):
     """
     Setup log for training by putting a `game_script.log` in `model_dir`.
     """
-    assert os.path.isfile(fn_log)
+    assert path.isfile(fn_log)
     setup_logging(
         default_path=fn_log,
-        local_log_filename=pjoin(model_dir, 'game_script.log'))
+        local_log_filename=path.join(model_dir, 'game_script.log'))
 
 
 def setup_eval_log(log_filename: str):
@@ -323,7 +323,7 @@ def setup_eval_log(log_filename: str):
     Args:
         log_filename: the path to log file
     """
-    assert os.path.isfile(fn_log_eval)
+    assert path.isfile(fn_log_eval)
     setup_logging(default_path=fn_log_eval, local_log_filename=log_filename)
 
 

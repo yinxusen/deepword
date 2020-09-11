@@ -1,5 +1,4 @@
-import os
-from os.path import join as pjoin
+from os import path
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
@@ -8,8 +7,8 @@ from deepword.agents.utils import ACT
 from deepword.hparams import load_hparams
 from deepword.tokenizers import init_tokens
 
-home_dir = os.path.expanduser("~")
-gen_model_dir = pjoin(
+home_dir = path.expanduser("~")
+gen_model_dir = path.join(
     home_dir,
     "experiments-drrn/agent-student-train-gen-student-model-pre-train")
 

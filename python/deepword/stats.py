@@ -1,18 +1,26 @@
+from typing import Tuple, Optional, List
+
 import numpy as np
 from scipy import stats
 
 
-def mean_confidence_interval(data, confidence=0.95):
+def mean_confidence_interval(
+        data: np.ndarray, confidence: float = 0.95) -> Tuple[float, float]:
     """
     Given data, 1D np array, compute the mean and confidence intervals given
     confidence level.
-    :param data: 1D np array
-    :param confidence: confidence level
-    :return: mean and confidence interval
+
+    Args:
+        data: 1D np array
+        confidence: confidence level
+
+    Returns:
+        mean and confidence interval
     """
+
     a = 1.0 * np.array(data)
     n = len(a)
-    m, se = np.mean(a), stats.sem(a)
+    m, se = float(np.mean(a)), stats.sem(a)
     h = se * stats.t.ppf((1 + confidence) / 2., n-1)
     return m, h
 
@@ -29,19 +37,23 @@ class UCBComputer(object):
 
     We use the APS bound.
     """
-    def __init__(self, d_states, d_actions):
+
+    def __init__(self, d_states: int, d_actions: int):
         """
         V: covariance matrix for each action a
         lam: lambda to control parameter size in ridge regression
         r: R-sub-Gaussian
         s: bound for |theta_a|_2
         delta: with probability of 1 - delta, we have the bound
-        :param d_states:
-        :param d_actions:
+
+        Args:
+            d_states: dimension of hidden states
+            d_actions: number of actions
         """
-        self.V = None
-        self.log_det_V = None
-        self.inv_V = None
+
+        self.V: Optional[List[np.ndarray]] = None
+        self.log_det_V: Optional[List[np.ndarray]] = None
+        self.inv_V: Optional[List[np.ndarray]] = None
         self.lam = 0.5
         self.d_states = d_states
         self.d_actions = d_actions
@@ -51,22 +63,39 @@ class UCBComputer(object):
         self.log_lam = np.log(self.lam)
         self.log_delta = np.log(self.delta)
 
-    def reset(self):
+    def reset(self) -> None:
+        """
+        Reset to accept new episodes
+        """
+
         self.V = [
             self.lam * np.eye(self.d_states) for _ in range(self.d_actions)]
         self.log_det_V = [np.log(np.linalg.det(a_mat)) for a_mat in self.V]
         self.inv_V = [np.linalg.inv(a_mat) for a_mat in self.V]
 
-    def collect_sample(self, action_idx, h_state):
+    def collect_sample(self, action_idx: int, h_state: np.ndarray) -> None:
+        """
+        Collect state-action pairs
+
+        Args:
+            action_idx: action index
+            h_state: hidden state vector
+        """
+
         self.V[action_idx] += np.outer(h_state, h_state)
         self.log_det_V[action_idx] = np.log(np.linalg.det(self.V[action_idx]))
         self.inv_V[action_idx] = np.linalg.inv(self.V[action_idx])
 
-    def APS_bound(self, q_actions, h_state):
+    def aps_bound(self, q_actions: np.ndarray, h_state: np.ndarray) -> float:
         """
-        :param q_actions: Q-vector of actions
-        :param h_state: hidden state of a game state
-        :return: upper confidence bound of q_actions.
+        Compute APS bound
+
+        Args:
+            q_actions: Q-vector of actions
+            h_state: hidden state of a game state
+
+        Returns
+            upper confidence bound of q_actions.
         """
 
         f = (0.5 * np.asarray(self.log_det_V) -
