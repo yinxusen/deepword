@@ -41,7 +41,7 @@ def gen_rand_str(
 
 def gen_action_master(
         vocab: List[str], turns_up_to: int, n_rows: int
-) -> List[List[ActionMaster]]:
+) -> List[List[ActionMasterBak]]:
     assert turns_up_to > 0, "at least need 1-turn of action-master"
     res = []
     for i in range(n_rows):
@@ -49,7 +49,7 @@ def gen_action_master(
         rnd_actions = gen_rand_str(vocab, 10, n_turns, allow_empty_str=False)
         rnd_masters = gen_rand_str(vocab, 50, n_turns, allow_empty_str=False)
         res.append(
-            [ActionMaster(a, m) for a, m in zip(rnd_actions, rnd_masters)])
+            [ActionMasterBak(a, m) for a, m in zip(rnd_actions, rnd_masters)])
     return res
 
 

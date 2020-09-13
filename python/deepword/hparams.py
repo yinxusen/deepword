@@ -170,7 +170,7 @@ default_config = {
         num_conv_filters=32),
     "LegacyCnnDRRN": HParams(
         agent_clazz='CompetitionAgent',
-        core_clazz="LegacyDRRNCore",
+        core_clazz="DRRNCore",
         tokenizer_type="NLTK",
         batch_size=32,
         save_gap_t=1000,

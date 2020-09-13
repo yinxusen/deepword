@@ -18,7 +18,7 @@ from tqdm import trange
 
 from deepword.action import ActionCollector
 from deepword.agents.base_agent import DRRNMemoTeacher
-from deepword.agents.utils import ActionMaster
+from deepword.agents.utils import ActionMasterBak
 from deepword.agents.utils import Memolet, align_batch_str
 from deepword.agents.utils import batch_dqn_input, batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
@@ -164,7 +164,7 @@ class StudentLearner(object):
     @classmethod
     def lst_str2am(
             cls, tj: List[str], allow_unfinished_tj: bool = False
-    ) -> List[ActionMaster]:
+    ) -> List[ActionMasterBak]:
         tj = [""] + tj
 
         if not allow_unfinished_tj and len(tj) % 2 != 0:
@@ -173,13 +173,13 @@ class StudentLearner(object):
         res_tj = []
         i = 0
         while i < len(tj) // 2:
-            res_tj.append(ActionMaster(action=tj[i * 2], master=tj[i * 2 + 1]))
+            res_tj.append(ActionMasterBak(action=tj[i * 2], master=tj[i * 2 + 1]))
             i += 1
 
         return res_tj
 
     @classmethod
-    def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMaster]:
+    def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMasterBak]:
         tjs = Trajectory(num_turns=old_tjs.num_turns // 2, size_per_turn=1)
         tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
         tjs.curr_tid = old_tjs.curr_tid
@@ -204,7 +204,7 @@ class StudentLearner(object):
 
     def _load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterBak], ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
             eprint("load old data with DRRNMemoTeacher")
@@ -218,7 +218,7 @@ class StudentLearner(object):
 
     def _load_snapshot_v1(
             self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterBak], ActionCollector]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
         old_memory = list(filter(
@@ -240,7 +240,7 @@ class StudentLearner(object):
 
     def _load_snapshot_v2(
             self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector]:
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterBak], ActionCollector]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
@@ -298,7 +298,7 @@ class StudentLearner(object):
     def _prepare_data(
             self,
             b_memory: List[Union[Tuple, Memolet]],
-            tjs: Trajectory[ActionMaster],
+            tjs: Trajectory[ActionMasterBak],
             action_collector: ActionCollector) -> Tuple:
         """
         Given a batch of memory, tjs, and action collector, create a tuple

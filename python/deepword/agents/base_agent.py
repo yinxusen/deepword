@@ -761,9 +761,12 @@ class BaseAgent(Logging):
             infos: Dict[str, List[Any]]) -> Tuple[
             List[str], np.ndarray, np.ndarray, float]:
 
+        master_tokens = self.tokenizer.convert_tokens_to_ids(
+            self.tokenizer.tokenize(master))
         self.tjs.append(ActionMaster(
-            action=self._last_action.action if self._last_action else "",
-            master=master))
+            action=list(
+                self._last_action.token_idx) if self._last_action else [],
+            master=master_tokens))
 
         state = ObsInventory(
             obs=infos[INFO_KEY.desc][0],

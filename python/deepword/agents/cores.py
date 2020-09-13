@@ -14,7 +14,7 @@ from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 from termcolor import colored
 
-from deepword.agents.utils import ActionMaster, ObsInventory
+from deepword.agents.utils import ActionMasterBak, ObsInventory, ActionMaster
 from deepword.agents.utils import GenSummary
 from deepword.agents.utils import Tokenizer
 from deepword.agents.utils import batch_drrn_action_input
@@ -35,6 +35,7 @@ from deepword.models.export_models import GenDQNModel
 from deepword.utils import eprint
 from deepword.utils import get_hash
 from deepword.utils import model_name2clazz
+from deepword.utils import flatten
 
 
 class BaseCore(Logging, ABC):
@@ -66,7 +67,7 @@ class BaseCore(Logging, ABC):
 
     def policy(
             self,
-            trajectory: List[ActionMaster],
+            trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -112,8 +113,8 @@ class BaseCore(Logging, ABC):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -346,23 +347,37 @@ class TFCore(BaseCore, ABC):
 
     def trajectory2input(
             self, trajectory: List[ActionMaster]
-    ) -> Tuple[List[int], int, List[int]]:
-        return dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id)
+    ) -> Tuple[List[int], int]:
+        """
+        generate src, src_len from trajectory
+
+        Args:
+            trajectory: List of ActionMaster
+
+        Returns:
+            src: source indices
+            src_len: length of the src
+        """
+
+        tj = flatten([x.ids for x in trajectory])
+        return tj, len(tj)
 
     def batch_trajectory2input(
             self, trajectories: List[List[ActionMaster]]
-    ) -> Tuple[List[List[int]], List[int], List[List[int]]]:
-        batch_src = []
-        batch_src_len = []
-        batch_mask = []
-        for tj in trajectories:
-            src, src_len, master_mask = self.trajectory2input(tj)
-            batch_src.append(src)
-            batch_src_len.append(src_len)
-            batch_mask.append(master_mask)
-        return batch_src, batch_src_len, batch_mask
+    ) -> Tuple[List[List[int]], List[int]]:
+
+        tjs, lens = zip(*[self.trajectory2input(x) for x in trajectories])
+        max_len = min(max(lens), self.hp.num_tokens)
+
+        tjs = [
+            x + [0] * (max_len - len(x))
+            if len(x) < max_len else x[-max_len:]
+            for x in tjs]
+
+        if max_len >= self.hp.num_tokens:
+            lens = [min(l, max_len) for l in lens]
+
+        return tjs, lens
 
     def init(
             self, is_training: bool, load_best: bool = False,
@@ -443,8 +458,8 @@ class BertCore(TFCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -460,7 +475,7 @@ class BertCore(TFCore):
         pass
 
     def trajectory2input(
-            self, trajectory: List[ActionMaster]
+            self, trajectory: List[ActionMasterBak]
     ) -> Tuple[List[int], int, List[int]]:
         # remove the length for [CLS] and two [SEP]s.
         return dqn_input(
@@ -470,7 +485,7 @@ class BertCore(TFCore):
 
     def policy(
             self,
-            trajectory: List[ActionMaster],
+            trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -512,7 +527,7 @@ class DQNCore(TFCore):
 
     def policy(
             self,
-            trajectory: List[ActionMaster],
+            trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -531,7 +546,7 @@ class DQNCore(TFCore):
     def _compute_expected_q(
             self,
             action_mask: List[np.ndarray],
-            trajectories: List[List[ActionMaster]],
+            trajectories: List[List[ActionMasterBak]],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
         """
@@ -569,8 +584,8 @@ class DQNCore(TFCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -624,8 +639,8 @@ class TabularCore(BaseCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -657,7 +672,7 @@ class TabularCore(BaseCore):
 
     def policy(
             self,
-            trajectory: List[ActionMaster],
+            trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -762,7 +777,7 @@ class DRRNCore(TFCore):
         admissible_action_len = action_len[action_mask]
         actions_repeats = [len(action_mask)]
 
-        src, src_len, _ = self.trajectory2input(trajectory)
+        src, src_len = self.trajectory2input(trajectory)
         q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len],
@@ -782,7 +797,7 @@ class DRRNCore(TFCore):
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
 
-        post_src, post_src_len, _ = self.batch_trajectory2input(trajectories)
+        post_src, post_src_len = self.batch_trajectory2input(trajectories)
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
             action_matrix, action_len, action_mask)
 
@@ -833,7 +848,7 @@ class DRRNCore(TFCore):
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
 
-        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
@@ -858,16 +873,6 @@ class DRRNCore(TFCore):
         return abs_loss
 
 
-class LegacyDRRNCore(DRRNCore):
-    def trajectory2input(
-            self, trajectory: List[ActionMaster]
-    ) -> Tuple[List[int], int, List[int]]:
-        return dqn_input(
-            trajectory, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id, with_action_padding=True,
-            max_action_size=self.hp.n_tokens_per_action)
-
-
 class DSQNZorkCore(DQNCore):
     def __init__(self, hp, model_dir, tokenizer):
         super(DQNCore, self).__init__(hp, model_dir, tokenizer)
@@ -876,8 +881,8 @@ class DSQNZorkCore(DQNCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -968,8 +973,8 @@ class DSQNCore(DRRNCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -1086,7 +1091,7 @@ class GenDQNCore(TFCore):
         return res_summary
 
     def decode_action(
-            self, trajectory: List[ActionMaster]) -> GenSummary:
+            self, trajectory: List[ActionMasterBak]) -> GenSummary:
         self.debug("trajectory: {}".format(trajectory))
         src, src_len, master_mask = self.trajectory2input(trajectory)
         self.debug("src: {}".format(src))
@@ -1125,7 +1130,7 @@ class GenDQNCore(TFCore):
         return res_summary[0]
 
     def policy(
-            self, trajectory: List[ActionMaster],
+            self, trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -1134,7 +1139,7 @@ class GenDQNCore(TFCore):
 
     def _compute_expected_q(
             self,
-            trajectories: List[List[ActionMaster]],
+            trajectories: List[List[ActionMasterBak]],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
         """
@@ -1178,8 +1183,8 @@ class GenDQNCore(TFCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -1255,7 +1260,7 @@ class PGNCore(TFCore):
         return res_summary
 
     def decode(
-            self, trajectory: List[ActionMaster], beam_size: int,
+            self, trajectory: List[ActionMasterBak], beam_size: int,
             temperature: float, use_greedy: bool) -> List[GenSummary]:
         src, src_len, master_mask = self.trajectory2input(trajectory)
         res = self.sess.run(
@@ -1282,7 +1287,7 @@ class PGNCore(TFCore):
         return res_summary
 
     def generate_admissible_actions(
-            self, trajectory: List[ActionMaster]) -> List[str]:
+            self, trajectory: List[ActionMasterBak]) -> List[str]:
 
         if self.hp.decode_concat_action:
             res = self.decode(
@@ -1297,7 +1302,7 @@ class PGNCore(TFCore):
 
     def policy(
             self,
-            trajectory: List[ActionMaster],
+            trajectory: List[ActionMasterBak],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -1305,8 +1310,8 @@ class PGNCore(TFCore):
         raise NotImplementedError()
 
     def train_one_batch(
-            self, pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
+            self, pre_trajectories: List[List[ActionMasterBak]],
+            post_trajectories: List[List[ActionMasterBak]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],

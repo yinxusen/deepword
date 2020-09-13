@@ -38,8 +38,22 @@ class Memolet(namedtuple(
     pass
 
 
-class ActionMaster(namedtuple("ActionMaster", ("action", "master"))):
+class ActionMasterBak(namedtuple("ActionMaster", ("action", "master"))):
     pass
+
+
+class ActionMaster(object):
+    def __init__(self, action: List[int], master: List[int]):
+        self._ids = action + master
+        self._lens = [len(action), len(master)]
+
+    @property
+    def ids(self):
+        return self._ids
+
+    @property
+    def lens(self):
+        return self._lens
 
 
 class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
@@ -228,7 +242,7 @@ def align_batch_str(
 
 
 def tj2ids(
-        trajectory: List[ActionMaster],
+        trajectory: List[ActionMasterBak],
         tokenizer: Tokenizer,
         with_action_padding: bool = False,
         max_action_size: Optional[int] = None,
@@ -259,7 +273,7 @@ def tj2ids(
 
 
 def dqn_input(
-        trajectory: List[ActionMaster],
+        trajectory: List[ActionMasterBak],
         tokenizer: Tokenizer,
         num_tokens: int,
         padding_val_id: int,
@@ -288,7 +302,7 @@ def dqn_input(
 
 
 def batch_dqn_input(
-        trajectories: List[List[ActionMaster]],
+        trajectories: List[List[ActionMasterBak]],
         tokenizer: Tokenizer,
         num_tokens: int,
         padding_val_id: int,
