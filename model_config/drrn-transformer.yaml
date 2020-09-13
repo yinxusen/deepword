@@ -5,19 +5,19 @@ model_creator: TransformerDRRN
 num_tokens: 200
 num_turns: 5
 batch_size: 32
-save_gap_t: 5000
+save_gap_t: 10000 # 10k
 embedding_size: 64
 learning_rate: 5e-5
 tokenizer_type: BERT
-max_snapshot_to_keep: 10
-eval_episode: 5
+max_snapshot_to_keep: 3
+eval_episode: 2
 game_episode_terminal_t: 100
-replay_mem: 500000  # 500k
+replay_mem: 100000  # 100k
 collect_floor_plan: True
 agent_clazz: CompetitionAgent
 core_clazz: DRRNCore
 learner_clazz: DRRNLearner
-annealing_eps_t: 10000000  # 10 million
+annealing_eps_t: 2000000  # 2 million
 observation_t: 10000
 init_eps: 1.0
 final_eps: 1e-4
