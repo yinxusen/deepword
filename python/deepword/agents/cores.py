@@ -341,11 +341,10 @@ class TFCore(BaseCore, ABC):
             trained_step = 0
         return trained_step
 
-    @classmethod
     def trajectory2input(
-            cls, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
+            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
         """
-        generate src, src_len from trajectory
+        generate src, src_len from trajectory, trimmed by hp.num_tokens
 
         Args:
             trajectory: List of ActionMaster
@@ -356,23 +355,32 @@ class TFCore(BaseCore, ABC):
         """
 
         tj = flatten([x.ids for x in trajectory])
+        tj = tj if len(tj) <= self.hp.num_tokens else tj[-self.hp.num_tokens:]
         return tj, len(tj)
 
     def batch_trajectory2input(
             self, trajectories: List[List[ActionMaster]]
     ) -> Tuple[List[List[int]], List[int]]:
+        """
+        generate batch of src, src_len, trimmed by hp.num_tokens
 
+        see :py:func:`deepword.agents.cores.TFCore.trajectory2input`
+
+        Args:
+            trajectories: a batch of trajectories
+
+        Returns:
+            batch of src
+            batch of src_len
+        """
         tjs, lens = zip(*[self.trajectory2input(x) for x in trajectories])
-        max_len = min(max(lens), self.hp.num_tokens)
 
+        # notice that `trajectory2input` has already trimmed by hp.num_tokens
+        # so no len will be larger than hp.num_tokens
+        max_len = max(lens)
         tjs = [
-            x + [0] * (max_len - len(x))
-            if len(x) < max_len else x[-max_len:]
+            x + [0] * (max_len - len(x)) if len(x) < max_len else x
             for x in tjs]
-
-        if max_len >= self.hp.num_tokens:
-            lens = [min(l, max_len) for l in lens]
-
         return tjs, lens
 
     def init(
