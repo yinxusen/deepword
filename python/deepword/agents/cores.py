@@ -14,12 +14,11 @@ from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 from termcolor import colored
 
-from deepword.agents.utils import ActionMasterBak, ObsInventory, ActionMaster
+from deepword.agents.utils import ActionMaster, ObsInventory
 from deepword.agents.utils import GenSummary
 from deepword.agents.utils import Tokenizer
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
-from deepword.agents.utils import dqn_input
 from deepword.agents.utils import get_action_idx_pair
 from deepword.agents.utils import get_best_1d_q
 from deepword.agents.utils import get_best_batch_ids
@@ -32,11 +31,11 @@ from deepword.models.export_models import DRRNModel
 from deepword.models.export_models import DSQNModel
 from deepword.models.export_models import DSQNZorkModel
 from deepword.models.export_models import GenDQNModel
+from deepword.utils import ctime, report_status
 from deepword.utils import eprint
+from deepword.utils import flatten
 from deepword.utils import get_hash
 from deepword.utils import model_name2clazz
-from deepword.utils import flatten
-from deepword.utils import ctime, report_status
 
 
 class BaseCore(Logging, ABC):
@@ -50,25 +49,23 @@ class BaseCore(Logging, ABC):
     are decided by agents.
     """
     def __init__(
-            self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+            self, hp: HParams, model_dir: str) -> None:
         """
         Initialize A Core for an agent.
 
         Args:
             hp: hyper-parameters, see :py:mod:`deepword.hparams`
             model_dir: path to save or load model
-            tokenizer: tokenizer, see :py:mod:`deepword.tokenizers`
         """
         super(BaseCore, self).__init__()
         self.hp = hp
         self.model_dir = model_dir
-        self.tokenizer = tokenizer
         self.loaded_ckpt_step: int = 0
         self.is_training: bool = True
 
     def policy(
             self,
-            trajectory: List[ActionMasterBak],
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -114,8 +111,8 @@ class BaseCore(Logging, ABC):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -167,14 +164,13 @@ class TFCore(BaseCore, ABC):
     Agent core implemented through Tensorflow.
     """
     def __init__(
-            self, hp: HParams, model_dir: str, tokenizer: Tokenizer) -> None:
+            self, hp: HParams, model_dir: str) -> None:
         """
         Args:
             hp: hyper-parameters
             model_dir: path to model dir
-            tokenizer: tokenizer see :py:mod:`deepword.tokenizers`
         """
-        super(TFCore, self).__init__(hp, model_dir, tokenizer)
+        super(TFCore, self).__init__(hp, model_dir)
         self.hp: HParams = hp
         self.model_dir: str = model_dir
         self.model: Optional[DQNModel] = None
@@ -189,7 +185,6 @@ class TFCore(BaseCore, ABC):
         self.saver: Optional[Saver] = None
         self.target_saver: Optional[Saver] = None
         self.d4train, self.d4eval, self.d4target = self._init_devices()
-        self.tokenizer = tokenizer
 
     @classmethod
     def _init_devices(cls):
@@ -346,9 +341,9 @@ class TFCore(BaseCore, ABC):
             trained_step = 0
         return trained_step
 
+    @classmethod
     def trajectory2input(
-            self, trajectory: List[ActionMaster]
-    ) -> Tuple[List[int], int]:
+            cls, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
         """
         generate src, src_len from trajectory
 
@@ -452,15 +447,15 @@ class BertCore(TFCore):
     from the [CLS] token.
     refer to https://arxiv.org/pdf/1810.04805.pdf for fine-tuning and evaluation
     """
-    def __init__(self, hp, model_dir, tokenizer):
-        super(BertCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(BertCore, self).__init__(hp, model_dir)
         self.model: Optional[CommonsenseModel] = None
         self.target_model: Optional[CommonsenseModel] = None
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -473,27 +468,18 @@ class BertCore(TFCore):
             b_weight: np.ndarray,
             step: int,
             others: Any) -> np.ndarray:
-        pass
-
-    def trajectory2input(
-            self, trajectory: List[ActionMasterBak]
-    ) -> Tuple[List[int], int, List[int]]:
-        # remove the length for [CLS] and two [SEP]s.
-        return dqn_input(
-            trajectory, self.tokenizer,
-            self.hp.num_tokens - 3 - self.hp.n_tokens_per_action,
-            self.hp.padding_val_id)
+        raise NotImplementedError("BertCore doesn't support for training")
 
     def policy(
             self,
-            trajectory: List[ActionMasterBak],
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
         action_matrix = action_matrix[action_mask, :]
         action_len = action_len[action_mask]
-        src, src_len, _ = self.trajectory2input(trajectory)
+        src, src_len = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_commonsense_input(
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
@@ -523,12 +509,12 @@ class DQNCore(TFCore):
     DQNAgent that treats actions as types
     """
 
-    def __init__(self, hp, model_dir, tokenizer):
-        super(DQNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(DQNCore, self).__init__(hp, model_dir)
 
     def policy(
             self,
-            trajectory: List[ActionMasterBak],
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -537,7 +523,7 @@ class DQNCore(TFCore):
         get either an random action index with action string
         or the best predicted action index with action string.
         """
-        src, src_len, _ = self.trajectory2input(trajectory)
+        src, src_len = self.trajectory2input(trajectory)
         q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.src_: [src],
             self.model.src_len_: [src_len]
@@ -547,7 +533,7 @@ class DQNCore(TFCore):
     def _compute_expected_q(
             self,
             action_mask: List[np.ndarray],
-            trajectories: List[List[ActionMasterBak]],
+            trajectories: List[List[ActionMaster]],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
         """
@@ -557,7 +543,7 @@ class DQNCore(TFCore):
         while dones, rewards belong to pre game states.
         """
 
-        src, src_len, _ = self.batch_trajectory2input(trajectories)
+        src, src_len = self.batch_trajectory2input(trajectories)
         target_model, target_sess = self._get_target_model()
         # target network provides the value used as expected q-values
         qs_target = target_sess.run(
@@ -585,8 +571,8 @@ class DQNCore(TFCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -603,7 +589,7 @@ class DQNCore(TFCore):
             action_mask=post_action_mask, trajectories=post_trajectories,
             dones=dones, rewards=rewards)
 
-        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
@@ -625,23 +611,22 @@ class TabularCore(BaseCore):
     Tabular-wise DQN agent that uses matrix to store q-vectors and uses
     hashed values of observation + inventory as game states
     """
-    def __init__(self, hp, model_dir, tokenizer):
-        super(TabularCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(TabularCore, self).__init__(hp, model_dir)
         self.hp = hp
         self.q_mat_prefix = "q_mat"
         # model of tabular Q-learning, map from state to q-vectors
         self.q_mat: Dict[str, np.ndarray] = dict()
         self.target_q_mat: Dict[str, np.ndarray] = dict()
         self.state2hash: Dict[ObsInventory, str] = dict()
-        self.tokenizer = tokenizer
         self.model_dir = model_dir
         self.ckpt_prefix = "after-epoch"
         self.ckpt_path = path.join(self.model_dir, self.q_mat_prefix)
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -673,7 +658,7 @@ class TabularCore(BaseCore):
 
     def policy(
             self,
-            trajectory: List[ActionMasterBak],
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
@@ -758,8 +743,8 @@ class DRRNCore(TFCore):
     DRRN agent that treats actions as meaningful sentences
     """
 
-    def __init__(self, hp, model_dir, tokenizer):
-        super(DRRNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(DRRNCore, self).__init__(hp, model_dir)
         self.model: Optional[DRRNModel] = None
         self.target_model: Optional[DRRNModel] = None
 
@@ -891,15 +876,15 @@ class DRRNCore(TFCore):
 
 
 class DSQNZorkCore(DQNCore):
-    def __init__(self, hp, model_dir, tokenizer):
-        super(DQNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(DQNCore, self).__init__(hp, model_dir)
         self.model: Optional[DSQNZorkModel] = None
         self.target_model: Optional[DSQNZorkModel] = None
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -919,7 +904,7 @@ class DSQNZorkCore(DQNCore):
             action_mask=post_action_mask, trajectories=post_trajectories,
             dones=dones, rewards=rewards)
 
-        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
 
         _, summaries, weighted_loss, abs_loss = self.sess.run(
             [self.model.merged_train_op, self.model.weighted_train_summary_op,
@@ -942,8 +927,8 @@ class DSQNZorkCore(DQNCore):
     # TODO: refine the code
     def eval_snn(
             self,
-            snn_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
-                            np.ndarray],
+            snn_data: Tuple[
+                np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
             batch_size: int = 32) -> float:
 
         src, src_len, src2, src2_len, labels = snn_data
@@ -983,15 +968,15 @@ class DSQNZorkCore(DQNCore):
 
 
 class DSQNCore(DRRNCore):
-    def __init__(self, hp, model_dir, tokenizer):
-        super(DRRNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir):
+        super(DRRNCore, self).__init__(hp, model_dir)
         self.model: Optional[DSQNModel] = None
         self.target_model: Optional[DSQNModel] = None
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -1009,7 +994,7 @@ class DSQNCore(DRRNCore):
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
-        pre_src, pre_src_len, _ = self.batch_trajectory2input(pre_trajectories)
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
         (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
@@ -1040,8 +1025,8 @@ class DSQNCore(DRRNCore):
     # TODO: refine the code
     def eval_snn(
             self,
-            snn_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
-                            np.ndarray],
+            snn_data: Tuple[
+                np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
             batch_size: int = 32) -> float:
 
         src, src_len, src2, src2_len, labels = snn_data
@@ -1077,14 +1062,14 @@ class DSQNCore(DRRNCore):
             avg_acc = total_acc * 1. / total_samples
             self.debug("valid sample size {}".format(total_samples))
         return avg_acc
-    pass
 
 
 class GenDQNCore(TFCore):
-    def __init__(self, hp, model_dir, tokenizer):
-        super(GenDQNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir, tokenizer: Tokenizer):
+        super(GenDQNCore, self).__init__(hp, model_dir)
         self.model: Optional[GenDQNModel] = None
         self.target_model: Optional[GenDQNModel] = None
+        self.tokenizer = tokenizer
 
     def summary(
             self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
@@ -1108,12 +1093,11 @@ class GenDQNCore(TFCore):
         return res_summary
 
     def decode_action(
-            self, trajectory: List[ActionMasterBak]) -> GenSummary:
+            self, trajectory: List[ActionMaster]) -> GenSummary:
         self.debug("trajectory: {}".format(trajectory))
-        src, src_len, master_mask = self.trajectory2input(trajectory)
+        src, src_len = self.trajectory2input(trajectory)
         self.debug("src: {}".format(src))
         self.debug("src_len: {}".format(src_len))
-        self.debug("master_mask: {}".format(master_mask))
         beam_size = 1
         temperature = 1
         use_greedy = True
@@ -1128,7 +1112,6 @@ class GenDQNCore(TFCore):
             feed_dict={
                 self.model.src_: [src],
                 self.model.src_len_: [src_len],
-                self.model.src_seg_: [master_mask],
                 self.model.temperature_: temperature,
                 self.model.beam_size_: beam_size,
                 self.model.use_greedy_: use_greedy
@@ -1147,23 +1130,23 @@ class GenDQNCore(TFCore):
         return res_summary[0]
 
     def policy(
-            self, trajectory: List[ActionMasterBak],
+            self, trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
+        raise NotImplementedError("GenDQNCore doesn't support policy")
 
     def _compute_expected_q(
             self,
-            trajectories: List[List[ActionMasterBak]],
+            trajectories: List[List[ActionMaster]],
             dones: List[bool],
             rewards: List[float]) -> np.ndarray:
         """
         Compute expected q values given post trajectories and post actions
         """
 
-        src, src_len, master_mask = self.batch_trajectory2input(trajectories)
+        src, src_len = self.batch_trajectory2input(trajectories)
         target_model, target_sess = self._get_target_model()
         # target network provides the value used as expected q-values
         qs_target = target_sess.run(
@@ -1171,7 +1154,6 @@ class GenDQNCore(TFCore):
             feed_dict={
                 target_model.src_: src,
                 target_model.src_len_: src_len,
-                target_model.src_seg_: master_mask,
                 target_model.beam_size_: 1,
                 target_model.use_greedy_: True,
                 target_model.temperature_: 1.
@@ -1183,7 +1165,6 @@ class GenDQNCore(TFCore):
             feed_dict={
                 self.model.src_: src,
                 self.model.src_len_: src_len,
-                self.model.src_seg_: master_mask,
                 self.model.beam_size_: 1,
                 self.model.use_greedy_: True,
                 self.model.temperature_: 1.})
@@ -1200,8 +1181,8 @@ class GenDQNCore(TFCore):
 
     def train_one_batch(
             self,
-            pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -1218,8 +1199,7 @@ class GenDQNCore(TFCore):
         expected_q = self._compute_expected_q(
             trajectories=post_trajectories, dones=dones, rewards=rewards)
 
-        src, src_len, master_mask = self.batch_trajectory2input(
-            pre_trajectories)
+        src, src_len = self.batch_trajectory2input(pre_trajectories)
         action_token_ids = others
         action_id_in, action_id_out, new_action_len = get_action_idx_pair(
             np.asarray(action_token_ids), np.asarray(action_len),
@@ -1238,7 +1218,6 @@ class GenDQNCore(TFCore):
             feed_dict={
                 self.model.src_: src,
                 self.model.src_len_: src_len,
-                self.model.src_seg_: master_mask,
                 self.model.b_weight_: b_weight,
                 self.model.action_idx_: action_id_in,
                 self.model.action_idx_out_: action_id_out,
@@ -1251,9 +1230,10 @@ class GenDQNCore(TFCore):
 
 class PGNCore(TFCore):
     """Generate admissible actions for games, given only trajectory"""
-    def __init__(self, hp, model_dir, tokenizer):
-        super(PGNCore, self).__init__(hp, model_dir, tokenizer)
+    def __init__(self, hp, model_dir, tokenizer: Tokenizer):
+        super(PGNCore, self).__init__(hp, model_dir)
         self.model: Optional[GenDQNModel] = None
+        self.tokenizer = tokenizer
 
     def summary(
             self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
@@ -1277,9 +1257,9 @@ class PGNCore(TFCore):
         return res_summary
 
     def decode(
-            self, trajectory: List[ActionMasterBak], beam_size: int,
+            self, trajectory: List[ActionMaster], beam_size: int,
             temperature: float, use_greedy: bool) -> List[GenSummary]:
-        src, src_len, master_mask = self.trajectory2input(trajectory)
+        src, src_len = self.trajectory2input(trajectory)
         res = self.sess.run(
             [self.model.decoded_idx_infer,
              self.model.col_eos_idx,
@@ -1288,7 +1268,6 @@ class PGNCore(TFCore):
             feed_dict={
                 self.model.src_: [src],
                 self.model.src_len_: [src_len],
-                self.model.src_seg_: [master_mask],
                 self.model.temperature_: temperature,
                 self.model.beam_size_: beam_size,
                 self.model.use_greedy_: use_greedy
@@ -1304,7 +1283,7 @@ class PGNCore(TFCore):
         return res_summary
 
     def generate_admissible_actions(
-            self, trajectory: List[ActionMasterBak]) -> List[str]:
+            self, trajectory: List[ActionMaster]) -> List[str]:
 
         if self.hp.decode_concat_action:
             res = self.decode(
@@ -1319,16 +1298,16 @@ class PGNCore(TFCore):
 
     def policy(
             self,
-            trajectory: List[ActionMasterBak],
+            trajectory: List[ActionMaster],
             state: Optional[ObsInventory],
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
+        raise NotImplementedError("PGNCore doesn't support policy")
 
     def train_one_batch(
-            self, pre_trajectories: List[List[ActionMasterBak]],
-            post_trajectories: List[List[ActionMasterBak]],
+            self, pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
             pre_states: Optional[List[ObsInventory]],
             post_states: Optional[List[ObsInventory]],
             action_matrix: List[np.ndarray],
@@ -1338,4 +1317,4 @@ class PGNCore(TFCore):
             rewards: List[float], action_idx: List[int],
             b_weight: np.ndarray, step: int,
             others: Any) -> np.ndarray:
-        raise NotImplementedError()
+        raise NotImplementedError("PGNCore doesn't support train")

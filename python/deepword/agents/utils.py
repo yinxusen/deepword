@@ -385,6 +385,7 @@ def bert_commonsense_input(
         trajectory + action; segmentation ids; sizes
     """
 
+    # TODO: automatically reduce 3 tokens in the front
     assert action_matrix.ndim == 2, "action_matrix: {}".format(action_matrix)
     assert np.all(trajectory_len + action_len <= num_tokens - 3), \
         "trajectory len or action len are too large"
