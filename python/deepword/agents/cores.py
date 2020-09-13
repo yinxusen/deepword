@@ -36,6 +36,7 @@ from deepword.utils import eprint
 from deepword.utils import get_hash
 from deepword.utils import model_name2clazz
 from deepword.utils import flatten
+from deepword.utils import ctime, report_status
 
 
 class BaseCore(Logging, ABC):
@@ -844,17 +845,25 @@ class DRRNCore(TFCore):
             step: int,
             others: Any) -> np.ndarray:
 
+        t1 = ctime()
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
+        t1_end = ctime()
 
+        t2 = ctime()
         pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        t2_end = ctime()
+
+        t3 = ctime()
         (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
         action_batch_ids = id_real2batch(
             action_idx, id_real2mask, actions_repeats)
+        t3_end = ctime()
 
+        t4 = ctime()
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
@@ -867,6 +876,14 @@ class DRRNCore(TFCore):
                 self.model.actions_: actions,
                 self.model.actions_len_: actions_lens,
                 self.model.actions_repeats_: actions_repeats})
+        t4_end = ctime()
+
+        self.info(report_status([
+            ("t1", t1_end - t1),
+            ("t2", t2_end - t2),
+            ("t3", t3_end - t3),
+            ("t4", t4_end - t4)
+        ]))
 
         self.train_summary_writer.add_summary(
             summaries, step - self.hp.observation_t)
