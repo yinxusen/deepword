@@ -1,8 +1,8 @@
 import unittest
 
+import numpy as np
 from bitarray import bitarray
 
-from deepword.agents.utils import *
 from deepword.utils import bytes2idx
 
 

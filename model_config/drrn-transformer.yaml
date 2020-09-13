@@ -2,7 +2,7 @@
 # for Transformer DRRN teacher
 
 model_creator: TransformerDRRN
-num_tokens: 500
+num_tokens: 200
 num_turns: 5
 batch_size: 32
 save_gap_t: 5000

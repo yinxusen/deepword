@@ -173,7 +173,7 @@ q-values are computed against action_mask.</p>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <dl class="py method">
 <dt id="deepword.students.student_learner.StudentLearner.lst_str2am">
-<em class="property">classmethod </em><code class="sig-name descname">lst_str2am</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tj</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">allow_unfinished_tj</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span><a class="reference internal" href="deepword.agents.html#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><a class="headerlink" href="#deepword.students.student_learner.StudentLearner.lst_str2am" title="Permalink to this definition">¶</a></dt>
+<em class="property">classmethod </em><code class="sig-name descname">lst_str2am</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tj</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">allow_unfinished_tj</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span><a class="reference internal" href="#deepword.students.utils.ActionMasterStr" title="deepword.students.utils.ActionMasterStr">deepword.students.utils.ActionMasterStr</a><span class="p">]</span><a class="headerlink" href="#deepword.students.student_learner.StudentLearner.lst_str2am" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -188,7 +188,7 @@ q-values are computed against action_mask.</p>
 
 <dl class="py method">
 <dt id="deepword.students.student_learner.StudentLearner.tjs_str2am">
-<em class="property">classmethod </em><code class="sig-name descname">tjs_str2am</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">old_tjs</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.trajectory.Trajectory" title="deepword.trajectory.Trajectory">deepword.trajectory.Trajectory</a><span class="p">[</span>str<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="deepword.html#deepword.trajectory.Trajectory" title="deepword.trajectory.Trajectory">deepword.trajectory.Trajectory</a><span class="p">[</span><a class="reference internal" href="deepword.agents.html#deepword.agents.utils.ActionMaster" title="deepword.agents.utils.ActionMaster">deepword.agents.utils.ActionMaster</a><span class="p">]</span><a class="headerlink" href="#deepword.students.student_learner.StudentLearner.tjs_str2am" title="Permalink to this definition">¶</a></dt>
+<em class="property">classmethod </em><code class="sig-name descname">tjs_str2am</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">old_tjs</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.trajectory.Trajectory" title="deepword.trajectory.Trajectory">deepword.trajectory.Trajectory</a><span class="p">[</span>str<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="deepword.html#deepword.trajectory.Trajectory" title="deepword.trajectory.Trajectory">deepword.trajectory.Trajectory</a><span class="p">[</span><a class="reference internal" href="#deepword.students.utils.ActionMasterStr" title="deepword.students.utils.ActionMasterStr">deepword.students.utils.ActionMasterStr</a><span class="p">]</span><a class="headerlink" href="#deepword.students.student_learner.StudentLearner.tjs_str2am" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -196,6 +196,60 @@ q-values are computed against action_mask.</p>
 <code class="sig-name descname">train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n_epochs</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.students.student_learner.StudentLearner.train" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
+</dd></dl>
+
+</div>
+<div class="section" id="module-deepword.students.utils">
+<span id="deepword-students-utils-module"></span><h2>deepword.students.utils module<a class="headerlink" href="#module-deepword.students.utils" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="deepword.students.utils.ActionMasterStr">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.students.utils.</code><code class="sig-name descname">ActionMasterStr</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span></em>, <em class="sig-param"><span class="n">master</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.students.utils.ActionMasterStr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.students.utils.ActionMaster</span></code></p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.students.utils.align_batch_str">
+<code class="sig-prename descclassname">deepword.students.utils.</code><code class="sig-name descname">align_batch_str</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ids</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">str_len_allowance</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">valid_len</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.students.utils.align_batch_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>Align a batch of string indexes.
+The maximum length will not exceed str_len_allowance.
+Each array of ids will be either padded or trimmed to reach
+the maximum length, notice that padded length won’t be counted in as valid
+length.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ids</strong> – a list of array of index (int)</p></li>
+<li><p><strong>str_len_allowance</strong> – </p></li>
+<li><p><strong>padding_val_id</strong> – </p></li>
+<li><p><strong>valid_len</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>aligned ids and aligned length</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.students.utils.batch_dqn_input">
+<code class="sig-prename descclassname">deepword.students.utils.</code><code class="sig-name descname">batch_dqn_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectories</span><span class="p">:</span> <span class="n">List<span class="p">[</span>List<span class="p">[</span><a class="reference internal" href="#deepword.students.utils.ActionMasterStr" title="deepword.students.utils.ActionMasterStr">deepword.students.utils.ActionMasterStr</a><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">num_tokens</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.students.utils.batch_dqn_input" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="deepword.students.utils.dqn_input">
+<code class="sig-prename descclassname">deepword.students.utils.</code><code class="sig-name descname">dqn_input</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.students.utils.ActionMasterStr" title="deepword.students.utils.ActionMasterStr">deepword.students.utils.ActionMasterStr</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">num_tokens</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>int<span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.students.utils.dqn_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a trajectory (a list of ActionMaster), get trajectory indexes, length
+and master mask (master marked as 1 while action marked as 0).
+Pad the trajectory to num_tokens.
+Pad actions if required.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="deepword.students.utils.tj2ids">
+<code class="sig-prename descclassname">deepword.students.utils.</code><code class="sig-name descname">tj2ids</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trajectory</span><span class="p">:</span> <span class="n">List<span class="p">[</span><a class="reference internal" href="#deepword.students.utils.ActionMasterStr" title="deepword.students.utils.ActionMasterStr">deepword.students.utils.ActionMasterStr</a><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">tokenizer</span><span class="p">:</span> <span class="n"><a class="reference internal" href="deepword.html#deepword.tokenizers.Tokenizer" title="deepword.tokenizers.Tokenizer">deepword.tokenizers.Tokenizer</a></span></em>, <em class="sig-param"><span class="n">with_action_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">max_action_size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">padding_val_id</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">0</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>List<span class="p">[</span>int<span class="p">]</span><span class="p">, </span>List<span class="p">[</span>int<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#deepword.students.utils.tj2ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a trajectory (list of ActionMaster) into ids
+Compute segmentation ids for masters (1) and actions (0)
+pad actions if required.</p>
 </dd></dl>
 
 </div>
@@ -217,6 +271,7 @@ q-values are computed against action_mask.</p>
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
 <li><a class="reference internal" href="#module-deepword.students.bert_swag">deepword.students.bert_swag module</a></li>
 <li><a class="reference internal" href="#module-deepword.students.student_learner">deepword.students.student_learner module</a></li>
+<li><a class="reference internal" href="#module-deepword.students.utils">deepword.students.utils module</a></li>
 <li><a class="reference internal" href="#module-deepword.students">Module contents</a></li>
 </ul>
 </li>

@@ -14,10 +14,10 @@ from tensorflow import Session
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 
-from deepword.agents.utils import Tokenizer
-from deepword.agents.utils import align_batch_str
 from deepword.agents.utils import bert_commonsense_input
 from deepword.students.student_learner import BertSoftmaxLearner
+from deepword.students.utils import align_batch_str
+from deepword.tokenizers import Tokenizer
 from deepword.utils import eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)

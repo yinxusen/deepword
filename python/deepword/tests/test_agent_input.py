@@ -1,12 +1,17 @@
 import random
 import unittest
+from typing import List
 
+import numpy as np
 from tensorflow.contrib.training import HParams
 
 from deepword.action import ActionCollector
-from deepword.agents.base_agent import BaseAgent
-from deepword.agents.utils import *
+from deepword.agents.utils import batch_drrn_action_input, id_real2batch, \
+    bert_commonsense_input, sample_batch_ids
 from deepword.hparams import copy_hparams
+from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
+    align_batch_str
+from deepword.tokenizers import Tokenizer, init_tokens
 
 tokenizer_hp = HParams(
     vocab_size=0,
@@ -41,7 +46,7 @@ def gen_rand_str(
 
 def gen_action_master(
         vocab: List[str], turns_up_to: int, n_rows: int
-) -> List[List[ActionMasterBak]]:
+) -> List[List[ActionMasterStr]]:
     assert turns_up_to > 0, "at least need 1-turn of action-master"
     res = []
     for i in range(n_rows):
@@ -49,7 +54,7 @@ def gen_action_master(
         rnd_actions = gen_rand_str(vocab, 10, n_turns, allow_empty_str=False)
         rnd_masters = gen_rand_str(vocab, 50, n_turns, allow_empty_str=False)
         res.append(
-            [ActionMasterBak(a, m) for a, m in zip(rnd_actions, rnd_masters)])
+            [ActionMasterStr(a, m) for a, m in zip(rnd_actions, rnd_masters)])
     return res
 
 
@@ -73,7 +78,7 @@ class TestAgentInput(unittest.TestCase):
     def test_dqn_input(self):
         hp = copy_hparams(tokenizer_hp)
         hp.set_hparam("tokenizer_type", "Bert")
-        hp, tokenizer = BaseAgent.init_tokens(hp)
+        hp, tokenizer = init_tokens(hp)
         vocab = list(tokenizer.vocab.keys())
 
         for _ in range(1000):
@@ -112,7 +117,7 @@ class TestAgentInput(unittest.TestCase):
     def test_drrn_action_input(self):
         hp = copy_hparams(tokenizer_hp)
         hp.set_hparam("tokenizer_type", "NLTK")
-        hp, tokenizer = BaseAgent.init_tokens(hp)
+        hp, tokenizer = init_tokens(hp)
         ac = gen_action_collector(hp, tokenizer)
         game_ids = ac.get_game_ids()
         action_len = [ac.get_action_len(gid) for gid in game_ids]
@@ -137,7 +142,7 @@ class TestAgentInput(unittest.TestCase):
     def test_bert_commonsense_input(self):
         hp = copy_hparams(tokenizer_hp)
         hp.set_hparam("tokenizer_type", "Bert")
-        hp, tokenizer = BaseAgent.init_tokens(hp)
+        hp, tokenizer = init_tokens(hp)
         vocab = list(tokenizer.vocab.keys())
         ac = gen_action_collector(hp, tokenizer)
         game_ids = ac.get_game_ids()
@@ -218,7 +223,7 @@ class TestAgentInput(unittest.TestCase):
     def test_align_batch_str(self):
         hp = copy_hparams(tokenizer_hp)
         hp.set_hparam("tokenizer_type", "NLTK")
-        hp, tokenizer = BaseAgent.init_tokens(hp)
+        hp, tokenizer = init_tokens(hp)
         vocab = list(tokenizer.vocab.keys())
 
         for _ in range(100):

@@ -20,6 +20,14 @@ deepword.students.student\_learner module
    :undoc-members:
    :show-inheritance:
 
+deepword.students.utils module
+------------------------------
+
+.. automodule:: deepword.students.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

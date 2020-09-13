@@ -2,8 +2,8 @@ from typing import List, Dict, Optional, Tuple
 
 import numpy as np
 
-from deepword.agents.utils import Tokenizer
 from deepword.log import Logging
+from deepword.tokenizers import Tokenizer
 
 
 class ActionCollector(Logging):

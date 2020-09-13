@@ -16,7 +16,6 @@ from termcolor import colored
 
 from deepword.agents.utils import ActionMaster, ObsInventory
 from deepword.agents.utils import GenSummary
-from deepword.agents.utils import Tokenizer
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
 from deepword.agents.utils import get_action_idx_pair
@@ -31,6 +30,7 @@ from deepword.models.export_models import DRRNModel
 from deepword.models.export_models import DSQNModel
 from deepword.models.export_models import DSQNZorkModel
 from deepword.models.export_models import GenDQNModel
+from deepword.tokenizers import Tokenizer
 from deepword.utils import ctime, report_status
 from deepword.utils import eprint
 from deepword.utils import flatten

@@ -1,12 +1,11 @@
 import glob
 import os
 from collections import namedtuple
-from typing import List, Dict, Tuple, Optional, Iterator
+from typing import List, Dict, Tuple
 
 import numpy as np
 
 from deepword.log import Logging
-from deepword.tokenizers import Tokenizer
 
 
 class Memolet(namedtuple(
@@ -35,10 +34,6 @@ class Memolet(namedtuple(
     TODO: Notice that end_of_episode doesn't imply is_terminal. Only winning
         or losing means is_terminal = True.
     """
-    pass
-
-
-class ActionMasterBak(namedtuple("ActionMaster", ("action", "master"))):
     pass
 
 
@@ -200,6 +195,12 @@ def get_path_tags(path: str, prefix: str) -> List[int]:
 
     Returns:
         list of all tags
+
+    Examples:
+        >>> # suppose there are these files:
+        >>> # actions-99.npz, actions-100.npz, actions-200.npz
+        >>> get_path_tags("/path/to/data", "actions")
+        [99, 100, 200]
     """
     all_paths = glob.glob(
         os.path.join(path, "{}-*.npz".format(prefix)), recursive=False)
@@ -209,124 +210,38 @@ def get_path_tags(path: str, prefix: str) -> List[int]:
     return tags
 
 
-def align_batch_str(
-        ids: List[List[int]], str_len_allowance: int,
-        padding_val_id: int, valid_len: List[int]
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Align a batch of string indexes.
-    The maximum length will not exceed str_len_allowance.
-    Each array of ids will be either padded or trimmed to reach
-    the maximum length, notice that padded length won't be counted in as valid
-    length.
-
-    Args:
-        ids: a list of array of index (int)
-        str_len_allowance:
-        padding_val_id:
-        valid_len:
-
-    Returns:
-        aligned ids and aligned length
-    """
-    def align() -> Iterator[Tuple[List[int], int]]:
-        m = min(str_len_allowance, np.max(valid_len))
-        for s, l in zip(ids, valid_len):
-            if 0 <= l < m:
-                yield s[:l] + [padding_val_id] * (m - l), l
-            else:
-                yield s[:m], m
-
-    aligned_ids, aligned_len = zip(*align())
-    return np.asarray(aligned_ids), np.asarray(aligned_len)
-
-
-def tj2ids(
-        trajectory: List[ActionMasterBak],
-        tokenizer: Tokenizer,
-        with_action_padding: bool = False,
-        max_action_size: Optional[int] = None,
-        padding_val_id: int = 0) -> Tuple[List[int], List[int]]:
-    """
-    Convert a trajectory (list of ActionMaster) into ids
-    Compute segmentation ids for masters (1) and actions (0)
-    pad actions if required.
-    """
-    ids = []
-    master_mask = []
-    for am in trajectory:
-        action_ids = tokenizer.convert_tokens_to_ids(
-            tokenizer.tokenize(am.action))
-        if with_action_padding:
-            if len(action_ids) < max_action_size:
-                action_ids += [padding_val_id] * (
-                        max_action_size - len(action_ids))
-            else:
-                action_ids = action_ids[:max_action_size]
-        master_ids = tokenizer.convert_tokens_to_ids(
-            tokenizer.tokenize(am.master))
-        ids += action_ids
-        ids += master_ids
-        master_mask += [0] * len(action_ids)
-        master_mask += [1] * len(master_ids)
-    return ids, master_mask
-
-
-def dqn_input(
-        trajectory: List[ActionMasterBak],
-        tokenizer: Tokenizer,
-        num_tokens: int,
-        padding_val_id: int,
-        with_action_padding: bool = False,
-        max_action_size: Optional[int] = None
-) -> Tuple[List[int], int, List[int]]:
-    """
-    Given a trajectory (a list of ActionMaster), get trajectory indexes, length
-    and master mask (master marked as 1 while action marked as 0).
-    Pad the trajectory to num_tokens.
-    Pad actions if required.
-    """
-    trajectory_ids, raw_master_mask = tj2ids(
-        trajectory, tokenizer,
-        with_action_padding, max_action_size, padding_val_id)
-    padding_size = num_tokens - len(trajectory_ids)
-    if padding_size >= 0:
-        src = trajectory_ids + [padding_val_id] * padding_size
-        master_mask = raw_master_mask + [0] * padding_size
-        src_len = len(trajectory_ids)
-    else:
-        src = trajectory_ids[-padding_size:]
-        master_mask = raw_master_mask[-padding_size:]
-        src_len = num_tokens
-    return src, src_len, master_mask
-
-
-def batch_dqn_input(
-        trajectories: List[List[ActionMasterBak]],
-        tokenizer: Tokenizer,
-        num_tokens: int,
-        padding_val_id: int,
-        with_action_padding: bool = False,
-        max_action_size: Optional[int] = None
-) -> Tuple[List[List[int]], List[int], List[List[int]]]:
-    batch_src = []
-    batch_src_len = []
-    batch_mask = []
-    for tj in trajectories:
-        src, src_len, master_mask = dqn_input(
-            tj, tokenizer, num_tokens, padding_val_id,
-            with_action_padding, max_action_size)
-        batch_src.append(src)
-        batch_src_len.append(src_len)
-        batch_mask.append(master_mask)
-    return batch_src, batch_src_len, batch_mask
-
-
 def drrn_action_input(
         action_matrix: np.ndarray,
         action_len: np.ndarray,
         action_mask: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, int, Dict[int, int]]:
+    """
+    Select actions from `action_mask`.
+
+    Args:
+        action_matrix: action matrix for a game
+        action_len: lengths for actions in the `action_matrix`
+        action_mask: list of indices of selected actions
+
+    Returns:
+        selected action matrix, selected action len, number of actions selected,
+         and the mapping from real ID to mask ID.
+        real ID: the action index in the original `action_matrix`
+        mask ID: the action index in the `action_mask`
+
+    Examples:
+        >>> a_mat = np.asarray([
+        >>>     [1, 2, 3, 4, 0],
+        >>>     [2, 2, 1, 3, 1],
+        >>>     [3, 1, 0, 0, 0],
+        >>>     [6, 9, 9, 1, 0]])
+        >>> a_len = np.asarray([4, 5, 2, 4])
+        >>> a_mask = np.asarray([1, 3])
+        >>> drrn_action_input(a_mat, a_len, a_mask)
+        [[2, 2, 1, 3, 1], [6, 9, 9, 1, 0]]
+        [5, 4]
+        {1: 0, 3: 1}
+    """
     id_real2mask = dict([(mid, i) for i, mid in enumerate(action_mask)])
     action_matrix = action_matrix[action_mask, :]
     action_len = action_len[action_mask]
@@ -338,19 +253,73 @@ def batch_drrn_action_input(
         action_lens: List[np.ndarray],
         action_masks: List[np.ndarray]
 ) -> Tuple[np.ndarray, np.ndarray, List[int], List[Dict[int, int]]]:
-    inp = [
+    """
+    Select actions from `action_masks` in a batch
+
+    see :py:func:`deepword.agents.utils.drrn_action_input`
+    """
+    mats, lens, actions_repeats, id_real2mask = zip(*[
         drrn_action_input(mat, l, mask) for mat, l, mask
-        in zip(action_matrices, action_lens, action_masks)]
-    inp_matrix = np.concatenate([x[0] for x in inp], axis=0)
-    inp_len = np.concatenate([x[1] for x in inp], axis=0)
-    actions_repeats = [x[2] for x in inp]
-    id_real2mask = [x[3] for x in inp]
+        in zip(action_matrices, action_lens, action_masks)])
+    inp_matrix = np.concatenate(mats, axis=0)
+    inp_len = np.concatenate(lens, axis=0)
     return inp_matrix, inp_len, actions_repeats, id_real2mask
 
 
 def id_real2batch(
         real_id: List[int], id_real2mask: List[Dict[int, int]],
         actions_repeats: List[int]) -> List[int]:
+    """
+    Transform real IDs to IDs in a batch
+
+    An explanation of three ID system for actions, depending on which location
+    does the action be in.
+
+    In the action matrix of the game: real ID. E.g. a game with three actions
+    `["go east", "go west", "eat meal"]`, then the real IDs are `[0, 1, 2]`
+
+    In the action mask for each step of game-playing. E.g. when play at a
+    step with admissible action as `["go east", "eat meal"]`, then the
+    mask IDs are `[0, 1]`, mapping to the real IDs are `[0, 2]`.
+
+    In a batch for training. E.g. in a batch of 2 entries, each entry is from
+    a different game, say, game-1 and game-2.
+
+    Game-1, at the step of playing, has two actions, say `[0, 2]`;
+
+    Game-2, at the step of playing, has three actions, say, `[0, 4, 10]`.
+
+    Supposing the agent choose action-0 from game-1 for entry-1, and
+    action-4 from game-2 for entry-2. Now the real IDs are
+    `[0, 4]`. However, the mask IDs are `[0, 1]`.
+
+    Why action-4 becomes action-1? Because for that step of game-2, there
+    are only three action `[0, 4, 10]`, and the action-4
+    is placed at position 1.
+
+    Converting mask IDs to batch IDs, we get `[0, 3]`.
+
+    Why action-1 becomes action-3? Because if we place actions (mask IDs)
+    for entry-1 and entry-2 together, it becomes `[[0, 1], [0, 1, 2]]`.
+    The action list is then flatten into `[0, 1, 0, 1, 2]`, then re-indexed as
+    `[0, 1, 2, 3, 4]`. So action-1 maps to action-3 for entry-2.
+
+    Args:
+        real_id: action ids for each game in the original action_matrix of that
+         game
+        id_real2mask: list of mappings from real IDs to mask IDs
+        actions_repeats: action sizes in each group
+
+    Returns:
+        a list of batch IDs
+
+    Examples:
+        >>> rids = [0, 4]
+        >>> id_maps = [{0: 0, 2: 1}, {0: 1, 4: 1, 10: 2}]
+        >>> repeats = [2, 3]
+        >>> id_real2batch(rids, id_maps, repeats)
+        [0, 3]
+    """
     batch_id = [0] + list(np.cumsum(actions_repeats)[:-1])
     return [inv_id[rid] + bid for rid, inv_id, bid
             in zip(real_id, id_real2mask, batch_id)]
@@ -416,6 +385,20 @@ def bert_commonsense_input(
 
 
 def get_best_1d_q(q_actions: np.ndarray) -> Tuple[int, float]:
+    """
+    Find the best Q-value given a 1D Q-vector
+
+    Args:
+        q_actions: a vector of Q-values
+
+    Returns:
+        best action index, Q-value
+
+    Examples:
+        >>> q_vec = np.asarray([0.1, 0.2, 0.3, 0.4])
+        >>> get_best_1d_q(q_vec)
+        3, 0.4
+    """
     action_idx = int(np.argmax(q_actions))
     q_val = q_actions[action_idx]
     return action_idx, q_val
@@ -424,13 +407,24 @@ def get_best_1d_q(q_actions: np.ndarray) -> Tuple[int, float]:
 def get_best_batch_ids(
         q_actions: np.ndarray, actions_repeats: List[int]) -> List[int]:
     """
-    get a batch of best action index of q-values
-    actions_repeats indicates how many elements are in the same group.
-    e.g. q_actions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    actions_repeats = [3, 4, 3]
-    then q_actions can be split into three groups:
-    [1, 2, 3], [4, 5, 6, 7], [8, 9, 10];
-    we compute the best idx for each group
+    Get a batch of best action index of q-values for each group defined by
+     `actions_repeats`
+
+    Args:
+        q_actions: a 1D Q-vector
+        actions_repeats: groups of number of actions, indicating how many
+         elements are in the same group.
+
+    Returns:
+        best action index for each group
+
+    Examples:
+        >>> q_vec = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        >>> repeats = [3, 4, 3]
+        >>> #Q-vector splits into three groups containing 3, 4, 3 Q-values
+        >>> # shaded_qs = [[1, 2, 3], [4, 5, 6, 7], [8, 9, 10]]
+        >>> get_best_batch_ids(np.asarray(q_vec), repeats)
+        [3, 7, 10]
     """
     assert q_actions.ndim == 1
     assert np.all(np.greater(actions_repeats, 0))

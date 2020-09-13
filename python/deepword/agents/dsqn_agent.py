@@ -8,7 +8,6 @@ import numpy as np
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
 from deepword.agents.utils import Memolet
-from deepword.agents.utils import batch_dqn_input
 from deepword.agents.utils import get_path_tags
 from deepword.agents.zork_agent import ZorkAgent
 from deepword.utils import get_hash
@@ -149,9 +148,8 @@ class DSQNAgent(BaseAgent):
         trajectories = [
             self.tjs.fetch_state_by_idx(tid, sid) for tid, sid in
             tgt_set + same_set + diff_set]
-        batch_src, batch_src_len, batch_mask = batch_dqn_input(
-            trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id, with_action_padding=False)
+        batch_src, batch_src_len = self.core.batch_trajectory2input(
+            trajectories)
         tgt_src = batch_src[: len(tgt_set)]
         tgt_src_len = batch_src_len[: len(tgt_set)]
         same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
