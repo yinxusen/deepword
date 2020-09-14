@@ -998,17 +998,29 @@ class DSQNCore(DRRNCore):
             step: int,
             others: Any) -> np.ndarray:
 
+        t0 = ctime()
         src, src_len, src2, src2_len, labels = others.get()
+        t0_end = ctime()
+
+        t1 = ctime()
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
+        t1_end = ctime()
+
+        t2 = ctime()
         pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        t2_end = ctime()
+
+        t3 = ctime()
         (actions, actions_lens, actions_repeats, id_real2mask
          ) = batch_drrn_action_input(
             action_matrix, action_len, pre_action_mask)
         action_batch_ids = id_real2batch(
             action_idx, id_real2mask, actions_repeats)
+        t3_end = ctime()
 
+        t4 = ctime()
         _, summaries, weighted_loss, abs_loss = self.sess.run(
             [self.model.merged_train_op, self.model.weighted_train_summary_op,
              self.model.weighted_loss, self.model.abs_loss],
@@ -1026,6 +1038,14 @@ class DSQNCore(DRRNCore):
                 self.model.snn_src2_: src2,
                 self.model.snn_src2_len_: src2_len,
                 self.model.labels_: labels})
+        t4_end = ctime()
+        self.info(report_status([
+            ("t0", t0_end - t0),
+            ("t1", t1_end - t1),
+            ("t2", t2_end - t2),
+            ("t3", t3_end - t3),
+            ("t4", t4_end - t4)
+        ]))
         self.train_summary_writer.add_summary(
             summaries, step - self.hp.observation_t)
         return abs_loss
