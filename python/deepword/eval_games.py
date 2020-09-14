@@ -229,14 +229,14 @@ def scores_of_tiers(agg_per_game: Dict[str, EvalResult]) -> Dict[str, float]:
 
     tiers2games = {
         "tier1": list(
-            filter(lambda k: "go" not in k and "recipe1" in k, games)),
+            filter(lambda k: "+go" not in k and "recipe1" in k, games)),
         "tier2": list(
-            filter(lambda k: "go" not in k and "recipe2" in k, games)),
+            filter(lambda k: "+go" not in k and "recipe2" in k, games)),
         "tier3": list(
-            filter(lambda k: "go" not in k and "recipe3" in k, games)),
-        "tier4": list(filter(lambda k: "go6" in k, games)),
-        "tier5": list(filter(lambda k: "go9" in k, games)),
-        "tier6": list(filter(lambda k: "go12" in k, games))
+            filter(lambda k: "+go" not in k and "recipe3" in k, games)),
+        "tier4": list(filter(lambda k: "+go6" in k, games)),
+        "tier5": list(filter(lambda k: "+go9" in k, games)),
+        "tier6": list(filter(lambda k: "+go12" in k, games))
     }
 
     tiers2scores = dict()
