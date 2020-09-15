@@ -953,63 +953,65 @@ confidence level.</p>
 </div>
 <div class="section" id="module-deepword.sum_tree">
 <span id="deepword-sum-tree-module"></span><h2>deepword.sum_tree module<a class="headerlink" href="#module-deepword.sum_tree" title="Permalink to this headline">¶</a></h2>
-<dl class="py class">
-<dt id="deepword.sum_tree.SumTree">
-<em class="property">class </em><code class="sig-prename descclassname">deepword.sum_tree.</code><code class="sig-name descname">SumTree</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>This SumTree code is modified version of Morvan Zhou:
 <a class="reference external" href="https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/5.2_Prioritized_Replay_DQN/RL_brain.py">https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/5.2_Prioritized_Replay_DQN/RL_brain.py</a></p>
+<dl class="py class">
+<dt id="deepword.sum_tree.SumTree">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.sum_tree.</code><code class="sig-name descname">SumTree</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwds</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">typing.Generic</span></code></p>
+<p>The SumTree is a binary tree, with leaf nodes containing the real data.</p>
 <dl class="py method">
 <dt id="deepword.sum_tree.SumTree.add">
-<code class="sig-name descname">add</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">priority</span></em>, <em class="sig-param"><span class="n">data</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree.add" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.sum_tree.SumTree.data_pointer">
-<code class="sig-name descname">data_pointer</code><em class="property"> = 0</em><a class="headerlink" href="#deepword.sum_tree.SumTree.data_pointer" title="Permalink to this definition">¶</a></dt>
-<dd><p>Here we initialize the tree with all nodes = 0, and initialize the data with all values = 0</p>
+<code class="sig-name descname">add</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">priority</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">data</span><span class="p">:</span> <span class="n">E</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree.add" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add an experience into the tree with a priority</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>priority</strong> – priority of sampling</p></li>
+<li><p><strong>data</strong> – experience of the replay</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>old data at the same position, 0 if unset</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt id="deepword.sum_tree.SumTree.get_leaf">
-<code class="sig-name descname">get_leaf</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">v</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree.get_leaf" title="Permalink to this definition">¶</a></dt>
-<dd><p>Tree structure and array storage:
-Tree index:</p>
-<blockquote>
-<div><blockquote>
-<div><blockquote>
-<div><p>0         -&gt; storing priority sum</p>
-</div></blockquote>
-<p>/           1     2</p>
-</div></blockquote>
-<p>/   /         3   4 5   6    -&gt; storing priority for experiences</p>
-</div></blockquote>
-<p>Array type for storing:
-[0,1,2,3,4,5,6]</p>
+<code class="sig-name descname">get_leaf</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">v</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>int<span class="p">, </span>float<span class="p">, </span>E<span class="p">]</span><a class="headerlink" href="#deepword.sum_tree.SumTree.get_leaf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a leaf_index w.r.t. a priority value
+the selected leaf_index must have the smallest priority among all leaves
+that have larger priority values than v.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>v</strong> – a priority value</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>leaf index, priority, and experience associated with the leaf index</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt id="deepword.sum_tree.SumTree.total_priority">
 <em class="property">property </em><code class="sig-name descname">total_priority</code><a class="headerlink" href="#deepword.sum_tree.SumTree.total_priority" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.sum_tree.SumTree.tree">
-<code class="sig-name descname">tree</code><a class="headerlink" href="#deepword.sum_tree.SumTree.tree" title="Permalink to this definition">¶</a></dt>
-<dd><dl>
-<dt>tree:</dt><dd><blockquote>
-<div><p>0</p>
-</div></blockquote>
-<p>/           0   0</p>
-</dd>
-</dl>
-<p>/ /         0  0 0  0  [Size: capacity] it’s at this line that there is the priorities score (aka pi)</p>
+<dd><p>The total priority is the value on the root node.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt id="deepword.sum_tree.SumTree.update">
-<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_index</span></em>, <em class="sig-param"><span class="n">priority</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.sum_tree.SumTree.update" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_index</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">priority</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.sum_tree.SumTree.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the leaf priority score and propagate the change through tree</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tree_index</strong> – tree index of the current data_pointer</p></li>
+<li><p><strong>priority</strong> – priority sampling value</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 </dd></dl>
 
@@ -1510,79 +1512,101 @@ current trajectory will be saved.</p>
 </div>
 <div class="section" id="module-deepword.tree_memory">
 <span id="deepword-tree-memory-module"></span><h2>deepword.tree_memory module<a class="headerlink" href="#module-deepword.tree_memory" title="Permalink to this headline">¶</a></h2>
-<dl class="py class">
-<dt id="deepword.tree_memory.TreeMemory">
-<em class="property">class </em><code class="sig-prename descclassname">deepword.tree_memory.</code><code class="sig-name descname">TreeMemory</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#deepword.log.Logging" title="deepword.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.log.Logging</span></code></a></p>
 <p>This SumTree code is modified version and the original code is from:
 <a class="reference external" href="https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py">https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py</a></p>
-<dl class="py attribute">
-<dt id="deepword.tree_memory.TreeMemory.PER_a">
-<code class="sig-name descname">PER_a</code><em class="property"> = 0.6</em><a class="headerlink" href="#deepword.tree_memory.TreeMemory.PER_a" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.tree_memory.TreeMemory.PER_b">
-<code class="sig-name descname">PER_b</code><em class="property"> = 0.4</em><a class="headerlink" href="#deepword.tree_memory.TreeMemory.PER_b" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.tree_memory.TreeMemory.PER_b_increment_per_sampling">
-<code class="sig-name descname">PER_b_increment_per_sampling</code><em class="property"> = 0.001</em><a class="headerlink" href="#deepword.tree_memory.TreeMemory.PER_b_increment_per_sampling" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.tree_memory.TreeMemory.PER_e">
-<code class="sig-name descname">PER_e</code><em class="property"> = 0.01</em><a class="headerlink" href="#deepword.tree_memory.TreeMemory.PER_e" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt id="deepword.tree_memory.TreeMemory.__init__">
-<code class="sig-name descname">__init__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">capacity</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Remember that our tree is composed of a sum tree that contains the priority scores at his leaf
-And also a data array
-We don’t use deque because it means that at each timestep our experiences change index by one.
-We prefer to use a simple array and to overwrite when the memory is full.</p>
-</dd></dl>
-
-<dl class="py attribute">
-<dt id="deepword.tree_memory.TreeMemory.absolute_error_upper">
-<code class="sig-name descname">absolute_error_upper</code><em class="property"> = 1.0</em><a class="headerlink" href="#deepword.tree_memory.TreeMemory.absolute_error_upper" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
+<dl class="py class">
+<dt id="deepword.tree_memory.TreeMemory">
+<em class="property">class </em><code class="sig-prename descclassname">deepword.tree_memory.</code><code class="sig-name descname">TreeMemory</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwds</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#deepword.log.Logging" title="deepword.log.Logging"><code class="xref py py-class docutils literal notranslate"><span class="pre">deepword.log.Logging</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">typing.Generic</span></code></p>
+<p>TreeMemory to store and sample experiences to replay.</p>
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.append">
-<code class="sig-name descname">append</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">experience</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.append" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">append</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">experience</span><span class="p">:</span> <span class="n">E</span></em><span class="sig-paren">)</span> &#x2192; E<a class="headerlink" href="#deepword.tree_memory.TreeMemory.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>New experiences have a score of max priority over all leaves to make
+sure to be sampled.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>experience</strong> – a new experience</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>previous experience in the same position</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.batch_update">
-<code class="sig-name descname">batch_update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_idx</span></em>, <em class="sig-param"><span class="n">abs_errors</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.batch_update" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">batch_update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree_idx</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em>, <em class="sig-param"><span class="n">abs_errors</span><span class="p">:</span> <span class="n">numpy.ndarray</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.tree_memory.TreeMemory.batch_update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the priorities on the tree</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tree_idx</strong> – an array of index (int)</p></li>
+<li><p><strong>abs_errors</strong> – an array of abs errors (float)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.load_memo">
-<code class="sig-name descname">load_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.load_memo" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">load_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.tree_memory.TreeMemory.load_memo" title="Permalink to this definition">¶</a></dt>
 <dd><p>load memo only apply to a new memo without any appending.
-load memo will change previous tree structure.
-:param path:
-:return:</p>
+load memo will change previous tree structure.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> – a npz file to load</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.sample_batch">
-<code class="sig-name descname">sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.sample_batch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>numpy.ndarray<span class="p">, </span>List<span class="p">[</span>E<span class="p">]</span><span class="p">, </span>numpy.ndarray<span class="p">]</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.sample_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sample a batch of experiences according to priority values</p>
+<ul class="simple">
+<li><p>First, to sample a batch of n size, the range [0, priority_total] is
+divided into n equally ranges.</p></li>
+<li><p>Then a value is uniformly sampled from each range</p></li>
+<li><p>We search in the <cite>SumTree</cite>, the experience where priority score
+correspond to sample values are retrieved from.</p></li>
+<li><p>Then, we calculate importance sampling (IS) weights
+for each element in the batch</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>n</strong> – batch size</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>tree index, experiences, IS weights</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.save_memo">
-<code class="sig-name descname">save_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.save_memo" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">save_memo</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#deepword.tree_memory.TreeMemory.save_memo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save the memory to a npz file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> – path to a npz file</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt id="deepword.tree_memory.TreeMemory.uniform_sample_batch">
-<code class="sig-name descname">uniform_sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span></em><span class="sig-paren">)</span><a class="headerlink" href="#deepword.tree_memory.TreeMemory.uniform_sample_batch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="sig-name descname">uniform_sample_batch</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">n</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; numpy.ndarray<a class="headerlink" href="#deepword.tree_memory.TreeMemory.uniform_sample_batch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Randomly sample a batch of experiences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>n</strong> – batch size</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a batch of experiences</p>
+</dd>
+</dl>
+</dd></dl>
 
 </dd></dl>
 
