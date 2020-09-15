@@ -114,15 +114,16 @@ class TransformerGenDQN(BaseDQN):
             max_tar_len=self.hp.max_decoding_size,
             sos_id=self.hp.sos_id,
             eos_id=self.hp.eos_id,
-            tj_master_mask=self.inputs["src_seg"],
+            padding_id=self.hp.padding_val_id,
             use_greedy=self.inputs["use_greedy"],
             beam_size=self.inputs["beam_size"],
-            temperature=self.inputs["temperature"])
+            temperature=self.inputs["temperature"],
+            copy_mask=self.inputs["src_seg"])
 
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
-            training=True, tj_master_mask=self.inputs["src_seg"])
+            training=True, copy_mask=self.inputs["src_seg"])
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):
