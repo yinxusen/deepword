@@ -1,135 +1,159 @@
+"""
+This SumTree code is modified version and the original code is from:
+https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py
+"""
+
+from typing import Tuple, List
+from typing import TypeVar, Generic
+
 import numpy as np
 
-from deepword.sum_tree import SumTree
 from deepword.log import Logging
+from deepword.sum_tree import SumTree
+
+E = TypeVar('E')  # type of the experience
 
 
-class TreeMemory(Logging):  # stored as ( s, a, r, s_ ) in SumTree
+class TreeMemory(Logging, Generic[E]):
     """
-    This SumTree code is modified version and the original code is from:
-    https://github.com/jaara/AI-blog/blob/master/Seaquest-DDQN-PER.py
+    TreeMemory to store and sample experiences to replay.
     """
-    PER_e = 0.01  # Hyperparameter that we use to avoid some experiences to have 0 probability of being taken
-    PER_a = 0.6  # Hyperparameter that we use to make a tradeoff between taking only exp with high priority and sampling randomly
-    PER_b = 0.4  # importance-sampling, from initial value increasing to 1
 
-    PER_b_increment_per_sampling = 0.001
-
-    absolute_error_upper = 1.  # clipped abs error
-
-    def __init__(self, capacity):
-        # Making the tree
-        """
-        Remember that our tree is composed of a sum tree that contains the priority scores at his leaf
-        And also a data array
-        We don't use deque because it means that at each timestep our experiences change index by one.
-        We prefer to use a simple array and to overwrite when the memory is full.
-        """
+    def __init__(self, capacity: int):
         super(TreeMemory, self).__init__()
         self.tree = SumTree(capacity)
         self.used_buffer_size = 0
+        self.per_e = 0.01  # to avoid zero probability
+        self.per_a = 0.6  # tradeoff between sampling ~ priority and random
+        self.per_b = 0.4  # importance-sampling, increasing to 1
+        self.per_b_inc_step = 0.001  # inc per_b per sampling
+        self.abs_err_upper_bound = 1.  # clip the error
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.used_buffer_size
 
-    """
-    Store a new experience in our tree
-    Each new experience have a score of max_prority (it will be then improved when we use this exp to train our DDQN)
-    """
+    def append(self, experience: E) -> E:
+        """
+        New experiences have a score of max priority over all leaves to make
+        sure to be sampled.
 
-    def append(self, experience):
-        # Find the max priority
+        Args:
+            experience: a new experience
+
+        Returns:
+            previous experience in the same position
+        """
+        # find the max priority over leaves
         max_priority = np.max(self.tree.tree[-self.tree.capacity:])
-
-        # If the max priority = 0 we can't put priority = 0 since this exp will never have a chance to be selected
-        # So we use a minimum priority
-        if max_priority == 0:
-            max_priority = self.absolute_error_upper
-
-        prev_data = self.tree.add(max_priority, experience)  # set the max p for new p
+        max_priority = (
+            self.abs_err_upper_bound if max_priority == 0 else max_priority)
+        prev_data = self.tree.add(max_priority, experience)
         if self.used_buffer_size < self.tree.capacity:
             self.used_buffer_size += 1
         return prev_data
 
-    def uniform_sample_batch(self, n):
-        return np.random.choice(self.tree.data[:-self.used_buffer_size], size=n)
+    def uniform_sample_batch(self, n: int) -> np.ndarray:
+        """
+        Randomly sample a batch of experiences
 
-    """
-    - First, to sample a minibatch of k size, the range [0, priority_total] is / into k ranges.
-    - Then a value is uniformly sampled from each range
-    - We search in the sumtree, the experience where priority score correspond to sample values are retrieved from.
-    - Then, we calculate IS weights for each minibatch element
-    """
+        Args:
+            n: batch size
 
-    def sample_batch(self, n):
-        # Create a sample array that will contains the minibatch
+        Returns:
+            a batch of experiences
+        """
+        return np.random.choice(
+            self.tree.data[:-self.used_buffer_size], size=n)
+
+    def sample_batch(self, n: int) -> Tuple[np.ndarray, List[E], np.ndarray]:
+        """
+        Sample a batch of experiences according to priority values
+
+        - First, to sample a batch of n size, the range [0, priority_total] is
+          divided into n equally ranges.
+        - Then a value is uniformly sampled from each range
+        - We search in the `SumTree`, the experience where priority score
+          correspond to sample values are retrieved from.
+        - Then, we calculate importance sampling (IS) weights
+          for each element in the batch
+
+        Args:
+            n: batch size
+
+        Returns:
+            tree index, experiences, IS weights
+        """
         memory_b = []
-
         b_idx = np.empty((n,), dtype=np.int32)
-        b_ISWeights = np.empty((n,), dtype=np.float32)
+        b_is_weights = np.empty((n,), dtype=np.float32)
 
         # Calculate the priority segment
-        # Here, as explained in the paper, we divide the Range[0, ptotal] into n ranges
-        priority_segment = self.tree.total_priority / n  # priority segment
+        priority_segment = self.tree.total_priority / n
 
-        # Here we increasing the PER_b each time we sample a new minibatch
-        self.PER_b = np.min(
-            [1., self.PER_b + self.PER_b_increment_per_sampling])  # max = 1
+        # Here we increasing the PER_b each time we sample a new batch
+        self.per_b = min(1., self.per_b + self.per_b_inc_step)
 
         # Calculating the max_weight
         p_min = (np.min(
             self.tree.tree[-self.tree.capacity:][:self.used_buffer_size]) /
                  self.tree.total_priority)
-        max_weight = np.power(p_min * self.used_buffer_size, -self.PER_b)
+        max_weight = np.power(p_min * self.used_buffer_size, -self.per_b)
 
         for i in range(n):
-            """
-            A value is uniformly sample from each range
-            """
+            # A value is uniformly sample from each range
             a, b = priority_segment * i, priority_segment * (i + 1)
             value = np.random.uniform(a, b)
 
-            """
-            Experience that correspond to each value is retrieved
-            """
+            # Experience that correspond to each value is retrieved
             index, priority, data = self.tree.get_leaf(value)
 
-            # P(j)
+            # P(i)
             sampling_probabilities = priority / self.tree.total_priority
 
             #  IS = (1/N * 1/P(i))**b /max wi == (N*P(i))**-b  /max wi
-            b_ISWeights[i] = np.power(
+            b_is_weights[i] = np.power(
                 self.used_buffer_size * sampling_probabilities,
-                -self.PER_b) / max_weight
+                -self.per_b) / max_weight
             b_idx[i] = index
 
             memory_b.append(data)
 
-        return b_idx, memory_b, b_ISWeights
+        return b_idx, memory_b, b_is_weights
 
-    """
-    Update the priorities on the tree
-    """
+    def batch_update(
+            self, tree_idx: np.ndarray, abs_errors: np.ndarray) -> None:
+        """
+        Update the priorities on the tree
 
-    def batch_update(self, tree_idx, abs_errors):
-        abs_errors += self.PER_e  # convert to abs and avoid 0
-        clipped_errors = np.minimum(abs_errors, self.absolute_error_upper)
-        ps = np.power(clipped_errors, self.PER_a)
+        Args:
+            tree_idx: an array of index (int)
+            abs_errors: an array of abs errors (float)
+        """
+        abs_errors += self.per_e  # avoid 0
+        clipped_errors = np.minimum(abs_errors, self.abs_err_upper_bound)
+        ps = np.power(clipped_errors, self.per_a)
         for ti, p in zip(tree_idx, ps):
             self.tree.update(ti, p)
 
-    def save_memo(self, path):
+    def save_memo(self, path: str) -> None:
+        """
+        Save the memory to a npz file
+
+        Args:
+            path: path to a npz file
+        """
         np.savez(
             path, tree=self.tree.tree, data=self.tree.data,
             data_pointer=self.tree.data_pointer,
             used_buffer_size=self.used_buffer_size)
 
-    def load_memo(self, path):
+    def load_memo(self, path: str) -> None:
         """
         load memo only apply to a new memo without any appending.
         load memo will change previous tree structure.
-        :param path:
-        :return:
+
+        Args:
+            path: a npz file to load
         """
         memo = np.load(path, allow_pickle=True)
         self.tree.tree = memo["tree"]
