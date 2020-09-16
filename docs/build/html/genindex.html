@@ -259,12 +259,12 @@
         <li><a href="deepword.models.html#deepword.models.transformer.Transformer.call">(deepword.models.transformer.Transformer method)</a>
 </li>
       </ul></li>
-      <li><a href="deepword.models.html#deepword.models.transformer.Transformer.categorical_with_replacement">categorical_with_replacement() (deepword.models.transformer.Transformer class method)</a>
+      <li><a href="deepword.models.html#deepword.models.transformer.categorical_with_replacement">categorical_with_replacement() (in module deepword.models.transformer)</a>
 </li>
-      <li><a href="deepword.models.html#deepword.models.transformer.Transformer.categorical_without_replacement">categorical_without_replacement() (deepword.models.transformer.Transformer class method)</a>
+      <li><a href="deepword.agents.html#deepword.agents.utils.categorical_without_replacement">categorical_without_replacement() (in module deepword.agents.utils)</a>
 
       <ul>
-        <li><a href="deepword.agents.html#deepword.agents.utils.categorical_without_replacement">(in module deepword.agents.utils)</a>
+        <li><a href="deepword.models.html#deepword.models.transformer.categorical_without_replacement">(in module deepword.models.transformer)</a>
 </li>
       </ul></li>
       <li><a href="deepword.tools.html#deepword.tools.clean_hs2tj.clean_data">clean_data() (in module deepword.tools.clean_hs2tj)</a>
@@ -365,8 +365,6 @@
       </ul></li>
       <li><a href="deepword.html#deepword.log.Logging.debug">debug() (deepword.log.Logging method)</a>
 </li>
-      <li><a href="deepword.models.html#deepword.models.transformer.Transformer.dec_step">dec_step() (deepword.models.transformer.Transformer method)</a>
-</li>
       <li><a href="deepword.agents.html#deepword.agents.cores.PGNCore.decode">decode() (deepword.agents.cores.PGNCore method)</a>
 
       <ul>
@@ -376,6 +374,8 @@
 </li>
       </ul></li>
       <li><a href="deepword.agents.html#deepword.agents.cores.GenDQNCore.decode_action">decode_action() (deepword.agents.cores.GenDQNCore method)</a>
+</li>
+      <li><a href="deepword.models.html#deepword.models.transformer.decode_next_step">decode_next_step() (in module deepword.models.transformer)</a>
 </li>
       <li><a href="deepword.models.html#deepword.models.transformer.Decoder">Decoder (class in deepword.models.transformer)</a>
 </li>
@@ -894,8 +894,6 @@
 </li>
       <li><a href="deepword.html#deepword.tokenizers.get_albert_tokenizer">get_albert_tokenizer() (in module deepword.tokenizers)</a>
 </li>
-      <li><a href="deepword.models.html#deepword.models.utils.get_angles">get_angles() (in module deepword.models.utils)</a>
-</li>
       <li><a href="deepword.students.html#deepword.students.bert_swag.get_bert_input">get_bert_input() (in module deepword.students.bert_swag)</a>
 </li>
       <li><a href="deepword.html#deepword.tokenizers.get_bert_tokenizer">get_bert_tokenizer() (in module deepword.tokenizers)</a>
@@ -987,10 +985,6 @@
       <li><a href="deepword.models.html#deepword.models.dsqn_model.CnnDSQN.get_snn_train_op">get_snn_train_op() (deepword.models.dsqn_model.CnnDSQN method)</a>
 </li>
       <li><a href="deepword.models.html#deepword.models.transformer.get_sparse_idx_for_copy">get_sparse_idx_for_copy() (in module deepword.models.transformer)</a>
-</li>
-      <li><a href="deepword.models.html#deepword.models.transformer.get_sparse_idx_src_for_copy">get_sparse_idx_src_for_copy() (in module deepword.models.transformer)</a>
-</li>
-      <li><a href="deepword.models.html#deepword.models.transformer.get_sparse_idx_tar_for_copy">get_sparse_idx_tar_for_copy() (in module deepword.models.transformer)</a>
 </li>
       <li><a href="deepword.agents.html#deepword.agents.cores.TabularCore.get_state_hash">get_state_hash() (deepword.agents.cores.TabularCore method)</a>
 </li>
@@ -1315,11 +1309,13 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="deepword.agents.html#deepword.agents.base_agent.BaseAgent.negative_scores">negative_scores() (deepword.agents.base_agent.BaseAgent property)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="deepword.html#deepword.eval_games.NewModelHandler">NewModelHandler (class in deepword.eval_games)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="deepword.html#deepword.tokenizers.NLTKTokenizer">NLTKTokenizer (class in deepword.tokenizers)</a>
+</li>
+      <li><a href="deepword.models.html#deepword.models.transformer.nucleus_renormalization">nucleus_renormalization() (in module deepword.models.transformer)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -1517,6 +1513,8 @@
 </li>
       <li><a href="deepword.agents.html#deepword.agents.base_agent.BaseAgent.select_additional_infos">select_additional_infos() (deepword.agents.base_agent.BaseAgent class method)</a>
 </li>
+      <li><a href="deepword.models.html#deepword.models.transformer.sequential_decoding">sequential_decoding() (in module deepword.models.transformer)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="deepword.students.html#deepword.students.student_learner.CMD.set">set() (deepword.students.student_learner.CMD method)</a>
@@ -1603,7 +1601,7 @@
 </li>
       <li><a href="deepword.students.html#deepword.students.student_learner.StudentLearner.tjs_str2am">tjs_str2am() (deepword.students.student_learner.StudentLearner class method)</a>
 </li>
-      <li><a href="deepword.models.html#deepword.models.transformer.Transformer.token_logit_masking">token_logit_masking() (deepword.models.transformer.Transformer class method)</a>
+      <li><a href="deepword.models.html#deepword.models.transformer.token_logit_masking">token_logit_masking() (in module deepword.models.transformer)</a>
 </li>
       <li><a href="deepword.html#deepword.tokenizers.BertTokenizer.tokenize">tokenize() (deepword.tokenizers.BertTokenizer method)</a>
 

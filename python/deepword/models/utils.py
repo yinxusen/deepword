@@ -5,11 +5,16 @@ import numpy as np
 def encoder_lstm(src, src_len, src_embeddings, num_units, num_layers):
     """
     encode state with LSTM
-    :param src: placeholder, (tf.int32, [None, None])
-    :param src_len: placeholder, (tf.float32, [None])
-    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
-    :param num_units: number of LSTM units
-    :param num_layers: number of LSTM layers
+
+    Args:
+        src: placeholder, (tf.int32, [None, None])
+        src_len: placeholder, (tf.float32, [None])
+        src_embeddings: (tf.float32, [vocab_size, embedding_size])
+        num_units: number of LSTM units
+        num_layers: number of LSTM layers
+
+    Returns:
+        inner states (c, h)
     """
     encoder_cell = tf.nn.rnn_cell.MultiRNNCell(
         [tf.nn.rnn_cell.LSTMCell(num_units) for _ in range(num_layers)])
@@ -39,16 +44,20 @@ def encoder_cnn_base(
     We use constant value 0 here, so make sure index-0 is a special token
     that can be used to pad in your vocabulary.
 
-    :param input_tensor:
-    :param filter_sizes:
-    :param num_filters:
-    :param num_channels:
-    :param embedding_size:
-    :param is_infer:
-    :param activation: choose from "tanh" or "relu". Notice that if choose relu,
-        make sure adding an extra dense layer, otherwise the output is all
-        non-negative values.
-    :return:
+    Args:
+        input_tensor: (tf.float32,
+          [batch_size, seq_len, embedding_size, num_channels])
+        filter_sizes: list of ints, e.g. [3, 4, 5]
+        num_filters: number of filters for each filter size
+        num_channels: 1 or 2, depending on the input tensor
+        embedding_size: word embedding size
+        is_infer: training or infer
+        activation: choose from "tanh" or "relu". Notice that if choose relu,
+          make sure adding an extra dense layer, otherwise the output is all
+          non-negative values.
+
+    Returns:
+        a vector as the inner state
     """
     layer_outputs = []
     for i, fs in enumerate(filter_sizes):
@@ -92,16 +101,20 @@ def encoder_cnn(
     """
     encode state with CNN, refer to
     Convolutional Neural Networks for Sentence Classification
-    :param src: placeholder, (tf.int32, [None, None])
-    :param src_embeddings: (tf.float32, [vocab_size, embedding_size])
-    :param pos_embeddings:
-     position embedding, (tf.float32, [src_len, embedding_size])
-    :param filter_sizes: list of ints, e.g. [3, 4, 5]
-    :param num_filters: number of filters of each filter_size
-    :param embedding_size: embedding size
-    :param is_infer:
-    :param num_channels: 1 or 2.
-    :param activation: tanh (default) or relu
+
+    Args:
+        src: placeholder, (tf.int32, [batch_size, seq_len])
+        src_embeddings: (tf.float32, [vocab_size, embedding_size])
+        pos_embeddings: (tf.float32, [max_position_size, embedding_size])
+        filter_sizes: list of ints, e.g. [3, 4, 5]
+        num_filters: number of filters of each filter_size
+        embedding_size: embedding size
+        is_infer: training or inference
+        num_channels: 1 or 2.
+        activation: tanh (default) or relu
+
+    Returns:
+        a vector as the inner state
     """
     with tf.variable_scope("cnn_encoder"):
         src_emb = tf.nn.embedding_lookup(src_embeddings, src)
@@ -135,9 +148,12 @@ def repeat(data, repeats):
     repeats [1, 1, 2] times, then we get
     [[1, 2, 3], [2, 3, 4], [3, 4, 5], [3, 4, 5]].
 
-    :param data: 2D matrix, [batch_size, hidden_size]
-    :param repeats: 1D int vector, [batch_size]
-    :return: 2D matrix, [sum(repeats), hidden_size]
+    Args:
+        data: 2D matrix, [batch_size, hidden_size]
+        repeats: 1D int vector, [batch_size]
+
+    Returns:
+        2D matrix, [sum(repeats), hidden_size]
     """
     max_repeat = tf.reduce_max(repeats)
     data = data[:, None, :]
@@ -153,12 +169,17 @@ def l2_loss_1d_action(q_actions, action_idx, expected_q, b_weight):
      selected by action_idx will be computed against expected_q
     e.g. "go east" would be one whole action.
     action_idx should have the same dimension as expected_q
-    :param q_actions: q-values
-    :param action_idx: placeholder, the action chose for the state,
-           in a format of (tf.int32, [None])
-    :param expected_q: placeholder, the expected reward gained from the step,
-           in a format of (tf.float32, [None])
-    :param b_weight: weights for each data point
+
+    Args:
+        q_actions: q-values
+        action_idx: placeholder, the action chose for the state,
+          in a format of (tf.int32, [None])
+        expected_q: placeholder, the expected reward gained from the step,
+          in a format of (tf.float32, [None])
+        b_weight: weights for each data point
+
+    Returns:
+        l2 loss and l1 loss
     """
     predicted_q = tf.gather(q_actions, indices=action_idx)
     loss = tf.reduce_mean(b_weight * tf.square(expected_q - predicted_q))
@@ -171,13 +192,17 @@ def l2_loss_1d_action_v2(
     """
     l2 loss for 1D action space.
     e.g. "go east" would be one whole action.
-    :param q_actions: Q-vector of a state for all actions
-    :param action_idx: placeholder, the action chose for the state,
-           in a format of (tf.int32, [None])
-    :param expected_q: placeholder, the expected reward gained from the step,
-           in a format of (tf.float32, [None])
-    :param n_actions: number of total actions
-    :param b_weight: weights for each data point
+
+        q_actions: Q-vector of a state for all actions
+        action_idx: placeholder, the action chose for the state,
+          in a format of (tf.int32, [None])
+        expected_q: placeholder, the expected reward gained from the step,
+          in a format of (tf.float32, [None])
+        n_actions: number of total actions
+        b_weight: weights for each data point
+
+    Returns:
+        l2 loss and l1 loss
     """
     actions_mask = tf.one_hot(indices=action_idx, depth=n_actions)
     predicted_q = tf.reduce_sum(
@@ -193,15 +218,20 @@ def l2_loss_2d_action(
     """
     l2 loss for 2D action space.
     e.g. "go east" is an action composed by "go" and "east".
-    :param q_actions: Q-matrix of a state for all action-components, e.g. tokens
-    :param action_idx: placeholder, the action-components chose for the state,
-           in a format of (tf.int32, [None, None])
-    :param expected_q: placeholder, the expected reward gained from the step,
-           in a format of (tf.float32, [None])
-    :param vocab_size: number of action-components
-    :param action_len: length of each action in a format of (tf.int32, [None])
-    :param max_action_len: maximum length of action
-    :param b_weight: weights for each data point
+
+    Args:
+        q_actions: Q-matrix of a state for all action-components, e.g. tokens
+        action_idx: placeholder, the action-components chose for the state,
+          in a format of (tf.int32, [None, None])
+        expected_q: placeholder, the expected reward gained from the step,
+          in a format of (tf.float32, [None])
+        vocab_size: number of action-components
+        action_len: length of each action in a format of (tf.int32, [None])
+        max_action_len: maximum length of action
+        b_weight: weights for each data point
+
+    Returns:
+        l2 loss and l1 loss
     """
     actions_idx_mask = tf.one_hot(indices=action_idx, depth=vocab_size)
     q_actions_mask = tf.sequence_mask(
@@ -216,13 +246,23 @@ def l2_loss_2d_action(
     return loss, abs_loss
 
 
-def get_angles(pos, i, d_model):
+def _get_angles(pos, i, d_model):
     angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
     return pos * angle_rates
 
 
 def positional_encoding(position, d_model):
-    angle_rads = get_angles(
+    """
+    Create position embeddings with sin/cos, not need to train
+
+    Args:
+        position: maximum position size
+        d_model: embedding size
+
+    Returns:
+        position embeddings in shape (position, d_model)
+    """
+    angle_rads = _get_angles(
         np.arange(position)[:, np.newaxis], np.arange(d_model)[np.newaxis, :],
         d_model)
 

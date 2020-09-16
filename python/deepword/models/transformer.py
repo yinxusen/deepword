@@ -79,13 +79,12 @@ def create_decode_masks(tar):
                  [0., 0., 0., 0., 1., 1.],
                  [0., 0., 0., 0., 1., 1.],
                  [0., 0., 0., 0., 1., 1.]]],
-
-              [[[0., 1., 1., 1., 1., 1.],
-                [0., 0., 1., 1., 1., 1.],
-                [0., 0., 1., 1., 1., 1.],
-                [0., 0., 1., 1., 1., 1.],
-                [0., 0., 1., 1., 1., 1.],
-                [0., 0., 1., 1., 1., 1.]]]], dtype=float32)
+               [[[0., 1., 1., 1., 1., 1.],
+                 [0., 0., 1., 1., 1., 1.],
+                 [0., 0., 1., 1., 1., 1.],
+                 [0., 0., 1., 1., 1., 1.],
+                 [0., 0., 1., 1., 1., 1.],
+                 [0., 0., 1., 1., 1., 1.]]]], dtype=float32)
     """
     # Used in the 1st attention block in the decoder.
     # It is used to pad and mask future tokens in the input received by
@@ -396,12 +395,10 @@ def get_sparse_idx_for_copy(src, target_seq_len: int):
                  [0, 1],
                  [0, 0],
                  [0, 2]],
-
                 [[1, 0],
                  [1, 1],
                  [1, 0],
                  [1, 2]],
-
                 [[2, 0],
                  [2, 1],
                  [2, 0],
@@ -902,61 +899,3 @@ class Transformer(tf.keras.Model):
             self.decoder, copy_mask, enc_x, enc_output, training,
             max_tar_len, sos_id, eos_id, padding_id,
             use_greedy, beam_size, temperature)
-
-
-if __name__ == '__main__':
-    def test():
-        txf = Transformer(
-            num_layers=1, d_model=4, num_heads=2, dff=4,
-            input_vocab_size=10, target_vocab_size=10, dropout_rate=0.1)
-        inp = tf.constant([[1, 1, 2, 3, 5, 8], [8, 7, 6, 3, 5, 1]])
-        res2, res_logits2, p_gen2, inc_valid_len2 = txf.decode(
-            inp, training=False, max_tar_len=2, sos_id=0,
-            use_greedy=tf.constant(True), beam_size=5, eos_id=9)
-        res3, res_logits3, p_gen3, inc_valid_len3 = txf.decode(
-            inp, training=False, max_tar_len=3, sos_id=0,
-            use_greedy=tf.constant(True), beam_size=5, eos_id=9)
-        res4, res_logits4, p_gen4, inc_valid_len4 = txf.decode(
-            inp, training=False, max_tar_len=4, sos_id=0,
-            use_greedy=tf.constant(True), beam_size=5, eos_id=9)
-        res5, res_logits5, p_gen5, inc_valid_len5 = txf.decode(
-            inp, training=False, max_tar_len=5, sos_id=0,
-            use_greedy=tf.constant(True), beam_size=5, eos_id=9)
-
-        # res2, res_logits2, p_gen2, inc_valid_len2 = txf.decode(
-        #     inp, training=False, max_tar_len=10, sos_id=0,
-        #     use_greedy=tf.constant(True), beam_size=1, eos_id=9)
-
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-        res = sess.run(
-            [res2, res_logits2, p_gen2, inc_valid_len2,
-             res3, res_logits3, p_gen3, inc_valid_len3,
-             res4, res_logits4, p_gen4, inc_valid_len4,
-             res5, res_logits5, p_gen5, inc_valid_len5
-             ])
-
-        print(res[0])
-        print(res[1])
-        print(res[3])
-
-        print(res[4])
-        print(res[5])
-        print(res[7])
-
-        print(res[8])
-        print(res[9])
-        print(res[11])
-
-        print(res[12])
-        print(res[13])
-        print(res[15])
-        # print(res_t)
-        # print(inc_valid_len_t)
-        # # print(res_logits_t)
-        # print(np.sum(res_logits_t, axis=-1))
-        # print(res2_t)
-        # print(inc_valid_len2_t)
-        # # print(res_logits2_t)
-        # print(np.sum(res_logits2_t, axis=-1))
-    test()
