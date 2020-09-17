@@ -11,6 +11,7 @@
 
 DeepWord is a project of building automatic agents to play text-based games.
 
+## Background
 This project is initialized from one of the ideas Jon thought about for 2018
 summer projects at USC/ISI, the Natural Language Group.
 The initial goal is to build a automatic Dungeons and Dragons player but is
@@ -31,11 +32,16 @@ the game-playing code, and there have already been some of them appeared in top
 NLP venues. Though text-based game playing is still a niche domain, I'm optimistic
 about the future. 
 
-I hope the code can be user for
+I hope the code can be used for
 
 - beginners to learn how to write reinforcement learning code
 - researchers to run comparison experiments, or to reach next step of game-playing
 - domain experts that convert their problems into games to solve
+
+
+## Overview
+
+What is DQN and how it works
 
 
 ## Install requirements
@@ -43,9 +49,25 @@ You may want to change the
 tensorflow to tensorflow-gpu in the `requirements.txt` if GPUs are available.
 
 ```bash
-cat requirements.txt | sed 's/tensorflow==1.15.3/tensorflow-gpu==1.15.3/'
 pip install -r requirements.txt
 ```
+
+## Important paths
+
+- `$HOME`: user home dir
+- `$PDIR`: the root path of the package
+- `$DATA_DIR`: the dir that contains data
+- `MODEL_HOME`: the dir that contains model
+  - `last_weights/`: the dir contains latest models
+  - `best_weights/`: the dir contains best models (evaluated by the dev set)
+  - `game_script.log`: training log
+  - `hparams.json`: hyper-parameters
+  - `actions-(steps).npz`: snapshot of actions for games
+  - `floor_plan-(steps).npz`: snapshot of floor plan collected
+  - `trajectories-(steps).npz`: snapshot of trajectories collected
+  - `state_text-(steps).npz`: snapshot of state texts (a combination of observation and inventory)
+  - `hs2tj-(steps).npz`: snapshot of mapping from states to trajectories
+  - `memo-(steps).npz`: snapshot of the replay memory
 
 ## Add dependencies
 
@@ -56,178 +78,85 @@ pre-defined paths.
 
 ### Download BERT
 
-`cd $HOME/local/opt/bert-models`
-
-`wget https://storage.googleapis.com/bert_models/2020_02_20/uncased_L-12_H-768_A-12.zip`
-
-`unzip uncased_L-12_H-768_A-12.zip`
-
-`ln -s uncased_L-12_H-768_A-12 bert-model`
+```bash
+cd $HOME/local/opt/bert-models
+wget https://storage.googleapis.com/bert_models/2020_02_20/uncased_L-12_H-768_A-12.zip
+unzip uncased_L-12_H-768_A-12.zip
+ln -s uncased_L-12_H-768_A-12 bert-model
+```
 
 
 ### Download Albert (optional)
 
-`cd $HOME/local/opt/bert-models`
-
-`wget https://storage.googleapis.com/albert_models/albert_base_v2.tar.gz`
-
-`tar -zxvf albert_base_v2.tar.gz`
-
-`ln -s albert_base albert-model`
-
-
-## Important paths
-
-- `$HOME`: user home dir
-
-- `$PDIR`: the root path of the package
-
-- `$DATA_DIR`: the dir that contains data
-
-- `MODEL_HOME`: the dir that contains model
-
-## Prepare datasets
-
-We use three datasets -
-SQuAD (Du split [\[Du et al., 2017\]](https://arxiv.org/abs/1705.00106)),
-NewsQA, and Natural Questions (NQ).
-
-### SQuAD - Du split
-SQuAD can be found on Github: https://github.com/xinyadu/nqg, the data in
-`nqg/data/processed` can be used directly. These data are pre-tokenized by NLTK
-so if you use different tokenizer, e.g. BPE, then you may want to do another
-pre-processing.
-
-### NewsQA
-
-NewsQA data reply on the CNN/Daily Mail (CNN/DM) dataset first, so download
-the CNN/DM from the link: https://cs.nyu.edu/~kcho/DMQA/. You can only download
-the CNN stories.
-
-Then download the NewsQA dataset:
-https://www.microsoft.com/en-us/research/project/newsqa-dataset/, login to
-Microsoft account is required.
-This will give you all the human generated questions and answers.
-
-After having these two datasets, use the introduction in the Github to get a
-combined dataset: https://github.com/Maluuba/newsqa. I recommend to use their
-pre-built docker image to do the processing.
-
-Finally you will get a combined dataset: `combined-newsqa-data-v1.json`.
-
-Then use the `$PDIR/python/tools/newsqa_data_transformation.py`
-in this package to do pre-process:
-
-`Usage: newsqa_data_transformation.py FN_COMBINED_NEWSQA MAX_SRC_LEN
- FN_LA FN_SA FN_HIGHLIGHTS`
-
- The `MAX_SRC_LEN` is used for BPE tokenization.
-
-E.g.
-
 ```bash
-cd $PDIR
-`./sbin/run.sh python/questgen/tools/newsqa_data_transformation.py combined-newsqa-data-v1.json 490 newsqa_la_size_490.txt newsqa_sa_size_490.txt newsqa_la_size_490.highlights.txt`
+cd $HOME/local/opt/bert-models
+wget https://storage.googleapis.com/albert_models/albert_base_v2.tar.gz
+tar -zxvf albert_base_v2.tar.gz
+ln -s albert_base albert-model
 ```
 
-### NQ
+## hyper-parameters and configuration
 
-Download the simplified train set and dev set from this url:
-https://ai.google.com/research/NaturalQuestions/download
+We have four methods to set hyperparameters, and they have different priorities
+when there are conflicts among them.
 
-then pre-process the data with `nq_data_transformation.py`:
+- `hparams.json` in `model_home`
+- `$PRE_CONF_FILE` (YAML file, examples shown in `$PDIR/mode_config`)
+- pre-set values in `deepword.hparams`
+- command line args
 
-`Usage: nq_data_transformation.py FN_NQ FN_SRC FN_TGT IS_TESTING`
+### full hyperparameters in `deepword.hparams`
 
-E.g.
-```
-cd $PDIR
-./sbin/run.sh python/questgen/tools/nq_data_transformation.py v1.0-simplified-simplified-nq-train.jsonl src-total.txt tgt-total.txt False
-```
+Different models have different hyperparameters, for a full list,
+see `deepword.hparrams.default_config`
 
-We then split the data into train/dev set:
+### PRE_CONF_FILE
 
-```bash
-awk '{if(rand(seed)<0.9) {print > "src-train.txt"} else {print > "src-dev.txt"}}' src-total.txt
-awk '{if(rand(seed)<0.9) {print > "tgt-train.txt"} else {print > "tgt-dev.txt"}}' tgt-total.txt
-```
+`$PRE_CONF_FILE` is a YAML file that contains some user-defined hyper-parameters,
+usually used as templates for a same set of training.
 
-
-Notice that for `awk`, the random seed is fixed, so we can run the splits of
-source and target separately.
-
-Use the same method to extract test set from the original dev set:
-
-E.g.
-```bash
-cd $PDIR
-./sbin/run.sh python/questgen/tools/nq_data_transformation.py v1.0-simplified-simplified-nq-dev-all.jsonl src-test.txt tgt-test.txt True
-```
-
-Notice that there will be overlapped contexts between train/dev and the test
-set, so we need a further filtering to remove overlapped contexts from
-test sets with `filter_same.py`:
-
-`Usage: filter_same.py FN_SRC_TOTAL FN_SRC_TEST`
-
-E.g.
-```bash
-cd $PDIR
-./sbin/run.sh python/questgen/tools/filter_same.py src-total.txt src-test.txt > test-mix-removals.txt
-```
-
-This will produce all line numbers in FN_SRC_TEST to be removed.
-
-Then use `line_remover.py` to remove them:
-
-`Usage: line_remover.py FN FN_REMOVAL NEW_FN`
-
-E.g.
-```bash
-cd $PDIR
-./sbin/run.sh python/questgen/tools/line_remover.py src-test.txt test-mix-removals.txt src-test.removal.txt
-```
-
-
-## Start training
-
-run
-```bash
-cd $PDIR
-nohup ./bin/run-train-nq-pgn.sh &> log.txt &
-```
-
-Three important paths in the script:
-
-```bash
-MODEL_HOME="$HOME/git-store/experiments/nq-pgn"
-PRE_CONF_FILE="$PDIR/model_config/nq_pgn.yaml"
-DATA_DIR="$HOME/data/NQ/processed"
-```
-
-models and hyper-parameters will be saved in `$MODEL_HOME`;
-
-`$DATA_DIR` should be a dir contains `src-train.txt`, `src-dev.txt`, `src-test.txt`,
-and `tgt-train.txt`, `tgt-dev.txt`. Soft links are allowed.
-
-`$PRE_CONF_FILE` is a yaml file that contains some user-defined hyper-parameters,
-templates are in `$PDIR/model_config`. Default hyper-parameters for each model
-is defined in `hparams.py`.
-
-example model config file:
+Example model config file:
 
 ```yaml
 ---
-# use Transformer PGN to train SQuAD QG
-
-model_creator: BertPGN  # only two in this package [BertPGN|TransformerPGN]
-max_src_len: 500  # maximum allowed source context length
-max_tgt_len: 50  # maximum allowed decoded question length
-batch_size: 10
-learning_rate: 5e-5
-tokenizer_type: Bert  # three defined in this package [Bert|NLTK|Albert]
-max_snapshot_to_keep: 20  # number of models saved
+model_creator: CnnDSQN  # use CnnDSQN model
+num_tokens: 500  # trajectory max length
+num_turns: 5  # action-master turns to construct trajectory
+batch_size: 32  # batch size for training
+save_gap_t: 10000  # training steps for model saving
+embedding_size: 64  # word embedding size
+learning_rate: 5e-5  # learning rate
+num_conv_filters: 32  # number of CNN convolutional filters if using CNN
+tokenizer_type: BERT  # tokenizer type, e.g. BERT, NLTK, Albert
+max_snapshot_to_keep: 3  # number of snapshots to keep before deleting
+eval_episode: 2  # number of episode for each game during evaluation
+game_episode_terminal_t: 100  # number of steps for each game-playing
+replay_mem: 100000  # the experience replay memory size
+collect_floor_plan: True  # collect floor plan during playing
+annealing_eps_t: 2000000  # number of steps to anneal eps from MAX_eps to MIN_eps
+observation_t: 10000  # number of observation before training
+init_eps: 1.0  # MAX_eps
+start_t_ignore_model_t: False  # game-playing steps different with model training steps
+use_step_wise_reward: True  # use step-related reward schema
+agent_clazz: DSQNCompetitionAgent  # use DSQN Competition agent
+core_clazz: DSQNCore  # use DSQN Core
+policy_to_action: LinUCB  # use LinUCB method when choose action
 ```
+
+### command line args (CMD args)
+
+CMD args are pretty useful when you want to do some small tweaks for a PER_CONF_FILE.
+E.g. you want to train a new model with a different learning rate, but all other 
+hyperparameters are unchanged, Or when you want to do evaluation, but with a
+different `policy_to_action` method, e.g. changing from `LinUCB` to `sampling`.
+
+You can see the full allowed CMD args in `deepword.main.hp_parser`.
+
+### `hparams.json` in `$MODEL_HOME`
+
+`hparams.json` is the hyperparameter config file that goes along with the model.
+This file is saved during the training process automatically.
+The next time training or evaluation will read hyperparameters in this file.
 
 ### Hyper-parameter priorities
 
@@ -244,19 +173,13 @@ This package have four methods to set hyper-parameters, and there are priorities
 If there is no `$MODEL_HOME/hparams.json`, e.g. the first time training, then
 3 > 2 > 1. (x > y means x overrides y)
 
-If there is `$MODEL_HOME/hparams.json`, e.g. after training and during inference,
-the priority is 4 > 2 > 1. Some hyper-parameters in 3 will override 4, here are
-the hyper-parameters:
+If there is `$MODEL_HOME/hparams.json`, e.g. the second time training and during
+inference,
+the priority is 4 > 2 > 1. Some hyper-parameters in 3 will override 4, depend
+on the logic and usage for that parameter. These hyperparameters are defined in
+`deepword.hparams.load_hparams.allowed_to_change`.
 
-- model_dir
-- batch_size
-- learning_rate
-- max_snapshot_to_keep
-- beam_size
-- temperature
-- use_greedy
-
-The behavior is defined in `hparams.py`.
+### Which hyperparameter is actually working?
 
 Which hyper-parameter is actually working? When you run the code, the hyper-parameters
 will output to stderr, e.g.
@@ -297,46 +220,6 @@ vocab_size -> 30522
 -----------------------------------
 ```
 
-## Start dev evaluation
-
-The dev evaluation will run through each model saved in `$MODEL_HOME/last_weights`
-and save better models to `$MODEL_HOME/best_weights`.
-
-run
-```bash
-nohup ./bin/run-dev-eval-nq-pgn.sh &> log-dev.txt &
-```
-
-## Start inference
-
-Inference process will read contexts from `src-test.txt` and generate questions.
-
-run
-```bash
-nohup ./bin/run-infer-nq-pgn.sh &> log-test.txt &
-```
-
-Important cmd args for inference:
-
-`--disable-greedy --temperature 0.3 --beam-size 3` - use nucleus sampling during
-decoding, temperature set to 0.3, beam size 3.
-
-`--use-greedy --temperature 0.3 --beam-size 3` - use beam search with greedy,
-beam size 3, temperature won't affect the decoding process.
+## Basic Usage
 
 
-## Prepare generated questions for QA system evaluation and human evaluation
-
-The SQuAD QA system we used: BERT: https://github.com/google-research/bert
-
-The NQ QA system we used: BERT-joint: https://github.com/google-research/language/tree/master/language/question_answering/bert_joint
-
-`newsqa_to_nq.py`: transform generated questions in NQ style for NQ QA system
-
-`newsqa_to_squad.py`: transform generated questions in SQuAD style for SQuAD QA system
-
-`csv_for_turk.py`: transform generated questions for Amazon MTurk HIT csv data
-
-`show_diff_qa_nq.py`: read NQ QA system output
-
-`show_diff_qa_squad.py`: read SQuAD QA system outpu
