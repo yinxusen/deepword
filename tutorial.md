@@ -222,4 +222,52 @@ vocab_size -> 30522
 
 ## Basic Usage
 
+### A simple Zork DQN training
 
+Zork is not a TextWorld generated game, even though you can still run it with TextWorld.
+Instead of the game file `Zork1.z5`, you still need an action file containing
+all possible actions, e.g. `commands-zork1-130.txt`.
+
+```bash
+cd $PDIR
+wget http://zork1.z5 .
+wget http://commands-zork1-130.txt .
+
+MODEL_HOME="example-model"
+PRE_CONF_FILE="model_config/dqn-zork-cnn.yaml"
+ACTION_FILE="commands-zork1-130.txt"
+GAME_PATH="zork1.z5"
+
+./sbin/run.sh python/deeptextworld/main.py \
+    --config-file "$PRE_CONF_FILE" \
+    --model-dir "$MODELHOME" \
+    --action-file "$ACTION_FILE" \
+    "train-dqn" \
+    --game-path "$GAME_PATH"
+```
+According the the `$PRE_CONF_FILE`, this will run 2 million training steps.
+You can decrease it by using CMD arg, e.g., `--annealing-eps-t 10000`.
+After the training, you can test your model by evaluation:
+
+```bash
+./sbin/run.sh python/deepword/main.py \
+    --model-dir "$MODEL_HOME" \
+    eval-dqn \
+    --game-path "$GAME_PATH"
+popd
+```
+
+You can also switch to DRRN model to train Zork. You need to create a new model
+dir since DRRN model is different with DQN model.
+
+```bash
+MODEL_HOME="example-model-drrn"
+
+./sbin/run.sh python/deeptextworld/main.py \
+    --config-file "$PRE_CONF_FILE" \
+    --model-creator "CnnDRRN" \
+    --model-dir "$MODELHOME" \
+    --action-file "$ACTION_FILE" \
+    "train-dqn" \
+    --game-path "$GAME_PATH"
+```

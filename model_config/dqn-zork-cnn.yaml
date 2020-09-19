@@ -1,0 +1,24 @@
+---
+model_creator: CnnDQN
+num_tokens: 1000
+num_turns: 10
+batch_size: 32
+save_gap_t: 5000
+embedding_size: 64
+learning_rate: 1e-5
+num_conv_filters: 32
+tokenizer_type: zork
+max_snapshot_to_keep: 10
+eval_episode: 2
+game_episode_terminal_t: 600
+replay_mem: 500000  # 500K
+collect_floor_plan: False
+annealing_eps_t: 2000000  # 2M
+observation_t: 50000  # 50K
+n_actions: 130
+init_eps: 1.0
+final_eps: 1e-4
+start_t_ignore_model_t: False
+use_step_wise_reward: True
+agent_clazz: ZorkAgent
+policy_to_action: EPS
