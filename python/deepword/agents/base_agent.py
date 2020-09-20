@@ -730,7 +730,8 @@ class BaseAgent(Logging):
                     if self._last_action.action_type == ACT_TYPE.policy_drrn
                     else "red", attrs=["underline"])),
                 ("master", colored(
-                    master.replace("\n", " "), "cyan", attrs=["underline"])),
+                    master.replace("\n", " ").strip(),
+                    "cyan", attrs=["underline"])),
                 ("reward", colored(
                     "{:.2f}".format(instant_reward),
                     "green" if instant_reward > 0 else "red")),

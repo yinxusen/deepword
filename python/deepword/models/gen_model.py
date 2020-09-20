@@ -14,7 +14,6 @@ class TransformerGenDQN(BaseDQN):
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_len": tf.placeholder(tf.float32, [None]),
-            "src_seg": tf.placeholder(tf.int32, [None, None]),
             "action_idx": tf.placeholder(tf.int32, [None, None]),
             "action_idx_out": tf.placeholder(tf.int32, [None, None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
@@ -42,7 +41,7 @@ class TransformerGenDQN(BaseDQN):
                 model = cls(hp)
                 inputs = model.inputs
                 q_actions, p_gen = model.get_q_actions()
-                (decoded_idx, decoded_logits, p_gen_infer, col_eos_idx
+                (decoded_idx, p_gen_infer, col_eos_idx, decoded_logits
                  ) = model.decode()
                 loss, train_op, abs_loss = model.get_train_op(q_actions)
                 loss_summary = tf.summary.scalar("loss", loss)
@@ -69,7 +68,7 @@ class TransformerGenDQN(BaseDQN):
             use_greedy_=inputs["use_greedy"],
             col_eos_idx=col_eos_idx,
             decoded_logits_infer=decoded_logits,
-            src_seg_=inputs["src_seg"],
+            src_seg_=None,
             h_state=None)
 
     @classmethod
@@ -104,7 +103,7 @@ class TransformerGenDQN(BaseDQN):
             use_greedy_=inputs["use_greedy"],
             col_eos_idx=col_eos_idx,
             decoded_logits_infer=decoded_logits,
-            src_seg_=inputs["src_seg"],
+            src_seg_=None,
             h_state=None)
 
     def decode(self):
@@ -117,13 +116,12 @@ class TransformerGenDQN(BaseDQN):
             padding_id=self.hp.padding_val_id,
             use_greedy=self.inputs["use_greedy"],
             beam_size=self.inputs["beam_size"],
-            temperature=self.inputs["temperature"],
-            copy_mask=self.inputs["src_seg"])
+            temperature=self.inputs["temperature"])
 
     def get_q_actions(self):
         q_actions, p_gen, _, _ = self.transformer(
             self.inputs["src"], tar=self.inputs["action_idx"],
-            training=True, copy_mask=self.inputs["src_seg"])
+            training=True)
         return q_actions, p_gen
 
     def get_train_op(self, q_actions):

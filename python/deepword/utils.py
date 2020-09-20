@@ -364,4 +364,4 @@ def report_status(lst_of_status: List[Tuple[str, Any]]) -> str:
     Returns:
         a string to print
     """
-    return tabulate(lst_of_status, headers=("key", "value"))
+    return "\n" + tabulate(lst_of_status, tablefmt="plain") + "\n"

@@ -30,7 +30,7 @@ from deepword.models.export_models import DRRNModel
 from deepword.models.export_models import DSQNModel
 from deepword.models.export_models import DSQNZorkModel
 from deepword.models.export_models import GenDQNModel
-from deepword.tokenizers import Tokenizer
+from deepword.tokenizers import init_tokens
 from deepword.utils import ctime, report_status
 from deepword.utils import eprint
 from deepword.utils import flatten
@@ -1093,31 +1093,24 @@ class DSQNCore(DRRNCore):
 
 
 class GenDQNCore(TFCore):
-    def __init__(self, hp, model_dir, tokenizer: Tokenizer):
+    def __init__(self, hp, model_dir):
         super(GenDQNCore, self).__init__(hp, model_dir)
         self.model: Optional[GenDQNModel] = None
         self.target_model: Optional[GenDQNModel] = None
-        self.tokenizer = tokenizer
+        self.hp, self.tokenizer = init_tokens(hp)
 
     def summary(
-            self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
-            decoded_logits: np.ndarray, p_gen: np.ndarray, beam_size: int
+            self, token_idx: np.ndarray, col_eos_idx: np.ndarray,
+            p_gen: np.ndarray, sum_logits: np.ndarray
     ) -> List[GenSummary]:
-        """
-        Return [ids, tokens, generation probabilities of each token, q_action]
-        sorted by q_action (from larger to smaller)
-        q_action: the average of decoded logits of selected tokens
-        """
         res_summary = []
-        for bid in range(beam_size):
-            n_cols = col_eos_idx[bid]
-            ids = list(action_idx[bid, :n_cols])
+        for i in range(len(token_idx)):
+            n_cols = col_eos_idx[i]
+            ids = list(token_idx[i, :n_cols])
             tokens = self.tokenizer.convert_ids_to_tokens(ids)
-            gen_prob_per_token = list(p_gen[bid, :n_cols])
-            q_action = np.sum(decoded_logits[bid, :n_cols, ids]) / n_cols
-            res_summary.append(
-                GenSummary(ids, tokens, gen_prob_per_token, q_action, n_cols))
-        res_summary = list(reversed(sorted(res_summary, key=lambda x: x[-1])))
+            gens = list(p_gen[i, :n_cols])
+            log_prob = sum_logits[i] / n_cols
+            res_summary.append(GenSummary(ids, tokens, gens, log_prob, n_cols))
         return res_summary
 
     def decode_action(
@@ -1132,11 +1125,12 @@ class GenDQNCore(TFCore):
 
         self.debug("use_greedy: {}, temperature: {}".format(
             use_greedy, temperature))
+
         res = self.sess.run(
             [self.model.decoded_idx_infer,
              self.model.col_eos_idx,
-             self.model.decoded_logits_infer,
-             self.model.p_gen_infer],
+             self.model.p_gen_infer,
+             self.model.decoded_logits_infer],
             feed_dict={
                 self.model.src_: [src],
                 self.model.src_len_: [src_len],
@@ -1145,13 +1139,17 @@ class GenDQNCore(TFCore):
                 self.model.use_greedy_: use_greedy
             })
 
-        action_idx = res[0]
+        token_idx = res[0]
         col_eos_idx = res[1]
-        decoded_logits = res[2]
-        p_gen = res[3]
-
+        p_gen = res[2]
+        decoded_logits = res[3]
         res_summary = self.summary(
-            action_idx, col_eos_idx, decoded_logits, p_gen, beam_size)
+            token_idx, col_eos_idx, p_gen, decoded_logits)
+        res_summary = flatten(
+            [sorted(res_summary[i: i + beam_size], key=lambda x: -x.log_prob)
+             for i in range(0, len(res_summary), beam_size)]
+        )
+
         self.debug("generated actions:\n{}".format(
             "\n".join([str(x) for x in res_summary])))
 
@@ -1258,10 +1256,10 @@ class GenDQNCore(TFCore):
 
 class PGNCore(TFCore):
     """Generate admissible actions for games, given only trajectory"""
-    def __init__(self, hp, model_dir, tokenizer: Tokenizer):
+    def __init__(self, hp, model_dir):
         super(PGNCore, self).__init__(hp, model_dir)
         self.model: Optional[GenDQNModel] = None
-        self.tokenizer = tokenizer
+        self.hp, self.tokenizer = init_tokens(hp)
 
     def summary(
             self, action_idx: np.ndarray, col_eos_idx: np.ndarray,
