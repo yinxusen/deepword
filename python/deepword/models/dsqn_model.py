@@ -5,22 +5,13 @@ import deepword.models.utils as dqn
 from deepword.models.dqn_model import BaseDQN
 from deepword.models.export_models import DSQNModel
 from deepword.models.export_models import DSQNZorkModel
-from deepword.utils import eprint
 
 
 class CnnDSQN(BaseDQN):
+    """
+    DSQN that uses CNN as the trajectory encoder
+    """
     def __init__(self, hp, src_embeddings=None, is_infer=False):
-        """
-        inputs:
-          src: source sentences to encode
-          src_len: length of source sentences
-          action_idx: the action chose to run
-          expected_q: E(q) computed from the iterative equation of DQN
-          actions: all possible actions
-          actions_len: length of actions
-        :param hp:
-        :param is_infer:
-        """
         super(CnnDSQN, self).__init__(hp, src_embeddings, is_infer)
         self.filter_sizes = [3, 4, 5]
         self.num_filters = hp.num_conv_filters
@@ -50,27 +41,51 @@ class CnnDSQN(BaseDQN):
             "labels": tf.placeholder(tf.float32, [None])
         }
 
+        self.wt = tf.layers.Dense(
+            units=self.hp.hidden_state_size, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        self.wt_var = tf.layers.Dense(
+            units=self.hp.hidden_state_size, activation=tf.tanh,
+            kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+
     def get_q_actions(self):
-        with tf.variable_scope("drrn-encoder", reuse=False):
+        h_state = self.get_h_state(self.inputs["src"])
+        new_h = self.wt(h_state)
+        new_h_var = self.wt_var(h_state)
+        h_state_expanded = dqn.repeat(
+            new_h + new_h_var, self.inputs["actions_repeats"])
+
+        with tf.variable_scope("drrn-action-encoder", reuse=False):
+            h_actions = dqn.encoder_lstm(
+                self.inputs["actions"],
+                self.inputs["actions_len"],
+                self.src_embeddings,
+                num_units=self.hp.hidden_state_size,
+                num_layers=self.hp.lstm_num_layers)[-1].h
+
+        q_actions = tf.reduce_sum(
+            tf.multiply(h_state_expanded, h_actions), axis=-1)
+        return q_actions, new_h
+
+    def get_h_state(self, src):
+        with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
             h_state = dqn.encoder_cnn(
-                self.inputs["src"], self.src_embeddings, self.pos_embeddings,
+                src,
+                self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
-            new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True)
-            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
+        return h_state
 
-            with tf.variable_scope("drrn-action-encoder", reuse=False):
-                h_actions = dqn.encoder_lstm(
-                    self.inputs["actions"],
-                    self.inputs["actions_len"],
-                    self.src_embeddings,
-                    num_units=self.hp.hidden_state_size,
-                    num_layers=self.hp.lstm_num_layers)[-1].h
-
-            q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions, new_h
+    def is_semantic_same(self):
+        h_state = self.get_h_state(self.inputs["snn_src"])
+        h_state2 = self.get_h_state(self.inputs["snn_src2"])
+        new_h_var = self.wt_var(h_state)
+        new_h_var2 = self.wt_var(h_state2)
+        diff_two_states = tf.abs(new_h_var - new_h_var2)
+        semantic_same = tf.squeeze(tf.layers.dense(
+            diff_two_states, activation=None, units=1, use_bias=True,
+            name="snn_dense"))
+        return semantic_same, diff_two_states
 
     def get_train_op(self, q_actions):
         loss, abs_loss = dqn.l2_loss_1d_action(
@@ -78,25 +93,6 @@ class CnnDSQN(BaseDQN):
             self.inputs["b_weight"])
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op, abs_loss
-
-    def is_semantic_same(self):
-        with tf.variable_scope("drrn-encoder", reuse=True):
-            h_state = dqn.encoder_cnn(
-                self.inputs["snn_src"],
-                self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
-            h_state2 = dqn.encoder_cnn(
-                self.inputs["snn_src2"],
-                self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
-
-        diff_two_states = tf.abs(h_state - h_state2)
-        semantic_same = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=None, units=1, use_bias=True,
-            name="snn_dense"))
-        return semantic_same, diff_two_states
 
     def get_snn_train_op(self, semantic_same):
         labels = self.inputs["labels"]
@@ -214,61 +210,11 @@ class CnnDSQN(BaseDQN):
 
 
 class CnnZorkDSQN(CnnDSQN):
+    """
+    DSQN for Zork
+    """
     def __init__(self, hp, src_embeddings=None, is_infer=False):
-        """
-        inputs:
-          src: source sentences to encode
-          src_len: length of source sentences
-          action_idx: the action chose to run
-          expected_q: E(q) computed from the iterative equation of DQN
-          actions: all possible actions
-          actions_len: length of actions
-          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
-                        some actions for a certain state.
-        :param hp:
-        :param is_infer:
-        """
         super(CnnZorkDSQN, self).__init__(hp, src_embeddings, is_infer)
-        self.factoring = True
-
-    def get_q_actions(self):
-        with tf.variable_scope("drrn-encoder", reuse=False):
-            h_state = dqn.encoder_cnn(
-                self.inputs["src"], self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
-            new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True,
-                name="new_h")
-            if self.factoring:
-                new_h_var = tf.layers.dense(
-                    h_state, units=self.hp.hidden_state_size, use_bias=True,
-                    name="new_h_var")
-                new_h += new_h_var
-            q_actions = tf.layers.dense(
-                new_h, units=self.hp.n_actions, use_bias=True)
-            eprint(tf.shape(q_actions))
-        return q_actions, new_h
-
-    def get_h_state(self, src):
-        with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
-            h_state = dqn.encoder_cnn(
-                src, self.src_embeddings, self.pos_embeddings,
-                self.filter_sizes, self.num_filters, self.hp.embedding_size,
-                self.is_infer)
-            new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True,
-                name="new_h")
-        return new_h
-
-    def is_semantic_same(self):
-        h_state = self.get_h_state(self.inputs["snn_src"])
-        h_state2 = self.get_h_state(self.inputs["snn_src2"])
-        diff_two_states = tf.abs(h_state - h_state2)
-        semantic_same = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=None, units=1, use_bias=True,
-            name="snn_dense"))
-        return semantic_same, diff_two_states
 
     def get_train_op(self, q_actions):
         loss, abs_loss = dqn.l2_loss_1d_action_v2(
@@ -364,80 +310,22 @@ class CnnZorkDSQN(CnnDSQN):
 
 
 class TransformerDSQN(CnnDSQN):
+    """
+    DSQN that uses transformer as the trajectory encoder
+    """
     def __init__(self, hp, src_embeddings=None, is_infer=False):
-        """
-        inputs:
-          src: source sentences to encode
-          src_len: length of source sentences
-          action_idx: the action chose to run
-          expected_q: E(q) computed from the iterative equation of DQN
-          actions: all possible actions
-          actions_len: length of actions
-          actions_mask: a 0-1 vector of size |actions|, using 0 to eliminate
-                        some actions for a certain state.
-        :param hp:
-        :param is_infer:
-        """
         super(TransformerDSQN, self).__init__(hp, src_embeddings, is_infer)
         self.d_model = 128
-        self.factoring = True
         self.attn_encoder = txf.Encoder(
             num_layers=1, d_model=self.d_model, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
-    def get_q_actions(self):
-        """
-        compute the Q-vector from the relevance of hidden state
-        and hidden actions
-        :return:
-        """
-        with tf.variable_scope("drrn-encoder", reuse=False):
-            padding_mask = txf.create_padding_mask(self.inputs["src"])
-            inner_state = self.attn_encoder(
-                self.inputs["src"], training=(not self.is_infer),
-                mask=padding_mask, x_seg=None)
-            pooled = tf.reduce_max(inner_state, axis=1)
-            h_state = tf.reshape(pooled, [-1, self.d_model])
-            new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True,
-                name="new_h")
-            if self.factoring:
-                new_h_var = tf.layers.dense(
-                    h_state, units=self.hp.hidden_state_size, use_bias=True,
-                    name="new_h_var")
-                new_h += new_h_var
-
-            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
-            with tf.variable_scope("drrn-action-encoder", reuse=False):
-                h_actions = dqn.encoder_lstm(
-                    self.inputs["actions"],
-                    self.inputs["actions_len"],
-                    self.src_embeddings,
-                    num_units=self.hp.hidden_state_size,
-                    num_layers=self.hp.lstm_num_layers)[-1].h
-
-            q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, h_actions), axis=-1)
-        return q_actions, new_h
-
     def get_h_state(self, src):
-        padding_mask = txf.create_padding_mask(src)
         with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
+            padding_mask = txf.create_padding_mask(src)
             inner_state = self.attn_encoder(
                 src, training=(not self.is_infer), mask=padding_mask,
                 x_seg=None)
             pooled = tf.reduce_max(inner_state, axis=1)
             h_state = tf.reshape(pooled, [-1, self.d_model])
-            new_h = tf.layers.dense(
-                h_state, units=self.hp.hidden_state_size, use_bias=True,
-                name="new_h")
-        return new_h
-
-    def is_semantic_same(self):
-        h_state = self.get_h_state(self.inputs["snn_src"])
-        h_state2 = self.get_h_state(self.inputs["snn_src2"])
-        diff_two_states = tf.abs(h_state - h_state2)
-        semantic_same = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=None, units=1, use_bias=True,
-            name="snn_dense"))
-        return semantic_same, diff_two_states
+        return h_state
