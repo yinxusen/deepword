@@ -83,7 +83,7 @@ class GenDQNModel(DQNModel):
         self.beam_size_ = beam_size_
         self.use_greedy_ = use_greedy_
         self.col_eos_idx = col_eos_idx
-        self.decoded_logits_infer = decoded_logits_infer
+        self.sum_logits = decoded_logits_infer
 
 
 class DRRNModel(DQNModel):

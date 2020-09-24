@@ -1130,7 +1130,7 @@ class GenDQNCore(TFCore):
             [self.model.decoded_idx_infer,
              self.model.col_eos_idx,
              self.model.p_gen_infer,
-             self.model.decoded_logits_infer],
+             self.model.sum_logits],
             feed_dict={
                 self.model.src_: [src],
                 self.model.src_len_: [src_len],
@@ -1174,19 +1174,9 @@ class GenDQNCore(TFCore):
 
         src, src_len = self.batch_trajectory2input(trajectories)
         target_model, target_sess = self._get_target_model()
-        # target network provides the value used as expected q-values
-        qs_target = target_sess.run(
-            target_model.decoded_logits_infer,
-            feed_dict={
-                target_model.src_: src,
-                target_model.src_len_: src_len,
-                target_model.beam_size_: 1,
-                target_model.use_greedy_: True,
-                target_model.temperature_: 1.
-            })
 
         # current network decides which action provides best q-value
-        s_argmax_q, valid_len = self.sess.run(
+        decoded_idx, valid_len = self.sess.run(
             [self.model.decoded_idx_infer, self.model.col_eos_idx],
             feed_dict={
                 self.model.src_: src,
@@ -1195,13 +1185,25 @@ class GenDQNCore(TFCore):
                 self.model.use_greedy_: True,
                 self.model.temperature_: 1.})
 
+        self.debug("decoded_idx: {}".format(decoded_idx))
+        self.debug("valid len: {}".format(valid_len))
+        # target network provides the value used as expected q-values
+        qs_target = target_sess.run(
+            target_model.q_actions,
+            feed_dict={
+                target_model.src_: src,
+                target_model.src_len_: src_len,
+                target_model.action_idx_: decoded_idx
+            })
+
+        self.debug("qs target: {}".format(qs_target))
         expected_q = np.zeros_like(rewards)
         for i in range(len(expected_q)):
+            n_cols = valid_len[i]
             expected_q[i] = rewards[i]
             if not dones[i]:
                 expected_q[i] += self.hp.gamma * np.mean(
-                    qs_target[i, range(valid_len[i]),
-                              s_argmax_q[i, :valid_len[i]]])
+                    qs_target[i, range(n_cols), decoded_idx[i, :n_cols]])
 
         return expected_q
 
@@ -1289,7 +1291,7 @@ class PGNCore(TFCore):
         res = self.sess.run(
             [self.model.decoded_idx_infer,
              self.model.col_eos_idx,
-             self.model.decoded_logits_infer,
+             self.model.sum_logits,
              self.model.p_gen_infer],
             feed_dict={
                 self.model.src_: [src],
