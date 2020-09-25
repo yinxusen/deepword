@@ -15,9 +15,11 @@ class BertSentence(BaseDQN):
         self.num_tokens = hp.num_tokens
         self.turns = hp.num_turns
         self.inputs = {
-            "src": tf.placeholder(tf.int32, [None, None, None]),
-            "src2": tf.placeholder(tf.int32, [None, None, None]),
-            "labels": tf.placeholder(tf.float32, [None])
+            "src": tf.placeholder(
+                tf.int32, [self.hp.batch_size * 2, None, None]),
+            "src2": tf.placeholder(
+                tf.int32, [self.hp.batch_size * 2, None, None]),
+            "labels": tf.placeholder(tf.float32, [self.hp.batch_size * 2])
         }
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
