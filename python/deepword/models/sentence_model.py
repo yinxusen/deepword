@@ -16,9 +16,7 @@ class BertSentence(BaseDQN):
         self.turns = hp.num_turns
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
-            "src_len": tf.placeholder(tf.int32, [None]),
             "src2": tf.placeholder(tf.int32, [None, None]),
-            "src2_len": tf.placeholder(tf.int32, [None]),
             "labels": tf.placeholder(tf.float32, [None])
         }
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
@@ -34,14 +32,14 @@ class BertSentence(BaseDQN):
     def get_q_actions(self):
         raise NotImplementedError()
 
-    def add_cls_token(self, src, src_len):
+    def add_cls_token(self, src):
         # padding the [CLS] in the beginning
         paddings = tf.constant([[0, 0], [1, 0]])
         src_w_pad = tf.pad(
             src, paddings=paddings, mode="CONSTANT",
             constant_values=self.hp.cls_val_id)
-        src_masks = tf.sequence_mask(
-            src_len + 1, maxlen=self.num_tokens, dtype=tf.int32)
+        # Note that selected tokens are 1, padded are 0
+        src_masks = tf.cast(tf.math.not_equal(src_w_pad, 0), tf.int32)
         return src_w_pad, src_masks
 
     def get_h_state(self, src, src_masks):
@@ -52,15 +50,13 @@ class BertSentence(BaseDQN):
             pooled = bert_model.get_pooled_output()
             h_state = tf.reduce_sum(
                 tf.reshape(
-                    pooled, [-1, self.turns, self.bert_config.hidden_size]),
+                    pooled, [-1, self.turns * 2, self.bert_config.hidden_size]),
                 axis=1)
         return h_state
 
     def is_semantic_same(self):
-        src, src_masks = self.add_cls_token(
-            self.inputs["src"], self.inputs["src_len"])
-        src2, src2_masks = self.add_cls_token(
-            self.inputs["src2"], self.inputs["src2_len"])
+        src, src_masks = self.add_cls_token(self.inputs["src"])
+        src2, src2_masks = self.add_cls_token(self.inputs["src2"])
 
         h_state = self.get_h_state(src, src_masks)
         h_state2 = self.get_h_state(src2, src2_masks)
@@ -107,9 +103,7 @@ class BertSentence(BaseDQN):
         return SentenceModel(
             graph=graph,
             src_=inputs["src"],
-            src_len_=inputs["src_len"],
             src2_=inputs["src2"],
-            src2_len_=inputs["src2_len"],
             semantic_same=semantic_same,
             labels_=inputs["labels"],
             loss=loss,
@@ -127,9 +121,7 @@ class BertSentence(BaseDQN):
         return SentenceModel(
             graph=graph,
             src_=inputs["src"],
-            src_len_=inputs["src_len"],
             src2_=inputs["src2"],
-            src2_len_=inputs["src2_len"],
             semantic_same=semantic_same,
             labels_=None,
             loss=None,

@@ -17,12 +17,11 @@ from tensorflow.train import Saver
 from tqdm import trange
 
 from deepword.action import ActionCollector
-from deepword.agents.base_agent import DRRNMemoTeacher
-from deepword.agents.utils import Memolet
+from deeptextworld.agents.base_agent import DRRNMemoTeacher
+from deeptextworld.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
 from deepword.hparams import save_hparams, output_hparams
 from deepword.students.utils import ActionMasterStr
-from deepword.tokenizers import Tokenizer
 from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
 from deepword.utils import eprint, flatten
@@ -82,7 +81,7 @@ class SentenceLearner(object):
                  path.join(
                      data_dir, "{}-{}.npz".format(self.memo_prefix, tag)),
                  path.join(
-                     data_dir, "{}-{}.clean.npz".format(
+                     data_dir, "{}-{}.npz".format(
                          self.hs2tj_prefix, tag))))
 
         return combined_data_path
@@ -295,12 +294,12 @@ class SentenceLearner(object):
                 # according to len(memory) / batch_size
                 i = 0
                 while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
-                    src, src_len, src2, src2_len, labels = self.get_snn_pairs(
+                    src, src2, labels = self.get_snn_pairs(
                         hash_states2tjs=hash_states2tjs,
                         tjs=tjs,
                         batch_size=self.hp.batch_size)
                     try:
-                        queue.put((src, src_len, src2, src2_len, labels))
+                        queue.put((src, src2, labels))
                     except Exception as e:
                         eprint("add_batch error: {}".format(e))
                         traceback.print_tb(e.__traceback__)
@@ -377,14 +376,12 @@ class SentenceLearner(object):
         return
 
     def _train_impl(self, data: Tuple, train_step: int) -> None:
-        src, src_len, src2, src2_len, labels = data
+        src, src2, labels = data
         _, summaries, loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
                 self.model.src_: src,
-                self.model.src_len_: src_len,
                 self.model.src2_: src2,
-                self.model.src2_len_: src2_len,
                 self.model.labels_: labels})
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
@@ -404,62 +401,23 @@ class SentenceLearner(object):
     def test(self) -> None:
         pass
 
-    def snn_tjs_transformation(
-            self, tjs: List[List[ActionMasterStr]], tokenizer: Tokenizer
-    ) -> Tuple[List[List[List[int]]], List[List[int]]]:
-        """
-        Give a batch of trajectories, prepare input for BertSentence model.
+    def _str2ids(self, s: str) -> List[int]:
+        return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(s))
 
-        Args:
-            tjs: a list of trajectory
-            tokenizer: a tokenizer
-
-        Returns:
-            padded trajectories. List[List[List[int]]],
-            in batch_size * num_turn * sentence_len
-        """
-        res = []
-        res_lens = []
-        for tj in tjs:
-            res_tj = []
-            res_tj_lens = []
-            for am in tj:
-                action_ids = tokenizer.convert_tokens_to_ids(
-                    tokenizer.tokenize(am.action))
-                master_ids = tokenizer.convert_tokens_to_ids(
-                    tokenizer.tokenize(am.master))
-                if len(action_ids) < self.hp.num_tokens:
-                    res_tj_lens.append(len(action_ids))
-                    action_ids += [self.hp.padding_val_id] * (
-                            self.hp.num_tokens - len(action_ids))
-                else:
-                    res_tj_lens.append(self.hp.num_tokens)
-                    action_ids = action_ids[:self.hp.num_tokens]
-                if len(master_ids) < self.hp.num_tokens:
-                    res_tj_lens.append(len(master_ids))
-                    master_ids += [self.hp.padding_val_id] * (
-                            self.hp.num_tokens - len(master_ids))
-                else:
-                    res_tj_lens.append(self.hp.num_tokens)
-                    master_ids = master_ids[:self.hp.num_tokens]
-                res_tj.append(action_ids)
-                res_tj.append(master_ids)
-            res.append(res_tj)
-            res_lens.append(res_tj_lens)
-            if len(res) < self.hp.num_turns * 2:
-                res.append(
-                    [[0] * self.hp.num_tokens for _ in range(
-                        self.hp.num_turns * 2 - len(res))])
-                res_lens.append(
-                    [[0] for _ in range(self.hp.num_turns * 2 - len(res))])
-        return res, res_lens
+    def _snn_tj_transformation(self, tj: List[ActionMasterStr]) -> np.ndarray:
+        ids = np.zeros(
+            (self.hp.num_turns * 2, self.hp.num_tokens), dtype=np.float32)
+        for i, s in enumerate(flatten([[x.action, x.master] for x in tj])):
+            s_ids = self._str2ids(s)
+            s_len = min(len(s_ids), self.hp.num_tokens)
+            ids[i, :s_len] = s_ids[:s_len]
+        return ids
 
     def get_snn_pairs(
             self,
             hash_states2tjs: Dict[str, Dict[int, List[int]]],
             tjs: Trajectory[ActionMasterStr],
-            batch_size: int) -> Tuple[
-            np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            batch_size: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
         non_empty_keys = list(
             filter(lambda x: hash_states2tjs[x] != {},
@@ -504,25 +462,17 @@ class SentenceLearner(object):
             tjs.fetch_state_by_idx(tid, sid) for tid, sid in
             tgt_set + same_set + diff_set]
 
-        batch_src, batch_src_len = self.snn_tjs_transformation(
-            trajectories, self.tokenizer)
-        tgt_src = flatten(batch_src[: len(tgt_set)])
-        tgt_src_len = flatten(batch_src_len[: len(tgt_set)])
-        same_src = flatten(
-            batch_src[len(tgt_set): len(tgt_set) + len(same_set)])
-        same_src_len = flatten(
-            batch_src_len[len(tgt_set): len(tgt_set) + len(same_set)])
-        diff_src = flatten(batch_src[-len(diff_set):])
-        diff_src_len = flatten(batch_src_len[-len(diff_set):])
+        batch_src = [self._snn_tj_transformation(tj) for tj in trajectories]
+        tgt_src = batch_src[: len(tgt_set)]
+        same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
+        diff_src = batch_src[-len(diff_set):]
 
-        src = np.concatenate([tgt_src, tgt_src], axis=0)
-        src_len = np.concatenate([tgt_src_len, tgt_src_len], axis=0)
-        src2 = np.concatenate([same_src, diff_src], axis=0)
-        src2_len = np.concatenate([same_src_len, diff_src_len], axis=0)
+        src = np.concatenate(tgt_src + tgt_src, axis=0)
+        src2 = np.concatenate(same_src + diff_src, axis=0)
         labels = np.concatenate(
             [np.zeros(batch_size * self.hp.num_turns),
              np.ones(batch_size * self.hp.num_turns)], axis=0)
-        return src, src_len, src2, src2_len, labels
+        return src, src2, labels
 
     def save_train_pairs(
             self, t: int, src: np.ndarray, src_len: np.ndarray,

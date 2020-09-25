@@ -154,7 +154,7 @@ class Trajectory(Generic[T]):
             tj = self.trajectories[tid]
         else:
             return []
-        state = tj[max(0, sid - self.num_turns):sid + 1]
+        state = tj[max(0, sid - self.num_turns + 1):sid + 1]
         return state
 
     def fetch_last_state(self) -> List[T]:

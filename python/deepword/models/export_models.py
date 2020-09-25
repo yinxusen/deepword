@@ -295,9 +295,7 @@ class SentenceModel(object):
             self,
             graph: tf.Graph,
             src_: tf.placeholder,
-            src_len_: tf.placeholder,
             src2_: tf.placeholder,
-            src2_len_: tf.placeholder,
             semantic_same: tf.Operation,
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
@@ -307,9 +305,7 @@ class SentenceModel(object):
 
         self.graph = graph
         self.src_ = src_
-        self.src_len_ = src_len_
         self.src2_ = src2_
-        self.src2_len_ = src2_len_
         self.semantic_same = semantic_same
         self.train_op = train_op
         self.loss = loss
