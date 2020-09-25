@@ -19,7 +19,7 @@ class BertSentence(BaseDQN):
             "src_len": tf.placeholder(tf.int32, [None]),
             "src2": tf.placeholder(tf.int32, [None, None]),
             "src2_len": tf.placeholder(tf.int32, [None]),
-            "labels": tf.placeholder(tf.int32, [None])
+            "labels": tf.placeholder(tf.float32, [None])
         }
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
@@ -45,7 +45,6 @@ class BertSentence(BaseDQN):
         return src_w_pad, src_masks
 
     def get_h_state(self, src, src_masks):
-        batch_size = tf.shape(self.inputs["src_len"])[0] // self.turns
         with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
             bert_model = b_model.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
