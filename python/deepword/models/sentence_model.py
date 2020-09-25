@@ -52,7 +52,9 @@ class BertSentence(BaseDQN):
                 input_ids=src, input_mask=src_masks)
             pooled = bert_model.get_pooled_output()
             h_state = tf.reduce_sum(
-                tf.reshape(pooled, [batch_size, self.turns, -1]), axis=1)
+                tf.reshape(
+                    pooled, [-1, self.turns, self.bert_config.hidden_size]),
+                axis=1)
         return h_state
 
     def is_semantic_same(self):
@@ -66,7 +68,7 @@ class BertSentence(BaseDQN):
         diff_two_states = self.dropout(
             tf.abs(h_state - h_state2), training=(not self.is_infer))
         semantic_same = tf.squeeze(tf.layers.dense(
-            diff_two_states, activation=None, units=1, use_bias=True,
+            diff_two_states, units=1, activation=None, use_bias=True,
             name="snn_dense"))
 
         # initialize bert from checkpoint file
