@@ -165,9 +165,9 @@ def learner_name2clazz(name: str):
         the class w.r.t. the learner name
     """
 
-    from deepword.students import student_learner, bert_swag
+    from deepword.students import student_learner, bert_swag, sentence_learner
 
-    for namespace in [student_learner, bert_swag]:
+    for namespace in [student_learner, bert_swag, sentence_learner]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in student learners".format(name))
