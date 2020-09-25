@@ -470,8 +470,7 @@ class SentenceLearner(object):
         src = np.concatenate([tgt_src, tgt_src], axis=0)
         src2 = np.concatenate([same_src, diff_src], axis=0)
         labels = np.concatenate(
-            [np.zeros(batch_size * self.hp.num_turns),
-             np.ones(batch_size * self.hp.num_turns)], axis=0)
+            [np.zeros(batch_size), np.ones(batch_size)], axis=0)
         return src, src2, labels
 
     def save_train_pairs(

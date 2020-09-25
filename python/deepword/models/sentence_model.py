@@ -54,21 +54,30 @@ class BertSentence(BaseDQN):
         return h_state
 
     def is_semantic_same(self):
-        processed = []
-        for raw_src, raw_src2 in zip(
-                tf.unstack(self.inputs["src"]),
-                tf.unstack(self.inputs["src2"])):
+        inc_step = tf.constant(0)
+        inc_diff = tf.TensorArray(
+            tf.float32, size=0, dynamic_size=True, clear_after_read=True)
+
+        def _dec_cond(_step, _diff):
+            return tf.less(_step, self.hp.batch_size)
+
+        def _dec_next_step(_step, _diff):
+            raw_src = self.inputs["src"][_step]
+            raw_src2 = self.inputs["src2"][_step]
             src, src_masks = self.add_cls_token(raw_src)
             src2, src2_masks = self.add_cls_token(raw_src2)
-
-            with tf.device("/device:GPU:0"):
-                h_state = self.get_h_state(src, src_masks)
-            with tf.device("/device:GPU:1"):
-                h_state2 = self.get_h_state(src2, src2_masks)
-
+            h_state = self.get_h_state(src, src_masks)
+            h_state2 = self.get_h_state(src2, src2_masks)
             diff_two_states = self.dropout(
                 tf.abs(h_state - h_state2), training=(not self.is_infer))
-            processed.append(diff_two_states)
+            _diff = _diff.write(_step, diff_two_states)
+            return _step + 1, _diff
+
+        results = tf.while_loop(
+            cond=_dec_cond,
+            body=_dec_next_step,
+            loop_vars=(inc_step, inc_diff))
+        processed = results[1].stack()
 
         batch_diff_two_states = tf.stack(processed, axis=0)
         semantic_same = tf.squeeze(tf.layers.dense(
