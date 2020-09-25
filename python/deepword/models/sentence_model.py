@@ -15,8 +15,8 @@ class BertSentence(BaseDQN):
         self.num_tokens = hp.num_tokens
         self.turns = hp.num_turns
         self.inputs = {
-            "src": tf.placeholder(tf.int32, [None, None]),
-            "src2": tf.placeholder(tf.int32, [None, None]),
+            "src": tf.placeholder(tf.int32, [None, None, None]),
+            "src2": tf.placeholder(tf.int32, [None, None, None]),
             "labels": tf.placeholder(tf.float32, [None])
         }
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
@@ -48,22 +48,29 @@ class BertSentence(BaseDQN):
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src, input_mask=src_masks)
             pooled = bert_model.get_pooled_output()
-            h_state = tf.reduce_sum(
-                tf.reshape(
-                    pooled, [-1, self.turns * 2, self.bert_config.hidden_size]),
-                axis=1)
+            h_state = tf.reduce_sum(pooled, axis=0)
         return h_state
 
     def is_semantic_same(self):
-        src, src_masks = self.add_cls_token(self.inputs["src"])
-        src2, src2_masks = self.add_cls_token(self.inputs["src2"])
+        processed = []
+        for raw_src, raw_src2 in zip(
+                tf.unstack(self.inputs["src"]),
+                tf.unstack(self.inputs["src2"])):
+            src, src_masks = self.add_cls_token(raw_src)
+            src2, src2_masks = self.add_cls_token(raw_src2)
 
-        h_state = self.get_h_state(src, src_masks)
-        h_state2 = self.get_h_state(src2, src2_masks)
-        diff_two_states = self.dropout(
-            tf.abs(h_state - h_state2), training=(not self.is_infer))
+            with tf.device("/device:GPU:0"):
+                h_state = self.get_h_state(src, src_masks)
+            with tf.device("/device:GPU:1"):
+                h_state2 = self.get_h_state(src2, src2_masks)
+
+            diff_two_states = self.dropout(
+                tf.abs(h_state - h_state2), training=(not self.is_infer))
+            processed.append(diff_two_states)
+
+        batch_diff_two_states = tf.concat(processed, axis=0)
         semantic_same = tf.squeeze(tf.layers.dense(
-            diff_two_states, units=1, activation=None, use_bias=True,
+            batch_diff_two_states, units=1, activation=None, use_bias=True,
             name="snn_dense"))
 
         # initialize bert from checkpoint file

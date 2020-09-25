@@ -467,8 +467,8 @@ class SentenceLearner(object):
         same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
         diff_src = batch_src[-len(diff_set):]
 
-        src = np.concatenate(tgt_src + tgt_src, axis=0)
-        src2 = np.concatenate(same_src + diff_src, axis=0)
+        src = np.concatenate([tgt_src, tgt_src], axis=0)
+        src2 = np.concatenate([same_src, diff_src], axis=0)
         labels = np.concatenate(
             [np.zeros(batch_size * self.hp.num_turns),
              np.ones(batch_size * self.hp.num_turns)], axis=0)
