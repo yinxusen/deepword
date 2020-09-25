@@ -70,7 +70,7 @@ class BertSentence(BaseDQN):
                 tf.abs(h_state - h_state2), training=(not self.is_infer))
             processed.append(diff_two_states)
 
-        batch_diff_two_states = tf.concat(processed, axis=0)
+        batch_diff_two_states = tf.stack(processed, axis=0)
         semantic_same = tf.squeeze(tf.layers.dense(
             batch_diff_two_states, units=1, activation=None, use_bias=True,
             name="snn_dense"))
