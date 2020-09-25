@@ -200,7 +200,7 @@ class SentenceLearner(object):
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
-               Dict[str, List[Tuple[int, int]]]]:
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
             eprint("load old data with DRRNMemoTeacher")
@@ -218,7 +218,7 @@ class SentenceLearner(object):
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
-               Dict[str, List[Tuple[int, int]]]]:
+               Dict[str, Dict[int, List[int]]]]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
         old_memory = list(filter(
@@ -246,7 +246,7 @@ class SentenceLearner(object):
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
     ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
-               Dict[str, List[Tuple[int, int]]]]:
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
@@ -456,38 +456,49 @@ class SentenceLearner(object):
 
     def get_snn_pairs(
             self,
-            hash_states2tjs: Dict[str, List[Tuple[int, int]]],
+            hash_states2tjs: Dict[str, Dict[int, List[int]]],
             tjs: Trajectory[ActionMasterStr],
             batch_size: int) -> Tuple[
             np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
-        # target key set should contain items more than twice, since we need to
-        # separate target set and same set.
-        target_key_set = list(
-            filter(lambda x: len(hash_states2tjs[x]) >= 2,
+        non_empty_keys = list(
+            filter(lambda x: hash_states2tjs[x] != {},
                    hash_states2tjs.keys()))
-        eprint(
-            "choose from {} keys for SNN target".format(len(target_key_set)))
-        hs_keys = np.random.choice(target_key_set, size=batch_size)
 
-        diff_keys_duo = np.random.choice(
-            list(hash_states2tjs.keys()), replace=False,
-            size=(batch_size, 2))
-        diff_keys = diff_keys_duo[:, 0]
-        same_key_ids = np.where(hs_keys == diff_keys)[0]
-        diff_keys[same_key_ids] = diff_keys_duo[same_key_ids, 1]
+        hs_keys = np.random.choice(non_empty_keys, size=batch_size)
+        diff_keys = [
+            np.random.choice(
+                list(filter(lambda x: x != k, non_empty_keys)), size=None)
+            for k in hs_keys]
 
-        tgt_set = []
-        same_set = []
-        diff_set = []
-        for hk, dk in zip(hs_keys, diff_keys):
-            samples_ids = np.random.choice(
-                len(hash_states2tjs[hk]), size=2, replace=False)
-            tgt_set.append(hash_states2tjs[hk][samples_ids[0]])
-            same_set.append(hash_states2tjs[hk][samples_ids[1]])
-            diff_set.append(
-                hash_states2tjs[dk][np.random.choice(
-                    len(hash_states2tjs[dk]))])
+        target_tids = []
+        same_tids = []
+        for k in hs_keys:
+            try:
+                tid_pair = np.random.choice(
+                    list(hash_states2tjs[k].keys()), size=2, replace=False)
+            except ValueError:
+                tid_pair = list(hash_states2tjs[k].keys()) * 2
+
+            target_tids.append(tid_pair[0])
+            same_tids.append(tid_pair[1])
+
+        diff_tids = [np.random.choice(
+            list(hash_states2tjs[k])) for k in diff_keys]
+
+        target_sids = [
+            np.random.choice(list(hash_states2tjs[k][tid]))
+            for k, tid in zip(hs_keys, target_tids)]
+        same_sids = [
+            np.random.choice(list(hash_states2tjs[k][tid]))
+            for k, tid in zip(hs_keys, same_tids)]
+        diff_sids = [
+            np.random.choice(list(hash_states2tjs[k][tid]))
+            for k, tid in zip(diff_keys, diff_tids)]
+
+        tgt_set = list(zip(target_tids, target_sids))
+        same_set = list(zip(same_tids, same_sids))
+        diff_set = list(zip(diff_tids, diff_sids))
 
         trajectories = [
             tjs.fetch_state_by_idx(tid, sid) for tid, sid in
