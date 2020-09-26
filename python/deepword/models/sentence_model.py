@@ -59,7 +59,7 @@ class BertSentence(BaseDQN):
             tf.float32, size=0, dynamic_size=True, clear_after_read=True)
 
         def _dec_cond(_step, _diff):
-            return tf.less(_step, self.hp.batch_size)
+            return tf.less(_step, self.hp.batch_size * 2)
 
         def _dec_next_step(_step, _diff):
             raw_src = self.inputs["src"][_step]
