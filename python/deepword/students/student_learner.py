@@ -174,13 +174,15 @@ class StudentLearner(object):
         res_tj = []
         i = 0
         while i < len(tj) // 2:
-            res_tj.append(ActionMasterStr(action=tj[i * 2], master=tj[i * 2 + 1]))
+            res_tj.append(
+                ActionMasterStr(action=tj[i * 2], master=tj[i * 2 + 1]))
             i += 1
 
         return res_tj
 
     @classmethod
-    def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMasterStr]:
+    def tjs_str2am(
+            cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMasterStr]:
         tjs = Trajectory(num_turns=old_tjs.num_turns // 2, size_per_turn=1)
         tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
         tjs.curr_tid = old_tjs.curr_tid

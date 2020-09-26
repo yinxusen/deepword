@@ -373,7 +373,8 @@ def process_eval_student(args):
     """
 
     hp = process_hp(args)
-    assert hp.learner_clazz == "SwagLearner"
+    assert hp.learner_clazz == "SwagLearner" or \
+           hp.learner_clazz == "SentenceLearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
     n_gpus = args.n_gpus

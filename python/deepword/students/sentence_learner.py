@@ -386,20 +386,56 @@ class SentenceLearner(object):
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
 
-    def _prepare_test(self) -> Tuple[Session, Any, Saver, int, Queue]:
+    def _prepare_test(
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None
+    ) -> Tuple[Session, Any, Saver, int, Queue]:
         sess, model, saver, train_steps = self._prepare_eval_model(
-            device_placement="/device:GPU:0")
+            device_placement, restore_from)
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,
-            args=(self._get_combined_data_path(self.eval_data_path),
-                  queue, False))
+            args=(self.eval_data_path, queue, False))
         t.setDaemon(True)
         t.start()
         return sess, model, saver, train_steps, queue
 
-    def test(self) -> None:
-        pass
+    def test(
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None) -> Tuple[int, int]:
+        if self.sess is None:
+            (self.sess, self.model, self.saver, self.train_steps, self.queue
+             ) = self._prepare_test(device_placement, restore_from)
+
+        wait_times = 10
+        while wait_times > 0 and self.queue.empty():
+            eprint("waiting data ... (retry times: {})".format(wait_times))
+            time.sleep(10)
+            wait_times -= 1
+
+        acc = 0
+        total = 0
+        eprint("start test")
+        i = 0
+        for data in iter(self.queue.get, None):
+            target_set, same_set, diff_set = data
+            if i % 100 == 0:
+                print("process a batch of {} .. {}".format(len(target_set), i))
+                print("partial acc.: {}".format(
+                    acc * 1. / total if total else "Nan"))
+
+            semantic_same = self.sess.run(
+                self.model.semantic_same,
+                feed_dict={
+                    self.model.target_set_: target_set,
+                    self.model.same_set_: same_set,
+                    self.model.diff_set_: diff_set})
+
+            acc += np.count_nonzero(semantic_same[: len(semantic_same)//2] < 0)
+            acc += np.count_nonzero(semantic_same[len(semantic_same)//2:] > 0)
+            total += len(semantic_same)
+            i += 1
+        return acc, total
 
     def _str2ids(self, s: str) -> List[int]:
         return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(s))
