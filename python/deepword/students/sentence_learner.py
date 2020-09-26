@@ -294,12 +294,12 @@ class SentenceLearner(object):
                 # according to len(memory) / batch_size
                 i = 0
                 while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
-                    src, src2, labels = self.get_snn_pairs(
+                    data = self.get_snn_pairs(
                         hash_states2tjs=hash_states2tjs,
                         tjs=tjs,
                         batch_size=self.hp.batch_size)
                     try:
-                        queue.put((src, src2, labels))
+                        queue.put(data)
                     except Exception as e:
                         eprint("add_batch error: {}".format(e))
                         traceback.print_tb(e.__traceback__)
@@ -376,13 +376,13 @@ class SentenceLearner(object):
         return
 
     def _train_impl(self, data: Tuple, train_step: int) -> None:
-        src, src2, labels = data
+        target_set, same_set, diff_set = data
         _, summaries, loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
-                self.model.src_: src,
-                self.model.src2_: src2,
-                self.model.labels_: labels})
+                self.model.target_set_: target_set,
+                self.model.same_set_: same_set,
+                self.model.diff_set_: diff_set})
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
 
@@ -462,16 +462,13 @@ class SentenceLearner(object):
             tjs.fetch_state_by_idx(tid, sid) for tid, sid in
             tgt_set + same_set + diff_set]
 
-        batch_src = [self._snn_tj_transformation(tj) for tj in trajectories]
+        batch_src = np.asarray(
+            [self._snn_tj_transformation(tj) for tj in trajectories])
         tgt_src = batch_src[: len(tgt_set)]
         same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
         diff_src = batch_src[-len(diff_set):]
 
-        src = np.concatenate([tgt_src, tgt_src], axis=0)
-        src2 = np.concatenate([same_src, diff_src], axis=0)
-        labels = np.concatenate(
-            [np.zeros(batch_size), np.ones(batch_size)], axis=0)
-        return src, src2, labels
+        return tgt_src, same_src, diff_src
 
     def save_train_pairs(
             self, t: int, src: np.ndarray, src_len: np.ndarray,

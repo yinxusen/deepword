@@ -294,20 +294,20 @@ class SentenceModel(object):
     def __init__(
             self,
             graph: tf.Graph,
-            src_: tf.placeholder,
-            src2_: tf.placeholder,
+            target_set_: tf.placeholder,
+            same_set_: tf.placeholder,
+            diff_set_: tf.placeholder,
             semantic_same: tf.Operation,
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
-            train_summary_op: Optional[tf.Operation],
-            labels_: Optional[tf.placeholder]):
+            train_summary_op: Optional[tf.Operation]):
         super(SentenceModel, self).__init__()
 
         self.graph = graph
-        self.src_ = src_
-        self.src2_ = src2_
+        self.target_set_ = target_set_
+        self.same_set_ = same_set_
+        self.diff_set_ = diff_set_
         self.semantic_same = semantic_same
         self.train_op = train_op
         self.loss = loss
         self.train_summary_op = train_summary_op
-        self.labels_ = labels_
