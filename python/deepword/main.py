@@ -5,7 +5,6 @@ import sys
 import time
 import traceback
 from argparse import ArgumentParser
-from multiprocessing import Pool
 from os import path
 from typing import Optional, Callable
 
@@ -377,36 +376,22 @@ def process_eval_student(args):
            hp.learner_clazz == "SentenceLearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
-    n_gpus = args.n_gpus
-    gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
-    watched_file_regex = path.join(
+    watched_files = path.join(
         args.model_dir, "last_weights", "after-epoch-*.index")
-    files = glob.glob(watched_file_regex)
-    ckpt_files = [os.path.splitext(f)[0] for f in files]
-    eprint("evaluate {} checkpoints".format(len(ckpt_files)))
-    if len(ckpt_files) == 0:
+    files = [path.splitext(fn)[0] for fn in glob.glob(watched_files)]
+    if len(files) == 0:
+        eprint(colored("No checkpoint found!", "red"))
         return
+    step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
+    steps = sorted(list(step2ckpt.keys()))
+    eprint("valid evaluation steps: {}".format(
+        ",".join([str(step) for step in steps])))
 
-    files_colocate_gpus = [
-        ckpt_files[i * n_gpus:(i + 1) * n_gpus]
-        for i in range((len(ckpt_files) + n_gpus - 1) // n_gpus)]
-
-    for batch_files in files_colocate_gpus:
-        pool = Pool(n_gpus)
-        eprint("process: {}".format(batch_files))
-        results = []
-        for k in range(n_gpus):
-            if k < len(batch_files):
-                res = pool.apply_async(
-                    eval_one_ckpt, args=(
-                        hp, args.model_dir, args.data_path, learner_clazz,
-                        gpus[k], batch_files[k]))
-                results.append(res)
-
-        for k, res in enumerate(results):
-            eprint("model: {}, res: {}".format(batch_files[k], res.get()))
-        pool.close()
-        pool.join()
+    for step in steps:
+        result = eval_one_ckpt(
+            hp, args.model_dir, args.data_path, learner_clazz,
+            device="", ckpt_path=step2ckpt[step])
+        eprint("model: {}, res: {}".format(step, result))
 
 
 def process_eval_dqn(args):
