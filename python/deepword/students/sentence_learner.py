@@ -394,7 +394,8 @@ class SentenceLearner(object):
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,
-            args=(self.eval_data_path, queue, False))
+            args=(self._get_combined_data_path(self.train_data_dir),
+                  queue, False))
         t.setDaemon(True)
         t.start()
         return sess, model, saver, train_steps, queue
