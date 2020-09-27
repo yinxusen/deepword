@@ -423,24 +423,40 @@ class SentenceLearner(object):
         total = 0
         eprint("start test")
         i = 0
-        for data in iter(self.queue.get, None):
-            target_set, same_set, diff_set = data
-            if i % 100 == 0:
-                print("process a batch of {} .. {}".format(len(target_set), i))
-                print("partial acc.: {}".format(
-                    acc * 1. / total if total else "Nan"))
 
-            semantic_same = self.sess.run(
-                self.model.semantic_same,
-                feed_dict={
-                    self.model.target_set_: target_set,
-                    self.model.same_set_: same_set,
-                    self.model.diff_set_: diff_set})
+        while True:
+            try:
+                data = self.queue.get(timeout=1000)
+                target_set, same_set, diff_set = data
 
-            acc += np.count_nonzero(semantic_same[: len(semantic_same)//2] < 0)
-            acc += np.count_nonzero(semantic_same[len(semantic_same)//2:] > 0)
-            total += len(semantic_same)
-            i += 1
+                if i % 100 == 0:
+                    print(
+                        "process a batch of {} .. {}".format(
+                            len(target_set), i))
+                    print("partial acc.: {}".format(
+                        acc * 1. / total if total else "Nan"))
+
+                semantic_same = self.sess.run(
+                    self.model.semantic_same,
+                    feed_dict={
+                        self.model.target_set_: target_set,
+                        self.model.same_set_: same_set,
+                        self.model.diff_set_: diff_set})
+
+                acc += np.count_nonzero(
+                    semantic_same[: len(semantic_same) // 2] < 0)
+                acc += np.count_nonzero(
+                    semantic_same[len(semantic_same) // 2:] > 0)
+                total += len(semantic_same)
+                i += 1
+            except Exception as e:
+                eprint("no more data: {}".format(e))
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                traceback.print_exception(
+                    exc_type, exc_value, exc_traceback, limit=None,
+                    file=sys.stdout)
+                break
+
         return acc, total
 
     def _str2ids(self, s: str) -> List[int]:
