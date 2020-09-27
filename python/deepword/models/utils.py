@@ -137,32 +137,6 @@ def encoder_cnn(
     return inner_states
 
 
-def repeat(data, repeats):
-    """
-    Repeat data with repeats. The function uses the same method as
-    tf.repeat in tensorflow version >= 1.15.2
-    For tensorflow version >= 1.15.2, you can use tf.repeat directly
-
-    This function only works for 2D matrix, e.g.
-    [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
-    repeats [1, 1, 2] times, then we get
-    [[1, 2, 3], [2, 3, 4], [3, 4, 5], [3, 4, 5]].
-
-    Args:
-        data: 2D matrix, [batch_size, hidden_size]
-        repeats: 1D int vector, [batch_size]
-
-    Returns:
-        2D matrix, [sum(repeats), hidden_size]
-    """
-    max_repeat = tf.reduce_max(repeats)
-    data = data[:, None, :]
-    data = tf.tile(data, [1, max_repeat, 1])
-    mask = tf.sequence_mask(repeats)
-    data = tf.boolean_mask(data, mask)
-    return data
-
-
 def l2_loss_1d_action(q_actions, action_idx, expected_q, b_weight):
     """
     l2 loss for 1D action space. only q values in q_actions

@@ -52,7 +52,8 @@ class CnnDRRN(BaseDQN):
                 self.is_infer)
             new_h = tf.layers.dense(
                 h_state, units=self.hp.hidden_state_size, use_bias=True)
-            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
+            h_state_expanded = tf.repeat(
+                new_h, self.inputs["actions_repeats"], axis=0)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 h_actions = dqn.encoder_lstm(
@@ -171,7 +172,8 @@ class TransformerDRRN(CnnDRRN):
             h_state = tf.reshape(pooled, [-1, 128])
             new_h = tf.layers.dense(
                 h_state, units=self.hp.hidden_state_size, use_bias=True)
-            h_state_expanded = dqn.repeat(new_h, self.inputs["actions_repeats"])
+            h_state_expanded = tf.repeat(
+                new_h, self.inputs["actions_repeats"], axis=0)
 
             with tf.variable_scope("drrn-action-encoder", reuse=False):
                 h_actions = dqn.encoder_lstm(
@@ -246,7 +248,8 @@ class BertDRRN(CnnDRRN):
                 num_units=self.hp.hidden_state_size,
                 num_layers=self.hp.lstm_num_layers)[-1].h
 
-        h_state_expanded = dqn.repeat(h_state, self.inputs["actions_repeats"])
+        h_state_expanded = tf.repeat(
+            h_state, self.inputs["actions_repeats"], axis=0)
         q_actions = tf.reduce_sum(
             tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions, h_state
