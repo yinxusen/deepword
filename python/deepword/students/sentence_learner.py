@@ -14,7 +14,7 @@ from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
-from tqdm import trange
+from tqdm import trange, tqdm
 
 from deepword.action import ActionCollector
 from deeptextworld.agents.base_agent import DRRNMemoTeacher
@@ -409,7 +409,7 @@ class SentenceLearner(object):
     def prepare_test_data(self):
         combined_data_path = self._get_combined_data_path(self.train_data_dir)
         batch = []
-        for tp, ap, mp, hsp in combined_data_path:
+        for tp, ap, mp, hsp in tqdm(combined_data_path):
             memory, tjs, action_collector, hash_states2tjs = \
                 self._load_snapshot(mp, tp, ap, hsp)
 
@@ -418,14 +418,12 @@ class SentenceLearner(object):
             total_iterations = int(
                 math.ceil(len(memory) * 1. / self.hp.batch_size))
 
-            i = 0
-            while i < total_iterations:
+            for i in trange(total_iterations):
                 data = self.get_snn_pairs(
                     hash_states2tjs=hash_states2tjs,
                     tjs=tjs,
                     batch_size=self.hp.batch_size)
                 batch.append(data)
-                i += 1
         np.savez("{}/snn-data.npz".format(self.model_dir), data=batch)
 
     def test(
