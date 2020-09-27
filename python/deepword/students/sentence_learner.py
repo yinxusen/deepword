@@ -292,8 +292,14 @@ class SentenceLearner(object):
 
                 # for every loaded snapshot, we sample SNN pairs
                 # according to len(memory) / batch_size
+                total_iterations = int(
+                    math.ceil(len(memory) * 1. / self.hp.batch_size))
+                # TODO: fix the hard-set evaluation times
+                if not training:
+                    total_iterations = min(5000, total_iterations)
+
                 i = 0
-                while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
+                while i < total_iterations:
                     data = self.get_snn_pairs(
                         hash_states2tjs=hash_states2tjs,
                         tjs=tjs,
