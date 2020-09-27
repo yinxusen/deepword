@@ -364,7 +364,10 @@ def process_train_student(args):
 def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
     tester = learner_clazz(
         hp, model_dir, train_data_dir=data_path, eval_data_path=None)
-    acc, total = tester.test(device, ckpt_path)
+    tester.prepare_test_data()
+    # acc, total = tester.test(device, ckpt_path)
+    acc = 0
+    total = 0
     return str(acc * 1. / total) if total != 0 else "Nan"
 
 
@@ -390,7 +393,7 @@ def process_eval_student(args):
 
     if args.debug:
         eprint("using debug mode")
-        for ckpt in ckpt_files:
+        for ckpt in ckpt_files[:1]:
             res = eval_one_ckpt(
                 hp, args.model_dir, args.data_path, learner_clazz,
                 device="/device:GPU:0", ckpt_path=ckpt)

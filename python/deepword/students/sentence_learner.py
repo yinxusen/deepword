@@ -406,6 +406,28 @@ class SentenceLearner(object):
         t.start()
         return sess, model, saver, train_steps, queue
 
+    def prepare_test_data(self):
+        combined_data_path = self._get_combined_data_path(self.train_data_dir)
+        batch = []
+        for tp, ap, mp, hsp in combined_data_path:
+            memory, tjs, action_collector, hash_states2tjs = \
+                self._load_snapshot(mp, tp, ap, hsp)
+
+            # for every loaded snapshot, we sample SNN pairs
+            # according to len(memory) / batch_size
+            total_iterations = int(
+                math.ceil(len(memory) * 1. / self.hp.batch_size))
+
+            i = 0
+            while i < total_iterations:
+                data = self.get_snn_pairs(
+                    hash_states2tjs=hash_states2tjs,
+                    tjs=tjs,
+                    batch_size=self.hp.batch_size)
+                batch.append(data)
+                i += 1
+        np.savez("{}/snn-data.npz".format(self.model_dir), data=batch)
+
     def test(
             self, device_placement: str = "/device:GPU:0",
             restore_from: Optional[str] = None) -> Tuple[int, int]:
