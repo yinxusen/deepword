@@ -384,7 +384,6 @@ class SentenceLearner(object):
                 self.model.same_set_: same_set,
                 self.model.diff_set_: diff_set})
         self.sw.add_summary(summaries, train_step)
-        eprint("\nloss: {}".format(loss))
 
     def _prepare_test(
             self, device_placement: str = "/device:GPU:0",

@@ -390,7 +390,7 @@ def process_eval_student(args):
     for step in steps:
         result = eval_one_ckpt(
             hp, args.model_dir, args.data_path, learner_clazz,
-            device="", ckpt_path=step2ckpt[step])
+            device="/device:GPU:0", ckpt_path=step2ckpt[step])
         eprint("model: {}, res: {}".format(step, result))
 
 
