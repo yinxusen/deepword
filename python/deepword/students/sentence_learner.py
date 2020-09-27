@@ -398,12 +398,12 @@ class SentenceLearner(object):
         sess, model, saver, train_steps = self._prepare_eval_model(
             device_placement, restore_from)
         queue = Queue(maxsize=100)
-        t = Thread(
-            target=self._add_batch,
-            args=(self._get_combined_data_path(self.train_data_dir),
-                  queue, False, False))
-        t.setDaemon(True)
-        t.start()
+        # t = Thread(
+        #     target=self._add_batch,
+        #     args=(self._get_combined_data_path(self.train_data_dir),
+        #           queue, False, False))
+        # t.setDaemon(True)
+        # t.start()
         return sess, model, saver, train_steps, queue
 
     def prepare_test_data(self):
@@ -415,8 +415,7 @@ class SentenceLearner(object):
 
             # for every loaded snapshot, we sample SNN pairs
             # according to len(memory) / batch_size
-            total_iterations = int(
-                math.ceil(len(memory) * 1. / self.hp.batch_size))
+            total_iterations = 5000
 
             for i in trange(total_iterations):
                 data = self.get_snn_pairs(
@@ -433,52 +432,34 @@ class SentenceLearner(object):
             (self.sess, self.model, self.saver, self.train_steps, self.queue
              ) = self._prepare_test(device_placement, restore_from)
 
-        wait_times = 10
-        while wait_times > 0 and self.queue.empty():
-            eprint("waiting data ... (retry times: {})".format(wait_times))
-            time.sleep(10)
-            wait_times -= 1
-
-        if self.queue.empty():
-            raise RuntimeError("No data received. exit")
-
+        batch_data = np.load(
+            "{}/snn-data.npz".format(self.model_dir), allow_pickle=True)['data']
         acc = 0
         total = 0
         eprint("start test")
         i = 0
 
-        while True:
-            try:
-                data = self.queue.get(timeout=1000)
-                target_set, same_set, diff_set = data
+        for data in batch_data:
+            if i % 100 == 0:
+                print(
+                    "process a batch of {} .. {}".format(
+                        len(data[0]), i))
+                print("partial acc.: {}".format(
+                    acc * 1. / total if total else "Nan"))
 
-                if i % 100 == 0:
-                    print(
-                        "process a batch of {} .. {}".format(
-                            len(target_set), i))
-                    print("partial acc.: {}".format(
-                        acc * 1. / total if total else "Nan"))
+            semantic_same = self.sess.run(
+                self.model.semantic_same,
+                feed_dict={
+                    self.model.target_set_: data[0],
+                    self.model.same_set_: data[1],
+                    self.model.diff_set_: data[2]})
 
-                semantic_same = self.sess.run(
-                    self.model.semantic_same,
-                    feed_dict={
-                        self.model.target_set_: target_set,
-                        self.model.same_set_: same_set,
-                        self.model.diff_set_: diff_set})
-
-                acc += np.count_nonzero(
-                    semantic_same[: len(semantic_same) // 2] < 0)
-                acc += np.count_nonzero(
-                    semantic_same[len(semantic_same) // 2:] > 0)
-                total += len(semantic_same)
-                i += 1
-            except Exception as e:
-                eprint("no more data: {}".format(e))
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                traceback.print_exception(
-                    exc_type, exc_value, exc_traceback, limit=None,
-                    file=sys.stdout)
-                break
+            acc += np.count_nonzero(
+                semantic_same[: len(semantic_same) // 2] < 0)
+            acc += np.count_nonzero(
+                semantic_same[len(semantic_same) // 2:] > 0)
+            total += len(semantic_same)
+            i += 1
 
         return acc, total
 
