@@ -120,6 +120,7 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str)
     student_eval_parser.add_argument('--n-gpus', type=int, default=1)
+    student_eval_parser.add_argument('--debug', action='store_true')
 
     gen_data_parser = subparsers.add_parser('gen-data')
     gen_data_parser.add_argument('--game-path', type=str, required=True)
@@ -385,6 +386,15 @@ def process_eval_student(args):
     ckpt_files = [os.path.splitext(f)[0] for f in files]
     eprint("evaluate {} checkpoints".format(len(ckpt_files)))
     if len(ckpt_files) == 0:
+        return
+
+    if args.debug:
+        eprint("using debug mode")
+        for ckpt in ckpt_files:
+            res = eval_one_ckpt(
+                hp, args.model_dir, args.data_path, learner_clazz,
+                device="/device:GPU:0", ckpt_path=ckpt)
+            eprint("model: {}, res: {}".format(ckpt, res))
         return
 
     files_colocate_gpus = [
