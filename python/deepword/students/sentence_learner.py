@@ -401,7 +401,7 @@ class SentenceLearner(object):
         t = Thread(
             target=self._add_batch,
             args=(self._get_combined_data_path(self.train_data_dir),
-                  queue, False))
+                  queue, False, False))
         t.setDaemon(True)
         t.start()
         return sess, model, saver, train_steps, queue
@@ -418,6 +418,9 @@ class SentenceLearner(object):
             eprint("waiting data ... (retry times: {})".format(wait_times))
             time.sleep(10)
             wait_times -= 1
+
+        if self.queue.empty():
+            raise RuntimeError("No data received. exit")
 
         acc = 0
         total = 0
