@@ -294,9 +294,12 @@ class SentenceModel(object):
     def __init__(
             self,
             graph: tf.Graph,
-            target_set_: tf.placeholder,
-            same_set_: tf.placeholder,
-            diff_set_: tf.placeholder,
+            target_master_: tf.placeholder,
+            same_master_: tf.placeholder,
+            diff_master_: tf.placeholder,
+            target_action_: tf.placeholder,
+            same_action_: tf.placeholder,
+            diff_action_: tf.placeholder,
             semantic_same: tf.Operation,
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
@@ -304,9 +307,12 @@ class SentenceModel(object):
         super(SentenceModel, self).__init__()
 
         self.graph = graph
-        self.target_set_ = target_set_
-        self.same_set_ = same_set_
-        self.diff_set_ = diff_set_
+        self.target_master_ = target_master_
+        self.same_master_ = same_master_
+        self.diff_master_ = diff_master_
+        self.target_action_ = target_action_
+        self.same_action_ = same_action_
+        self.diff_action_ = diff_action_
         self.semantic_same = semantic_same
         self.train_op = train_op
         self.loss = loss

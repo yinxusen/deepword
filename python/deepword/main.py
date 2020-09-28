@@ -5,7 +5,6 @@ import sys
 import time
 import traceback
 from argparse import ArgumentParser
-from multiprocessing import Pool
 from os import path
 from typing import Optional, Callable
 
@@ -359,13 +358,17 @@ def process_train_student(args):
     learner.train(n_epochs=args.n_epochs)
 
 
+def prepare_snn_input(
+        hp, model_dir, data_path, learner_clazz):
+    tester = learner_clazz(
+        hp, model_dir, train_data_dir=data_path)
+    tester.preprocess_input()
+
+
 def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
     tester = learner_clazz(
-        hp, model_dir, train_data_dir=data_path, eval_data_path=None)
-    tester.preprocess_input()
-    # acc, total = tester.test(device, ckpt_path)
-    acc = 0
-    total = 0
+        hp, model_dir, train_data_dir=None, eval_data_path=data_path)
+    acc, total = tester.test(device, ckpt_path)
     return str(acc * 1. / total) if total != 0 else "Nan"
 
 
@@ -387,11 +390,13 @@ def process_eval_student(args):
     if len(ckpt_files) == 0:
         return
 
-    for ckpt in ckpt_files[:1]:
-        res = eval_one_ckpt(
-            hp, args.model_dir, args.data_path, learner_clazz,
-            device="/device:GPU:0", ckpt_path=ckpt)
-        eprint("model: {}, res: {}".format(ckpt, res))
+    prepare_snn_input(hp, args.model_dir, args.data_path, learner_clazz)
+
+    # for ckpt in ckpt_files[:1]:
+    #     res = eval_one_ckpt(
+    #         hp, args.model_dir, args.data_path, learner_clazz,
+    #         device="/device:GPU:0", ckpt_path=ckpt)
+    #     eprint("model: {}, res: {}".format(ckpt, res))
 
 
 def process_eval_dqn(args):

@@ -1,20 +1,34 @@
 import math
+import random
+from collections import namedtuple
 from os import path
 from queue import Queue
-from typing import Tuple, List, Any, Optional, Dict, Union
+from typing import Tuple, List, Any, Optional, Dict, Union, Generator
 
 import numpy as np
+import tensorflow as tf
 from tensorflow import Session
 from tensorflow.contrib.training import HParams
+from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
+from tensorflow.train import Saver
+from tqdm import trange
 
 from deepword.action import ActionCollector
 from deepword.agents.utils import Memolet
-
+from deepword.agents.utils import get_path_tags
 from deepword.students.student_learner import StudentLearner
 from deepword.students.utils import ActionMasterStr
 from deepword.trajectory import Trajectory
 from deepword.utils import eprint
+
+
+class SNNData(namedtuple(
+    "SNNData", (
+            "target_mids", "target_aids",
+            "same_mids", "same_aids",
+            "diff_mids", "diff_aids"))):
+    pass
 
 
 class SentenceLearner(StudentLearner):
@@ -50,7 +64,6 @@ class SentenceLearner(StudentLearner):
             # according to len(memory) / batch_size
             total_size = int(
                 math.ceil(len(memory) * 1. / self.hp.batch_size))
-            total_size = 100
             target_set, same_set, diff_set = self.get_snn_pairs(
                 hash_states2tjs, tjs, total_size)
             target_aids, target_mids, target_tjs = self.get_snn_tjs(
@@ -71,14 +84,85 @@ class SentenceLearner(StudentLearner):
                 diff_aids=diff_aids,
                 diff_mids=diff_mids)
 
-    def _train_impl(self, data: Tuple, train_step: int) -> None:
-        target_set, same_set, diff_set = data
+    def _prepare_training(
+            self
+    ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
+        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
+
+        # save the very first model to verify weight has been loaded
+        if train_steps == 0:
+            saver.save(
+                sess, self.ckpt_prefix,
+                global_step=tf.train.get_or_create_global_step(
+                    graph=model.graph))
+        else:
+            pass
+
+        sw_path = path.join(self.model_dir, "summaries", "train")
+        sw = tf.summary.FileWriter(sw_path, sess.graph)
+        queue = Queue()  # empty queue
+        return sess, model, saver, sw, train_steps, queue
+
+    def snn_data_loader(
+            self, data_path: str, batch_size: int
+    ) -> Generator[SNNData, None, None]:
+        data_tags = sorted(get_path_tags(data_path, prefix="snn-data"))
+        self.info("load snn tags: {}".format(data_tags))
+        while True:
+            for tag in sorted(data_tags, key=lambda k: random.random()):
+                data = np.load(
+                    path.join(data_path, "snn-data-{}.npz".format(tag)))
+                target_aids = data["target_aids"]
+                target_mids = data["target_mids"]
+                same_aids = data["same_aids"]
+                same_mids = data["same_mids"]
+                diff_aids = data["diff_aids"]
+                diff_mids = data["diff_mids"]
+                i = 0
+                while i < (len(target_aids) // batch_size) - 1:
+                    ss = i * batch_size
+                    ee = (i + 1) * batch_size
+                    yield SNNData(
+                        target_mids[ss: ee], target_aids[ss: ee],
+                        same_mids[ss: ee], same_aids[ss: ee],
+                        diff_mids[ss: ee], diff_aids[ss: ee])
+                    i += 1
+
+    def train(self, n_epochs: int) -> None:
+        if self.sess is None:
+            (self.sess, self.model, self.saver, self.sw, self.train_steps,
+             self.queue) = self._prepare_training()
+
+        epoch_size = self.hp.save_gap_t
+        data_loader = self.snn_data_loader(
+            data_path=self.train_data_dir, batch_size=self.hp.batch_size)
+
+        eprint("start training")
+        data_in_queue = True
+        for et in trange(n_epochs, ascii=True, desc="epoch"):
+            for it in trange(epoch_size, ascii=True, desc="step"):
+                self._train_impl(
+                    next(data_loader), self.train_steps + et * epoch_size + it)
+            self.saver.save(
+                self.sess, self.ckpt_prefix,
+                global_step=tf.train.get_or_create_global_step(
+                    graph=self.model.graph))
+            eprint("finish and save {} epoch".format(et))
+            if not data_in_queue:
+                break
+        return
+
+    def _train_impl(self, data: SNNData, train_step: int) -> None:
         _, summaries, loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
-                self.model.target_set_: target_set,
-                self.model.same_set_: same_set,
-                self.model.diff_set_: diff_set})
+                self.model.target_master_: data.target_mids,
+                self.model.same_master_: data.same_mids,
+                self.model.diff_master_: data.diff_mids,
+                self.model.target_action_: data.target_aids,
+                self.model.same_action_: data.same_aids,
+                self.model.diff_action_: data.diff_aids
+            })
         self.sw.add_summary(summaries, train_step)
 
     def _prepare_test(
@@ -87,13 +171,7 @@ class SentenceLearner(StudentLearner):
     ) -> Tuple[Session, Any, Saver, int, Queue]:
         sess, model, saver, train_steps = self._prepare_eval_model(
             device_placement, restore_from)
-        queue = Queue(maxsize=100)
-        # t = Thread(
-        #     target=self._add_batch,
-        #     args=(self._get_combined_data_path(self.train_data_dir),
-        #           queue, False, False))
-        # t.setDaemon(True)
-        # t.start()
+        queue = Queue()
         return sess, model, saver, train_steps, queue
 
     def test(
@@ -103,34 +181,30 @@ class SentenceLearner(StudentLearner):
             (self.sess, self.model, self.saver, self.train_steps, self.queue
              ) = self._prepare_test(device_placement, restore_from)
 
-        batch_data = np.load(
-            "{}/snn-data.npz".format(self.model_dir), allow_pickle=True)['data']
+        data_loader = self.snn_data_loader(
+            data_path=self.eval_data_path, batch_size=self.hp.batch_size)
         acc = 0
         total = 0
         eprint("start test")
-        i = 0
 
-        for data in batch_data:
-            if i % 100 == 0:
-                print(
-                    "process a batch of {} .. {}".format(
-                        len(data[0]), i))
-                print("partial acc.: {}".format(
-                    acc * 1. / total if total else "Nan"))
-
+        for _ in trange(5000):
+            data = next(data_loader)
             semantic_same = self.sess.run(
                 self.model.semantic_same,
                 feed_dict={
-                    self.model.target_set_: data[0],
-                    self.model.same_set_: data[1],
-                    self.model.diff_set_: data[2]})
+                    self.model.target_master_: data.target_mids,
+                    self.model.same_master_: data.same_mids,
+                    self.model.diff_master_: data.diff_mids,
+                    self.model.target_action_: data.target_aids,
+                    self.model.same_action_: data.same_aids,
+                    self.model.diff_action_: data.diff_aids
+                })
 
             acc += np.count_nonzero(
                 semantic_same[: len(semantic_same) // 2] < 0)
             acc += np.count_nonzero(
                 semantic_same[len(semantic_same) // 2:] > 0)
             total += len(semantic_same)
-            i += 1
 
         return acc, total
 

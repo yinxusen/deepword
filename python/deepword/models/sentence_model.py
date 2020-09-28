@@ -15,12 +15,18 @@ class BertSentence(BaseDQN):
         self.num_tokens = hp.num_tokens
         self.turns = hp.num_turns
         self.inputs = {
-            "target_set": tf.placeholder(
-                tf.int32, [self.hp.batch_size, None, None]),
-            "same_set": tf.placeholder(
-                tf.int32, [self.hp.batch_size, None, None]),
-            "diff_set": tf.placeholder(
-                tf.int32, [self.hp.batch_size, None, None])
+            "target_master": tf.placeholder(
+                tf.int32, [None, None, None]),
+            "same_master": tf.placeholder(
+                tf.int32, [None, None, None]),
+            "diff_master": tf.placeholder(
+                tf.int32, [None, None, None]),
+            "target_action": tf.placeholder(
+                tf.int32, [None, None, None]),
+            "same_action": tf.placeholder(
+                tf.int32, [None, None, None]),
+            "diff_action": tf.placeholder(
+                tf.int32, [None, None, None])
         }
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
         self.bert_config_file = "{}/bert_config.json".format(
@@ -46,6 +52,16 @@ class BertSentence(BaseDQN):
         return src_w_pad, src_masks
 
     def get_h_state(self, src, src_masks):
+        """
+        Encode one trajectory
+
+        Args:
+            src: [num_turns, num_tokens]
+            src_masks: [num_turns, num_tokens]
+
+        Returns:
+            encoded state for the trajectory [hidden_state,]
+        """
         with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
             bert_model = b_model.BertModel(
                 config=self.bert_config, is_training=(not self.is_infer),
@@ -54,11 +70,36 @@ class BertSentence(BaseDQN):
             h_state = tf.reduce_sum(pooled, axis=0)
         return h_state
 
+    def get_h_actions(self, raw_src):
+        """
+        Encode batch of actions
+
+        Args:
+            raw_src: [batch_size, num_turns, num_tokens_per_action]
+
+        Returns:
+            encoded batch actions [batch_size, hidden_state]
+        """
+        n_batch = tf.shape(raw_src)[0]
+        n_turns = tf.shape(raw_src)[1]
+        raw_src = tf.reshape(raw_src, [n_batch * n_turns, -1])
+        src, src_masks = self.add_cls_token(raw_src)
+        with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
+            bert_model = b_model.BertModel(
+                config=self.bert_config, is_training=(not self.is_infer),
+                input_ids=src, input_mask=src_masks)
+            pooled = bert_model.get_pooled_output()
+            pooled = tf.reshape(pooled, [n_batch, n_turns, -1])
+            h_actions = tf.reduce_sum(pooled, axis=1)
+        return h_actions
+
     def is_semantic_same(self):
+        batch_size = tf.shape(self.inputs["target_master"])[0]
+
         combined_input = tf.concat(
-            [self.inputs["target_set"],
-             self.inputs["same_set"],
-             self.inputs["diff_set"]], axis=0)
+            [self.inputs["target_master"],
+             self.inputs["same_master"],
+             self.inputs["diff_master"]], axis=0)
 
         inc_step = tf.constant(0)
         inc_hs = tf.TensorArray(
@@ -79,11 +120,19 @@ class BertSentence(BaseDQN):
             body=_dec_next_step,
             loop_vars=(inc_step, inc_hs))
 
-        processed = results[1].stack()
+        h_states = results[1].stack()
 
-        target_hs = processed[:self.hp.batch_size]
-        same_hs = processed[self.hp.batch_size: self.hp.batch_size * 2]
-        diff_hs = processed[-self.hp.batch_size:]
+        combined_actions = tf.concat(
+            [self.inputs["target_action"],
+             self.inputs["same_action"],
+             self.inputs["diff_action"]], axis=0)
+        h_actions = self.get_h_actions(combined_actions)
+
+        features = h_states + h_actions
+
+        target_hs = features[:batch_size]
+        same_hs = features[batch_size: batch_size * 2]
+        diff_hs = features[-batch_size:]
 
         diff_hs = tf.concat(
             [tf.abs(target_hs - same_hs), tf.abs(target_hs - diff_hs)], axis=0)
@@ -101,8 +150,9 @@ class BertSentence(BaseDQN):
         return semantic_same
 
     def get_train_op(self, semantic_same):
+        batch_size = tf.shape(self.inputs["target_master"])[0]
         labels = tf.concat(
-            [tf.zeros(self.hp.batch_size), tf.ones(self.hp.batch_size)], axis=0)
+            [tf.zeros(batch_size), tf.ones(batch_size)], axis=0)
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=labels, logits=semantic_same)
         loss = tf.reduce_mean(losses)
@@ -130,9 +180,9 @@ class BertSentence(BaseDQN):
                 train_summary_op = tf.summary.merge([loss_summary])
         return SentenceModel(
             graph=graph,
-            target_set_=inputs["target_set"],
-            same_set_=inputs["same_set"],
-            diff_set_=inputs["diff_set"],
+            target_master_=inputs["target_set"],
+            same_master_=inputs["same_set"],
+            diff_master_=inputs["diff_set"],
             semantic_same=semantic_same,
             loss=loss,
             train_op=train_op,
@@ -148,9 +198,9 @@ class BertSentence(BaseDQN):
                 semantic_same = model.is_semantic_same()
         return SentenceModel(
             graph=graph,
-            target_set_=inputs["target_set"],
-            same_set_=inputs["same_set"],
-            diff_set_=inputs["diff_set"],
+            target_master_=inputs["target_set"],
+            same_master_=inputs["same_set"],
+            diff_master_=inputs["diff_set"],
             semantic_same=semantic_same,
             loss=None,
             train_op=None,
