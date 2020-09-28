@@ -119,6 +119,10 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str)
 
+    snn_gen_parser = subparsers.add_parser('gen-snn')
+    snn_gen_parser.add_argument('--data-path', type=str, required=True)
+    snn_gen_parser.add_argument('--learner-clazz', type=str)
+
     gen_data_parser = subparsers.add_parser('gen-data')
     gen_data_parser.add_argument('--game-path', type=str, required=True)
     gen_data_parser.add_argument('--f-games', type=str)
@@ -358,11 +362,20 @@ def process_train_student(args):
     learner.train(n_epochs=args.n_epochs)
 
 
-def prepare_snn_input(
-        hp, model_dir, data_path, learner_clazz):
-    tester = learner_clazz(
-        hp, model_dir, train_data_dir=data_path)
-    tester.preprocess_input()
+def process_snn_input(args):
+    """
+    generate snn input
+    """
+
+    fn_hparams = os.path.join(args.model_dir, "hparams.json")
+    if os.path.isfile(fn_hparams):
+        eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
+    hp = process_hp(args)
+    assert hp.learner_clazz == "SentenceLearner"
+    setup_train_log(args.model_dir)
+    learner_clazz = learner_name2clazz(hp.learner_clazz)
+    learner = learner_clazz(hp, args.model_dir, args.data_path)
+    learner.preprocess_input()
 
 
 def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
@@ -390,13 +403,11 @@ def process_eval_student(args):
     if len(ckpt_files) == 0:
         return
 
-    prepare_snn_input(hp, args.model_dir, args.data_path, learner_clazz)
-
-    # for ckpt in ckpt_files[:1]:
-    #     res = eval_one_ckpt(
-    #         hp, args.model_dir, args.data_path, learner_clazz,
-    #         device="/device:GPU:0", ckpt_path=ckpt)
-    #     eprint("model: {}, res: {}".format(ckpt, res))
+    for ckpt in ckpt_files:
+        res = eval_one_ckpt(
+            hp, args.model_dir, args.data_path, learner_clazz,
+            device="/device:GPU:0", ckpt_path=ckpt)
+        eprint("model: {}, res: {}".format(ckpt, res))
 
 
 def process_eval_dqn(args):
@@ -488,6 +499,8 @@ def main(args):
         process_train_student(args)
     elif args.mode == "eval-student":
         process_eval_student(args)
+    elif args.mode == "gen-snn":
+        process_snn_input(args)
     elif args.mode == "eval-dqn":
         process_eval_dqn(args)
     elif args.mode == "gen-data":
