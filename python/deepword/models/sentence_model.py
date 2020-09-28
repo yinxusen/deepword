@@ -201,9 +201,9 @@ class BertSentence(BaseDQN):
                 semantic_same = model.is_semantic_same()
         return SentenceModel(
             graph=graph,
-            target_master_=inputs["target_set"],
-            same_master_=inputs["same_set"],
-            diff_master_=inputs["diff_set"],
+            target_master_=inputs["target_master"],
+            same_master_=inputs["same_master"],
+            diff_master_=inputs["diff_master"],
             target_action_=inputs["target_action"],
             same_action_=inputs["same_action"],
             diff_action_=inputs["diff_action"],
