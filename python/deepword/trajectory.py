@@ -155,6 +155,10 @@ class Trajectory(Generic[T]):
         else:
             return []
         state = tj[max(0, sid - self.num_turns + 1):sid + 1]
+        if not state:
+            eprint(
+                "empty trajectory, tid: {}, sid: {}, tj_len: {}".format(
+                    tid, sid, len(tj)))
         return state
 
     def fetch_last_state(self) -> List[T]:

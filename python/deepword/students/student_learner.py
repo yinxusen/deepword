@@ -6,7 +6,7 @@ import traceback
 from os import path
 from queue import Queue
 from threading import Thread
-from typing import Tuple, List, Union, Any, Optional
+from typing import Tuple, List, Union, Any, Optional, Dict
 
 import numpy as np
 import tensorflow as tf
@@ -17,10 +17,8 @@ from tensorflow.train import Saver
 from tqdm import trange
 
 from deepword.action import ActionCollector
-from deepword.agents.base_agent import DRRNMemoTeacher
-from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
-    align_batch_str
-from deepword.agents.utils import Memolet
+from deeptextworld.agents.base_agent import DRRNMemoTeacher
+from deeptextworld.agents.utils import Memolet
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
 from deepword.agents.utils import get_action_idx_pair
@@ -28,6 +26,9 @@ from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import sample_batch_ids
 from deepword.hparams import save_hparams, output_hparams
+from deepword.log import Logging
+from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
+    align_batch_str
 from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
 from deepword.utils import eprint, flatten, softmax
@@ -45,14 +46,16 @@ class CMD:
         return self.__dict__[key]
 
 
-class StudentLearner(object):
+class StudentLearner(Logging):
     def __init__(
             self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
             eval_data_path: Optional[str] = None) -> None:
+        super(StudentLearner, self).__init__()
         # prefix should match BaseAgent
         self.tjs_prefix = "trajectories"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
+        self.hs2tj_prefix = "hs2tj"
 
         self.model_dir = model_dir
         self.train_data_dir = train_data_dir
@@ -75,15 +78,17 @@ class StudentLearner(object):
         action_tags = get_path_tags(self.train_data_dir, self.action_prefix)
         memo_tags = get_path_tags(self.train_data_dir, self.memo_prefix)
         tjs_tags = get_path_tags(self.train_data_dir, self.tjs_prefix)
+        hs2tj_tags = get_path_tags(self.train_data_dir, self.hs2tj_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
+        valid_tags.intersection_update(hs2tj_tags)
 
         return list(valid_tags)
 
     def _get_combined_data_path(
-            self, data_dir: str) -> List[Tuple[str, str, str]]:
+            self, data_dir: str) -> List[Tuple[str, str, str, str]]:
         valid_tags = self._get_compatible_snapshot_tag()
         combined_data_path = []
         for tag in sorted(valid_tags, key=lambda k: random.random()):
@@ -93,7 +98,11 @@ class StudentLearner(object):
                  path.join(
                      data_dir, "{}-{}.npz".format(self.action_prefix, tag)),
                  path.join(
-                     data_dir, "{}-{}.npz".format(self.memo_prefix, tag))))
+                     data_dir, "{}-{}.npz".format(self.memo_prefix, tag)),
+                 path.join(
+                     data_dir, "{}-{}.npz".format(
+                         self.hs2tj_prefix, tag))))
+
         return combined_data_path
 
     def _prepare_model(
@@ -205,23 +214,48 @@ class StudentLearner(object):
                 q_actions=m.q_actions[mask]))
         return res
 
+    @classmethod
+    def hs2tj_old2new(
+            cls, old_hs2tj: Dict[str, Dict[int, List[int]]]
+    ) -> Dict[str, Dict[int, List[int]]]:
+        """
+        sid need to be halved.
+        Args:
+            old_hs2tj:
+
+        Returns:
+
+        """
+        new_hs2tj = dict()
+        for sk in old_hs2tj:
+            new_hs2tj[sk] = dict()
+            for tid in old_hs2tj[sk]:
+                new_hs2tj[sk][tid] = list(np.asarray(old_hs2tj[sk][tid]) // 2)
+        return new_hs2tj
+
     def _load_snapshot(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
             eprint("load old data with DRRNMemoTeacher")
-            return self._load_snapshot_v1(memo_path, tjs_path, action_path)
+            return self._load_snapshot_v1(
+                memo_path, tjs_path, action_path, hs2tj_path)
         elif isinstance(memory[0], Memolet):
             eprint("load new data with Memolet")
-            return self._load_snapshot_v2(memo_path, tjs_path, action_path)
+            return self._load_snapshot_v2(
+                memo_path, tjs_path, action_path, hs2tj_path)
         else:
             raise ValueError(
                 "Unrecognized memory type: {}".format(type(memory[0])))
 
     def _load_snapshot_v1(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
         old_memory = list(filter(
@@ -239,11 +273,17 @@ class StudentLearner(object):
             unk_val_id=self.hp.unk_val_id,
             padding_val_id=self.hp.padding_val_id)
         actions.load_actions(action_path)
-        return memory, tjs, actions
+
+        hs2tj = np.load(hs2tj_path, allow_pickle=True)
+        hash_states2tjs = self.hs2tj_old2new(hs2tj["hs2tj"][0])
+
+        return memory, tjs, actions, hash_states2tjs
 
     def _load_snapshot_v2(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
@@ -256,7 +296,11 @@ class StudentLearner(object):
             unk_val_id=self.hp.unk_val_id,
             padding_val_id=self.hp.padding_val_id)
         actions.load_actions(action_path)
-        return memory, tjs, actions
+
+        hs2tj = np.load(hs2tj_path, allow_pickle=True)
+        hash_states2tjs = hs2tj["hs2tj"][0]
+
+        return memory, tjs, actions, hash_states2tjs
 
     def _add_batch(
             self, combined_data_path: List[Tuple[str, str, str]],
@@ -279,9 +323,10 @@ class StudentLearner(object):
                     eprint(
                         "update training data: {}".format(combined_data_path))
                     combined_data_path = new_combined_data_path
-            for tp, ap, mp, in sorted(
+            for tp, ap, mp, hsp in sorted(
                     combined_data_path, key=lambda k: random.random()):
-                memory, tjs, action_collector = self._load_snapshot(mp, tp, ap)
+                memory, tjs, action_collector, _ = self._load_snapshot(
+                    mp, tp, ap, hsp)
                 random.shuffle(memory)
                 i = 0
                 while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
