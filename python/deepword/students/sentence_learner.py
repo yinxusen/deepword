@@ -110,6 +110,7 @@ class SentenceLearner(StudentLearner):
         self.info("load snn tags: {}".format(data_tags))
         while True:
             for tag in sorted(data_tags, key=lambda k: random.random()):
+                self.info("load data from {}".format(tag))
                 data = np.load(
                     path.join(data_path, "snn-data-{}.npz".format(tag)))
                 target_aids = data["target_aids"]
