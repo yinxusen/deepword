@@ -193,8 +193,7 @@ class SentenceLearner(StudentLearner):
         total = 0
         eprint("start test")
 
-        for _ in trange(5000):
-            data = next(data_loader)
+        for data in data_loader:
             semantic_same = self.sess.run(
                 self.model.semantic_same,
                 feed_dict={
