@@ -12,7 +12,7 @@ from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 from tensorflow.train import Saver
-from tqdm import trange
+from tqdm import trange, tqdm
 
 from deepword.action import ActionCollector
 from deepword.agents.utils import Memolet
@@ -20,7 +20,6 @@ from deepword.agents.utils import get_path_tags
 from deepword.students.student_learner import StudentLearner
 from deepword.students.utils import ActionMasterStr
 from deepword.trajectory import Trajectory
-from deepword.utils import eprint
 
 
 class SNNData(namedtuple(
@@ -109,7 +108,7 @@ class SentenceLearner(StudentLearner):
         data_tags = sorted(get_path_tags(data_path, prefix="snn-data"))
         self.info("load snn tags: {}".format(data_tags))
         while True:
-            for tag in sorted(data_tags, key=lambda k: random.random()):
+            for tag in tqdm(sorted(data_tags, key=lambda k: random.random())):
                 self.info("load data from {}".format(tag))
                 data = np.load(
                     path.join(data_path, "snn-data-{}.npz".format(tag)))
@@ -119,17 +118,16 @@ class SentenceLearner(StudentLearner):
                 same_mids = data["same_mids"]
                 diff_aids = data["diff_aids"]
                 diff_mids = data["diff_mids"]
-                i = 0
-                while i < (len(target_aids) // batch_size) - 1:
+                for i in trange(len(target_aids) // batch_size):
                     ss = i * batch_size
                     ee = (i + 1) * batch_size
                     yield SNNData(
                         target_mids[ss: ee], target_aids[ss: ee],
                         same_mids[ss: ee], same_aids[ss: ee],
                         diff_mids[ss: ee], diff_aids[ss: ee])
-                    i += 1
             # only load data one time for evaluation
             if not training:
+                self.info("snn data loader finished")
                 break
 
     def train(self, n_epochs: int) -> None:
@@ -142,7 +140,7 @@ class SentenceLearner(StudentLearner):
             data_path=self.train_data_dir, batch_size=self.hp.batch_size,
             training=True)
 
-        eprint("start training")
+        self.info("start training")
         data_in_queue = True
         for et in trange(n_epochs, ascii=True, desc="epoch"):
             for it in trange(epoch_size, ascii=True, desc="step"):
@@ -152,7 +150,7 @@ class SentenceLearner(StudentLearner):
                 self.sess, self.ckpt_prefix,
                 global_step=tf.train.get_or_create_global_step(
                     graph=self.model.graph))
-            eprint("finish and save {} epoch".format(et))
+            self.info("finish and save {} epoch".format(et))
             if not data_in_queue:
                 break
         return
@@ -191,7 +189,7 @@ class SentenceLearner(StudentLearner):
             training=False)
         acc = 0
         total = 0
-        eprint("start test")
+        self.info("start test")
 
         for data in data_loader:
             semantic_same = self.sess.run(
@@ -210,6 +208,9 @@ class SentenceLearner(StudentLearner):
             acc += np.count_nonzero(
                 semantic_same[len(semantic_same) // 2:] > 0)
             total += len(semantic_same)
+
+        self.info("evaluate with {}, acc: {}, total: {}, acc/total: {}".format(
+            self.train_steps, acc, total, acc * 1. / total if total else 'Nan'))
 
         return acc, total
 

@@ -400,14 +400,12 @@ def process_eval_student(args):
     files = glob.glob(watched_file_regex)
     ckpt_files = [os.path.splitext(f)[0] for f in files]
     eprint("evaluate {} checkpoints".format(len(ckpt_files)))
-    if len(ckpt_files) == 0:
-        return
 
     for ckpt in ckpt_files:
-        res = eval_one_ckpt(
-            hp, args.model_dir, args.data_path, learner_clazz,
-            device="/device:GPU:0", ckpt_path=ckpt)
-        eprint("model: {}, res: {}".format(ckpt, res))
+        tester = learner_clazz(
+            hp, args.model_dir, train_data_dir=None,
+            eval_data_path=args.data_path)
+        tester.test(restore_from=ckpt)
 
 
 def process_eval_dqn(args):
