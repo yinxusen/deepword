@@ -104,7 +104,7 @@ class SentenceLearner(StudentLearner):
         return sess, model, saver, sw, train_steps, queue
 
     def snn_data_loader(
-            self, data_path: str, batch_size: int
+            self, data_path: str, batch_size: int, training: bool
     ) -> Generator[SNNData, None, None]:
         data_tags = sorted(get_path_tags(data_path, prefix="snn-data"))
         self.info("load snn tags: {}".format(data_tags))
@@ -128,6 +128,9 @@ class SentenceLearner(StudentLearner):
                         same_mids[ss: ee], same_aids[ss: ee],
                         diff_mids[ss: ee], diff_aids[ss: ee])
                     i += 1
+            # only load data one time for evaluation
+            if not training:
+                break
 
     def train(self, n_epochs: int) -> None:
         if self.sess is None:
@@ -136,7 +139,8 @@ class SentenceLearner(StudentLearner):
 
         epoch_size = self.hp.save_gap_t
         data_loader = self.snn_data_loader(
-            data_path=self.train_data_dir, batch_size=self.hp.batch_size)
+            data_path=self.train_data_dir, batch_size=self.hp.batch_size,
+            training=True)
 
         eprint("start training")
         data_in_queue = True
@@ -183,7 +187,8 @@ class SentenceLearner(StudentLearner):
              ) = self._prepare_test(device_placement, restore_from)
 
         data_loader = self.snn_data_loader(
-            data_path=self.eval_data_path, batch_size=self.hp.batch_size)
+            data_path=self.eval_data_path, batch_size=self.hp.batch_size,
+            training=False)
         acc = 0
         total = 0
         eprint("start test")
