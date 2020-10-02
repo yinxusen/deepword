@@ -406,7 +406,7 @@ def load_hparams(
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
         "agent_clazz", "policy_to_action", "policy_sampling_temp",
-        "action_file", "policy_eps"
+        "action_file", "policy_eps", "observation_t"
     ]
 
     if fn_pre_config:
