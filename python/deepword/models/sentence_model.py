@@ -18,8 +18,10 @@ class BertSentence(BaseDQN):
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
 
-            "vec_src": tf.placeholder(tf.float32, [None, None]),
-            "vec_actions": tf.placeholder(tf.float32, [None, None]),
+            "vec_src": tf.placeholder(
+                tf.float32, [None, self.bert_config.hidden_size]),
+            "vec_actions": tf.placeholder(
+                tf.float32, [None, self.bert_config.hidden_size]),
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
@@ -49,9 +51,8 @@ class BertSentence(BaseDQN):
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
     def get_q_actions(self):
-
         new_h = tf.layers.dense(
-            self.inputs["vec_src"], units=self.hp.hidden_state_size,
+            self.inputs["vec_src"], units=self.bert_config.hidden_size,
             use_bias=True)
         h_state_expanded = tf.repeat(
             new_h, self.inputs["actions_repeats"], axis=0)
