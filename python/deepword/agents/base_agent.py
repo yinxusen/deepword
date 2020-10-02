@@ -175,8 +175,8 @@ class BaseAgent(Logging):
         return tjs
 
     def _init_state_text(self, state_text_path, with_loading=True):
-        # num_turns = 0, we only need the most recent ObsInventory
-        stc = Trajectory(num_turns=0)
+        # num_turns = 1, we only need the most recent ObsInventory
+        stc = Trajectory(num_turns=1)
         if with_loading:
             try:
                 stc.load_tjs(state_text_path)
