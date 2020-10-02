@@ -1378,18 +1378,26 @@ class FastCore(TFCore):
         strings = flatten([(am.action_ids, am.master_ids) for am in trajectory])
         unknown = [x for x in strings if tuple(x) not in self._str2vec]
         if unknown:
+            self.debug(
+                "get sentence embeddings for {} trajectory(ies)".format(
+                    len(unknown)))
             embeddings = self.get_sentence_embeddings(unknown)
-            self._str2vec += dict(zip([tuple(x) for x in unknown], embeddings))
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
         vectors = [self._str2vec[tuple(x)] for x in strings]
         return np.sum(vectors, axis=0)
 
     def actions2vectors(self, actions: np.ndarray) -> np.ndarray:
         assert actions.ndim == 2, "actions should have dim-2"
-        unknown = [x for x in actions if tuple(list(x)) not in self._str2vec]
+        unknown = [x for x in actions if tuple(x) not in self._str2vec]
         if unknown:
+            self.debug(
+                "get sentence embeddings for {} action(s)".format(
+                    len(unknown)))
             embeddings = self.get_action_embeddings(unknown)
-            self._str2vec += dict(zip([tuple(x) for x in unknown], embeddings))
-        vectors = np.asarray([self._str2vec[tuple(list(x))] for x in actions])
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
+        vectors = np.asarray([self._str2vec[tuple(x)] for x in actions])
         return vectors
 
     def policy(
