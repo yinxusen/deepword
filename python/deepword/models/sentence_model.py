@@ -15,6 +15,16 @@ class BertSentence(BaseDQN):
         super(BertSentence, self).__init__(hp, is_infer)
         self.num_tokens = hp.num_tokens
         self.turns = hp.num_turns
+        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(
+            self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(
+            self.bert_init_ckpt_dir)
+        self.dropout = tf.keras.layers.Dropout(rate=0.4)
+        self.bert_config = b_model.BertConfig.from_json_file(
+            self.bert_config_file)
+        self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
+
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
 
@@ -40,15 +50,6 @@ class BertSentence(BaseDQN):
             "diff_action": tf.placeholder(
                 tf.int32, [None, None, None])
         }
-        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
-        self.bert_config_file = "{}/bert_config.json".format(
-            self.bert_init_ckpt_dir)
-        self.bert_ckpt_file = "{}/bert_model.ckpt".format(
-            self.bert_init_ckpt_dir)
-        self.dropout = tf.keras.layers.Dropout(rate=0.4)
-        self.bert_config = b_model.BertConfig.from_json_file(
-            self.bert_config_file)
-        self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
     def get_q_actions(self):
         new_h = tf.layers.dense(
