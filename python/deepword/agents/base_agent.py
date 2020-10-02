@@ -1,6 +1,5 @@
 import random
 import re
-from collections import namedtuple
 from os import path
 from os import remove
 from typing import List, Dict, Tuple, Optional, Any
@@ -23,13 +22,6 @@ from deepword.trajectory import Trajectory
 from deepword.tree_memory import TreeMemory
 from deepword.utils import get_hash, core_name2clazz
 from deepword.utils import report_status
-
-
-class DRRNMemoTeacher(namedtuple(
-    "DRRNMemoTeacher",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask", "q_actions"))):
-    pass
 
 
 class BaseAgent(Logging):

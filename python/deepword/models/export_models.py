@@ -305,7 +305,6 @@ class SentenceModel(object):
             loss: Optional[tf.Tensor],
             train_summary_op: Optional[tf.Operation]):
         super(SentenceModel, self).__init__()
-
         self.graph = graph
         self.target_master_ = target_master_
         self.same_master_ = same_master_
@@ -317,3 +316,39 @@ class SentenceModel(object):
         self.train_op = train_op
         self.loss = loss
         self.train_summary_op = train_summary_op
+
+
+class VecDRRNModel(object):
+    def __init__(
+            self,
+            graph: tf.Graph,
+            q_actions: tf.Tensor,
+            src_: tf.placeholder,
+            sentence_embeddings: tf.Tensor,
+            vec_src_: tf.placeholder,
+            vec_actions_: tf.placeholder,
+            actions_repeats_: tf.placeholder,
+            action_idx_: Optional[tf.placeholder],
+            train_op: Optional[tf.Operation],
+            loss: Optional[tf.Tensor],
+            expected_q_: Optional[tf.placeholder],
+            b_weight_: Optional[tf.placeholder],
+            train_summary_op: Optional[tf.Operation],
+            abs_loss: Optional[tf.Tensor],
+            h_state: Optional[tf.Tensor]):
+        super(VecDRRNModel, self).__init__()
+        self.graph = graph
+        self.q_actions = q_actions
+        self.src_ = src_
+        self.sentence_embeddings = sentence_embeddings
+        self.vec_src_ = vec_src_
+        self.vec_actions_ = vec_actions_
+        self.actions_repeats_ = actions_repeats_
+        self.action_idx_ = action_idx_
+        self.train_op = train_op
+        self.loss = loss
+        self.expected_q_ = expected_q_
+        self.b_weight_ = b_weight_
+        self.train_summary_op = train_summary_op
+        self.abs_loss = abs_loss
+        self.h_state = h_state

@@ -1,9 +1,10 @@
 import bert.modeling as b_model
 import tensorflow as tf
 
+import deepword.models.utils as dqn
 from deepword.hparams import conventions
 from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import SentenceModel
+from deepword.models.export_models import SentenceModel, VecDRRNModel
 
 
 class BertSentence(BaseDQN):
@@ -15,6 +16,15 @@ class BertSentence(BaseDQN):
         self.num_tokens = hp.num_tokens
         self.turns = hp.num_turns
         self.inputs = {
+            "src": tf.placeholder(tf.int32, [None, None]),
+
+            "vec_src": tf.placeholder(tf.float32, [None, None]),
+            "vec_actions": tf.placeholder(tf.float32, [None, None]),
+            "action_idx": tf.placeholder(tf.int32, [None]),
+            "b_weight": tf.placeholder(tf.float32, [None]),
+            "expected_q": tf.placeholder(tf.float32, [None]),
+            "actions_repeats": tf.placeholder(tf.int32, [None]),
+
             "target_master": tf.placeholder(
                 tf.int32, [None, None, None]),
             "same_master": tf.placeholder(
@@ -39,7 +49,19 @@ class BertSentence(BaseDQN):
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
 
     def get_q_actions(self):
-        raise NotImplementedError()
+
+        new_h = tf.layers.dense(
+            self.inputs["vec_src"], units=self.hp.hidden_state_size,
+            use_bias=True)
+        h_state_expanded = tf.repeat(
+            new_h, self.inputs["actions_repeats"], axis=0)
+
+        q_actions = tf.reduce_sum(
+            tf.multiply(h_state_expanded, self.inputs["vec_actions"]), axis=-1)
+        return q_actions, new_h
+
+    def get_pretrained_embeddings(self):
+        return self.get_raw_states(self.inputs["src"])
 
     def add_cls_token(self, src):
         # padding the [CLS] in the beginning
@@ -51,7 +73,16 @@ class BertSentence(BaseDQN):
         src_masks = tf.cast(tf.math.not_equal(src_w_pad, 0), tf.int32)
         return src_w_pad, src_masks
 
-    def get_h_state(self, src, src_masks):
+    def get_raw_states(self, raw_src):
+        src, src_masks = self.add_cls_token(raw_src)
+        with tf.variable_scope("bert-state-encoder", reuse=tf.AUTO_REUSE):
+            bert_model = b_model.BertModel(
+                config=self.bert_config, is_training=(not self.is_infer),
+                input_ids=src, input_mask=src_masks)
+            pooled = bert_model.get_pooled_output()
+        return pooled
+
+    def get_single_state(self, src, src_masks):
         """
         Encode one trajectory
 
@@ -70,7 +101,7 @@ class BertSentence(BaseDQN):
             h_state = tf.reduce_sum(pooled, axis=0)
         return h_state
 
-    def get_h_actions(self, raw_src):
+    def get_batch_states(self, raw_src):
         """
         Encode batch of actions
 
@@ -111,7 +142,7 @@ class BertSentence(BaseDQN):
         def _dec_next_step(_step, _hs):
             raw_src = combined_input[_step]
             src, src_masks = self.add_cls_token(raw_src)
-            h_state = self.get_h_state(src, src_masks)
+            h_state = self.get_single_state(src, src_masks)
             _hs = _hs.write(_step, h_state)
             return _step + 1, _hs
 
@@ -126,7 +157,7 @@ class BertSentence(BaseDQN):
             [self.inputs["target_action"],
              self.inputs["same_action"],
              self.inputs["diff_action"]], axis=0)
-        h_actions = self.get_h_actions(combined_actions)
+        h_actions = self.get_batch_states(combined_actions)
 
         features = h_states + h_actions
 
@@ -149,7 +180,7 @@ class BertSentence(BaseDQN):
 
         return semantic_same
 
-    def get_train_op(self, semantic_same):
+    def get_snn_train_op(self, semantic_same):
         batch_size = tf.shape(self.inputs["target_master"])[0]
         labels = tf.concat(
             [tf.zeros(batch_size), tf.ones(batch_size)], axis=0)
@@ -159,23 +190,22 @@ class BertSentence(BaseDQN):
         train_op = self.optimizer.minimize(loss, global_step=self.global_step)
         return loss, train_op
 
+    def get_train_op(self, q_actions):
+        loss, abs_loss = dqn.l2_loss_1d_action(
+            q_actions, self.inputs["action_idx"], self.inputs["expected_q"],
+            self.inputs["b_weight"])
+        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+        return loss, train_op, abs_loss
+
     @classmethod
     def get_train_student_model(cls, hp, device_placement):
-        return cls.get_train_model(hp, device_placement)
-
-    @classmethod
-    def get_eval_student_model(cls, hp, device_placement):
-        return cls.get_eval_model(hp, device_placement)
-
-    @classmethod
-    def get_train_model(cls, hp, device_placement):
         graph = tf.Graph()
         with graph.as_default():
             with tf.device(device_placement):
                 model = cls(hp)
                 inputs = model.inputs
                 semantic_same = model.is_semantic_same()
-                loss, train_op = model.get_train_op(semantic_same)
+                loss, train_op = model.get_snn_train_op(semantic_same)
                 loss_summary = tf.summary.scalar("loss", loss)
                 train_summary_op = tf.summary.merge([loss_summary])
         return SentenceModel(
@@ -192,7 +222,7 @@ class BertSentence(BaseDQN):
             train_summary_op=train_summary_op)
 
     @classmethod
-    def get_eval_model(cls, hp, device_placement):
+    def get_eval_student_model(cls, hp, device_placement):
         graph = tf.Graph()
         with graph.as_default():
             with tf.device(device_placement):
@@ -210,4 +240,59 @@ class BertSentence(BaseDQN):
             semantic_same=semantic_same,
             loss=None,
             train_op=None,
+            train_summary_op=None)
+
+    @classmethod
+    def get_train_model(cls, hp, device_placement):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp)
+                inputs = model.inputs
+                sentence_embeddings = model.get_pretrained_embeddings()
+                q_actions, new_h = model.get_q_actions()
+                loss, train_op, abs_loss = model.get_train_op(q_actions)
+                loss_summary = tf.summary.scalar("loss", loss)
+                train_summary_op = tf.summary.merge([loss_summary])
+        return VecDRRNModel(
+            graph=graph,
+            q_actions=q_actions,
+            src_=inputs["src"],
+            sentence_embeddings=sentence_embeddings,
+            vec_src_=inputs["vec_src"],
+            vec_actions_=inputs["vec_actions"],
+            actions_repeats_=inputs["actions_repeats"],
+            b_weight_=inputs["b_weight"],
+            h_state=new_h,
+            abs_loss=abs_loss,
+            train_op=train_op,
+            action_idx_=inputs["action_idx"],
+            expected_q_=inputs["expected_q"],
+            loss=loss,
+            train_summary_op=train_summary_op)
+
+    @classmethod
+    def get_eval_model(cls, hp, device_placement):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.device(device_placement):
+                model = cls(hp, is_infer=True)
+                inputs = model.inputs
+                sentence_embeddings = model.get_pretrained_embeddings()
+                q_actions, new_h = model.get_q_actions()
+        return VecDRRNModel(
+            graph=graph,
+            q_actions=q_actions,
+            src_=inputs["src"],
+            sentence_embeddings=sentence_embeddings,
+            vec_src_=inputs["vec_src"],
+            vec_actions_=inputs["vec_actions"],
+            actions_repeats_=inputs["actions_repeats"],
+            h_state=new_h,
+            b_weight_=None,
+            abs_loss=None,
+            train_op=None,
+            action_idx_=None,
+            expected_q_=None,
+            loss=None,
             train_summary_op=None)
