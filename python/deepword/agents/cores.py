@@ -1379,7 +1379,7 @@ class FastCore(TFCore):
         unknown = [x for x in strings if tuple(x) not in self._str2vec]
         if unknown:
             self.debug(
-                "get sentence embeddings for {} trajectory(ies)".format(
+                "get sentence embeddings for {} masters and actions".format(
                     len(unknown)))
             embeddings = self.get_sentence_embeddings(unknown)
             self._str2vec.update(
