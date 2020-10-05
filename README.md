@@ -1,8 +1,19 @@
+```text
+██████╗ ███████╗███████╗██████╗ ██╗    ██╗ ██████╗ ██████╗ ██████╗
+██╔══██╗██╔════╝██╔════╝██╔══██╗██║    ██║██╔═══██╗██╔══██╗██╔══██╗
+██║  ██║█████╗  █████╗  ██████╔╝██║ █╗ ██║██║   ██║██████╔╝██║  ██║
+██║  ██║██╔══╝  ██╔══╝  ██╔═══╝ ██║███╗██║██║   ██║██╔══██╗██║  ██║
+██████╔╝███████╗███████╗██║     ╚███╔███╔╝╚██████╔╝██║  ██║██████╔╝
+╚═════╝ ╚══════╝╚══════╝╚═╝      ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
+```
+
 # DeepWord
 
 Create auto-agent to play text-based games
 
-Our testbed is [TextWorld](https://github.com/microsoft/TextWorld). Our BaseAgent is built upon TextWorld. However, our agent core - the most important model part - is independent with specific game frameworks or games.
+Our testbed is [TextWorld](https://github.com/microsoft/TextWorld).
+Our BaseAgent is built upon TextWorld.
+However, our agent core - the most important model part - is independent with specific game frameworks or games.
 
 The BaseAgent works with specific games / frameworks, fetching important information from games, and gives actions as feedback.
 
@@ -18,7 +29,7 @@ We support
 
 4. Bert commonsense agents
 
-5. Generation + DRRN agents
+5. Generation + DRRN agents (In-Progress)
 
 We provide
 
@@ -26,9 +37,12 @@ We provide
 
 2. Transformer models
 
-3. Pointer-generator models for generation agents
+3. Pointer-generator models for generation agents (In-Progress)
 
-cite our papers
+Read the [tutorial.md](tutorial.md)
+for details.
+
+Cite our papers
 
 ```
 @article{DBLP:journals/corr/abs-1905-02265,

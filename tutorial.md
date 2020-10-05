@@ -271,3 +271,8 @@ MODEL_HOME="example-model-drrn"
     "train-dqn" \
     --game-path "$GAME_PATH"
 ```
+
+### Teacher-Student Training
+
+Refer to the [Learning to Generalize for Sequential Decision Making](https://github.com/yinxusen/learning_to_generalize)
+code repository.
