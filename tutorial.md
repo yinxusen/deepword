@@ -14,28 +14,28 @@ DeepWord is a project of building automatic agents to play text-based games.
 ## Background
 This project is initialized from one of the ideas Jon thought about for 2018
 summer projects at USC/ISI, the Natural Language Group.
-The initial goal is to build a automatic Dungeons and Dragons player but is
+The initial goal is to build an automatic Dungeons and Dragons player but is
 evolved into the simplified scenario that playing single person text-based games
 such as Zork.
 
 Over the years, the codebase becomes larger and larger with more than 10k line
 of code and ~300k line of changes, supporting four game-playing papers, from
 the simplest Zork DQN, to Cooking DRRN, Commonsense reasoning, and discriminative
-state representation learning. There are also a lot of code are about game
+state representation learning. There is also much code are about the game
 action generation, but we decide not to move on for the action generation direction
 at this time because of
 lacking motivation --- who will accept a paper about generating languages to be
 understandable by a game?
 
-Beside game playing, we find out that there could be some practical usages for
-the game-playing code, and there have already been some of them appeared in top
-NLP venues. Though text-based game playing is still a niche domain, I'm optimistic
+Besides game playing, we find out that there could be some practical usages for
+the game-playing code, and there have already been some of them appeared in the top
+NLP venues. Though text-based game playing is still a niche domain, I am optimistic
 about the future. 
 
 I hope the code can be used for
 
 - beginners to learn how to write reinforcement learning code
-- researchers to run comparison experiments, or to reach next step of game-playing
+- researchers to run comparison experiments, or to reach the next step of game-playing
 - domain experts that convert their problems into games to solve
 
 
