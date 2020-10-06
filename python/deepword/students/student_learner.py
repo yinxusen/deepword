@@ -10,6 +10,8 @@ from typing import Tuple, List, Union, Any, Optional, Dict
 
 import numpy as np
 import tensorflow as tf
+from deeptextworld.agents.base_agent import DRRNMemoTeacher
+from deeptextworld.agents.utils import Memolet
 from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
@@ -17,8 +19,7 @@ from tensorflow.train import Saver
 from tqdm import trange
 
 from deepword.action import ActionCollector
-from deeptextworld.agents.base_agent import DRRNMemoTeacher
-from deeptextworld.agents.utils import Memolet
+from deepword.agents.utils import ActionMaster
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
 from deepword.agents.utils import get_action_idx_pair
@@ -785,3 +786,110 @@ class BertSoftmaxLearner(BertLearner):
                 })
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
+
+
+class SentenceDRRNLearner(StudentLearner):
+    def __init__(
+            self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
+        super(SentenceDRRNLearner, self).__init__(hp, model_dir, train_data_dir)
+        self._str2vec: Dict[Tuple[Any], np.ndarray] = dict()
+        self._str2ids: Dict[str, List[int]] = dict()
+
+    def pad_or_trim(self, src: List[List[int]]) -> List[List[int]]:
+        max_len = min(max([len(x) for x in src]), self.hp.num_tokens)
+        return [
+            x + [self.hp.padding_val_id] * (max_len - len(x))
+            if len(x) < max_len else x[:max_len] for x in src]
+
+    def get_sentence_embeddings(
+            self, src: List[List[int]]) -> List[np.ndarray]:
+        embeddings = self.sess.run(
+            self.model.sentence_embeddings,
+            feed_dict={self.model.src_: self.pad_or_trim(src)})
+        return list(embeddings)
+
+    def get_action_embeddings(
+            self, src: List[np.ndarray]) -> List[np.ndarray]:
+        embeddings = self.sess.run(
+            self.model.sentence_embeddings,
+            feed_dict={self.model.src_: src})
+        return list(embeddings)
+
+    def get_sentence_ids(self, s: str) -> List[int]:
+        if s not in self._str2ids:
+            self._str2ids[s] = self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.tokenize(s))
+        return self._str2ids[s]
+
+    def trajectory2vector(
+            self, trajectory: List[ActionMasterStr]) -> np.ndarray:
+        trajectory = [
+            ActionMaster(
+                action=self.get_sentence_ids(am.action),
+                master=self.get_sentence_ids(am.master))
+            for am in trajectory]
+        strings = flatten([(am.action_ids, am.master_ids) for am in trajectory])
+        unknown = [x for x in strings if tuple(x) not in self._str2vec]
+        if unknown:
+            self.debug(
+                "get sentence embeddings for {} masters and actions".format(
+                    len(unknown)))
+            embeddings = self.get_sentence_embeddings(unknown)
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
+        vectors = [self._str2vec[tuple(x)] for x in strings]
+        return np.sum(vectors, axis=0)
+
+    def actions2vectors(self, actions: np.ndarray) -> np.ndarray:
+        assert actions.ndim == 2, "actions should have dim-2"
+        unknown = [x for x in actions if tuple(x) not in self._str2vec]
+        if unknown:
+            self.debug(
+                "get sentence embeddings for {} action(s)".format(
+                    len(unknown)))
+            embeddings = self.get_action_embeddings(unknown)
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
+        vectors = np.asarray([self._str2vec[tuple(x)] for x in actions])
+        return vectors
+
+    def _train_impl(self, data: Tuple, train_step: int) -> None:
+        vec_src, vec_actions, actions_repeats, expected_qs, state_id = data
+        _, summaries, loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss],
+            feed_dict={
+                self.model.vec_src_: vec_src,
+                self.model.vec_actions_: vec_actions,
+                self.model.actions_repeats_: actions_repeats,
+                self.model.action_idx_: np.arange(len(expected_qs)),
+                self.model.expected_q_: expected_qs,
+                self.model.state_id_: state_id,
+                self.model.b_weight_: [1.]})
+        eprint("\nloss: {}".format(loss))
+        self.sw.add_summary(summaries, train_step)
+
+    def _prepare_data(
+            self,
+            b_memory: List[Union[Tuple, Memolet]],
+            tjs: Trajectory[ActionMasterStr],
+            action_collector: ActionCollector) -> Tuple:
+
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = flatten([list(m.q_actions) for m in b_memory])
+
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        action_matrix = (
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask)
+
+        vec_src = [self.trajectory2vector(tj) for tj in states]
+        vec_actions = self.actions2vectors(actions)
+
+        return vec_src, vec_actions, actions_repeats, expected_qs, state_id

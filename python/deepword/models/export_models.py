@@ -328,6 +328,7 @@ class VecDRRNModel(object):
             vec_src_: tf.placeholder,
             vec_actions_: tf.placeholder,
             actions_repeats_: tf.placeholder,
+            state_id_: tf.placeholder,
             action_idx_: Optional[tf.placeholder],
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
@@ -345,6 +346,7 @@ class VecDRRNModel(object):
         self.vec_actions_ = vec_actions_
         self.actions_repeats_ = actions_repeats_
         self.action_idx_ = action_idx_
+        self.state_id_ = state_id_
         self.train_op = train_op
         self.loss = loss
         self.expected_q_ = expected_q_

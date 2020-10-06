@@ -21,9 +21,13 @@ class BertSentence(BaseDQN):
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
         self.dropout = tf.keras.layers.Dropout(rate=0.4)
+        self.q_dropout = tf.keras.layers.Dropout(rate=0.3)
         self.bert_config = b_model.BertConfig.from_json_file(
             self.bert_config_file)
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
+        self.pos_embeddings = dqn.positional_encoding(
+            position=self.hp.game_episode_terminal_t * 2,
+            d_model=self.bert_config.hidden_size)[0]
 
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
@@ -36,6 +40,7 @@ class BertSentence(BaseDQN):
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
             "actions_repeats": tf.placeholder(tf.int32, [None]),
+            "state_id": tf.placeholder(tf.int32, [None]),
 
             "target_master": tf.placeholder(
                 tf.int32, [None, None, None]),
@@ -52,14 +57,33 @@ class BertSentence(BaseDQN):
         }
 
     def get_q_actions(self):
-        new_h = tf.layers.dense(
-            self.inputs["vec_src"], units=self.bert_config.hidden_size,
-            use_bias=True)
-        h_state_expanded = tf.repeat(
-            new_h, self.inputs["actions_repeats"], axis=0)
+        with tf.variable_scope("q-vals", reuse=False):
+            inp_pos = tf.gather(
+                self.pos_embeddings, indices=self.inputs["state_id"])
+            inp_src = self.inputs["vec_src"] + inp_pos
+            inp_src = self.q_dropout(inp_src, training=(not self.is_infer))
+            new_h = tf.layers.dense(
+                inp_src,
+                units=self.hp.hidden_state_size,
+                activation="relu",
+                use_bias=True)
+            new_h = self.q_dropout(new_h, training=(not self.is_infer))
+            h_state_expanded = tf.repeat(
+                new_h, self.inputs["actions_repeats"], axis=0)
 
-        q_actions = tf.reduce_sum(
-            tf.multiply(h_state_expanded, self.inputs["vec_actions"]), axis=-1)
+            inp_actions = self.q_dropout(
+                self.inputs["vec_actions"], training=(not self.is_infer))
+            new_h_actions = tf.layers.dense(
+                inp_actions,
+                units=self.hp.hidden_state_size,
+                activation="relu",
+                use_bias=True)
+            new_h_actions = self.q_dropout(
+                new_h_actions, training=(not self.is_infer))
+
+            q_actions = tf.reduce_sum(
+                tf.multiply(h_state_expanded, new_h_actions), axis=-1)
+
         return q_actions, new_h
 
     def get_pretrained_embeddings(self):
@@ -200,7 +224,7 @@ class BertSentence(BaseDQN):
         return loss, train_op, abs_loss
 
     @classmethod
-    def get_train_student_model(cls, hp, device_placement):
+    def get_train_model(cls, hp, device_placement):
         graph = tf.Graph()
         with graph.as_default():
             with tf.device(device_placement):
@@ -224,7 +248,7 @@ class BertSentence(BaseDQN):
             train_summary_op=train_summary_op)
 
     @classmethod
-    def get_eval_student_model(cls, hp, device_placement):
+    def get_eval_model(cls, hp, device_placement):
         graph = tf.Graph()
         with graph.as_default():
             with tf.device(device_placement):
@@ -243,6 +267,24 @@ class BertSentence(BaseDQN):
             loss=None,
             train_op=None,
             train_summary_op=None)
+
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return cls.get_train_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return cls.get_eval_model(hp, device_placement)
+
+
+class BertSentenceDRRN(BertSentence):
+    @classmethod
+    def get_train_student_model(cls, hp, device_placement):
+        return cls.get_train_model(hp, device_placement)
+
+    @classmethod
+    def get_eval_student_model(cls, hp, device_placement):
+        return cls.get_eval_model(hp, device_placement)
 
     @classmethod
     def get_train_model(cls, hp, device_placement):
@@ -265,6 +307,7 @@ class BertSentence(BaseDQN):
             vec_actions_=inputs["vec_actions"],
             actions_repeats_=inputs["actions_repeats"],
             b_weight_=inputs["b_weight"],
+            state_id_=inputs["state_id"],
             h_state=new_h,
             abs_loss=abs_loss,
             train_op=train_op,
@@ -292,6 +335,7 @@ class BertSentence(BaseDQN):
             actions_repeats_=inputs["actions_repeats"],
             h_state=new_h,
             b_weight_=None,
+            state_id_=inputs["state_id"],
             abs_loss=None,
             train_op=None,
             action_idx_=None,

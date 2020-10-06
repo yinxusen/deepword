@@ -298,6 +298,20 @@ default_config = {
         cls_val_id=0,
         sep_val_id=0,
         mask_val_id=0
+    ),
+    "BertSentenceDRRN": HParams(
+        agent_clazz="BaseAgent",
+        core_clazz="FastCore",
+        batch_size=32,
+        save_gap_t=1000,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=500,
+        bert_num_hidden_layers=12,
+        embedding_size=64,
+        cls_val_id=0,
+        sep_val_id=0,
+        mask_val_id=0
     )
 }
 

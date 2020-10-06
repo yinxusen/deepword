@@ -234,7 +234,7 @@ def positional_encoding(position, d_model):
         d_model: embedding size
 
     Returns:
-        position embeddings in shape (position, d_model)
+        position embeddings in shape (1, position, d_model)
     """
     angle_rads = _get_angles(
         np.arange(position)[:, np.newaxis], np.arange(d_model)[np.newaxis, :],
