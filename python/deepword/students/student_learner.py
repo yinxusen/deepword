@@ -16,6 +16,7 @@ from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
+from termcolor import colored
 from tqdm import trange
 
 from deepword.action import ActionCollector
@@ -106,6 +107,55 @@ class StudentLearner(Logging):
 
         return combined_data_path
 
+    def safe_loading(
+            self, model: Any, sess: Session, saver: Saver,
+            restore_from: str) -> int:
+        """
+        Load weights from restore_from to model.
+        If weights in loaded model are incompatible with current model,
+        try to load those weights that have the same name.
+
+        This method is useful when saved model lacks of training part, e.g.
+        Adam optimizer.
+
+        Args:
+            model: A tensorflow model
+            sess: A tensorflow session
+            saver: A tensorflow saver
+            restore_from: the path to restore the model
+
+        Returns:
+            training steps
+        """
+        self.info(
+            colored(
+                "Try to restore parameters from: {}".format(restore_from),
+                "magenta", attrs=["bold", "underline"]))
+        with model.graph.as_default():
+            try:
+                saver.restore(sess, restore_from)
+            except Exception as e:
+                self.debug(
+                    "Restoring from saver failed,"
+                    " try to restore from safe saver\n{}".format(e))
+                all_saved_vars = list(
+                    map(lambda v: v[0],
+                        tf.train.list_variables(restore_from)))
+                self.debug(
+                    "Try to restore with safe saver with vars:\n{}".format(
+                        "\n".join(all_saved_vars)))
+                all_vars = tf.global_variables()
+                self.debug("all vars:\n{}".format(
+                    "\n".join([v.op.name for v in all_vars])))
+                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                self.debug("Matched vars:\n{}".format(
+                    "\n".join([v.name for v in var_list])))
+                safe_saver = tf.train.Saver(var_list=var_list)
+                safe_saver.restore(sess, restore_from)
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+        return trained_steps
+
     def _prepare_model(
             self, device_placement: str, restore_from: Optional[str] = None
     ) -> Tuple[Session, Any, Saver, int]:
@@ -126,17 +176,19 @@ class StudentLearner(Logging):
             saver = tf.train.Saver(
                 max_to_keep=self.hp.max_snapshot_to_keep,
                 save_relative_paths=True)
-            global_step = tf.train.get_or_create_global_step()
 
-        try:
             if restore_from is None:
                 restore_from = tf.train.latest_checkpoint(self.load_from)
-            saver.restore(sess, restore_from)
-            trained_steps = sess.run(global_step)
-            eprint("load student from ckpt: {}".format(restore_from))
-        except Exception as e:
-            eprint("load model failed: {}".format(e))
-            trained_steps = 0
+
+            if restore_from is not None:
+                trained_steps = self.safe_loading(
+                    model, sess, saver, restore_from)
+            else:
+                self.warning(colored(
+                    "No checkpoint to load, using untrained model",
+                    "red", "on_white", ["bold", "blink", "underline"]))
+                trained_steps = 0
+
         return sess, model, saver, trained_steps
 
     def _prepare_eval_model(
