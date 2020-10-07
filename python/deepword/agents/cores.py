@@ -1419,7 +1419,8 @@ class FastCore(TFCore):
         q_actions = self.sess.run(self.model.q_actions, feed_dict={
             self.model.vec_src_: [vec_src],
             self.model.vec_actions_: vec_actions,
-            self.model.actions_repeats_: actions_repeats
+            self.model.actions_repeats_: actions_repeats,
+            self.model.state_id_: [state.sid]
         })
 
         return q_actions

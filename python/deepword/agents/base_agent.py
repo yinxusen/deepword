@@ -763,7 +763,8 @@ class BaseAgent(Logging):
 
         state = ObsInventory(
             obs=infos[INFO_KEY.desc][0],
-            inventory=infos[INFO_KEY.inventory][0])
+            inventory=infos[INFO_KEY.inventory][0],
+            sid=self.tjs.get_last_sid())
         self.stc.append(state)
 
         admissible_actions = self._get_admissible_actions(infos)

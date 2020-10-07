@@ -60,7 +60,7 @@ class ActionMaster(object):
         return self._lens
 
 
-class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
+class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory", "sid"))):
     pass
 
 
