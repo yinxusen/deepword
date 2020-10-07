@@ -64,25 +64,16 @@ class BertSentence(BaseDQN):
             inp_src = self.q_dropout(inp_src, training=(not self.is_infer))
             new_h = tf.layers.dense(
                 inp_src,
-                units=self.hp.hidden_state_size,
-                activation="relu",
+                units=self.bert_config.hidden_size,
+                activation=tf.tanh,
                 use_bias=True)
             new_h = self.q_dropout(new_h, training=(not self.is_infer))
             h_state_expanded = tf.repeat(
                 new_h, self.inputs["actions_repeats"], axis=0)
 
-            inp_actions = self.q_dropout(
-                self.inputs["vec_actions"], training=(not self.is_infer))
-            new_h_actions = tf.layers.dense(
-                inp_actions,
-                units=self.hp.hidden_state_size,
-                activation="relu",
-                use_bias=True)
-            new_h_actions = self.q_dropout(
-                new_h_actions, training=(not self.is_infer))
-
             q_actions = tf.reduce_sum(
-                tf.multiply(h_state_expanded, new_h_actions), axis=-1)
+                tf.multiply(
+                    h_state_expanded, self.inputs["vec_actions"]), axis=-1)
 
         return q_actions, new_h
 
