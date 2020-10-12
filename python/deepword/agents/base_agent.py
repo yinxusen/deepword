@@ -1,6 +1,5 @@
 import random
 import re
-from collections import namedtuple
 from os import path
 from os import remove
 from typing import List, Dict, Tuple, Optional, Any
@@ -23,13 +22,6 @@ from deepword.trajectory import Trajectory
 from deepword.tree_memory import TreeMemory
 from deepword.utils import get_hash, core_name2clazz
 from deepword.utils import report_status
-
-
-class DRRNMemoTeacher(namedtuple(
-    "DRRNMemoTeacher",
-    ("tid", "sid", "gid", "aid", "reward", "is_terminal",
-     "action_mask", "next_action_mask", "q_actions"))):
-    pass
 
 
 class BaseAgent(Logging):
@@ -183,8 +175,8 @@ class BaseAgent(Logging):
         return tjs
 
     def _init_state_text(self, state_text_path, with_loading=True):
-        # num_turns = 0, we only need the most recent ObsInventory
-        stc = Trajectory(num_turns=0)
+        # num_turns = 1, we only need the most recent ObsInventory
+        stc = Trajectory(num_turns=1)
         if with_loading:
             try:
                 stc.load_tjs(state_text_path)
@@ -771,7 +763,8 @@ class BaseAgent(Logging):
 
         state = ObsInventory(
             obs=infos[INFO_KEY.desc][0],
-            inventory=infos[INFO_KEY.inventory][0])
+            inventory=infos[INFO_KEY.inventory][0],
+            sid=self.tjs.get_last_sid())
         self.stc.append(state)
 
         admissible_actions = self._get_admissible_actions(infos)

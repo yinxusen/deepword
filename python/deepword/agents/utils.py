@@ -38,7 +38,8 @@ class Memolet(namedtuple(
 
 
 class ActionMaster(object):
-    def __init__(self, action: List[int], master: List[int]):
+    def __init__(
+            self, action: List[int], master: List[int]):
         self._ids = action + master
         self._lens = [len(action), len(master)]
 
@@ -47,11 +48,19 @@ class ActionMaster(object):
         return self._ids
 
     @property
+    def action_ids(self):
+        return self._ids[:self._lens[0]]
+
+    @property
+    def master_ids(self):
+        return self._ids[self._lens[0]:]
+
+    @property
     def lens(self):
         return self._lens
 
 
-class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory"))):
+class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory", "sid"))):
     pass
 
 

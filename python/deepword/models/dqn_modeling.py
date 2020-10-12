@@ -3,7 +3,7 @@ import tensorflow as tf
 
 import deepword.models.utils as dqn
 from deepword.hparams import conventions
-from deepword.models.export_models import DQNModel
+from deepword.models.models import DQNModel
 
 
 class BaseDQN(object):

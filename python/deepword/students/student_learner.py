@@ -6,21 +6,21 @@ import traceback
 from os import path
 from queue import Queue
 from threading import Thread
-from typing import Tuple, List, Union, Any, Optional
+from typing import Tuple, List, Union, Any, Optional, Dict
 
 import numpy as np
 import tensorflow as tf
+from deeptextworld.agents.base_agent import DRRNMemoTeacher
+from deeptextworld.agents.utils import Memolet
 from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
+from termcolor import colored
 from tqdm import trange
 
 from deepword.action import ActionCollector
-from deepword.agents.base_agent import DRRNMemoTeacher
-from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
-    align_batch_str
-from deepword.agents.utils import Memolet
+from deepword.agents.utils import ActionMaster
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
 from deepword.agents.utils import get_action_idx_pair
@@ -28,6 +28,9 @@ from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import sample_batch_ids
 from deepword.hparams import save_hparams, output_hparams
+from deepword.log import Logging
+from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
+    align_batch_str
 from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
 from deepword.utils import eprint, flatten, softmax
@@ -45,14 +48,16 @@ class CMD:
         return self.__dict__[key]
 
 
-class StudentLearner(object):
+class StudentLearner(Logging):
     def __init__(
             self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
             eval_data_path: Optional[str] = None) -> None:
+        super(StudentLearner, self).__init__()
         # prefix should match BaseAgent
         self.tjs_prefix = "trajectories"
         self.action_prefix = "actions"
         self.memo_prefix = "memo"
+        self.hs2tj_prefix = "hs2tj"
 
         self.model_dir = model_dir
         self.train_data_dir = train_data_dir
@@ -75,15 +80,17 @@ class StudentLearner(object):
         action_tags = get_path_tags(self.train_data_dir, self.action_prefix)
         memo_tags = get_path_tags(self.train_data_dir, self.memo_prefix)
         tjs_tags = get_path_tags(self.train_data_dir, self.tjs_prefix)
+        hs2tj_tags = get_path_tags(self.train_data_dir, self.hs2tj_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
         valid_tags.intersection_update(tjs_tags)
+        valid_tags.intersection_update(hs2tj_tags)
 
         return list(valid_tags)
 
     def _get_combined_data_path(
-            self, data_dir: str) -> List[Tuple[str, str, str]]:
+            self, data_dir: str) -> List[Tuple[str, str, str, str]]:
         valid_tags = self._get_compatible_snapshot_tag()
         combined_data_path = []
         for tag in sorted(valid_tags, key=lambda k: random.random()):
@@ -93,8 +100,61 @@ class StudentLearner(object):
                  path.join(
                      data_dir, "{}-{}.npz".format(self.action_prefix, tag)),
                  path.join(
-                     data_dir, "{}-{}.npz".format(self.memo_prefix, tag))))
+                     data_dir, "{}-{}.npz".format(self.memo_prefix, tag)),
+                 path.join(
+                     data_dir, "{}-{}.npz".format(
+                         self.hs2tj_prefix, tag))))
+
         return combined_data_path
+
+    def safe_loading(
+            self, model: Any, sess: Session, saver: Saver,
+            restore_from: str) -> int:
+        """
+        Load weights from restore_from to model.
+        If weights in loaded model are incompatible with current model,
+        try to load those weights that have the same name.
+
+        This method is useful when saved model lacks of training part, e.g.
+        Adam optimizer.
+
+        Args:
+            model: A tensorflow model
+            sess: A tensorflow session
+            saver: A tensorflow saver
+            restore_from: the path to restore the model
+
+        Returns:
+            training steps
+        """
+        self.info(
+            colored(
+                "Try to restore parameters from: {}".format(restore_from),
+                "magenta", attrs=["bold", "underline"]))
+        with model.graph.as_default():
+            try:
+                saver.restore(sess, restore_from)
+            except Exception as e:
+                self.debug(
+                    "Restoring from saver failed,"
+                    " try to restore from safe saver\n{}".format(e))
+                all_saved_vars = list(
+                    map(lambda v: v[0],
+                        tf.train.list_variables(restore_from)))
+                self.debug(
+                    "Try to restore with safe saver with vars:\n{}".format(
+                        "\n".join(all_saved_vars)))
+                all_vars = tf.global_variables()
+                self.debug("all vars:\n{}".format(
+                    "\n".join([v.op.name for v in all_vars])))
+                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                self.debug("Matched vars:\n{}".format(
+                    "\n".join([v.name for v in var_list])))
+                safe_saver = tf.train.Saver(var_list=var_list)
+                safe_saver.restore(sess, restore_from)
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+        return trained_steps
 
     def _prepare_model(
             self, device_placement: str, restore_from: Optional[str] = None
@@ -116,17 +176,19 @@ class StudentLearner(object):
             saver = tf.train.Saver(
                 max_to_keep=self.hp.max_snapshot_to_keep,
                 save_relative_paths=True)
-            global_step = tf.train.get_or_create_global_step()
 
-        try:
             if restore_from is None:
                 restore_from = tf.train.latest_checkpoint(self.load_from)
-            saver.restore(sess, restore_from)
-            trained_steps = sess.run(global_step)
-            eprint("load student from ckpt: {}".format(restore_from))
-        except Exception as e:
-            eprint("load model failed: {}".format(e))
-            trained_steps = 0
+
+            if restore_from is not None:
+                trained_steps = self.safe_loading(
+                    model, sess, saver, restore_from)
+            else:
+                self.warning(colored(
+                    "No checkpoint to load, using untrained model",
+                    "red", "on_white", ["bold", "blink", "underline"]))
+                trained_steps = 0
+
         return sess, model, saver, trained_steps
 
     def _prepare_eval_model(
@@ -174,13 +236,15 @@ class StudentLearner(object):
         res_tj = []
         i = 0
         while i < len(tj) // 2:
-            res_tj.append(ActionMasterStr(action=tj[i * 2], master=tj[i * 2 + 1]))
+            res_tj.append(
+                ActionMasterStr(action=tj[i * 2], master=tj[i * 2 + 1]))
             i += 1
 
         return res_tj
 
     @classmethod
-    def tjs_str2am(cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMasterStr]:
+    def tjs_str2am(
+            cls, old_tjs: Trajectory[str]) -> Trajectory[ActionMasterStr]:
         tjs = Trajectory(num_turns=old_tjs.num_turns // 2, size_per_turn=1)
         tjs.curr_tj = cls.lst_str2am(old_tjs.curr_tj, allow_unfinished_tj=True)
         tjs.curr_tid = old_tjs.curr_tid
@@ -203,23 +267,48 @@ class StudentLearner(object):
                 q_actions=m.q_actions[mask]))
         return res
 
+    @classmethod
+    def hs2tj_old2new(
+            cls, old_hs2tj: Dict[str, Dict[int, List[int]]]
+    ) -> Dict[str, Dict[int, List[int]]]:
+        """
+        sid need to be halved.
+        Args:
+            old_hs2tj:
+
+        Returns:
+
+        """
+        new_hs2tj = dict()
+        for sk in old_hs2tj:
+            new_hs2tj[sk] = dict()
+            for tid in old_hs2tj[sk]:
+                new_hs2tj[sk][tid] = list(np.asarray(old_hs2tj[sk][tid]) // 2)
+        return new_hs2tj
+
     def _load_snapshot(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
             eprint("load old data with DRRNMemoTeacher")
-            return self._load_snapshot_v1(memo_path, tjs_path, action_path)
+            return self._load_snapshot_v1(
+                memo_path, tjs_path, action_path, hs2tj_path)
         elif isinstance(memory[0], Memolet):
             eprint("load new data with Memolet")
-            return self._load_snapshot_v2(memo_path, tjs_path, action_path)
+            return self._load_snapshot_v2(
+                memo_path, tjs_path, action_path, hs2tj_path)
         else:
             raise ValueError(
                 "Unrecognized memory type: {}".format(type(memory[0])))
 
     def _load_snapshot_v1(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
         old_memory = list(filter(
@@ -237,11 +326,17 @@ class StudentLearner(object):
             unk_val_id=self.hp.unk_val_id,
             padding_val_id=self.hp.padding_val_id)
         actions.load_actions(action_path)
-        return memory, tjs, actions
+
+        hs2tj = np.load(hs2tj_path, allow_pickle=True)
+        hash_states2tjs = self.hs2tj_old2new(hs2tj["hs2tj"][0])
+
+        return memory, tjs, actions, hash_states2tjs
 
     def _load_snapshot_v2(
-            self, memo_path: str, tjs_path: str, action_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector]:
+            self, memo_path: str, tjs_path: str, action_path: str,
+            hs2tj_path: str
+    ) -> Tuple[List[Tuple], Trajectory[ActionMasterStr], ActionCollector,
+               Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
 
@@ -254,7 +349,11 @@ class StudentLearner(object):
             unk_val_id=self.hp.unk_val_id,
             padding_val_id=self.hp.padding_val_id)
         actions.load_actions(action_path)
-        return memory, tjs, actions
+
+        hs2tj = np.load(hs2tj_path, allow_pickle=True)
+        hash_states2tjs = hs2tj["hs2tj"][0]
+
+        return memory, tjs, actions, hash_states2tjs
 
     def _add_batch(
             self, combined_data_path: List[Tuple[str, str, str]],
@@ -277,9 +376,10 @@ class StudentLearner(object):
                     eprint(
                         "update training data: {}".format(combined_data_path))
                     combined_data_path = new_combined_data_path
-            for tp, ap, mp, in sorted(
+            for tp, ap, mp, hsp in sorted(
                     combined_data_path, key=lambda k: random.random()):
-                memory, tjs, action_collector = self._load_snapshot(mp, tp, ap)
+                memory, tjs, action_collector, _ = self._load_snapshot(
+                    mp, tp, ap, hsp)
                 random.shuffle(memory)
                 i = 0
                 while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
@@ -708,6 +808,7 @@ class BertLearner(StudentLearner):
 
         action_len = action_len[batch_q_idx].reshape((batch_size, n_classes))
         actions = actions[batch_q_idx].reshape((batch_size, n_classes, -1))
+        # all labels are zero, because the first one is always the best
         swag_labels = np.zeros((len(actions), ), dtype=np.int32)
 
         processed_input = [
@@ -728,8 +829,9 @@ class BertSoftmaxLearner(BertLearner):
     def _train_impl(self, data, train_step):
         inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
         _, summaries, loss = self.sess.run(
-            [self.model.swag_train_op, self.model.swag_train_summary_op,
-             self.model.swag_loss],
+            [self.model.classification_train_op,
+             self.model.classification_train_summary_op,
+             self.model.classification_loss],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
@@ -738,3 +840,107 @@ class BertSoftmaxLearner(BertLearner):
                 })
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
+
+
+class SentenceDRRNLearner(StudentLearner):
+    def __init__(
+            self, hp: HParams, model_dir: str, train_data_dir: str) -> None:
+        super(SentenceDRRNLearner, self).__init__(hp, model_dir, train_data_dir)
+        self._str2vec: Dict[Tuple[Any], np.ndarray] = dict()
+        self._str2ids: Dict[str, List[int]] = dict()
+
+    def pad_or_trim(self, src: List[List[int]]) -> List[List[int]]:
+        max_len = min(max([len(x) for x in src]), self.hp.num_tokens)
+        return [
+            x + [self.hp.padding_val_id] * (max_len - len(x))
+            if len(x) < max_len else x[:max_len] for x in src]
+
+    def get_sentence_embeddings(
+            self, src: List[List[int]]) -> List[np.ndarray]:
+        embeddings = self.sess.run(
+            self.model.sentence_embeddings,
+            feed_dict={self.model.src_: self.pad_or_trim(src)})
+        return list(embeddings)
+
+    def get_action_embeddings(
+            self, src: List[np.ndarray]) -> List[np.ndarray]:
+        embeddings = self.sess.run(
+            self.model.sentence_embeddings,
+            feed_dict={self.model.src_: src})
+        return list(embeddings)
+
+    def get_sentence_ids(self, s: str) -> List[int]:
+        if s not in self._str2ids:
+            self._str2ids[s] = self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.tokenize(s))
+        return self._str2ids[s]
+
+    def trajectory2vector(
+            self, trajectory: List[ActionMasterStr]) -> np.ndarray:
+        trajectory = [
+            ActionMaster(
+                action=self.get_sentence_ids(am.action),
+                master=self.get_sentence_ids(am.master))
+            for am in trajectory]
+        strings = flatten([(am.action_ids, am.master_ids) for am in trajectory])
+        unknown = [x for x in strings if tuple(x) not in self._str2vec]
+        if unknown:
+            self.debug(
+                "get sentence embeddings for {} masters and actions".format(
+                    len(unknown)))
+            embeddings = self.get_sentence_embeddings(unknown)
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
+        vectors = [self._str2vec[tuple(x)] for x in strings]
+        return np.sum(vectors, axis=0)
+
+    def actions2vectors(self, actions: np.ndarray) -> np.ndarray:
+        assert actions.ndim == 2, "actions should have dim-2"
+        unknown = [x for x in actions if tuple(x) not in self._str2vec]
+        if unknown:
+            self.debug(
+                "get sentence embeddings for {} action(s)".format(
+                    len(unknown)))
+            embeddings = self.get_action_embeddings(unknown)
+            self._str2vec.update(
+                dict(zip([tuple(x) for x in unknown], embeddings)))
+        vectors = np.asarray([self._str2vec[tuple(x)] for x in actions])
+        return vectors
+
+    def _train_impl(self, data: Tuple, train_step: int) -> None:
+        vec_src, vec_actions, actions_repeats, expected_qs, state_id = data
+        _, summaries, loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss],
+            feed_dict={
+                self.model.vec_src_: vec_src,
+                self.model.vec_actions_: vec_actions,
+                self.model.actions_repeats_: actions_repeats,
+                self.model.action_idx_: np.arange(len(expected_qs)),
+                self.model.expected_q_: expected_qs,
+                self.model.state_id_: state_id,
+                self.model.b_weight_: [1.]})
+        eprint("\nloss: {}".format(loss))
+        self.sw.add_summary(summaries, train_step)
+
+    def _prepare_data(
+            self,
+            b_memory: List[Union[Tuple, Memolet]],
+            tjs: Trajectory[ActionMasterStr],
+            action_collector: ActionCollector) -> Tuple:
+        trajectory_id = [m.tid for m in b_memory]
+        state_id = [m.sid for m in b_memory]
+        game_id = [m.gid for m in b_memory]
+        action_mask = [m.action_mask for m in b_memory]
+        expected_qs = flatten([list(m.q_actions) for m in b_memory])
+        states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
+        action_len = (
+            [action_collector.get_action_len(gid) for gid in game_id])
+        action_matrix = (
+            [action_collector.get_action_matrix(gid) for gid in game_id])
+        actions, action_len, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask)
+
+        vec_src = [self.trajectory2vector(tj) for tj in states]
+        vec_actions = self.actions2vectors(actions)
+
+        return vec_src, vec_actions, actions_repeats, expected_qs, state_id

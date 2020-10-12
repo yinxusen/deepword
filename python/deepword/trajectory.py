@@ -3,12 +3,13 @@ from typing import TypeVar, Generic
 
 import numpy as np
 
-from deepword.utils import ctime, eprint
+from deepword.log import Logging
+from deepword.utils import ctime, report_status
 
 T = TypeVar('T')
 
 
-class Trajectory(Generic[T]):
+class Trajectory(Generic[T], Logging):
     """
     BaseTrajectory only takes care of interacting with Agent on collecting
     game scripts.
@@ -20,7 +21,7 @@ class Trajectory(Generic[T]):
         """
         Take the ActionMaster (AM) as an example,
         Trajectory(AM1, AM2, AM3, AM4, AM5), and last_sid points to AM5;
-        num_turns = 1 means we choose [AM4, AM5];
+        num_turns = 1 means we choose [AM5];
 
         size_per_turn only controls the way we separate pre- and post-trajectory
         default with size_per_turn = 1, AM4 is the pre-trajectory of AM5.
@@ -74,7 +75,8 @@ class Trajectory(Generic[T]):
                 break
             else:
                 self.trajectories.pop(k, None)
-                eprint('trajectory {} (time<=) {} deleted'.format(k, max(ks)))
+                self.debug(
+                    'trajectory {} (time<=) {} deleted'.format(k, max(ks)))
 
     def add_new_tj(self, tid: Optional[int] = None) -> int:
         """
@@ -154,7 +156,15 @@ class Trajectory(Generic[T]):
             tj = self.trajectories[tid]
         else:
             return []
-        state = tj[max(0, sid - self.num_turns):sid + 1]
+        ss = max(0, sid - self.num_turns + 1)
+        ee = sid + 1  # sid should be included
+        state = tj[ss: ee]
+        if not state:
+            self.debug("empty trajectory:\n{}".format(
+                report_status([
+                    ("tid", tid), ("sid", sid), ("tj_len", len(tj)),
+                    ("ss", ss), ("ee", ee)
+                ])))
         return state
 
     def fetch_last_state(self) -> List[T]:

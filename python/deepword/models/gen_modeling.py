@@ -1,8 +1,8 @@
 import tensorflow as tf
 
 from deepword.models import transformer as txf
-from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import GenDQNModel
+from deepword.models.dqn_modeling import BaseDQN
+from deepword.models.models import GenDQNModel
 from deepword.models.utils import l2_loss_2d_action
 
 

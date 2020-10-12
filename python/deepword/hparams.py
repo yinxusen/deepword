@@ -284,6 +284,34 @@ default_config = {
         cls_val_id=0,
         sep_val_id=0,
         mask_val_id=0
+    ),
+    "BertSentence": HParams(
+        agent_clazz="",
+        core_clazz="",
+        batch_size=32,
+        save_gap_t=1000,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=500,
+        bert_num_hidden_layers=12,
+        embedding_size=64,
+        cls_val_id=0,
+        sep_val_id=0,
+        mask_val_id=0
+    ),
+    "BertSentenceDRRN": HParams(
+        agent_clazz="BaseAgent",
+        core_clazz="FastCore",
+        batch_size=32,
+        save_gap_t=1000,
+        learning_rate=5e-5,
+        num_turns=6,
+        num_tokens=500,
+        bert_num_hidden_layers=12,
+        embedding_size=64,
+        cls_val_id=0,
+        sep_val_id=0,
+        mask_val_id=0
     )
 }
 
@@ -392,7 +420,7 @@ def load_hparams(
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
         "agent_clazz", "policy_to_action", "policy_sampling_temp",
-        "action_file", "policy_eps"
+        "action_file", "policy_eps", "observation_t"
     ]
 
     if fn_pre_config:

@@ -101,7 +101,7 @@ def get_parser() -> ArgumentParser:
     eval_parser.add_argument('--game-path', type=str, required=True)
     eval_parser.add_argument('--f-games', type=str)
     eval_parser.add_argument('--n-gpus', type=int, default=1)
-    eval_parser.add_argument('--debug', action='store_true')
+    eval_parser.add_argument('--debug', action='store_true', default=False)
     eval_parser.add_argument('--load-best', action='store_true', default=False)
     eval_parser.add_argument('--restore-from', type=str)
     eval_parser.add_argument(
@@ -120,6 +120,12 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--data-path', type=str, required=True)
     student_eval_parser.add_argument('--learner-clazz', type=str)
     student_eval_parser.add_argument('--n-gpus', type=int, default=1)
+    student_eval_parser.add_argument(
+        '--debug', action='store_true', default=False)
+
+    snn_gen_parser = subparsers.add_parser('gen-snn')
+    snn_gen_parser.add_argument('--data-path', type=str, required=True)
+    snn_gen_parser.add_argument('--learner-clazz', type=str)
 
     gen_data_parser = subparsers.add_parser('gen-data')
     gen_data_parser.add_argument('--game-path', type=str, required=True)
@@ -360,6 +366,22 @@ def process_train_student(args):
     learner.train(n_epochs=args.n_epochs)
 
 
+def process_snn_input(args):
+    """
+    generate snn input
+    """
+
+    fn_hparams = os.path.join(args.model_dir, "hparams.json")
+    if os.path.isfile(fn_hparams):
+        eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
+    hp = process_hp(args)
+    assert hp.learner_clazz == "SentenceLearner"
+    setup_train_log(args.model_dir)
+    learner_clazz = learner_name2clazz(hp.learner_clazz)
+    learner = learner_clazz(hp, args.model_dir, args.data_path)
+    learner.preprocess_input()
+
+
 def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
     tester = learner_clazz(
         hp, model_dir, train_data_dir=None, eval_data_path=data_path)
@@ -373,16 +395,28 @@ def process_eval_student(args):
     """
 
     hp = process_hp(args)
-    assert hp.learner_clazz == "SwagLearner"
+    assert hp.learner_clazz == "SwagLearner" or \
+           hp.learner_clazz == "SentenceLearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
     n_gpus = args.n_gpus
     gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
+
+    setup_eval_log(log_filename="/tmp/eval-logging.txt")
     watched_file_regex = path.join(
         args.model_dir, "last_weights", "after-epoch-*.index")
     files = glob.glob(watched_file_regex)
     ckpt_files = [os.path.splitext(f)[0] for f in files]
     eprint("evaluate {} checkpoints".format(len(ckpt_files)))
+
+    if args.debug:
+        for ckpt in ckpt_files:
+            tester = learner_clazz(
+                hp, args.model_dir, train_data_dir=None,
+                eval_data_path=args.data_path)
+            tester.test(restore_from=ckpt)
+        return
+
     if len(ckpt_files) == 0:
         return
 
@@ -497,6 +531,8 @@ def main(args):
         process_train_student(args)
     elif args.mode == "eval-student":
         process_eval_student(args)
+    elif args.mode == "gen-snn":
+        process_snn_input(args)
     elif args.mode == "eval-dqn":
         process_eval_dqn(args)
     elif args.mode == "gen-data":
