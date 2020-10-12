@@ -2,9 +2,9 @@ import tensorflow as tf
 
 import deepword.models.transformer as txf
 import deepword.models.utils as dqn
-from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import DSQNModel
-from deepword.models.export_models import DSQNZorkModel
+from deepword.models.dqn_modeling import BaseDQN
+from deepword.models.models import DSQNModel
+from deepword.models.models import DSQNZorkModel
 
 
 class CnnDSQN(BaseDQN):

@@ -3,11 +3,11 @@ import bert.modeling as b_model
 import tensorflow as tf
 
 from deepword.hparams import conventions
-from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import CommonsenseModel
+from deepword.models.dqn_modeling import BaseDQN
+from deepword.models.models import NLUModel
 
 
-class BertCommonsense(BaseDQN):
+class BertNLU(BaseDQN):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -23,7 +23,7 @@ class BertCommonsense(BaseDQN):
         :param hp:
         :param is_infer:
         """
-        super(BertCommonsense, self).__init__(hp, is_infer)
+        super(BertNLU, self).__init__(hp, is_infer)
         self.num_tokens = hp.num_tokens
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
@@ -66,7 +66,7 @@ class BertCommonsense(BaseDQN):
 
         return q_actions
 
-    def get_swag_train_op(self, q_actions):
+    def get_classification_train_op(self, q_actions):
         """
         q_actions: [batch_size, 1]
         in this case, when we want to compute classification error, we need
@@ -91,11 +91,11 @@ class BertCommonsense(BaseDQN):
 
     @classmethod
     def get_train_student_model(cls, hp, device_placement):
-        return create_train_bert_commonsense_model(cls, hp, device_placement)
+        return create_train_bert_nlu_model(cls, hp, device_placement)
 
     @classmethod
     def get_eval_student_model(cls, hp, device_placement):
-        return create_eval_bert_commonsense_model(cls, hp, device_placement)
+        return create_eval_bert_nlu_model(cls, hp, device_placement)
 
     @classmethod
     def get_train_model(cls, hp, device_placement):
@@ -106,7 +106,7 @@ class BertCommonsense(BaseDQN):
         return cls.get_eval_student_model(hp, device_placement)
 
 
-class AlbertCommonsense(BertCommonsense):
+class AlbertNLU(BertNLU):
     def __init__(self, hp, is_infer=False):
         """
         inputs:
@@ -122,7 +122,7 @@ class AlbertCommonsense(BertCommonsense):
         :param hp:
         :param is_infer:
         """
-        super(AlbertCommonsense, self).__init__(hp, is_infer)
+        super(AlbertNLU, self).__init__(hp, is_infer)
         self.bert_init_ckpt_dir = conventions.albert_ckpt_dir
         self.bert_config_file = "{}/albert_config.json".format(
             self.bert_init_ckpt_dir)
@@ -157,7 +157,7 @@ class AlbertCommonsense(BertCommonsense):
         return q_actions
 
 
-def create_train_bert_commonsense_model(model_creator, hp, device_placement):
+def create_train_bert_nlu_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
         with tf.device(device_placement):
@@ -165,12 +165,15 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
             inputs = model.inputs
             q_actions = model.get_q_actions()
             loss, train_op = model.get_train_op(q_actions)
-            swag_loss, swag_train_op = model.get_swag_train_op(q_actions)
+            classification_loss, classification_train_op = \
+                model.get_classification_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
-            swag_loss_summary = tf.summary.scalar("swag_loss", swag_loss)
+            classification_loss_summary = tf.summary.scalar(
+                "classification_loss", classification_loss)
             train_summary_op = tf.summary.merge([loss_summary])
-            swag_train_summary_op = tf.summary.merge([swag_loss_summary])
-    return CommonsenseModel(
+            classification_train_summary_op = tf.summary.merge(
+                [classification_loss_summary])
+    return NLUModel(
         graph=graph,
         q_actions=q_actions,
         src_seg_=None,
@@ -179,10 +182,10 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         swag_labels_=inputs["swag_labels"],
         loss=loss,
         train_op=train_op,
-        swag_loss=swag_loss,
-        swag_train_op=swag_train_op,
+        classification_loss=classification_loss,
+        classification_train_op=classification_train_op,
         train_summary_op=train_summary_op,
-        swag_train_summary_op=swag_train_summary_op,
+        classification_train_summary_op=classification_train_summary_op,
         expected_q_=inputs["expected_q"],
         action_idx_=inputs["action_idx"],
         abs_loss=None,
@@ -191,14 +194,14 @@ def create_train_bert_commonsense_model(model_creator, hp, device_placement):
         b_weight_=None)
 
 
-def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
+def create_eval_bert_nlu_model(model_creator, hp, device_placement):
     graph = tf.Graph()
     with graph.as_default():
         with tf.device(device_placement):
             model = model_creator(hp, is_infer=True)
             inputs = model.inputs
             q_actions = model.get_q_actions()
-    return CommonsenseModel(
+    return NLUModel(
         graph=graph,
         q_actions=q_actions,
         src_seg_=None,
@@ -207,10 +210,10 @@ def create_eval_bert_commonsense_model(model_creator, hp, device_placement):
         swag_labels_=None,
         loss=None,
         train_op=None,
-        swag_loss=None,
-        swag_train_op=None,
+        classification_loss=None,
+        classification_train_op=None,
         train_summary_op=None,
-        swag_train_summary_op=None,
+        classification_train_summary_op=None,
         expected_q_=inputs["expected_q"],
         action_idx_=inputs["action_idx"],
         abs_loss=None,

@@ -3,8 +3,8 @@ import tensorflow as tf
 
 import deepword.models.utils as dqn
 from deepword.hparams import conventions
-from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import SentenceModel, VecDRRNModel
+from deepword.models.dqn_modeling import BaseDQN
+from deepword.models.models import SentenceModel, SentenceDRRNModel
 
 
 class BertSentence(BaseDQN):
@@ -289,7 +289,7 @@ class BertSentenceDRRN(BertSentence):
                 loss, train_op, abs_loss = model.get_train_op(q_actions)
                 loss_summary = tf.summary.scalar("loss", loss)
                 train_summary_op = tf.summary.merge([loss_summary])
-        return VecDRRNModel(
+        return SentenceDRRNModel(
             graph=graph,
             q_actions=q_actions,
             src_=inputs["src"],
@@ -316,7 +316,7 @@ class BertSentenceDRRN(BertSentence):
                 inputs = model.inputs
                 sentence_embeddings = model.get_pretrained_embeddings()
                 q_actions, new_h = model.get_q_actions()
-        return VecDRRNModel(
+        return SentenceDRRNModel(
             graph=graph,
             q_actions=q_actions,
             src_=inputs["src"],

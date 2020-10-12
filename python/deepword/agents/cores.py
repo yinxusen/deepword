@@ -24,13 +24,13 @@ from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import id_real2batch
 from deepword.log import Logging
-from deepword.models.dqn_model import DQNModel
-from deepword.models.export_models import CommonsenseModel
-from deepword.models.export_models import DRRNModel
-from deepword.models.export_models import VecDRRNModel
-from deepword.models.export_models import DSQNModel
-from deepword.models.export_models import DSQNZorkModel
-from deepword.models.export_models import GenDQNModel
+from deepword.models.dqn_modeling import DQNModel
+from deepword.models.models import NLUModel
+from deepword.models.models import DRRNModel
+from deepword.models.models import SentenceDRRNModel
+from deepword.models.models import DSQNModel
+from deepword.models.models import DSQNZorkModel
+from deepword.models.models import GenDQNModel
 from deepword.tokenizers import init_tokens
 from deepword.utils import ctime, report_status
 from deepword.utils import eprint
@@ -458,8 +458,8 @@ class BertCore(TFCore):
     """
     def __init__(self, hp, model_dir):
         super(BertCore, self).__init__(hp, model_dir)
-        self.model: Optional[CommonsenseModel] = None
-        self.target_model: Optional[CommonsenseModel] = None
+        self.model: Optional[NLUModel] = None
+        self.target_model: Optional[NLUModel] = None
 
     def train_one_batch(
             self,
@@ -1350,8 +1350,8 @@ class PGNCore(TFCore):
 class FastCore(TFCore):
     def __init__(self, hp, model_dir):
         super(FastCore, self).__init__(hp, model_dir)
-        self.model: Optional[VecDRRNModel] = None
-        self.target_model: Optional[VecDRRNModel] = None
+        self.model: Optional[SentenceDRRNModel] = None
+        self.target_model: Optional[SentenceDRRNModel] = None
         self._str2vec: Dict[Tuple[Any], np.ndarray] = dict()
 
     def pad_or_trim(self, src: List[List[int]]) -> List[List[int]]:

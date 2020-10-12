@@ -808,6 +808,7 @@ class BertLearner(StudentLearner):
 
         action_len = action_len[batch_q_idx].reshape((batch_size, n_classes))
         actions = actions[batch_q_idx].reshape((batch_size, n_classes, -1))
+        # all labels are zero, because the first one is always the best
         swag_labels = np.zeros((len(actions), ), dtype=np.int32)
 
         processed_input = [
@@ -828,8 +829,9 @@ class BertSoftmaxLearner(BertLearner):
     def _train_impl(self, data, train_step):
         inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
         _, summaries, loss = self.sess.run(
-            [self.model.swag_train_op, self.model.swag_train_summary_op,
-             self.model.swag_loss],
+            [self.model.classification_train_op,
+             self.model.classification_train_summary_op,
+             self.model.classification_loss],
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
@@ -925,15 +927,12 @@ class SentenceDRRNLearner(StudentLearner):
             b_memory: List[Union[Tuple, Memolet]],
             tjs: Trajectory[ActionMasterStr],
             action_collector: ActionCollector) -> Tuple:
-
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
         game_id = [m.gid for m in b_memory]
         action_mask = [m.action_mask for m in b_memory]
         expected_qs = flatten([list(m.q_actions) for m in b_memory])
-
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
-
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         action_matrix = (

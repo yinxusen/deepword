@@ -124,7 +124,7 @@ class DRRNModel(DQNModel):
         self.actions_repeats_ = actions_repeats_
 
 
-class CommonsenseModel(DQNModel):
+class NLUModel(DQNModel):
     def __init__(
             self,
             graph: tf.Graph,
@@ -137,15 +137,15 @@ class CommonsenseModel(DQNModel):
             expected_q_: Optional[tf.placeholder],
             b_weight_: Optional[tf.placeholder],
             train_summary_op: Optional[tf.Operation],
-            swag_train_summary_op: Optional[tf.Operation],
+            classification_train_summary_op: Optional[tf.Operation],
             abs_loss: Optional[tf.Tensor],
             src_seg_: Optional[tf.placeholder],
             h_state: Optional[tf.Tensor],
             seg_tj_action_: tf.placeholder,
             swag_labels_: Optional[tf.placeholder],
-            swag_loss: Optional[tf.Tensor],
-            swag_train_op: Optional[tf.Operation]):
-        super(CommonsenseModel, self).__init__(
+            classification_loss: Optional[tf.Tensor],
+            classification_train_op: Optional[tf.Operation]):
+        super(NLUModel, self).__init__(
             graph,
             q_actions,
             src_,
@@ -161,9 +161,9 @@ class CommonsenseModel(DQNModel):
             h_state)
         self.seg_tj_action_ = seg_tj_action_
         self.swag_labels_ = swag_labels_
-        self.swag_loss = swag_loss
-        self.swag_train_op = swag_train_op
-        self.swag_train_summary_op = swag_train_summary_op
+        self.classification_loss = classification_loss
+        self.classification_train_op = classification_train_op
+        self.classification_train_summary_op = classification_train_summary_op
 
 
 class DSQNModel(DRRNModel):
@@ -318,7 +318,7 @@ class SentenceModel(object):
         self.train_summary_op = train_summary_op
 
 
-class VecDRRNModel(object):
+class SentenceDRRNModel(object):
     def __init__(
             self,
             graph: tf.Graph,
@@ -337,7 +337,7 @@ class VecDRRNModel(object):
             train_summary_op: Optional[tf.Operation],
             abs_loss: Optional[tf.Tensor],
             h_state: Optional[tf.Tensor]):
-        super(VecDRRNModel, self).__init__()
+        super(SentenceDRRNModel, self).__init__()
         self.graph = graph
         self.q_actions = q_actions
         self.src_ = src_

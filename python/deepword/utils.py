@@ -144,11 +144,11 @@ def model_name2clazz(name: str):
         the class w.r.t. the model name
     """
 
-    from deepword.models import dqn_model, drrn_model, dsqn_model, \
-        gen_model, commonsense_model, sentence_model
+    from deepword.models import dqn_modeling, drrn_modeling, dsqn_modeling, \
+        gen_modeling, nlu_modeling, sentence_modeling
 
-    for namespace in [dqn_model, drrn_model, dsqn_model, gen_model,
-                      commonsense_model, sentence_model]:
+    for namespace in [dqn_modeling, drrn_modeling, dsqn_modeling, gen_modeling,
+                      nlu_modeling, sentence_modeling]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in models".format(name))

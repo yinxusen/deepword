@@ -4,8 +4,8 @@ import tensorflow as tf
 import deepword.models.transformer as txf
 import deepword.models.utils as dqn
 from deepword.hparams import conventions
-from deepword.models.dqn_model import BaseDQN
-from deepword.models.export_models import DRRNModel
+from deepword.models.dqn_modeling import BaseDQN
+from deepword.models.models import DRRNModel
 
 
 class CnnDRRN(BaseDQN):
