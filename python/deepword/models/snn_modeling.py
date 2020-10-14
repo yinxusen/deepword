@@ -12,7 +12,6 @@ class BertSNN(object):
     def __init__(self, hp, is_infer=False):
         self.is_infer = is_infer
         self.hp = hp
-        self.snn_language_layer = self.hp.snn_language_layer
         self.global_step = tf.train.get_or_create_global_step()
         self.optimizer = tf.train.AdamOptimizer(self.hp.learning_rate)
         self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
@@ -24,7 +23,9 @@ class BertSNN(object):
         self.bert_config = b_model.BertConfig.from_json_file(
             self.bert_config_file)
         self.bert_config.num_hidden_layers = self.hp.bert_num_hidden_layers
-        assert 0 < self.snn_language_layer <= self.hp.bert_num_hidden_layers, \
+        # bert language layer is index of one layer
+        self.bert_language_layer = self.hp.bert_language_layer
+        assert 0 <= self.bert_language_layer < self.hp.bert_num_hidden_layers, \
             "language layer doesn't match bert layers"
 
         self.inputs = {
@@ -50,7 +51,7 @@ class BertSNN(object):
                 config=self.bert_config, is_training=(not self.is_infer),
                 input_ids=src, input_mask=src_masks)
             all_layers = bert_model.get_all_encoder_layers()
-            snn_feature_output = all_layers[self.snn_language_layer]
+            snn_feature_output = all_layers[self.bert_language_layer]
             with tf.variable_scope("language_pooler"):
                 first_token_tensor = tf.squeeze(
                     snn_feature_output[:, 0:1, :], axis=1)

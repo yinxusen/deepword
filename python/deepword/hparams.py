@@ -286,7 +286,8 @@ default_config = {
         embedding_size=64,
         cls_val_id=0,
         sep_val_id=0,
-        mask_val_id=0
+        mask_val_id=0,
+        bert_language_layer=11
     )
 }
 
