@@ -2,7 +2,7 @@
 # for Bert DRRN
 
 model_creator: BertSentence
-num_tokens: 128
+num_tokens: 256
 num_turns: 5
 batch_size: 32
 save_gap_t: 5000

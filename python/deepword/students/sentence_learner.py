@@ -18,7 +18,7 @@ from deepword.action import ActionCollector
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
 from deepword.students.student_learner import StudentLearner
-from deepword.students.utils import ActionMasterStr
+from deepword.students.utils import ActionMasterStr, batch_dqn_input
 from deepword.trajectory import Trajectory
 
 
@@ -65,10 +65,12 @@ class SentenceLearner(StudentLearner):
                 math.ceil(len(memory) * 1. / self.hp.batch_size))
             target_set, same_set, diff_set = self.get_snn_pairs(
                 hash_states2tjs, tjs, total_size)
-            target_aids, target_mids, target_tjs = self.get_snn_tjs(
-                tjs, target_set)
-            same_aids, same_mids, same_tjs = self.get_snn_tjs(tjs, same_set)
-            diff_aids, diff_mids, diff_tjs = self.get_snn_tjs(tjs, diff_set)
+            target_src, target_src_len, target_src_mask, target_tjs = \
+                self.get_snn_tjs(tjs, target_set)
+            same_src, same_src_len, same_src_mask, same_tjs = \
+                self.get_snn_tjs(tjs, same_set)
+            diff_src, diff_src_len, diff_src_mask, diff_tjs = \
+                self.get_snn_tjs(tjs, diff_set)
 
             for i in range(min(len(target_tjs), 10)):
                 self.info("target: {}, same: {}, diff: {}".format(
@@ -76,12 +78,15 @@ class SentenceLearner(StudentLearner):
 
             np.savez(
                 "{}/snn-data-{}.npz".format(self.model_dir, tag),
-                target_aids=target_aids,
-                target_mids=target_mids,
-                same_aids=same_aids,
-                same_mids=same_mids,
-                diff_aids=diff_aids,
-                diff_mids=diff_mids)
+                target_src=target_src,
+                target_src_len=target_src_len,
+                target_src_mask=target_src_mask,
+                same_src=same_src,
+                same_src_len=same_src_len,
+                same_src_mask=same_src_mask,
+                diff_src=diff_src,
+                diff_src_len=diff_src_len,
+                diff_src_mask=diff_src_mask)
 
     def _prepare_training(
             self
@@ -304,11 +309,16 @@ class SentenceLearner(StudentLearner):
 
     def get_snn_tjs(
             self, tjs: Trajectory, tid_sid_set: List[Tuple[int, int]]
-    ) -> Tuple[np.ndarray, np.ndarray, List[List[ActionMasterStr]]]:
+    ) -> Tuple[List[List[int]], List[int], List[List[int]],
+               List[List[ActionMasterStr]]]:
         trajectories = [
             tjs.fetch_state_by_idx(tid, sid) for tid, sid in tid_sid_set]
 
-        action_ids, master_ids = zip(*[
-            self._snn_tj_transformation(tj) for tj in trajectories])
+        batch_src, batch_src_len, batch_mask = batch_dqn_input(
+            trajectories, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id, with_action_padding=False)
 
-        return action_ids, master_ids, trajectories
+        # action_ids, master_ids = zip(*[
+        #     self._snn_tj_transformation(tj) for tj in trajectories])
+
+        return batch_src, batch_src_len, batch_mask, trajectories
