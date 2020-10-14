@@ -137,10 +137,6 @@ class CnnDRRN(BaseDQN):
         return cls.get_eval_model(hp, device_placement)
 
 
-class LegacyCnnDRRN(CnnDRRN):
-    pass
-
-
 class TransformerDRRN(CnnDRRN):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
         """

@@ -1,18 +1,18 @@
 ---
-# for Bert DRRN
+# for CNN DRRN
 
-model_creator: BertSentenceDRRN
-num_tokens: 128
+model_creator: CnnDRRN
+num_tokens: 256
 num_turns: 5
 batch_size: 32
 save_gap_t: 5000
 embedding_size: 64
-learning_rate: 1e-5
-bert_num_hidden_layers: 12  # full-size bert-base
+learning_rate: 5e-5
+num_conv_filters: 32
 tokenizer_type: BERT
 max_snapshot_to_keep: 100
 eval_episode: 5
 game_episode_terminal_t: 100
 replay_mem: 500000
 collect_floor_plan: True
-learner_clazz: SentenceDRRNLearner  # for student learner
+learner_clazz: DRRNLearner  # for student learner

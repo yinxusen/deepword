@@ -25,12 +25,11 @@ from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import id_real2batch
 from deepword.log import Logging
 from deepword.models.dqn_modeling import DQNModel
-from deepword.models.models import NLUModel
 from deepword.models.models import DRRNModel
-from deepword.models.models import SentenceDRRNModel
 from deepword.models.models import DSQNModel
 from deepword.models.models import DSQNZorkModel
 from deepword.models.models import GenDQNModel
+from deepword.models.models import NLUModel
 from deepword.tokenizers import init_tokens
 from deepword.utils import ctime, report_status
 from deepword.utils import eprint
@@ -448,7 +447,7 @@ class TFCore(BaseCore, ABC):
             "load target model from trained step {}".format(trained_step))
 
 
-class BertCore(TFCore):
+class NLUCore(TFCore):
     """
     The agent that explores commonsense ability of BERT models.
     This agent combines each trajectory with all its actions together, separated
@@ -457,7 +456,7 @@ class BertCore(TFCore):
     refer to https://arxiv.org/pdf/1810.04805.pdf for fine-tuning and evaluation
     """
     def __init__(self, hp, model_dir):
-        super(BertCore, self).__init__(hp, model_dir)
+        super(NLUCore, self).__init__(hp, model_dir)
         self.model: Optional[NLUModel] = None
         self.target_model: Optional[NLUModel] = None
 
@@ -1345,178 +1344,3 @@ class PGNCore(TFCore):
             b_weight: np.ndarray, step: int,
             others: Any) -> np.ndarray:
         raise NotImplementedError("PGNCore doesn't support train")
-
-
-class FastCore(TFCore):
-    def __init__(self, hp, model_dir):
-        super(FastCore, self).__init__(hp, model_dir)
-        self.model: Optional[SentenceDRRNModel] = None
-        self.target_model: Optional[SentenceDRRNModel] = None
-        self._str2vec: Dict[Tuple[Any], np.ndarray] = dict()
-
-    def pad_or_trim(self, src: List[List[int]]) -> List[List[int]]:
-        max_len = min(max([len(x) for x in src]), self.hp.num_tokens)
-        return [
-            x + [self.hp.padding_val_id] * (max_len - len(x))
-            if len(x) < max_len else x[:max_len] for x in src]
-
-    def get_sentence_embeddings(
-            self, src: List[List[int]]) -> List[np.ndarray]:
-        embeddings = self.sess.run(
-            self.model.sentence_embeddings,
-            feed_dict={self.model.src_: self.pad_or_trim(src)})
-        return list(embeddings)
-
-    def get_action_embeddings(
-            self, src: List[np.ndarray]) -> List[np.ndarray]:
-        embeddings = self.sess.run(
-            self.model.sentence_embeddings,
-            feed_dict={self.model.src_: src})
-        return list(embeddings)
-
-    def trajectory2vector(self, trajectory: List[ActionMaster]) -> np.ndarray:
-        strings = flatten([(am.action_ids, am.master_ids) for am in trajectory])
-        unknown = [x for x in strings if tuple(x) not in self._str2vec]
-        if unknown:
-            self.debug(
-                "get sentence embeddings for {} masters and actions".format(
-                    len(unknown)))
-            embeddings = self.get_sentence_embeddings(unknown)
-            self._str2vec.update(
-                dict(zip([tuple(x) for x in unknown], embeddings)))
-        vectors = [self._str2vec[tuple(x)] for x in strings]
-        return np.sum(vectors, axis=0)
-
-    def actions2vectors(self, actions: np.ndarray) -> np.ndarray:
-        assert actions.ndim == 2, "actions should have dim-2"
-        unknown = [x for x in actions if tuple(x) not in self._str2vec]
-        if unknown:
-            self.debug(
-                "get sentence embeddings for {} action(s)".format(
-                    len(unknown)))
-            embeddings = self.get_action_embeddings(unknown)
-            self._str2vec.update(
-                dict(zip([tuple(x) for x in unknown], embeddings)))
-        vectors = np.asarray([self._str2vec[tuple(x)] for x in actions])
-        return vectors
-
-    def policy(
-            self,
-            trajectory: List[ActionMaster],
-            state: Optional[ObsInventory],
-            action_matrix: np.ndarray,
-            action_len: np.ndarray,
-            action_mask: np.ndarray) -> np.ndarray:
-        """
-        get either an random action index with action string
-        or the best predicted action index with action string.
-        """
-        admissible_action_matrix = action_matrix[action_mask, :]
-        actions_repeats = [len(action_mask)]
-
-        vec_src = self.trajectory2vector(trajectory)
-        vec_actions = self.actions2vectors(admissible_action_matrix)
-        q_actions = self.sess.run(self.model.q_actions, feed_dict={
-            self.model.vec_src_: [vec_src],
-            self.model.vec_actions_: vec_actions,
-            self.model.actions_repeats_: actions_repeats,
-            self.model.state_id_: [state.sid]
-        })
-
-        return q_actions
-
-    def _compute_expected_q(
-            self,
-            action_mask: List[np.ndarray],
-            trajectories: List[List[ActionMaster]],
-            action_matrix: List[np.ndarray],
-            action_len: List[np.ndarray],
-            dones: List[bool],
-            rewards: List[float]) -> np.ndarray:
-
-        post_vec_src = [self.trajectory2vector(tj) for tj in trajectories]
-        actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
-            action_matrix, action_len, action_mask)
-        vec_actions = self.actions2vectors(actions)
-
-        target_model, target_sess = self._get_target_model()
-        post_qs_target = target_sess.run(
-            target_model.q_actions,
-            feed_dict={
-                target_model.vec_src_: post_vec_src,
-                target_model.vec_actions_: vec_actions,
-                target_model.actions_repeats_: actions_repeats})
-
-        post_qs_dqn = self.sess.run(
-            self.model.q_actions,
-            feed_dict={
-                self.model.vec_src_: post_vec_src,
-                self.model.vec_actions_: vec_actions,
-                self.model.actions_repeats_: actions_repeats})
-
-        best_actions_idx = get_best_batch_ids(post_qs_dqn, actions_repeats)
-        best_qs = post_qs_target[best_actions_idx]
-        expected_q = (
-                np.asarray(rewards) +
-                np.asarray(dones) * self.hp.gamma * best_qs)
-        return expected_q
-
-    def train_one_batch(
-            self,
-            pre_trajectories: List[List[ActionMaster]],
-            post_trajectories: List[List[ActionMaster]],
-            pre_states: Optional[List[ObsInventory]],
-            post_states: Optional[List[ObsInventory]],
-            action_matrix: List[np.ndarray],
-            action_len: List[np.ndarray],
-            pre_action_mask: List[np.ndarray],
-            post_action_mask: List[np.ndarray],
-            dones: List[bool],
-            rewards: List[float],
-            action_idx: List[int],
-            b_weight: np.ndarray,
-            step: int,
-            others: Any) -> np.ndarray:
-
-        t1 = ctime()
-        expected_q = self._compute_expected_q(
-            post_action_mask, post_trajectories, action_matrix, action_len,
-            dones, rewards)
-        t1_end = ctime()
-
-        t2 = ctime()
-        pre_vec_src = [self.trajectory2vector(tj) for tj in pre_trajectories]
-        t2_end = ctime()
-
-        t3 = ctime()
-        (actions, actions_lens, actions_repeats, id_real2mask
-         ) = batch_drrn_action_input(
-            action_matrix, action_len, pre_action_mask)
-        action_batch_ids = id_real2batch(
-            action_idx, id_real2mask, actions_repeats)
-        vec_actions = self.actions2vectors(actions)
-        t3_end = ctime()
-
-        t4 = ctime()
-        _, summaries, loss_eval, abs_loss = self.sess.run(
-            [self.model.train_op, self.model.train_summary_op, self.model.loss,
-             self.model.abs_loss],
-            feed_dict={
-                self.model.vec_src_: pre_vec_src,
-                self.model.b_weight_: b_weight,
-                self.model.action_idx_: action_batch_ids,
-                self.model.expected_q_: expected_q,
-                self.model.vec_actions_: vec_actions,
-                self.model.actions_repeats_: actions_repeats})
-        t4_end = ctime()
-
-        self.info(report_status([
-            ("t1", t1_end - t1),
-            ("t2", t2_end - t2),
-            ("t3", t3_end - t3),
-            ("t4", t4_end - t4)
-        ]))
-
-        self.train_summary_writer.add_summary(
-            summaries, step - self.hp.observation_t)
-        return abs_loss

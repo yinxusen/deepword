@@ -22,15 +22,11 @@ from deepword.students.utils import ActionMasterStr, batch_dqn_input
 from deepword.trajectory import Trajectory
 
 
-class SNNData(namedtuple(
-    "SNNData", (
-            "target_mids", "target_aids",
-            "same_mids", "same_aids",
-            "diff_mids", "diff_aids"))):
+class SNNData(namedtuple("SNNData", ("target_src", "same_src", "diff_src"))):
     pass
 
 
-class SentenceLearner(StudentLearner):
+class SNNLearner(StudentLearner):
     def _prepare_data(
             self, b_memory: List[Union[Tuple, Memolet]],
             tjs: Trajectory[ActionMasterStr],
@@ -40,7 +36,7 @@ class SentenceLearner(StudentLearner):
     def __init__(
             self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
             eval_data_path: Optional[str] = None) -> None:
-        super(SentenceLearner, self).__init__(
+        super(SNNLearner, self).__init__(
             hp, model_dir, train_data_dir, eval_data_path)
 
     def preprocess_input(self):
@@ -117,19 +113,14 @@ class SentenceLearner(StudentLearner):
                 self.info("load data from {}".format(tag))
                 data = np.load(
                     path.join(data_path, "snn-data-{}.npz".format(tag)))
-                target_aids = data["target_aids"]
-                target_mids = data["target_mids"]
-                same_aids = data["same_aids"]
-                same_mids = data["same_mids"]
-                diff_aids = data["diff_aids"]
-                diff_mids = data["diff_mids"]
-                for i in trange(len(target_aids) // batch_size):
+                target_src = data["target_src"]
+                same_src = data["same_src"]
+                diff_src = data["diff_src"]
+                for i in trange(len(target_src) // batch_size):
                     ss = i * batch_size
                     ee = (i + 1) * batch_size
                     yield SNNData(
-                        target_mids[ss: ee], target_aids[ss: ee],
-                        same_mids[ss: ee], same_aids[ss: ee],
-                        diff_mids[ss: ee], diff_aids[ss: ee])
+                        target_src[ss: ee], same_src[ss: ee], diff_src[ss: ee])
             # only load data one time for evaluation
             if not training:
                 self.info("snn data loader finished")
@@ -164,12 +155,9 @@ class SentenceLearner(StudentLearner):
         _, summaries, loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss],
             feed_dict={
-                self.model.target_master_: data.target_mids,
-                self.model.same_master_: data.same_mids,
-                self.model.diff_master_: data.diff_mids,
-                self.model.target_action_: data.target_aids,
-                self.model.same_action_: data.same_aids,
-                self.model.diff_action_: data.diff_aids
+                self.model.target_src_: data.target_src,
+                self.model.same_src_: data.same_src,
+                self.model.diff_src_: data.diff_src,
             })
         self.sw.add_summary(summaries, train_step)
 
@@ -200,12 +188,9 @@ class SentenceLearner(StudentLearner):
             semantic_same = self.sess.run(
                 self.model.semantic_same,
                 feed_dict={
-                    self.model.target_master_: data.target_mids,
-                    self.model.same_master_: data.same_mids,
-                    self.model.diff_master_: data.diff_mids,
-                    self.model.target_action_: data.target_aids,
-                    self.model.same_action_: data.same_aids,
-                    self.model.diff_action_: data.diff_aids
+                    self.model.target_src_: data.target_src,
+                    self.model.same_src_: data.same_src,
+                    self.model.diff_src_: data.diff_src
                 })
 
             acc += np.count_nonzero(

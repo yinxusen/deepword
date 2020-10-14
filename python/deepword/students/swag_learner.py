@@ -15,7 +15,7 @@ from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 
 from deepword.agents.utils import bert_commonsense_input
-from deepword.students.student_learner import BertSoftmaxLearner
+from deepword.students.student_learner import NLUClassificationLearner
 from deepword.students.utils import align_batch_str
 from deepword.tokenizers import Tokenizer
 from deepword.utils import eprint
@@ -93,7 +93,7 @@ def get_bert_input(
     return inp, seg_tj_action, inp_size
 
 
-class SwagLearner(BertSoftmaxLearner):
+class SwagLearner(NLUClassificationLearner):
     def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:

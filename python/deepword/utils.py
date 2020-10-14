@@ -145,10 +145,10 @@ def model_name2clazz(name: str):
     """
 
     from deepword.models import dqn_modeling, drrn_modeling, dsqn_modeling, \
-        gen_modeling, nlu_modeling, sentence_modeling
+        gen_modeling, nlu_modeling, snn_modeling
 
     for namespace in [dqn_modeling, drrn_modeling, dsqn_modeling, gen_modeling,
-                      nlu_modeling, sentence_modeling]:
+                      nlu_modeling, snn_modeling]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in models".format(name))
@@ -165,9 +165,9 @@ def learner_name2clazz(name: str):
         the class w.r.t. the learner name
     """
 
-    from deepword.students import student_learner, bert_swag, sentence_learner
+    from deepword.students import student_learner, swag_learner, snn_learner
 
-    for namespace in [student_learner, bert_swag, sentence_learner]:
+    for namespace in [student_learner, swag_learner, snn_learner]:
         if hasattr(namespace, name):
             return getattr(namespace, name)
     raise ValueError("{} not found in student learners".format(name))

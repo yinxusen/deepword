@@ -158,17 +158,6 @@ default_config = {
         num_tokens=1000,
         num_conv_filters=32),
     "CnnDRRN": HParams(
-        agent_clazz='BaseAgent',
-        core_clazz="DRRNCore",
-        batch_size=32,
-        save_gap_t=1000,
-        embedding_size=64,
-        learning_rate=1e-5,
-        lstm_num_layers=1,
-        num_turns=11,
-        num_tokens=1000,
-        num_conv_filters=32),
-    "LegacyCnnDRRN": HParams(
         agent_clazz='CompetitionAgent',
         core_clazz="DRRNCore",
         tokenizer_type="NLTK",
@@ -255,9 +244,9 @@ default_config = {
         decode_concat_action=False,
         gen_loss_weighted_by_qs=False,
         tokenizer_type="NLTK"),
-    "BertCommonsense": HParams(
+    "BertNLU": HParams(
         agent_clazz='BaseAgent',
-        core_clazz="BertCore",
+        core_clazz="NLUCore",
         batch_size=32,
         save_gap_t=1000,
         learning_rate=5e-5,
@@ -269,9 +258,9 @@ default_config = {
         sep_val_id=0,
         mask_val_id=0
     ),
-    "AlbertCommonsense": HParams(
+    "AlbertNLU": HParams(
         agent_clazz='BaseAgent',
-        core_clazz="BertCore",
+        core_clazz="NLUCore",
         batch_size=32,
         save_gap_t=1000,
         learning_rate=5e-5,
@@ -285,23 +274,9 @@ default_config = {
         sep_val_id=0,
         mask_val_id=0
     ),
-    "BertSentence": HParams(
+    "BertSNN": HParams(
         agent_clazz="",
         core_clazz="",
-        batch_size=32,
-        save_gap_t=1000,
-        learning_rate=5e-5,
-        num_turns=6,
-        num_tokens=500,
-        bert_num_hidden_layers=12,
-        embedding_size=64,
-        cls_val_id=0,
-        sep_val_id=0,
-        mask_val_id=0
-    ),
-    "BertSentenceDRRN": HParams(
-        agent_clazz="BaseAgent",
-        core_clazz="FastCore",
         batch_size=32,
         save_gap_t=1000,
         learning_rate=5e-5,

@@ -290,67 +290,23 @@ class DSQNZorkModel(DQNModel):
         self.h_states_diff = h_states_diff
 
 
-class SentenceModel(object):
+class SNNModel(object):
     def __init__(
             self,
             graph: tf.Graph,
-            target_master_: tf.placeholder,
-            same_master_: tf.placeholder,
-            diff_master_: tf.placeholder,
-            target_action_: tf.placeholder,
-            same_action_: tf.placeholder,
-            diff_action_: tf.placeholder,
+            target_src_: tf.placeholder,
+            same_src_: tf.placeholder,
+            diff_src_: tf.placeholder,
             semantic_same: tf.Operation,
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
             train_summary_op: Optional[tf.Operation]):
-        super(SentenceModel, self).__init__()
+        super(SNNModel, self).__init__()
         self.graph = graph
-        self.target_master_ = target_master_
-        self.same_master_ = same_master_
-        self.diff_master_ = diff_master_
-        self.target_action_ = target_action_
-        self.same_action_ = same_action_
-        self.diff_action_ = diff_action_
+        self.target_src_ = target_src_
+        self.same_src_ = same_src_
+        self.diff_src_ = diff_src_
         self.semantic_same = semantic_same
         self.train_op = train_op
         self.loss = loss
         self.train_summary_op = train_summary_op
-
-
-class SentenceDRRNModel(object):
-    def __init__(
-            self,
-            graph: tf.Graph,
-            q_actions: tf.Tensor,
-            src_: tf.placeholder,
-            sentence_embeddings: tf.Tensor,
-            vec_src_: tf.placeholder,
-            vec_actions_: tf.placeholder,
-            actions_repeats_: tf.placeholder,
-            state_id_: tf.placeholder,
-            action_idx_: Optional[tf.placeholder],
-            train_op: Optional[tf.Operation],
-            loss: Optional[tf.Tensor],
-            expected_q_: Optional[tf.placeholder],
-            b_weight_: Optional[tf.placeholder],
-            train_summary_op: Optional[tf.Operation],
-            abs_loss: Optional[tf.Tensor],
-            h_state: Optional[tf.Tensor]):
-        super(SentenceDRRNModel, self).__init__()
-        self.graph = graph
-        self.q_actions = q_actions
-        self.src_ = src_
-        self.sentence_embeddings = sentence_embeddings
-        self.vec_src_ = vec_src_
-        self.vec_actions_ = vec_actions_
-        self.actions_repeats_ = actions_repeats_
-        self.action_idx_ = action_idx_
-        self.state_id_ = state_id_
-        self.train_op = train_op
-        self.loss = loss
-        self.expected_q_ = expected_q_
-        self.b_weight_ = b_weight_
-        self.train_summary_op = train_summary_op
-        self.abs_loss = abs_loss
-        self.h_state = h_state
