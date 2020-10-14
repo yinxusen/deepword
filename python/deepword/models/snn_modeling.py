@@ -105,9 +105,9 @@ class BertSNN(object):
                 train_summary_op = tf.summary.merge([loss_summary])
         return SNNModel(
             graph=graph,
-            target_src_=inputs["target_src_"],
-            same_src_=inputs["same_src_"],
-            diff_src_=inputs["diff_src_"],
+            target_src_=inputs["target_src"],
+            same_src_=inputs["same_src"],
+            diff_src_=inputs["diff_src"],
             semantic_same=semantic_same,
             loss=loss,
             train_op=train_op,
