@@ -14,7 +14,7 @@ from deepword.action import ActionCollector
 from deepword.agents.utils import ACT, ObsInventory, INFO_KEY, \
     ActionDesc, ACT_TYPE, Memolet, ActionMaster, Logging, LinearDecayedEPS
 from deepword.agents.utils import categorical_without_replacement, \
-    get_best_1d_q, remove_zork_version_info, get_path_tags
+    get_best_1d_q, remove_zork_version_info, get_path_tags, get_hash_state
 from deepword.floor_plan import FloorPlanCollector
 from deepword.hparams import save_hparams, output_hparams
 from deepword.tokenizers import init_tokens, Tokenizer
@@ -764,7 +764,9 @@ class BaseAgent(Logging):
         state = ObsInventory(
             obs=infos[INFO_KEY.desc][0],
             inventory=infos[INFO_KEY.inventory][0],
-            sid=self.tjs.get_last_sid())
+            sid=self.tjs.get_last_sid(),
+            hs=get_hash_state(
+                infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0]))
         self.stc.append(state)
 
         admissible_actions = self._get_admissible_actions(infos)

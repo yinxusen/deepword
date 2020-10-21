@@ -11,7 +11,6 @@ from typing import Tuple, List, Union, Any, Optional, Dict
 import numpy as np
 import tensorflow as tf
 from deeptextworld.agents.base_agent import DRRNMemoTeacher
-from deeptextworld.agents.utils import Memolet
 from tensorflow import Session
 from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
@@ -20,7 +19,7 @@ from termcolor import colored
 from tqdm import trange
 
 from deepword.action import ActionCollector
-from deepword.agents.utils import ActionMaster
+from deepword.agents.utils import Memolet
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_commonsense_input
 from deepword.agents.utils import get_action_idx_pair

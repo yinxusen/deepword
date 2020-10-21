@@ -60,23 +60,25 @@ class Trajectory(Generic[T], Logging):
 
         return self.curr_tid
 
-    def request_delete_keys(self, ks: List[int]) -> None:
+    def request_delete_keys(self, ks: List[int]) -> Dict[int, List[T]]:
         """
         Request to delete all trajectories with keys in `ks`.
 
         Args:
             ks: a list of keys of trajectories to be deleted
         """
-
+        trashed = {}
         if not ks:
-            return
+            return trashed
         for k in sorted(self.trajectories.keys()):
             if k > max(ks):
                 break
             else:
-                self.trajectories.pop(k, None)
+                values = self.trajectories.pop(k, None)
+                trashed[k] = values
                 self.debug(
                     'trajectory {} (time<=) {} deleted'.format(k, max(ks)))
+        return trashed
 
     def add_new_tj(self, tid: Optional[int] = None) -> int:
         """

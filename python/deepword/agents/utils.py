@@ -6,6 +6,8 @@ from typing import List, Dict, Tuple
 import numpy as np
 
 from deepword.log import Logging
+from deepword.trajectory import Trajectory
+from deepword.utils import get_hash
 
 
 class Memolet(namedtuple(
@@ -60,7 +62,8 @@ class ActionMaster(object):
         return self._lens
 
 
-class ObsInventory(namedtuple("ObsInventory", ("obs", "inventory", "sid"))):
+class ObsInventory(namedtuple(
+        "ObsInventory", ("obs", "inventory", "sid", "hs"))):
     pass
 
 
@@ -547,3 +550,92 @@ def remove_zork_version_info(text):
     # don't strip texts, keep the raw response
     return "\n".join(
         filter(lambda s: s.strip() not in zork_info, text.split("\n")))
+
+
+def get_hash_state(obs: str, inv: str) -> str:
+    """
+    Generate hash state from observation and inventory
+    Args:
+        obs: observation of current step
+        inv: inventory of current step
+
+    Returns:
+        hash state of current step
+    """
+    return get_hash(obs + "\n" + inv)
+
+
+def get_snn_keys(
+        hash_states2tjs: Dict[str, Dict[int, List[int]]],
+        tjs: Trajectory,
+        size: int
+) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]],
+           List[Tuple[int, int]]]:
+    """
+    Get SNN training pairs from trajectories.
+
+    Args:
+        hash_states2tjs: the mapping from hash state to trajectory
+        tjs: the trajectories
+        size: batch size
+
+    Returns:
+        target_set, same_set and diff_set
+        each set contains keys of (tid, sid) to locate trajectory
+    """
+
+    non_empty_keys = list(
+        filter(lambda x: hash_states2tjs[x] != {},
+               hash_states2tjs.keys()))
+    perm_keys = list(np.random.permutation(non_empty_keys))
+    state_pairs = list(zip(non_empty_keys, perm_keys))
+
+    target_set = []
+    same_set = []
+    diff_set = []
+
+    i = 0
+    while i < size:
+        for j, (sk1, sk2) in enumerate(state_pairs):
+            if sk1 == sk2:
+                sk2 = non_empty_keys[(j + 1) % len(non_empty_keys)]
+
+            try:
+                tid_pair = np.random.choice(
+                    list(hash_states2tjs[sk1].keys()),
+                    size=2, replace=False)
+            except ValueError:
+                tid_pair = list(hash_states2tjs[sk1].keys()) * 2
+
+            target_tid = tid_pair[0]
+            same_tid = tid_pair[1]
+
+            if (target_tid == same_tid and
+                    len(hash_states2tjs[sk1][same_tid]) == 1):
+                continue
+
+            diff_tid = np.random.choice(
+                list(hash_states2tjs[sk2].keys()), size=None)
+
+            # remove empty trajectory
+            if (target_tid not in tjs.trajectories
+                    or same_tid not in tjs.trajectories
+                    or diff_tid not in tjs.trajectories):
+                continue
+
+            target_sid = np.random.choice(
+                list(hash_states2tjs[sk1][target_tid]), size=None)
+            same_sid = np.random.choice(
+                list(hash_states2tjs[sk1][same_tid]), size=None)
+            diff_sid = np.random.choice(
+                list(hash_states2tjs[sk2][diff_tid]), size=None)
+
+            target_set.append((target_tid, target_sid))
+            same_set.append((same_tid, same_sid))
+            diff_set.append((diff_tid, diff_sid))
+
+            i += 1
+            if i >= size:
+                break
+
+    return target_set, same_set, diff_set

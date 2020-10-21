@@ -1,4 +1,3 @@
-from bisect import bisect_left
 from multiprocessing.pool import ThreadPool
 from os import remove
 from typing import Dict, Tuple, List, Any
@@ -9,8 +8,8 @@ from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
+from deepword.agents.utils import get_snn_keys
 from deepword.agents.zork_agent import ZorkAgent
-from deepword.utils import get_hash
 
 
 class DSQNAgent(BaseAgent):
@@ -21,7 +20,7 @@ class DSQNAgent(BaseAgent):
     def __init__(self, hp, model_dir):
         super(DSQNAgent, self).__init__(hp, model_dir)
         self.hs2tj_prefix = "hs2tj"
-        self.hash_states2tjs: Dict[str, List[Tuple[int, int]]] = dict()
+        self.hash_states2tjs: Dict[str, Dict[int, List[int]]] = dict()
         self.pool_train = ThreadPool(processes=2)
 
     def _init_hs2tj(
@@ -66,18 +65,20 @@ class DSQNAgent(BaseAgent):
                 remove(self._get_context_obj_path_w_tag(self.hs2tj_prefix, tag))
 
     def _clean_stale_context(self, tids):
-        super(DSQNAgent, self)._clean_stale_context(tids)
-        if not tids:
-            return
-        hs2tj_cleaned: Dict[str, List[Tuple[int, int]]] = dict()
-        for k in self.hash_states2tjs.keys():
-            start_t = bisect_left(
-                [t for t, s in self.hash_states2tjs[k]], max(tids))
-            if self.hash_states2tjs[k][start_t:]:
-                hs2tj_cleaned[k] = self.hash_states2tjs[k][start_t:]
-            else:
-                self.debug("remove key {} from hs2tj".format(k))
-        self.hash_states2tjs = hs2tj_cleaned
+        """
+        We don't call super method, since we need to know trashed elements
+        for removing stale hash_state2tjs.
+        """
+        self.tjs.request_delete_keys(tids)
+        trashed = self.stc.request_delete_keys(tids)
+        inverse_trashed = []
+        for tid in trashed:
+            inverse_trashed += [(x.hs, tid) for x in trashed[tid]]
+        inverse_trashed = dict(inverse_trashed)
+        self.debug("to trash: {}".format(inverse_trashed))
+        for hs in inverse_trashed:
+            for tid in inverse_trashed[hs]:
+                self.hash_states2tjs[hs].pop(tid)
 
     def _collect_new_sample(
             self, master, instant_reward, dones, infos):
@@ -87,12 +88,14 @@ class DSQNAgent(BaseAgent):
 
         if not dones[0]:
             state = self.stc.fetch_last_state()[-1]
-            hs = get_hash(state.obs + "\n" + state.inventory)
+            hs = state.hs
             if hs not in self.hash_states2tjs:
-                self.hash_states2tjs[hs] = []
+                self.hash_states2tjs[hs] = dict()
             last_tid = self.tjs.get_current_tid()
             last_sid = self.tjs.get_last_sid()
-            self.hash_states2tjs[hs].append((last_tid, last_sid))
+            if last_tid not in self.hash_states2tjs[hs]:
+                self.hash_states2tjs[hs][last_tid] = []
+            self.hash_states2tjs[hs][last_tid].append(last_sid)
         else:
             pass  # final states are not considered
 
@@ -117,43 +120,19 @@ class DSQNAgent(BaseAgent):
             src2_len: length of them
             labels: `0` for same states; `1` for different states
         """
-        # target key set should contain items more than twice, since we need to
-        # separate target set and same set.
-        target_key_set = list(
-            filter(lambda x: len(self.hash_states2tjs[x]) >= 2,
-                   self.hash_states2tjs.keys()))
-        self.debug(
-            "choose from {} keys for SNN target".format(len(target_key_set)))
-        hs_keys = np.random.choice(target_key_set, size=batch_size)
-
-        diff_keys_duo = np.random.choice(
-            list(self.hash_states2tjs.keys()), replace=False,
-            size=(batch_size, 2))
-        diff_keys = diff_keys_duo[:, 0]
-        same_key_ids = np.where(hs_keys == diff_keys)[0]
-        diff_keys[same_key_ids] = diff_keys_duo[same_key_ids, 1]
-
-        tgt_set = []
-        same_set = []
-        diff_set = []
-        for hk, dk in zip(hs_keys, diff_keys):
-            samples_ids = np.random.choice(
-                len(self.hash_states2tjs[hk]), size=2, replace=False)
-            tgt_set.append(self.hash_states2tjs[hk][samples_ids[0]])
-            same_set.append(self.hash_states2tjs[hk][samples_ids[1]])
-            diff_set.append(
-                self.hash_states2tjs[dk][np.random.choice(
-                    len(self.hash_states2tjs[dk]))])
+        target_set, same_set, diff_set = get_snn_keys(
+            self.hash_states2tjs, self.tjs, batch_size)
 
         trajectories = [
             self.tjs.fetch_state_by_idx(tid, sid) for tid, sid in
-            tgt_set + same_set + diff_set]
+            target_set + same_set + diff_set]
         batch_src, batch_src_len = self.core.batch_trajectory2input(
             trajectories)
-        tgt_src = batch_src[: len(tgt_set)]
-        tgt_src_len = batch_src_len[: len(tgt_set)]
-        same_src = batch_src[len(tgt_set): len(tgt_set) + len(same_set)]
-        same_src_len = batch_src_len[len(tgt_set): len(tgt_set) + len(same_set)]
+        tgt_src = batch_src[: len(target_set)]
+        tgt_src_len = batch_src_len[: len(target_set)]
+        same_src = batch_src[len(target_set): len(target_set) + len(same_set)]
+        same_src_len = batch_src_len[
+            len(target_set): len(target_set) + len(same_set)]
         diff_src = batch_src[-len(diff_set):]
         diff_src_len = batch_src_len[-len(diff_set):]
 

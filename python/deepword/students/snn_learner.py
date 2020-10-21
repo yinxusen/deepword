@@ -3,7 +3,7 @@ import random
 from collections import namedtuple
 from os import path
 from queue import Queue
-from typing import Tuple, List, Any, Optional, Dict, Union, Generator
+from typing import Tuple, List, Any, Optional, Union, Generator
 
 import numpy as np
 import tensorflow as tf
@@ -17,6 +17,7 @@ from tqdm import trange, tqdm
 from deepword.action import ActionCollector
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
+from deepword.agents.utils import get_snn_keys
 from deepword.students.student_learner import StudentLearner
 from deepword.students.utils import ActionMasterStr, batch_dqn_input
 from deepword.trajectory import Trajectory
@@ -59,7 +60,7 @@ class SNNLearner(StudentLearner):
             # according to len(memory) / batch_size
             total_size = int(
                 math.ceil(len(memory) * 1. / self.hp.batch_size))
-            target_set, same_set, diff_set = self.get_snn_pairs(
+            target_set, same_set, diff_set = get_snn_keys(
                 hash_states2tjs, tjs, total_size)
             target_src, target_src_len, target_src_mask, target_tjs = \
                 self.get_snn_tjs(tjs, target_set)
@@ -226,71 +227,6 @@ class SNNLearner(StudentLearner):
             master_ids[i, :s_len] = s_ids[:s_len]
 
         return action_ids, master_ids
-
-    @classmethod
-    def get_snn_pairs(
-            cls,
-            hash_states2tjs: Dict[str, Dict[int, List[int]]],
-            tjs: Trajectory,
-            size: int
-    ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]],
-               List[Tuple[int, int]]]:
-
-        non_empty_keys = list(
-            filter(lambda x: hash_states2tjs[x] != {},
-                   hash_states2tjs.keys()))
-        perm_keys = list(np.random.permutation(non_empty_keys))
-        state_pairs = list(zip(non_empty_keys, perm_keys))
-
-        target_set = []
-        same_set = []
-        diff_set = []
-
-        i = 0
-        while i < size:
-            for j, (sk1, sk2) in enumerate(state_pairs):
-                if sk1 == sk2:
-                    sk2 = non_empty_keys[(j + 1) % len(non_empty_keys)]
-
-                try:
-                    tid_pair = np.random.choice(
-                        list(hash_states2tjs[sk1].keys()),
-                        size=2, replace=False)
-                except ValueError:
-                    tid_pair = list(hash_states2tjs[sk1].keys()) * 2
-
-                target_tid = tid_pair[0]
-                same_tid = tid_pair[1]
-
-                if (target_tid == same_tid and
-                        len(hash_states2tjs[sk1][same_tid]) == 1):
-                    continue
-
-                diff_tid = np.random.choice(
-                    list(hash_states2tjs[sk2].keys()), size=None)
-
-                # remove empty trajectory
-                if (target_tid not in tjs.trajectories
-                        or same_tid not in tjs.trajectories
-                        or diff_tid not in tjs.trajectories):
-                    continue
-
-                target_sid = np.random.choice(
-                    list(hash_states2tjs[sk1][target_tid]), size=None)
-                same_sid = np.random.choice(
-                    list(hash_states2tjs[sk1][same_tid]), size=None)
-                diff_sid = np.random.choice(
-                    list(hash_states2tjs[sk2][diff_tid]), size=None)
-
-                target_set.append((target_tid, target_sid))
-                same_set.append((same_tid, same_sid))
-                diff_set.append((diff_tid, diff_sid))
-
-                i += 1
-                if i >= size:
-                    break
-
-        return target_set, same_set, diff_set
 
     def get_snn_tjs(
             self, tjs: Trajectory, tid_sid_set: List[Tuple[int, int]]
