@@ -79,6 +79,8 @@ class DSQNAgent(BaseAgent):
                 inverse_trashed[state.hs].append(tid)
         self.debug("to trash: {}".format(inverse_trashed))
         for hs in inverse_trashed:
+            if hs not in self.hash_states2tjs:
+                continue
             for tid in inverse_trashed[hs]:
                 if tid in self.hash_states2tjs[hs]:
                     self.hash_states2tjs[hs].pop(tid)
