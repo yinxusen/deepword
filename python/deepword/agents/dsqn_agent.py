@@ -71,14 +71,19 @@ class DSQNAgent(BaseAgent):
         """
         self.tjs.request_delete_keys(tids)
         trashed = self.stc.request_delete_keys(tids)
-        inverse_trashed = []
+        inverse_trashed = {}
         for tid in trashed:
-            inverse_trashed += [(x.hs, tid) for x in trashed[tid]]
-        inverse_trashed = dict(inverse_trashed)
+            for state in trashed[tid]:
+                if state.hs not in inverse_trashed:
+                    inverse_trashed[state.hs] = []
+                inverse_trashed[state.hs].append(tid)
         self.debug("to trash: {}".format(inverse_trashed))
         for hs in inverse_trashed:
             for tid in inverse_trashed[hs]:
-                self.hash_states2tjs[hs].pop(tid)
+                if tid in self.hash_states2tjs[hs]:
+                    self.hash_states2tjs[hs].pop(tid)
+            if not self.hash_states2tjs[hs]:
+                self.hash_states2tjs.pop(hs)
 
     def _collect_new_sample(
             self, master, instant_reward, dones, infos):
