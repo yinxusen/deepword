@@ -41,9 +41,12 @@ class Memolet(namedtuple(
 
 class ActionMaster(object):
     def __init__(
-            self, action: List[int], master: List[int]):
-        self._ids = action + master
-        self._lens = [len(action), len(master)]
+            self, action_ids: List[int], master_ids: List[int],
+            action: str, master: str):
+        self._ids = action_ids + master_ids
+        self._lens = [len(action_ids), len(master_ids)]
+        self._action = action
+        self._master = master
 
     @property
     def ids(self):
@@ -56,6 +59,14 @@ class ActionMaster(object):
     @property
     def master_ids(self):
         return self._ids[self._lens[0]:]
+
+    @property
+    def action(self):
+        return self._action
+
+    @property
+    def master(self):
+        return self._master
 
     @property
     def lens(self):

@@ -15,11 +15,12 @@ from tensorflow.train import Saver
 from tqdm import trange, tqdm
 
 from deepword.action import ActionCollector
+from deepword.agents.utils import ActionMaster
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import get_snn_keys
 from deepword.students.student_learner import StudentLearner
-from deepword.students.utils import ActionMasterStr, batch_dqn_input
+from deepword.students.utils import batch_dqn_input
 from deepword.trajectory import Trajectory
 
 
@@ -30,7 +31,7 @@ class SNNData(namedtuple("SNNData", ("target_src", "same_src", "diff_src"))):
 class SNNLearner(StudentLearner):
     def _prepare_data(
             self, b_memory: List[Union[Tuple, Memolet]],
-            tjs: Trajectory[ActionMasterStr],
+            tjs: Trajectory[ActionMaster],
             action_collector: ActionCollector) -> Tuple:
         raise NotImplementedError()
 
@@ -209,7 +210,7 @@ class SNNLearner(StudentLearner):
         return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(s))
 
     def _snn_tj_transformation(
-            self, tj: List[ActionMasterStr]
+            self, tj: List[ActionMaster]
     ) -> Tuple[np.ndarray, np.ndarray]:
         master_ids = np.zeros(
             (self.hp.num_turns, self.hp.num_tokens), dtype=np.float32)
@@ -231,7 +232,7 @@ class SNNLearner(StudentLearner):
     def get_snn_tjs(
             self, tjs: Trajectory, tid_sid_set: List[Tuple[int, int]]
     ) -> Tuple[List[List[int]], List[int], List[List[int]],
-               List[List[ActionMasterStr]]]:
+               List[List[ActionMaster]]]:
         trajectories = [
             tjs.fetch_state_by_idx(tid, sid) for tid, sid in tid_sid_set]
 

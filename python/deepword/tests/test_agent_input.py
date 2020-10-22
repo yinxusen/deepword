@@ -9,8 +9,8 @@ from deepword.action import ActionCollector
 from deepword.agents.utils import batch_drrn_action_input, id_real2batch, \
     bert_commonsense_input, sample_batch_ids
 from deepword.hparams import copy_hparams
-from deepword.students.utils import ActionMasterStr, batch_dqn_input, \
-    align_batch_str
+from deepword.agents.utils import ActionMaster
+from deepword.students.utils import batch_dqn_input, align_batch_str
 from deepword.tokenizers import Tokenizer, init_tokens
 
 tokenizer_hp = HParams(
@@ -46,7 +46,7 @@ def gen_rand_str(
 
 def gen_action_master(
         vocab: List[str], turns_up_to: int, n_rows: int
-) -> List[List[ActionMasterStr]]:
+) -> List[List[ActionMaster]]:
     assert turns_up_to > 0, "at least need 1-turn of action-master"
     res = []
     for i in range(n_rows):
@@ -54,7 +54,8 @@ def gen_action_master(
         rnd_actions = gen_rand_str(vocab, 10, n_turns, allow_empty_str=False)
         rnd_masters = gen_rand_str(vocab, 50, n_turns, allow_empty_str=False)
         res.append(
-            [ActionMasterStr(a, m) for a, m in zip(rnd_actions, rnd_masters)])
+            [ActionMaster(action=a, master=m, action_ids=[], master_ids=[])
+             for a, m in zip(rnd_actions, rnd_masters)])
     return res
 
 

@@ -757,9 +757,11 @@ class BaseAgent(Logging):
         master_tokens = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(master))
         self.tjs.append(ActionMaster(
-            action=list(
+            action_ids=list(
                 self._last_action.token_idx) if self._last_action else [],
-            master=master_tokens))
+            master_ids=master_tokens,
+            action=self._last_action.action if self._last_action else "",
+            master=master))
 
         state = ObsInventory(
             obs=infos[INFO_KEY.desc][0],

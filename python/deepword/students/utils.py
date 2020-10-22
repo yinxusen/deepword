@@ -1,17 +1,13 @@
-from collections import namedtuple
 from typing import List, Tuple, Optional, Iterator
 
 import numpy as np
 
+from deepword.agents.utils import ActionMaster
 from deepword.tokenizers import Tokenizer
 
 
-class ActionMasterStr(namedtuple("ActionMaster", ("action", "master"))):
-    pass
-
-
 def dqn_input(
-        trajectory: List[ActionMasterStr],
+        trajectory: List[ActionMaster],
         tokenizer: Tokenizer,
         num_tokens: int,
         padding_val_id: int,
@@ -40,7 +36,7 @@ def dqn_input(
 
 
 def batch_dqn_input(
-        trajectories: List[List[ActionMasterStr]],
+        trajectories: List[List[ActionMaster]],
         tokenizer: Tokenizer,
         num_tokens: int,
         padding_val_id: int,
@@ -93,7 +89,7 @@ def align_batch_str(
 
 
 def tj2ids(
-        trajectory: List[ActionMasterStr],
+        trajectory: List[ActionMaster],
         tokenizer: Tokenizer,
         with_action_padding: bool = False,
         max_action_size: Optional[int] = None,
