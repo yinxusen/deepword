@@ -6,47 +6,32 @@
 ██████╔╝███████╗███████╗██║     ╚███╔███╔╝╚██████╔╝██║  ██║██████╔╝
 ╚═════╝ ╚══════╝╚══════╝╚═╝      ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
 ```
-                                                                  
+
 # Tutorial
 
 DeepWord is a project of building automatic agents to play text-based games.
 
-## Background
-This project is initialized from one of the ideas Jon thought about for 2018
-summer projects at USC/ISI, the Natural Language Group.
-The initial goal is to build an automatic Dungeons and Dragons player but is
-evolved into the simplified scenario that playing single person text-based games
-such as Zork.
-
-Over the years, the codebase becomes larger and larger with more than 10k line
-of code and ~300k line of changes, supporting four game-playing papers, from
-the simplest Zork DQN, to Cooking DRRN, Commonsense reasoning, and discriminative
-state representation learning. There is also much code are about the game
-action generation, but we decide not to move on for the action generation direction
-at this time because of
-lacking motivation --- who will accept a paper about generating languages to be
-understandable by a game?
-
-Besides game playing, we find out that there could be some practical usages for
-the game-playing code, and there have already been some of them appeared in the top
-NLP venues. Though text-based game playing is still a niche domain, I am optimistic
-about the future. 
-
-I hope the code can be used for
-
-- beginners to learn how to write reinforcement learning code
-- researchers to run comparison experiments, or to reach the next step of game-playing
-- domain experts that convert their problems into games to solve
-
-
 ## Overview
 
-What is DQN and how it works
+The architecture of the DeepWord
+
+<img src="resources/deepword-archi.png" width="400">
+
+- Agent: Interacting with the TextWorld, receiving text descriptions or reactions,
+scores, and sending the next action to the game. The game could be anything
+only if it sends over texts and scores and receives the next action.
+
+- Core: Interacting with the Agent to receive training samples or requests of computing
+policies, and forwarding these to the Model.
+
+- Model: Mostly a Tensorflow model (v1.x).
+
+These are three essential parts of DQN.
 
 
 ## Install requirements
 You may want to change the
-tensorflow to tensorflow-gpu in the `requirements.txt` if GPUs are available.
+`tensorflow` to `tensorflow-gpu` in the `requirements.txt` if GPUs are available.
 
 ```bash
 pip install -r requirements.txt
@@ -107,13 +92,13 @@ when there are conflicts among them.
 
 ### full hyperparameters in `deepword.hparams`
 
-Different models have different hyperparameters, for a full list,
+Different models have different hyperparameters. For a full list,
 see `deepword.hparrams.default_config`
 
 ### PRE_CONF_FILE
 
 `$PRE_CONF_FILE` is a YAML file that contains some user-defined hyper-parameters,
-usually used as templates for a same set of training.
+usually used as templates for the same set of training.
 
 Example model config file:
 
@@ -146,8 +131,8 @@ policy_to_action: LinUCB  # use LinUCB method when choose action
 ### command line args (CMD args)
 
 CMD args are pretty useful when you want to do some small tweaks for a PER_CONF_FILE.
-E.g. you want to train a new model with a different learning rate, but all other 
-hyperparameters are unchanged, Or when you want to do evaluation, but with a
+E.g., you want to train a new model with a different learning rate, but all other 
+hyperparameters are unchanged, Or when you want to do the evaluation, but with a
 different `policy_to_action` method, e.g. changing from `LinUCB` to `sampling`.
 
 You can see the full allowed CMD args in `deepword.main.hp_parser`.
@@ -160,7 +145,7 @@ The next time training or evaluation will read hyperparameters in this file.
 
 ### Hyper-parameter priorities
 
-This package have four methods to set hyper-parameters, and there are priorities.
+This package has four methods to set hyper-parameters, and there are priorities.
 
 1. set in hparams.py  (for programmers)
 
@@ -168,12 +153,12 @@ This package have four methods to set hyper-parameters, and there are priorities
 
 3. set in cmd args  (usually for inference)
 
-4. set in `$MODEL_HOME/hparams.json`  (not recommend to set, only for hparams reading)
+4. set in `$MODEL_HOME/hparams.json`  (not recommended to use, only for hparams reading)
 
-If there is no `$MODEL_HOME/hparams.json`, e.g. the first time training, then
+If there is no `$MODEL_HOME/hparams.json`, e.g., the first time training, then
 3 > 2 > 1. (x > y means x overrides y)
 
-If there is `$MODEL_HOME/hparams.json`, e.g. the second time training and during
+If there is `$MODEL_HOME/hparams.json`, e.g., the second time training and during
 inference,
 the priority is 4 > 2 > 1. Some hyper-parameters in 3 will override 4, depend
 on the logic and usage for that parameter. These hyperparameters are defined in
@@ -185,7 +170,7 @@ Which hyper-parameter is actually working? When you run the code, the hyper-para
 will output to stderr, e.g.
 
 ```
-hparams.json exists! some hyper-parameter setting from CMD and pre-config file will be disabled. make sure to clear model_dir first if you want to train a new agent from scratch!
+hparams.json exists! Some hyper-parameter set from CMD and the pre-config file will be disabled. Make sure to clear model_dir first if you want to train a new agent from scratch!
 ------------hparams---------------
 batch_size -> 10
 beam_size -> 3
@@ -226,7 +211,7 @@ vocab_size -> 30522
 
 Zork is not a TextWorld generated game, even though you can still run it with TextWorld.
 Instead of the game file `Zork1.z5`, you still need an action file containing
-all possible actions, e.g. `commands-zork1-130.txt`.
+all possible actions, e.g., `commands-zork1-130.txt`.
 
 ```bash
 cd $PDIR
@@ -245,7 +230,7 @@ GAME_PATH="zork1.z5"
     "train-dqn" \
     --game-path "$GAME_PATH"
 ```
-According the the `$PRE_CONF_FILE`, this will run 2 million training steps.
+According to the `$PRE_CONF_FILE`, this will run 2 million training steps.
 You can decrease it by using CMD arg, e.g., `--annealing-eps-t 10000`.
 After the training, you can test your model by evaluation:
 
@@ -257,8 +242,8 @@ After the training, you can test your model by evaluation:
 popd
 ```
 
-You can also switch to DRRN model to train Zork. You need to create a new model
-dir since DRRN model is different with DQN model.
+You can also switch to the DRRN model to train Zork. You need to create a new model
+dir since the DRRN model is different from the DQN model.
 
 ```bash
 MODEL_HOME="example-model-drrn"

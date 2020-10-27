@@ -13,34 +13,13 @@ Create auto-agent to play text-based games
 
 Our testbed is [TextWorld](https://github.com/microsoft/TextWorld).
 Our BaseAgent is built upon TextWorld.
-However, our agent core - the most important model part - is independent with specific game frameworks or games.
+However, our agent core is independent with specific game frameworks or games.
 
-The BaseAgent works with specific games / frameworks, fetching important information from games, and gives actions as feedback.
+The BaseAgent works with specific games/frameworks, fetching important information from games, and gives actions as feedback.
 
-The BaseCore works independently, requires only trajectory and actions, etc.
+The BaseCore works independently, requiring only trajectory and actions, etc.
 
-We support
-
-1. DQN agents
-
-2. DRRN agents
-
-3. generation agents
-
-4. Bert commonsense agents
-
-5. Generation + DRRN agents (In-Progress)
-
-We provide
-
-1. CNN models
-
-2. Transformer models
-
-3. Pointer-generator models for generation agents (In-Progress)
-
-Read the [tutorial.md](tutorial.md)
-for details.
+Read the [tutorial.md](tutorial.md) for details.
 
 Cite our papers
 
@@ -77,6 +56,13 @@ Cite our papers
     archivePrefix={arXiv},
     primaryClass={cs.CL}
 }
+
+@misc{yin2020learning,
+      title={Learning to Generalize for Sequential Decision Making}, 
+      author={Xusen Yin and Ralph Weischedel and Jonathan May},
+      year={2020},
+      eprint={2010.02229},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
 ```
-
-

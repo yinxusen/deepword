@@ -328,8 +328,8 @@ def process_hp(args) -> HParams:
 
 
 warning_hparams_exist = """
-hparams.json exists! some hyper-parameter setting from CMD and pre-config file
-will be disabled. make sure to clear model_dir first if you want to train a
+hparams.json exists! Some hyper-parameter set from CMD and the pre-config file
+will be disabled. Make sure to clear model_dir first if you want to train a
 new agent from scratch!
 """.replace("\n", " ").strip()
 
