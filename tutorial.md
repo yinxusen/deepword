@@ -30,6 +30,12 @@ These are three essential parts of DQN.
 
 
 ## Install requirements
+Python3 is required for the package. I recommend to use 
+[pyenv](https://github.com/pyenv/pyenv) and 
+[pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv).
+You can use your own Python environment such as Conda, or the original python virtualenv.
+You may need to change `python` and `pip` to `python3` and `pip3` according to your Python environment.
+
 You may want to change the
 `tensorflow` to `tensorflow-gpu` in the `requirements.txt` if GPUs are available.
 
@@ -215,15 +221,15 @@ all possible actions, e.g., `commands-zork1-130.txt`.
 
 ```bash
 cd $PDIR
-wget http://zork1.z5 .
-wget http://commands-zork1-130.txt .
+wget https://github.com/yinxusen/dqn-zork/blob/master/resources/games/zork1.z5 ./zork1.z5
+wget https://github.com/yinxusen/dqn-zork/blob/master/resources/commands-zork1-minimum.txt ./commands-zork1-minimum.txt
 
 MODEL_HOME="example-model"
 PRE_CONF_FILE="model_config/dqn-zork-cnn.yaml"
-ACTION_FILE="commands-zork1-130.txt"
+ACTION_FILE="commands-zork1-minimum.txt"
 GAME_PATH="zork1.z5"
 
-./sbin/run.sh python/deeptextworld/main.py \
+./sbin/run.sh python/deepword/main.py \
     --config-file "$PRE_CONF_FILE" \
     --model-dir "$MODELHOME" \
     --action-file "$ACTION_FILE" \
@@ -248,7 +254,7 @@ dir since the DRRN model is different from the DQN model.
 ```bash
 MODEL_HOME="example-model-drrn"
 
-./sbin/run.sh python/deeptextworld/main.py \
+./sbin/run.sh python/deepword/main.py \
     --config-file "$PRE_CONF_FILE" \
     --model-creator "CnnDRRN" \
     --model-dir "$MODELHOME" \
