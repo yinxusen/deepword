@@ -19,7 +19,9 @@ The BaseAgent works with specific games/frameworks, fetching important informati
 
 The BaseCore works independently, requiring only trajectory and actions, etc.
 
-Read the [tutorial.md](tutorial.md) for details.
+Read the [tutorial.md](tutorial.md) for users.
+
+Check the [API doc](https://yinxusen.github.io/deepword/) for developers.
 
 Cite our papers
 
