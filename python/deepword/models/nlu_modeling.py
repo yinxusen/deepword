@@ -39,6 +39,8 @@ class BertNLU(BaseDQN):
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
         self.dropout = tf.keras.layers.Dropout(rate=0.4)
+        self.bert_freeze_layers = set([
+            int(x) for x in self.hp.bert_freeze_layers.split(",")])
 
     def get_q_actions(self):
         src = self.inputs["src"]
@@ -56,6 +58,8 @@ class BertNLU(BaseDQN):
                 input_ids=src, input_mask=src_masks,
                 token_type_ids=seg_tj_action)
             pooled = bert_model.get_pooled_output()
+
+        with tf.variable_scope("q-encoder"):
             output = self.dropout(pooled, training=(not self.is_infer))
             q_actions = tf.layers.dense(output, units=1, use_bias=True)[:, 0]
 
@@ -86,7 +90,21 @@ class BertNLU(BaseDQN):
     def get_train_op(self, q_actions):
         losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
         loss = tf.reduce_mean(losses)
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+
+        var_q_encoder = tf.trainable_variables(scope="q-encoder")
+        var_bert = tf.trainable_variables(scope="bert-state-encoder")
+        allowed_var_bert = list(filter(
+            lambda v: all([layer_name not in v.name.split("/")
+                           for layer_name in self.bert_freeze_layers]),
+            var_bert))
+        trainable_vars = var_q_encoder + allowed_var_bert
+
+        self.debug("trainable vars: {}".format(trainable_vars))
+
+        train_op = self.optimizer.minimize(
+            loss, global_step=self.global_step,
+            var_list=trainable_vars)
+
         return loss, train_op
 
     @classmethod

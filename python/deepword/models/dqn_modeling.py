@@ -4,10 +4,12 @@ import tensorflow as tf
 import deepword.models.utils as dqn
 from deepword.hparams import conventions
 from deepword.models.models import DQNModel
+from deepword.log import Logging
 
 
-class BaseDQN(object):
+class BaseDQN(Logging):
     def __init__(self, hp, src_embeddings=None, is_infer=False):
+        super(BaseDQN, self).__init__()
         self.is_infer = is_infer
         self.hp = hp
         if src_embeddings is None:

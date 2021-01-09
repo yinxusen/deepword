@@ -71,6 +71,7 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument("--action-file", type=str)
     parser.add_argument("--policy-eps", type=float)
     parser.add_argument("--bert-language-layer", type=int)
+    parser.add_argument("--bert-freeze-layers", type=str)
     return parser
 
 
