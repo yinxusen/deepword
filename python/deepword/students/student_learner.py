@@ -21,7 +21,7 @@ from tqdm import trange
 from deepword.action import ActionCollector
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import batch_drrn_action_input
-from deepword.agents.utils import bert_commonsense_input
+from deepword.agents.utils import bert_nlu_input
 from deepword.agents.utils import get_action_idx_pair
 from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
@@ -813,7 +813,7 @@ class NLULearner(StudentLearner):
         swag_labels = np.zeros((len(actions), ), dtype=np.int32)
 
         processed_input = [
-            bert_commonsense_input(
+            bert_nlu_input(
                 am, al, tj, tj_len, self.hp.sep_val_id, self.hp.cls_val_id,
                 self.hp.num_tokens)
             for am, al, tj, tj_len

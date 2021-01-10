@@ -14,7 +14,7 @@ from tensorflow import Session
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 
-from deepword.agents.utils import bert_commonsense_input
+from deepword.agents.utils import bert_nlu_input
 from deepword.students.student_learner import NLUClassificationLearner
 from deepword.students.utils import align_batch_str
 from deepword.tokenizers import Tokenizer
@@ -80,7 +80,7 @@ def get_bert_input(
     for tj, actions in zip(start_str, ending_str):
         tj_ids, tj_len, action_matrix, action_len = process_one_line(
             tokenizer, tj, list(actions), num_tokens_tj, n_tokens_per_action)
-        _inp, _seg_tj_action, _inp_size = bert_commonsense_input(
+        _inp, _seg_tj_action, _inp_size = bert_nlu_input(
             action_matrix, action_len, tj_ids, tj_len,
             sep_val_id, cls_val_id, num_tokens)
         inp.append(_inp)

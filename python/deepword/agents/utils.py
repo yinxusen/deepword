@@ -348,7 +348,7 @@ def id_real2batch(
             in zip(real_id, id_real2mask, batch_id)]
 
 
-def bert_commonsense_input(
+def bert_nlu_input(
         action_matrix: np.ndarray, action_len: np.ndarray,
         trajectory: List[int], trajectory_len: int,
         sep_val_id: int, cls_val_id: int,

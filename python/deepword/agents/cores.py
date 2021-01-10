@@ -17,7 +17,7 @@ from termcolor import colored
 from deepword.agents.utils import ActionMaster, ObsInventory
 from deepword.agents.utils import GenSummary
 from deepword.agents.utils import batch_drrn_action_input
-from deepword.agents.utils import bert_commonsense_input
+from deepword.agents.utils import bert_nlu_input
 from deepword.agents.utils import get_action_idx_pair
 from deepword.agents.utils import get_best_1d_q
 from deepword.agents.utils import get_best_batch_ids
@@ -460,6 +460,27 @@ class NLUCore(TFCore):
         self.model: Optional[NLUModel] = None
         self.target_model: Optional[NLUModel] = None
 
+    def trajectory2input(
+            self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
+        """
+        generate src, src_len from trajectory, trimmed by hp.num_tokens
+        For NLU input, this trajectory will be trimmed by hp.num_tokens - 3
+        to reserve positions for the CLS and two SEPs.
+
+        Args:
+            trajectory: List of ActionMaster
+
+        Returns:
+            src: source indices
+            src_len: length of the src
+        """
+
+        tj = flatten([x.ids for x in trajectory])
+        max_bert_tj_len = self.hp.num_tokens - 3
+        if len(tj) > max_bert_tj_len:
+            tj = tj[-max_bert_tj_len:]
+        return tj, len(tj)
+
     def train_one_batch(
             self,
             pre_trajectories: List[List[ActionMaster]],
@@ -476,7 +497,7 @@ class NLUCore(TFCore):
             b_weight: np.ndarray,
             step: int,
             others: Any) -> np.ndarray:
-        raise NotImplementedError("BertCore doesn't support for training")
+        raise NotImplementedError("NLUCore doesn't support for training")
 
     def policy(
             self,
@@ -488,7 +509,7 @@ class NLUCore(TFCore):
         action_matrix = action_matrix[action_mask, :]
         action_len = action_len[action_mask]
         src, src_len = self.trajectory2input(trajectory)
-        inp, seg_tj_action, inp_size = bert_commonsense_input(
+        inp, seg_tj_action, inp_size = bert_nlu_input(
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
         n_actions = inp.shape[0]

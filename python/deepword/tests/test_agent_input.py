@@ -7,7 +7,7 @@ from tensorflow.contrib.training import HParams
 
 from deepword.action import ActionCollector
 from deepword.agents.utils import batch_drrn_action_input, id_real2batch, \
-    bert_commonsense_input, sample_batch_ids
+    bert_nlu_input, sample_batch_ids
 from deepword.hparams import copy_hparams
 from deepword.agents.utils import ActionMaster
 from deepword.students.utils import batch_dqn_input, align_batch_str
@@ -161,7 +161,7 @@ class TestAgentInput(unittest.TestCase):
             n_actions = len(action_matrix)
             action_mask = np.random.choice(
                 np.arange(n_actions), size=np.random.randint(1, n_actions))
-            inp, seg_tj_action, inp_size = bert_commonsense_input(
+            inp, seg_tj_action, inp_size = bert_nlu_input(
                 action_matrix=action_matrix[action_mask],
                 action_len=ac.get_action_len(gid)[action_mask],
                 trajectory=s, trajectory_len=l,
