@@ -99,7 +99,12 @@ class BertSNN(Logging):
             lambda v: all([layer_name not in v.name.split("/")
                            for layer_name in self.bert_freeze_layers]),
             var_bert))
-        trainable_vars = var_snn + allowed_var_bert
+
+        # allow snn_dense to be frozen
+        if "snn_dense" in self.bert_freeze_layers:
+            trainable_vars = allowed_var_bert
+        else:
+            trainable_vars = var_snn + allowed_var_bert
 
         self.debug("trainable vars:\n{}\n".format(
             "\n".join([v.name for v in trainable_vars])))
