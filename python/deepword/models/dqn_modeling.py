@@ -3,8 +3,8 @@ import tensorflow as tf
 
 import deepword.models.utils as dqn
 from deepword.hparams import conventions
-from deepword.models.models import DQNModel
 from deepword.log import Logging
+from deepword.models.models import DQNModel
 
 
 class BaseDQN(Logging):

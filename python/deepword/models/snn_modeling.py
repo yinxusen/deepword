@@ -2,14 +2,16 @@ import bert.modeling as b_model
 import tensorflow as tf
 
 from deepword.hparams import conventions
+from deepword.log import Logging
 from deepword.models.models import SNNModel
 
 
-class BertSNN(object):
+class BertSNN(Logging):
     """
     Use SNN to encode sentences for additive features representation learning
     """
     def __init__(self, hp, is_infer=False):
+        super(BertSNN, self).__init__()
         self.is_infer = is_infer
         self.hp = hp
         self.global_step = tf.train.get_or_create_global_step()
@@ -27,6 +29,7 @@ class BertSNN(object):
         self.bert_language_layer = self.hp.bert_language_layer
         assert 0 <= self.bert_language_layer < self.hp.bert_num_hidden_layers, \
             "language layer doesn't match bert layers"
+        self.bert_freeze_layers = set(self.hp.bert_freeze_layers.split(","))
 
         self.inputs = {
             "target_src": tf.placeholder(tf.int32, [None, None]),
@@ -89,7 +92,22 @@ class BertSNN(object):
         losses = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=labels, logits=semantic_same)
         loss = tf.reduce_mean(losses)
-        train_op = self.optimizer.minimize(loss, global_step=self.global_step)
+
+        var_snn = tf.trainable_variables(scope="snn_dense")
+        var_bert = tf.trainable_variables(scope="bert-state-encoder")
+        allowed_var_bert = list(filter(
+            lambda v: all([layer_name not in v.name.split("/")
+                           for layer_name in self.bert_freeze_layers]),
+            var_bert))
+        trainable_vars = var_snn + allowed_var_bert
+
+        self.debug("trainable vars:\n{}\n".format(
+            "\n".join([v.name for v in trainable_vars])))
+
+        train_op = self.optimizer.minimize(
+            loss, global_step=self.global_step,
+            var_list=trainable_vars)
+
         return loss, train_op
 
     @classmethod

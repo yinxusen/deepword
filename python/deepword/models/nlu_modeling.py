@@ -39,8 +39,7 @@ class BertNLU(BaseDQN):
         self.bert_ckpt_file = "{}/bert_model.ckpt".format(
             self.bert_init_ckpt_dir)
         self.dropout = tf.keras.layers.Dropout(rate=0.4)
-        self.bert_freeze_layers = set([
-            int(x) for x in self.hp.bert_freeze_layers.split(",")])
+        self.bert_freeze_layers = set(self.hp.bert_freeze_layers.split(","))
 
     def get_q_actions(self):
         src = self.inputs["src"]
