@@ -464,7 +464,8 @@ class NLUCore(TFCore):
             self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
         """
         generate src, src_len from trajectory, trimmed by hp.num_tokens
-        For NLU input, this trajectory will be trimmed by hp.num_tokens - 3
+        For NLU input, this trajectory will be trimmed by
+         hp.num_tokens - 3 - hp.n_tokens_per_action
         to reserve positions for the CLS and two SEPs.
 
         Args:
@@ -476,7 +477,7 @@ class NLUCore(TFCore):
         """
 
         tj = flatten([x.ids for x in trajectory])
-        max_bert_tj_len = self.hp.num_tokens - 3
+        max_bert_tj_len = self.hp.num_tokens - 3 - self.hp.n_tokens_per_action
         if len(tj) > max_bert_tj_len:
             tj = tj[-max_bert_tj_len:]
         return tj, len(tj)
