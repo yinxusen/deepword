@@ -528,5 +528,5 @@ class FullDirEvalPlayer(Logging):
             ",".join([str(step) for step in steps])))
 
         event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        for step in steps:
+        for step in steps[::-1]:  # eval reversely
             event_handler.run_eval_player(step2ckpt[step])
