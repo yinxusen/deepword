@@ -757,8 +757,10 @@ class BaseAgent(Logging):
         master_tokens = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.tokenize(master))
         self.tjs.append(ActionMaster(
-            action_ids=list(
-                self._last_action.token_idx) if self._last_action else [],
+            action_ids=(
+                list(self._last_action.token_idx[
+                     :self._last_action.action_len])
+                if self._last_action else []),
             master_ids=master_tokens,
             action=self._last_action.action if self._last_action else "",
             master=master))
