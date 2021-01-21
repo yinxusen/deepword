@@ -3,7 +3,12 @@ from typing import Optional
 import tensorflow as tf
 
 
-class DQNModel(object):
+class TFModel(object):
+    def __init__(self, graph):
+        self.graph = graph
+
+
+class DQNModel(TFModel):
     def __init__(
             self,
             graph: tf.Graph,
@@ -19,7 +24,7 @@ class DQNModel(object):
             abs_loss: Optional[tf.Tensor],
             src_seg_: Optional[tf.placeholder],
             h_state: Optional[tf.Tensor]):
-        self.graph = graph
+        super(DQNModel, self).__init__(graph)
         self.q_actions = q_actions
         self.src_ = src_
         self.src_len_ = src_len_
@@ -290,7 +295,7 @@ class DSQNZorkModel(DQNModel):
         self.h_states_diff = h_states_diff
 
 
-class SNNModel(object):
+class SNNModel(TFModel):
     def __init__(
             self,
             graph: tf.Graph,
@@ -301,8 +306,7 @@ class SNNModel(object):
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
             train_summary_op: Optional[tf.Operation]):
-        super(SNNModel, self).__init__()
-        self.graph = graph
+        super(SNNModel, self).__init__(graph)
         self.target_src_ = target_src_
         self.same_src_ = same_src_
         self.diff_src_ = diff_src_

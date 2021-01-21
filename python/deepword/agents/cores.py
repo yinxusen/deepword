@@ -36,6 +36,7 @@ from deepword.utils import eprint
 from deepword.utils import flatten
 from deepword.utils import get_hash
 from deepword.utils import model_name2clazz
+from deepword.utils import tf_model_safe_loading
 
 
 class BaseCore(Logging, ABC):
@@ -230,55 +231,6 @@ class TFCore(BaseCore, ABC):
             target_sess = self.target_sess
         return target_model, target_sess
 
-    def safe_loading(
-            self, model: DQNModel, sess: Session, saver: Saver,
-            restore_from: str) -> int:
-        """
-        Load weights from restore_from to model.
-        If weights in loaded model are incompatible with current model,
-        try to load those weights that have the same name.
-
-        This method is useful when saved model lacks of training part, e.g.
-        Adam optimizer.
-
-        Args:
-            model: A tensorflow model
-            sess: A tensorflow session
-            saver: A tensorflow saver
-            restore_from: the path to restore the model
-
-        Returns:
-            training steps
-        """
-        self.info(
-            colored(
-                "Try to restore parameters from: {}".format(restore_from),
-                "magenta", attrs=["bold", "underline"]))
-        with model.graph.as_default():
-            try:
-                saver.restore(sess, restore_from)
-            except Exception as e:
-                self.debug(
-                    "Restoring from saver failed,"
-                    " try to restore from safe saver\n{}".format(e))
-                all_saved_vars = list(
-                    map(lambda v: v[0],
-                        tf.train.list_variables(restore_from)))
-                self.debug(
-                    "Try to restore with safe saver with vars:\n{}".format(
-                        "\n".join(all_saved_vars)))
-                all_vars = tf.global_variables()
-                self.debug("all vars:\n{}".format(
-                    "\n".join([v.op.name for v in all_vars])))
-                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
-                self.debug("Matched vars:\n{}".format(
-                    "\n".join([v.name for v in var_list])))
-                safe_saver = tf.train.Saver(var_list=var_list)
-                safe_saver.restore(sess, restore_from)
-            global_step = tf.train.get_or_create_global_step()
-            trained_steps = sess.run(global_step)
-        return trained_steps
-
     def _create_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
         self.debug(
@@ -325,15 +277,18 @@ class TFCore(BaseCore, ABC):
 
     def _load_model(
             self, sess: Session, model: DQNModel, saver: Saver,
-            restore_from: Optional[str] = None, load_best=False) -> int:
+            restore_from: Optional[str] = None, load_best: bool = False) -> int:
         if restore_from is None:
             if load_best:
                 restore_from = tf.train.latest_checkpoint(self.best_ckpt_path)
             else:
                 restore_from = tf.train.latest_checkpoint(self.ckpt_path)
 
-        if restore_from is not None:
-            trained_step = self.safe_loading(model, sess, saver, restore_from)
+        # only allow safe_loading during training
+        # safe_loading for evaluation could cause evaluation inaccurate.
+        if restore_from is not None and self.is_training:
+            trained_step = tf_model_safe_loading(
+                model, sess, saver, restore_from)
         else:
             self.warning(colored(
                 "No checkpoint to load, using untrained model",
