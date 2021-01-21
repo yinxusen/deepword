@@ -10,7 +10,6 @@ from collections import ChainMap
 from collections import namedtuple
 from multiprocessing import Pool
 from os import path
-from threading import Lock
 from typing import List, Dict, Optional, Tuple
 
 import gym
@@ -18,8 +17,6 @@ import numpy as np
 import textworld.gym
 from tensorflow.contrib.training import HParams
 from termcolor import colored
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
 
 from deepword.agents.utils import INFO_KEY
 from deepword.log import Logging
@@ -36,8 +33,9 @@ class EvalResult(namedtuple(
 
 
 def eval_agent(
-        hp: HParams, model_dir: str, load_best: bool, restore_from: str,
-        game_files: List[str], gpu_device: Optional[str] = None
+        hp: HParams, model_dir: str, load_best: bool,
+        restore_from: Optional[str], game_files: List[str],
+        gpu_device: Optional[str] = None
 ) -> Tuple[Dict[str, List[EvalResult]], int]:
     """
     Evaluate an agent with given games.
@@ -309,7 +307,8 @@ class MultiGPUsEvalPlayer(Logging):
                 total_steps < self.prev_best_steps)
         return has_better_score or has_fewer_steps
 
-    def evaluate(self, restore_from: str, debug: bool = False) -> None:
+    def evaluate(
+            self, restore_from: Optional[str], debug: bool = False) -> None:
         """
         Evaluate an agent
 
@@ -410,75 +409,14 @@ class MultiGPUsEvalPlayer(Logging):
         self.debug("copied: {} -> {}".format(ckpt_file, dst))
 
 
-class NewModelHandler(FileSystemEventHandler):
-    def __init__(self, hp, model_dir, game_files, n_gpus):
-        self.hp = hp
-        self.model_dir = model_dir
-        self.game_files = game_files
-        self.n_gpus = n_gpus
-        self.eval_player = None
-        self.lock = Lock()
-        self.watched_file = "checkpoint"
-
-    def run_eval_player(self, restore_from=None, load_best=False):
-        if self.eval_player is None:
-            self.eval_player = MultiGPUsEvalPlayer(
-                self.hp, self.model_dir, self.game_files, self.n_gpus,
-                load_best=load_best)
-        time.sleep(10)  # wait until all files of a model has been saved
-        if self.lock.locked():
-            eprint("Give up evaluation since model is running.")
-            return
-        self.lock.acquire()
-        try:
-            self.eval_player.evaluate(restore_from)
-        except Exception as e:
-            eprint("evaluation failed with {}\n{}".format(restore_from, e))
-        self.lock.release()
-
-    def is_ckpt_file(self, src_path):
-        return self.watched_file == path.basename(src_path)
-
-    def on_created(self, event):
-        eprint("create ", event.src_path)
-        if not event.is_directory and self.is_ckpt_file(event.src_path):
-            self.run_eval_player()
-
-    def on_modified(self, event):
-        eprint("modify", event.src_path)
-        if not event.is_directory and self.is_ckpt_file(event.src_path):
-            self.run_eval_player()
-
-
-class WatchDogEvalPlayer(Logging):
-    def __init__(self):
-        super(WatchDogEvalPlayer, self).__init__()
-
-    def start(self, hp, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
-        watched_dir = path.join(model_dir, "last_weights")
-        if not path.exists(watched_dir):
-            os.mkdir(watched_dir)
-        self.debug("watch on {}".format(watched_dir))
-        observer = Observer()
-        observer.schedule(event_handler, watched_dir, recursive=False)
-        observer.start()
-        try:
-            while True:
-                time.sleep(10)
-                self.debug("watching ...")
-        except KeyboardInterrupt:
-            observer.stop()
-        observer.join()
-
-
 class LoopDogEvalPlayer(Logging):
     def __init__(self):
         super(LoopDogEvalPlayer, self).__init__()
         self.file_content = hash("")
 
-    def start(self, hp, model_dir, game_files, n_gpus):
-        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
+    def start(self, hp, model_dir, game_files, n_gpus, debug):
+        player = MultiGPUsEvalPlayer(
+            hp, model_dir, game_files, n_gpus, load_best=False)
         watched_file = path.join(model_dir, "last_weights", "checkpoint")
         self.debug("watch on {}".format(watched_file))
         try:
@@ -493,7 +431,7 @@ class LoopDogEvalPlayer(Logging):
                             "encounter new file {} -> {} for evaluation".format(
                                 self.file_content, content))
                         self.file_content = content
-                        event_handler.run_eval_player()
+                        player.evaluate(restore_from=None, debug=debug)
                     else:
                         pass
                 except Exception as e:
@@ -509,7 +447,7 @@ class FullDirEvalPlayer(Logging):
 
     @classmethod
     def start(
-            cls, hp, model_dir, game_files, n_gpus,
+            cls, hp, model_dir, game_files, n_gpus, debug,
             range_min=None, range_max=None):
         watched_files = path.join(
             model_dir, "last_weights", "after-epoch-*.index")
@@ -527,6 +465,7 @@ class FullDirEvalPlayer(Logging):
         eprint("valid evaluation steps: {}".format(
             ",".join([str(step) for step in steps])))
 
-        event_handler = NewModelHandler(hp, model_dir, game_files, n_gpus)
+        player = MultiGPUsEvalPlayer(
+            hp, model_dir, game_files, n_gpus, load_best=False)
         for step in steps[::-1]:  # eval reversely
-            event_handler.run_eval_player(step2ckpt[step])
+            player.evaluate(restore_from=step2ckpt[step], debug=debug)

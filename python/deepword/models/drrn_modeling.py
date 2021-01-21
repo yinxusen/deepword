@@ -87,6 +87,7 @@ class CnnDRRN(BaseDQN):
                 train_summary_op = tf.summary.merge([loss_summary])
         return DRRNModel(
             graph=graph,
+            training=True,
             q_actions=q_actions,
             src_=inputs["src"],
             src_len_=inputs["src_len"],
@@ -112,7 +113,9 @@ class CnnDRRN(BaseDQN):
                 inputs = model.inputs
                 q_actions, new_h = model.get_q_actions()
         return DRRNModel(
-            graph=graph, q_actions=q_actions,
+            graph=graph,
+            training=False,
+            q_actions=q_actions,
             src_=inputs["src"],
             src_len_=inputs["src_len"],
             actions_=inputs["actions"],

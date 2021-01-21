@@ -34,7 +34,6 @@ from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
 from deepword.utils import eprint, flatten, softmax
 from deepword.utils import model_name2clazz, bytes2idx
-from deepword.utils import tf_model_safe_loading
 
 
 class CMD:
@@ -108,7 +107,8 @@ class StudentLearner(Logging):
         return combined_data_path
 
     def _prepare_model(
-            self, device_placement: str, restore_from: Optional[str] = None
+            self, device_placement: str, training: bool,
+            restore_from: Optional[str] = None,
     ) -> Tuple[Session, Any, Saver, int]:
         """
         create and load model from restore_from
@@ -116,9 +116,15 @@ class StudentLearner(Logging):
         if model_dir
         """
         model_clazz = model_name2clazz(self.hp.model_creator)
-        model = model_clazz.get_train_student_model(
-            hp=self.hp,
-            device_placement=device_placement)
+        if training:
+            model = model_clazz.get_train_student_model(
+                hp=self.hp,
+                device_placement=device_placement)
+        else:
+            model = model_clazz.get_eval_student_model(
+                hp=self.hp,
+                device_placement=device_placement)
+
         conf = tf.ConfigProto(
             log_device_placement=False, allow_soft_placement=True)
         sess = tf.Session(graph=model.graph, config=conf)
@@ -132,47 +138,13 @@ class StudentLearner(Logging):
                 restore_from = tf.train.latest_checkpoint(self.load_from)
 
             if restore_from is not None:
-                trained_steps = tf_model_safe_loading(
-                    model, sess, saver, restore_from)
+                trained_steps = model.safe_loading(sess, saver, restore_from)
             else:
                 self.warning(colored(
                     "No checkpoint to load, using untrained model",
                     "red", "on_white", ["bold", "blink", "underline"]))
                 trained_steps = 0
 
-        return sess, model, saver, trained_steps
-
-    def _prepare_eval_model(
-            self, device_placement: str, restore_from: Optional[str] = None
-    ) -> Tuple[Session, Any, Saver, int]:
-        """
-        create and load model from restore_from
-        if restore_from is None, use the latest checkpoint from last_weights
-        if model_dir
-        """
-        model_clazz = model_name2clazz(self.hp.model_creator)
-        model = model_clazz.get_eval_student_model(
-            hp=self.hp,
-            device_placement=device_placement)
-        conf = tf.ConfigProto(
-            log_device_placement=False, allow_soft_placement=True)
-        sess = tf.Session(graph=model.graph, config=conf)
-        with model.graph.as_default():
-            sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver(
-                max_to_keep=self.hp.max_snapshot_to_keep,
-                save_relative_paths=True)
-            global_step = tf.train.get_or_create_global_step()
-
-        try:
-            if restore_from is None:
-                restore_from = tf.train.latest_checkpoint(self.load_from)
-            saver.restore(sess, restore_from)
-            trained_steps = sess.run(global_step)
-            eprint("load student from ckpt: {}".format(restore_from))
-        except Exception as e:
-            eprint("load model failed: {}".format(e))
-            trained_steps = 0
         return sess, model, saver, trained_steps
 
     @classmethod
@@ -368,7 +340,8 @@ class StudentLearner(Logging):
     def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_model(
+            "/device:GPU:0", training=True)
 
         # save the very first model to verify weight has been loaded
         if train_steps == 0:
@@ -445,8 +418,8 @@ class StudentLearner(Logging):
         raise NotImplementedError()
 
     def _prepare_test(self) -> Tuple[Session, Any, Saver, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_eval_model(
-            device_placement="/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_model(
+            device_placement="/device:GPU:0", training=False)
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,

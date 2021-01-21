@@ -1,17 +1,75 @@
 from typing import Optional
 
 import tensorflow as tf
+from termcolor import colored
+
+from deepword.log import Logging
 
 
-class TFModel(object):
-    def __init__(self, graph):
+class TFModel(Logging):
+    def __init__(self, graph: tf.Graph, training: bool):
+        super(TFModel, self).__init__()
         self.graph = graph
+        self.training = training
+
+    def safe_loading(
+            self, sess: tf.Session, saver: tf.train.Saver,
+            restore_from: str) -> int:
+        """
+        Load weights from restore_from to model.
+        If weights in loaded model are incompatible with current model,
+        try to load those weights that have the same name.
+
+        This method is useful when saved model lacks of training part, e.g.
+        Adam optimizer.
+
+        Args:
+            sess: A tensorflow session
+            saver: A tensorflow saver
+            restore_from: the path to restore the model
+
+        Returns:
+            training steps
+        """
+        self.warning(
+            colored(
+                "Try to restore parameters from: {}".format(restore_from),
+                "magenta", attrs=["bold", "underline"]))
+        with self.graph.as_default():
+            try:
+                saver.restore(sess, restore_from)
+            except Exception as e:
+                if not self.training:
+                    self.error("Evaluation model should not use safe_loading")
+                    raise e
+
+                self.warning(
+                    "Restoring from saver failed,"
+                    " try to restore from safe saver\n{}".format(e))
+                all_saved_vars = list(
+                    map(lambda v: v[0],
+                        tf.train.list_variables(restore_from)))
+                self.warning(
+                    "Try to restore with safe saver with vars:\n{}".format(
+                        "\n".join(all_saved_vars)))
+                all_vars = tf.global_variables()
+                self.warning("all vars:\n{}".format(
+                    "\n".join([v.op.name for v in all_vars])))
+                var_list = [v for v in all_vars if v.op.name in all_saved_vars]
+                self.warning("Matched vars:\n{}".format(
+                    "\n".join([v.name for v in var_list])))
+                safe_saver = tf.train.Saver(var_list=var_list)
+                safe_saver.restore(sess, restore_from)
+            global_step = tf.train.get_or_create_global_step()
+            trained_steps = sess.run(global_step)
+        return trained_steps
 
 
 class DQNModel(TFModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -24,7 +82,7 @@ class DQNModel(TFModel):
             abs_loss: Optional[tf.Tensor],
             src_seg_: Optional[tf.placeholder],
             h_state: Optional[tf.Tensor]):
-        super(DQNModel, self).__init__(graph)
+        super(DQNModel, self).__init__(graph, training)
         self.q_actions = q_actions
         self.src_ = src_
         self.src_len_ = src_len_
@@ -43,6 +101,7 @@ class GenDQNModel(DQNModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -67,6 +126,7 @@ class GenDQNModel(DQNModel):
             decoded_logits_infer: tf.Tensor):
         super(GenDQNModel, self).__init__(
             graph,
+            training,
             q_actions,
             src_,
             src_len_,
@@ -95,6 +155,7 @@ class DRRNModel(DQNModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -112,6 +173,7 @@ class DRRNModel(DQNModel):
             actions_repeats_: tf.placeholder):
         super(DRRNModel, self).__init__(
             graph,
+            training,
             q_actions,
             src_,
             src_len_,
@@ -133,6 +195,7 @@ class NLUModel(DQNModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -152,6 +215,7 @@ class NLUModel(DQNModel):
             classification_train_op: Optional[tf.Operation]):
         super(NLUModel, self).__init__(
             graph,
+            training,
             q_actions,
             src_,
             src_len_,
@@ -175,6 +239,7 @@ class DSQNModel(DRRNModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -205,6 +270,7 @@ class DSQNModel(DRRNModel):
             h_states_diff: Optional[tf.Tensor]):
         super(DSQNModel, self).__init__(
             graph,
+            training,
             q_actions,
             src_,
             src_len_,
@@ -240,6 +306,7 @@ class DSQNZorkModel(DQNModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             q_actions: tf.Tensor,
             src_: tf.placeholder,
             src_len_: tf.placeholder,
@@ -267,6 +334,7 @@ class DSQNZorkModel(DQNModel):
             h_states_diff: Optional[tf.Tensor]):
         super(DSQNZorkModel, self).__init__(
             graph,
+            training,
             q_actions,
             src_,
             src_len_,
@@ -299,6 +367,7 @@ class SNNModel(TFModel):
     def __init__(
             self,
             graph: tf.Graph,
+            training: bool,
             target_src_: tf.placeholder,
             same_src_: tf.placeholder,
             diff_src_: tf.placeholder,
@@ -306,7 +375,7 @@ class SNNModel(TFModel):
             train_op: Optional[tf.Operation],
             loss: Optional[tf.Tensor],
             train_summary_op: Optional[tf.Operation]):
-        super(SNNModel, self).__init__(graph)
+        super(SNNModel, self).__init__(graph, training)
         self.target_src_ = target_src_
         self.same_src_ = same_src_
         self.diff_src_ = diff_src_

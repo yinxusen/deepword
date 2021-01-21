@@ -469,11 +469,12 @@ def process_eval_dqn(args):
             restore_from=args.restore_from, debug=args.debug)
     elif args.eval_mode == "dev-eval":
         eval_player = LoopDogEvalPlayer()
-        eval_player.start(hp, args.model_dir, eval_games, args.n_gpus)
+        eval_player.start(
+            hp, args.model_dir, eval_games, args.n_gpus, args.debug)
     elif args.eval_mode == "full-eval":
         eval_player = FullDirEvalPlayer()
         eval_player.start(
-            hp, args.model_dir, eval_games, args.n_gpus,
+            hp, args.model_dir, eval_games, args.n_gpus, args.debug,
             range_min=args.ckpt_range_min, range_max=args.ckpt_range_max)
     else:
         raise ValueError()

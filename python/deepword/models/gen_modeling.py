@@ -48,6 +48,7 @@ class TransformerGenDQN(BaseDQN):
                 train_summary_op = tf.summary.merge([loss_summary])
         return GenDQNModel(
             graph=graph,
+            training=True,
             q_actions=q_actions,
             decoded_idx_infer=decoded_idx,
             src_=inputs["src"],
@@ -83,6 +84,7 @@ class TransformerGenDQN(BaseDQN):
                  ) = model.decode()
         return GenDQNModel(
             graph=graph,
+            training=False,
             q_actions=q_actions,
             decoded_idx_infer=decoded_idx,
             src_=inputs["src"],

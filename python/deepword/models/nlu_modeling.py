@@ -58,7 +58,6 @@ class BertNLU(BaseDQN):
                 token_type_ids=seg_tj_action)
             pooled = bert_model.get_pooled_output()
 
-        with tf.variable_scope("q-encoder"):
             output = self.dropout(pooled, training=(not self.is_infer))
             q_actions = tf.layers.dense(output, units=1, use_bias=True)[:, 0]
 
@@ -192,6 +191,7 @@ def create_train_bert_nlu_model(model_creator, hp, device_placement):
                 [classification_loss_summary])
     return NLUModel(
         graph=graph,
+        training=True,
         q_actions=q_actions,
         src_seg_=None,
         src_=inputs["src"],
@@ -220,6 +220,7 @@ def create_eval_bert_nlu_model(model_creator, hp, device_placement):
             q_actions = model.get_q_actions()
     return NLUModel(
         graph=graph,
+        training=False,
         q_actions=q_actions,
         src_seg_=None,
         src_=inputs["src"],

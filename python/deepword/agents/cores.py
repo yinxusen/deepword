@@ -36,7 +36,6 @@ from deepword.utils import eprint
 from deepword.utils import flatten
 from deepword.utils import get_hash
 from deepword.utils import model_name2clazz
-from deepword.utils import tf_model_safe_loading
 
 
 class BaseCore(Logging, ABC):
@@ -286,9 +285,8 @@ class TFCore(BaseCore, ABC):
 
         # only allow safe_loading during training
         # safe_loading for evaluation could cause evaluation inaccurate.
-        if restore_from is not None and self.is_training:
-            trained_step = tf_model_safe_loading(
-                model, sess, saver, restore_from)
+        if restore_from is not None:
+            trained_step = model.safe_loading(sess, saver, restore_from)
         else:
             self.warning(colored(
                 "No checkpoint to load, using untrained model",

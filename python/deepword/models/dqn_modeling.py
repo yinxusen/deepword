@@ -68,6 +68,7 @@ class BaseDQN(Logging):
                 train_summary_op = tf.summary.merge([loss_summary])
         return DQNModel(
             graph=graph,
+            training=True,
             q_actions=q_actions,
             src_=src_placeholder,
             src_len_=src_len_placeholder,
@@ -93,6 +94,7 @@ class BaseDQN(Logging):
                 q_actions = model.get_q_actions()
         return DQNModel(
             graph=graph,
+            training=False,
             q_actions=q_actions,
             src_=src_placeholder,
             src_len_=src_len_placeholder,

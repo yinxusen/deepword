@@ -143,6 +143,7 @@ class CnnDSQN(BaseDQN):
                      s1_summary, s2_summary])
         return DSQNModel(
             graph=graph,
+            training=True,
             q_actions=q_actions,
             semantic_same=semantic_same,
             src_=inputs["src"],
@@ -182,7 +183,10 @@ class CnnDSQN(BaseDQN):
                 q_actions, new_h = model.get_q_actions()
                 semantic_same, h_states_diff = model.is_semantic_same()
         return DSQNModel(
-            graph=graph, q_actions=q_actions, semantic_same=semantic_same,
+            graph=graph,
+            training=False,
+            q_actions=q_actions,
+            semantic_same=semantic_same,
             src_=inputs["src"],
             src_len_=inputs["src_len"],
             actions_=inputs["actions"],
@@ -249,6 +253,7 @@ class CnnZorkDSQN(CnnDSQN):
                      s1_summary, s2_summary])
         return DSQNZorkModel(
             graph=graph,
+            training=True,
             q_actions=q_actions,
             semantic_same=semantic_same,
             src_=inputs["src"],
@@ -285,7 +290,10 @@ class CnnZorkDSQN(CnnDSQN):
                 q_actions, new_h = model.get_q_actions()
                 semantic_same, h_states_diff = model.is_semantic_same()
         return DSQNZorkModel(
-            graph=graph, q_actions=q_actions, semantic_same=semantic_same,
+            graph=graph,
+            training=False,
+            q_actions=q_actions,
+            semantic_same=semantic_same,
             src_=inputs["src"],
             src_len_=inputs["src_len"],
             snn_src_=inputs["snn_src"],

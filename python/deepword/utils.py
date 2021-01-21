@@ -16,12 +16,8 @@ from typing import List, Tuple, Dict, Optional, Any
 
 import numpy as np
 import ruamel.yaml
-import tensorflow as tf
 from bitarray import bitarray
 from tabulate import tabulate
-from termcolor import colored
-
-from deepword.models.models import TFModel
 
 
 def get_hash(txt: str) -> str:
@@ -369,57 +365,3 @@ def report_status(lst_of_status: List[Tuple[str, Any]]) -> str:
         a string to print
     """
     return "\n" + tabulate(lst_of_status, tablefmt="plain") + "\n"
-
-
-def tf_model_safe_loading(
-        model: TFModel, sess: tf.Session, saver: tf.train.Saver,
-        restore_from: str) -> int:
-    """
-    Load weights from restore_from to model.
-    If weights in loaded model are incompatible with current model,
-    try to load those weights that have the same name.
-
-    This method is useful when saved model lacks of training part, e.g.
-    Adam optimizer.
-
-    Args:
-        model: A tensorflow model
-        sess: A tensorflow session
-        saver: A tensorflow saver
-        restore_from: the path to restore the model
-
-    Returns:
-        training steps
-    """
-    eprint(
-        colored(
-            "Try to restore parameters from: {}".format(restore_from),
-            "magenta", attrs=["bold", "underline"]))
-    with model.graph.as_default():
-        try:
-            saver.restore(sess, restore_from)
-        except Exception as e:
-            eprint(
-                "Restoring from saver failed,"
-                " try to restore from safe saver\n{}".format(e))
-            all_saved_vars = list(
-                map(lambda v: v[0],
-                    tf.train.list_variables(restore_from)))
-            eprint("----------------------------------")
-            eprint(
-                "Try to restore with safe saver with vars:\n{}".format(
-                    "\n".join(all_saved_vars)))
-            all_vars = tf.global_variables()
-            eprint("----------------------------------")
-            eprint("all vars:\n{}".format(
-                "\n".join([v.op.name for v in all_vars])))
-            var_list = [v for v in all_vars if v.op.name in all_saved_vars]
-            eprint("----------------------------------")
-            eprint("Matched vars:\n{}".format(
-                "\n".join([v.name for v in var_list])))
-            eprint("----------------------------------")
-            safe_saver = tf.train.Saver(var_list=var_list)
-            safe_saver.restore(sess, restore_from)
-        global_step = tf.train.get_or_create_global_step()
-        trained_steps = sess.run(global_step)
-    return trained_steps

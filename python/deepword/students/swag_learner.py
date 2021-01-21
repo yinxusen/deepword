@@ -97,7 +97,8 @@ class SwagLearner(NLUClassificationLearner):
     def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_model("/device:GPU:0")
+        sess, model, saver, train_steps = self._prepare_model(
+            "/device:GPU:0", training=True)
 
         # save the very first model to verify weight has been loaded
         if train_steps == 0:
@@ -124,8 +125,8 @@ class SwagLearner(NLUClassificationLearner):
             self, device_placement: str = "/device:GPU:0",
             restore_from: Optional[str] = None
     ) -> Tuple[Session, Any, Saver, int, Queue]:
-        sess, model, saver, train_steps = self._prepare_eval_model(
-            device_placement, restore_from)
+        sess, model, saver, train_steps = self._prepare_model(
+            device_placement, training=False, restore_from=restore_from)
         queue = Queue(maxsize=100)
         t = Thread(
             target=self._add_batch,
