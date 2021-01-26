@@ -75,11 +75,11 @@ class StudentLearner(Logging):
         self.train_steps = None
         self.queue = None
 
-    def _get_compatible_snapshot_tag(self) -> List[int]:
-        action_tags = get_path_tags(self.train_data_dir, self.action_prefix)
-        memo_tags = get_path_tags(self.train_data_dir, self.memo_prefix)
-        tjs_tags = get_path_tags(self.train_data_dir, self.tjs_prefix)
-        hs2tj_tags = get_path_tags(self.train_data_dir, self.hs2tj_prefix)
+    def _get_compatible_snapshot_tag(self, data_dir: str) -> List[int]:
+        action_tags = get_path_tags(data_dir, self.action_prefix)
+        memo_tags = get_path_tags(data_dir, self.memo_prefix)
+        tjs_tags = get_path_tags(data_dir, self.tjs_prefix)
+        hs2tj_tags = get_path_tags(data_dir, self.hs2tj_prefix)
 
         valid_tags = set(action_tags)
         valid_tags.intersection_update(memo_tags)
@@ -90,7 +90,7 @@ class StudentLearner(Logging):
 
     def _get_combined_data_path(
             self, data_dir: str) -> List[Tuple[str, str, str, str]]:
-        valid_tags = self._get_compatible_snapshot_tag()
+        valid_tags = self._get_compatible_snapshot_tag(data_dir)
         combined_data_path = []
         for tag in sorted(valid_tags, key=lambda k: random.random()):
             combined_data_path.append(
