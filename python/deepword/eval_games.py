@@ -449,14 +449,7 @@ class FullDirEvalPlayer(Logging):
     def start(
             cls, hp, model_dir, game_files, n_gpus, debug,
             range_min=None, range_max=None):
-        watched_files = path.join(
-            model_dir, "last_weights", "after-epoch-*.index")
-        files = [path.splitext(fn)[0] for fn in glob.glob(watched_files)]
-        if len(files) == 0:
-            eprint(colored("No checkpoint found!", "red"))
-            return
-        step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
-        steps = sorted(list(step2ckpt.keys()))
+        steps, step2ckpt = list_checkpoints(model_dir)
         if range_max is None:
             range_max = steps[-1]
         if range_min is None:
@@ -469,3 +462,22 @@ class FullDirEvalPlayer(Logging):
             hp, model_dir, game_files, n_gpus, load_best=False)
         for step in steps[::-1]:  # eval reversely
             player.evaluate(restore_from=step2ckpt[step], debug=debug)
+
+
+def list_checkpoints(model_dir: str) -> Tuple[List[int], Dict[int, str]]:
+    """
+    list all checkpoints under `model_dir`/last_weights
+    all checkpoints should have the same pattern "after-epoch-[step]".
+
+    Returns:
+        sorted list of steps, dict of step to checkpoint file name
+    """
+    watched_files = path.join(
+        model_dir, "last_weights", "after-epoch-*.index")
+    files = [path.splitext(fn)[0] for fn in glob.glob(watched_files)]
+    if len(files) == 0:
+        eprint(colored("No checkpoint found!", "red"))
+        return [], {}
+    step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
+    steps = sorted(list(step2ckpt.keys()))
+    return steps, step2ckpt

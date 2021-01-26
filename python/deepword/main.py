@@ -1,12 +1,9 @@
-import glob
 import logging
 import os
 import sys
 import time
 import traceback
 from argparse import ArgumentParser
-from multiprocessing import Pool
-from os import path
 from typing import Optional, Callable
 
 import gym
@@ -20,6 +17,7 @@ from tqdm import trange
 from deepword.agents.base_agent import BaseAgent
 from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
     FullDirEvalPlayer, agent_collect_data
+from deepword.eval_games import list_checkpoints
 from deepword.hparams import load_hparams, conventions
 from deepword.utils import agent_name2clazz, learner_name2clazz
 from deepword.utils import load_and_split, load_game_files
@@ -384,13 +382,6 @@ def process_snn_input(args):
     learner.preprocess_input()
 
 
-def eval_one_ckpt(hp, model_dir, data_path, learner_clazz, device, ckpt_path):
-    tester = learner_clazz(
-        hp, model_dir, train_data_dir=None, eval_data_path=data_path)
-    acc, total = tester.test(device, ckpt_path)
-    return str(acc * 1. / total) if total != 0 else "Nan"
-
-
 def process_eval_student(args):
     """
     Evaluate student models
@@ -398,50 +389,20 @@ def process_eval_student(args):
 
     hp = process_hp(args)
     assert hp.learner_clazz == "SwagLearner" or \
-           hp.learner_clazz == "SNNLearner"
+           hp.learner_clazz == "SNNLearner" or \
+           hp.learner_clazz == "NLULearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
-    n_gpus = args.n_gpus
-    gpus = ["/device:GPU:{}".format(i) for i in range(n_gpus)]
-
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
-    watched_file_regex = path.join(
-        args.model_dir, "last_weights", "after-epoch-*.index")
-    files = glob.glob(watched_file_regex)
-    ckpt_files = [os.path.splitext(f)[0] for f in files]
-    eprint("evaluate {} checkpoints".format(len(ckpt_files)))
+    steps, step2ckpt = list_checkpoints(args.model_dir)
+    eprint("evaluate {} checkpoints".format(len(steps)))
 
-    if args.debug:
-        for ckpt in ckpt_files:
-            tester = learner_clazz(
-                hp, args.model_dir, train_data_dir=None,
-                eval_data_path=args.data_path)
-            tester.test(restore_from=ckpt)
-        return
-
-    if len(ckpt_files) == 0:
-        return
-
-    files_colocate_gpus = [
-        ckpt_files[i * n_gpus:(i + 1) * n_gpus]
-        for i in range((len(ckpt_files) + n_gpus - 1) // n_gpus)]
-
-    for batch_files in files_colocate_gpus:
-        pool = Pool(n_gpus)
-        eprint("process: {}".format(batch_files))
-        results = []
-        for k in range(n_gpus):
-            if k < len(batch_files):
-                res = pool.apply_async(
-                    eval_one_ckpt, args=(
-                        hp, args.model_dir, args.data_path, learner_clazz,
-                        gpus[k], batch_files[k]))
-                results.append(res)
-
-        for k, res in enumerate(results):
-            eprint("model: {}, res: {}".format(batch_files[k], res.get()))
-        pool.close()
-        pool.join()
+    for step in step2ckpt:
+        tester = learner_clazz(
+            hp, args.model_dir, train_data_dir=None,
+            eval_data_path=args.data_path)
+        acc, total = tester.test(restore_from=step2ckpt[step])
+        eprint("eval step: {}, acc: {}, total: {}".format(step, acc, total))
 
 
 def process_eval_dqn(args):

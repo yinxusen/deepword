@@ -137,7 +137,7 @@ class SwagLearner(NLUClassificationLearner):
 
     def test(
             self, device_placement: str = "/device:GPU:0",
-            restore_from: Optional[str] = None) -> Tuple[int, int]:
+            restore_from: Optional[str] = None) -> Tuple[float, int]:
         if self.sess is None:
             (self.sess, self.model, self.saver, self.train_steps, self.queue
              ) = self._prepare_test(device_placement, restore_from)
@@ -172,7 +172,7 @@ class SwagLearner(NLUClassificationLearner):
             acc += np.count_nonzero(predicted_swag_labels == swag_labels)
             total += len(swag_labels)
             i += 1
-        return acc, total
+        return acc * 1. / total, total
 
     def _add_batch(
             self, swag_path: str,

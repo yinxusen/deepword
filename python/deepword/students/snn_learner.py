@@ -184,7 +184,7 @@ class SNNLearner(StudentLearner):
 
     def test(
             self, device_placement: str = "/device:GPU:0",
-            restore_from: Optional[str] = None) -> Tuple[int, int]:
+            restore_from: Optional[str] = None) -> Tuple[float, int]:
         if self.sess is None:
             (self.sess, self.model, self.saver, self.train_steps, self.queue
              ) = self._prepare_test(device_placement, restore_from)
@@ -192,7 +192,7 @@ class SNNLearner(StudentLearner):
         data_loader = self.snn_data_loader(
             data_path=self.eval_data_path, batch_size=self.hp.batch_size,
             training=False)
-        acc = 0
+        count_correct = 0
         total = 0
         self.info("start test")
 
@@ -205,14 +205,15 @@ class SNNLearner(StudentLearner):
                     self.model.diff_src_: data.diff_src
                 })
 
-            acc += np.count_nonzero(
+            count_correct += np.count_nonzero(
                 semantic_same[: len(semantic_same) // 2] < 0)
-            acc += np.count_nonzero(
+            count_correct += np.count_nonzero(
                 semantic_same[len(semantic_same) // 2:] > 0)
             total += len(semantic_same)
 
+        acc = count_correct * 1. / total if total else np.nan
         self.info("evaluate with {}, acc: {}, total: {}, acc/total: {}".format(
-            self.train_steps, acc, total, acc * 1. / total if total else 'Nan'))
+            self.train_steps, count_correct, total, acc))
 
         return acc, total
 
