@@ -86,8 +86,8 @@ def main(model_dir_to, model_dir_from):
     step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
     steps = sorted(list(step2ckpt.keys()))
 
-    fn_hparams1 = "{}/hparams.json".format(model_dir_from)
-    fn_hparams2 = "{}/hparams.json".format(model_dir_to)
+    fn_hparams1 = "{}/hparams.json".format(model_dir_to)
+    fn_hparams2 = "{}/hparams.json".format(model_dir_from)
 
     for step in steps:
         save_to = "{}/merged_last_weights/after-epoch-{}".format(
