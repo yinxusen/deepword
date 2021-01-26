@@ -29,10 +29,19 @@ class SNNData(namedtuple("SNNData", ("target_src", "same_src", "diff_src"))):
 
 
 class SNNLearner(StudentLearner):
+    def _test_impl(self, data: Tuple) -> float:
+        """
+        Dummy method, won't be used.
+        """
+        raise NotImplementedError()
+
     def _prepare_data(
             self, b_memory: List[Union[Tuple, Memolet]],
             tjs: Trajectory[ActionMaster],
             action_collector: ActionCollector) -> Tuple:
+        """
+        Dummy method, won't be used.
+        """
         raise NotImplementedError()
 
     def __init__(

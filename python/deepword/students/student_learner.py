@@ -417,20 +417,65 @@ class StudentLearner(Logging):
         """
         raise NotImplementedError()
 
-    def _prepare_test(self) -> Tuple[Session, Any, Saver, int, Queue]:
+    def _prepare_test(
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None
+    ) -> Tuple[Session, Any, Saver, int, Queue]:
         sess, model, saver, train_steps = self._prepare_model(
-            device_placement="/device:GPU:0", training=False)
-        queue = Queue(maxsize=100)
+            device_placement, training=False, restore_from=restore_from)
+        queue = Queue()
         t = Thread(
             target=self._add_batch,
             args=(self._get_combined_data_path(self.eval_data_path),
-                  queue, False))
+                  queue, False, False))
         t.setDaemon(True)
         t.start()
         return sess, model, saver, train_steps, queue
 
-    def test(self) -> None:
-        pass
+    def _test_impl(self, data: Tuple) -> float:
+        """
+        Test the model one time given data.
+
+        :param data:
+        :return:
+        """
+        raise NotImplementedError()
+
+    def test(
+            self, device_placement: str = "/device:GPU:0",
+            restore_from: Optional[str] = None) -> Tuple[float, int]:
+
+        if self.sess is None:
+            (self.sess, self.model, self.saver, self.train_steps,
+             self.queue) = self._prepare_test(device_placement, restore_from)
+
+        wait_times = 10
+        while wait_times > 0 and self.queue.empty():
+            eprint("waiting data ... (retry times: {})".format(wait_times))
+            time.sleep(10)
+            wait_times -= 1
+
+        if self.queue.empty():
+            eprint("No data received. exit")
+            return np.nan, 0
+
+        eprint("start test")
+        total_test = 0
+        total_acc = []
+        while True:
+            try:
+                data = self.queue.get(timeout=1000)
+                acc = self._test_impl(data)
+                total_test += len(data)
+                total_acc.append(acc)
+            except Exception as e:
+                eprint("no more data: {}".format(e))
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                traceback.print_exception(
+                    exc_type, exc_value, exc_traceback, limit=None,
+                    file=sys.stdout)
+                break
+        return float(np.mean(total_acc)), total_test
 
 
 class DRRNLearner(StudentLearner):
@@ -454,6 +499,9 @@ class DRRNLearner(StudentLearner):
                 self.model.b_weight_: [1.]})
         eprint("\nloss: {}".format(loss))
         self.sw.add_summary(summaries, train_step)
+
+    def _test_impl(self, data: Tuple) -> float:
+        raise NotImplementedError()
 
     def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
@@ -492,6 +540,9 @@ class GenLearner(StudentLearner):
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
 
+    def _test_impl(self, data: Tuple) -> float:
+        raise NotImplementedError()
+
     def _prepare_data(self, b_memory, tjs, action_collector):
         trajectory_id = [m.tid for m in b_memory]
         state_id = [m.sid for m in b_memory]
@@ -518,6 +569,9 @@ class GenLearner(StudentLearner):
 
 
 class GenMixActionsLearner(GenLearner):
+    def _test_impl(self, data: Tuple) -> float:
+        raise NotImplementedError()
+
     def _prepare_data(self, b_memory, tjs, action_collector):
         n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
@@ -594,6 +648,9 @@ class GenConcatActionsLearner(GenLearner):
         concat_action = np.concatenate(action_ids, axis=0)[:-1]
         token_weight = np.repeat(action_weight, repeats=action_len + 1)[:-1]
         return concat_action, token_weight
+
+    def _test_impl(self, data: Tuple) -> float:
+        raise NotImplementedError()
 
     def _prepare_data_v2(self, b_memory, tjs, action_collector):
         """prepare concat actions without using q-values to weigh"""
@@ -703,6 +760,17 @@ class NLULearner(StudentLearner):
                 })
         self.sw.add_summary(summaries, train_step)
 
+    def _test_impl(self, data: Tuple) -> float:
+        inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
+        q_actions = self.sess.run(
+            [self.model.q_actions],
+            feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_len,
+                self.model.seg_tj_action_: seg_tj_action
+            })
+        return float(np.mean(np.abs(q_actions - selected_qs)))
+
     def _prepare_data(self, b_memory, tjs, action_collector):
         n_classes = 4
         trajectory_id = [m.tid for m in b_memory]
@@ -766,3 +834,6 @@ class NLUClassificationLearner(NLULearner):
                 })
         self.sw.add_summary(summaries, train_step)
         eprint("\nloss: {}".format(loss))
+
+    def _test_impl(self, data: Tuple) -> float:
+        raise NotImplementedError()
