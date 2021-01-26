@@ -29,6 +29,12 @@ class SNNData(namedtuple("SNNData", ("target_src", "same_src", "diff_src"))):
 
 
 class SNNLearner(StudentLearner):
+    def __init__(
+            self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
+            eval_data_path: Optional[str] = None) -> None:
+        super(SNNLearner, self).__init__(
+            hp, model_dir, train_data_dir, eval_data_path)
+
     def _test_impl(self, data: Tuple) -> float:
         """
         Dummy method, won't be used.
@@ -44,24 +50,18 @@ class SNNLearner(StudentLearner):
         """
         raise NotImplementedError()
 
-    def __init__(
-            self, hp: HParams, model_dir: str, train_data_dir: Optional[str],
-            eval_data_path: Optional[str] = None) -> None:
-        super(SNNLearner, self).__init__(
-            hp, model_dir, train_data_dir, eval_data_path)
-
-    def preprocess_input(self):
-        valid_tags = self._get_compatible_snapshot_tag()
+    def preprocess_input(self, data_dir):
+        valid_tags = self._get_compatible_snapshot_tag(data_dir)
         for tag in valid_tags:
             tp = path.join(
-                self.train_data_dir, "{}-{}.npz".format(self.tjs_prefix, tag))
+                data_dir, "{}-{}.npz".format(self.tjs_prefix, tag))
             hsp = path.join(
-                self.train_data_dir, "{}-{}.npz".format(self.hs2tj_prefix, tag))
+                data_dir, "{}-{}.npz".format(self.hs2tj_prefix, tag))
             ap = path.join(
-                self.train_data_dir,
+                data_dir,
                 "{}-{}.npz".format(self.action_prefix, tag))
             mp = path.join(
-                self.train_data_dir, "{}-{}.npz".format(self.memo_prefix, tag))
+                data_dir, "{}-{}.npz".format(self.memo_prefix, tag))
 
             memory, tjs, action_collector, hash_states2tjs = \
                 self._load_snapshot(mp, tp, ap, hsp)

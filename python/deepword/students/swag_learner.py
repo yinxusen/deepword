@@ -18,7 +18,6 @@ from deepword.agents.utils import bert_nlu_input
 from deepword.students.student_learner import NLUClassificationLearner
 from deepword.students.utils import align_batch_str
 from deepword.tokenizers import Tokenizer
-from deepword.utils import eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
@@ -94,6 +93,12 @@ def get_bert_input(
 
 
 class SwagLearner(NLUClassificationLearner):
+    def _test_impl(self, data: Tuple) -> float:
+        """
+        Dummy method, won't be used.
+        """
+        raise NotImplementedError()
+
     def _prepare_training(
             self
     ) -> Tuple[Session, Any, Saver, FileWriter, int, Queue]:
@@ -144,20 +149,20 @@ class SwagLearner(NLUClassificationLearner):
 
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
-            eprint("waiting data ... (retry times: {})".format(wait_times))
+            self.info("waiting data ... (retry times: {})".format(wait_times))
             time.sleep(10)
             wait_times -= 1
 
         acc = 0
         total = 0
-        eprint("start test")
+        self.info("start test")
         i = 0
         for data in iter(self.queue.get, None):
             inp, seg_tj_action, inp_len, _, swag_labels = data
 
             if i % 100 == 0:
-                print("process a batch of {} .. {}".format(len(inp), i))
-                print("partial acc.: {}".format(
+                self.debug("process a batch of {} .. {}".format(len(inp), i))
+                self.debug("partial acc.: {}".format(
                     acc * 1. / total if total else "Nan"))
 
             q_actions_t = self.sess.run(
@@ -200,7 +205,7 @@ class SwagLearner(NLUClassificationLearner):
                     queue.put(
                         (inp, seg_tj_action, inp_size, None, batch_labels))
                 except Exception as e:
-                    eprint("add_batch error: {}".format(e))
+                    self.error("add_batch error: {}".format(e))
                     traceback.print_tb(e.__traceback__)
                     raise RuntimeError()
                 i += 1

@@ -378,8 +378,8 @@ def process_snn_input(args):
     assert hp.learner_clazz == "SNNLearner"
     setup_train_log(args.model_dir)
     learner_clazz = learner_name2clazz(hp.learner_clazz)
-    learner = learner_clazz(hp, args.model_dir, args.data_path)
-    learner.preprocess_input()
+    learner = learner_clazz(hp, args.model_dir)
+    learner.preprocess_input(data_dir=args.data_path)
 
 
 def process_eval_student(args):

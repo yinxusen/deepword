@@ -32,7 +32,7 @@ from deepword.log import Logging
 from deepword.students.utils import batch_dqn_input, align_batch_str
 from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
-from deepword.utils import eprint, flatten, softmax
+from deepword.utils import flatten, softmax
 from deepword.utils import model_name2clazz, bytes2idx
 
 
@@ -66,7 +66,7 @@ class StudentLearner(Logging):
         self.ckpt_prefix = path.join(self.load_from, "after-epoch")
         self.hp, self.tokenizer = init_tokens(hp)
         save_hparams(self.hp, path.join(model_dir, "hparams.json"))
-        eprint(output_hparams(self.hp))
+        self.info(output_hparams(self.hp))
 
         self.sess = None
         self.model = None
@@ -218,11 +218,11 @@ class StudentLearner(Logging):
                Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
-            eprint("load old data with DRRNMemoTeacher")
+            self.warning("load old data with DRRNMemoTeacher")
             return self._load_snapshot_v1(
                 memo_path, tjs_path, action_path, hs2tj_path)
         elif isinstance(memory[0], Memolet):
-            eprint("load new data with Memolet")
+            self.warning("load new data with Memolet")
             return self._load_snapshot_v2(
                 memo_path, tjs_path, action_path, hs2tj_path)
         else:
@@ -292,13 +292,13 @@ class StudentLearner(Logging):
             epoch of training.
         :return:
         """
-        eprint("try to add batch data: {}".format(combined_data_path))
+        self.info("try to add batch data: {}".format(combined_data_path))
         while True:
             if training and append_new_data:
                 new_combined_data_path = self._get_combined_data_path(
                     self.train_data_dir)
                 if set(new_combined_data_path) != set(combined_data_path):
-                    eprint(
+                    self.info(
                         "update training data: {}".format(combined_data_path))
                     combined_data_path = new_combined_data_path
             for tp, ap, mp, hsp in sorted(
@@ -316,7 +316,7 @@ class StudentLearner(Logging):
                             batch_memory, tjs, action_collector),
                         )
                     except Exception as e:
-                        eprint("add_batch error: {}".format(e))
+                        self.error("add_batch error: {}".format(e))
                         traceback.print_tb(e.__traceback__)
                         raise RuntimeError()
                     i += 1
@@ -372,17 +372,17 @@ class StudentLearner(Logging):
 
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
-            eprint("waiting data ... (retry times: {})".format(wait_times))
+            self.info("waiting data ... (retry times: {})".format(wait_times))
             time.sleep(10)
             wait_times -= 1
 
         if self.queue.empty():
-            eprint("No data received. exit")
+            self.warning("No data received. exit")
             return
 
         epoch_size = self.hp.save_gap_t
 
-        eprint("start training")
+        self.info("start training")
         data_in_queue = True
         for et in trange(n_epochs, ascii=True, desc="epoch"):
             for it in trange(epoch_size, ascii=True, desc="step"):
@@ -392,7 +392,7 @@ class StudentLearner(Logging):
                         data, self.train_steps + et * epoch_size + it)
                 except Exception as e:
                     data_in_queue = False
-                    eprint("no more data: {}".format(e))
+                    self.info("no more data: {}".format(e))
                     exc_type, exc_value, exc_traceback = sys.exc_info()
                     traceback.print_exception(
                         exc_type, exc_value, exc_traceback, limit=None,
@@ -402,7 +402,7 @@ class StudentLearner(Logging):
                 self.sess, self.ckpt_prefix,
                 global_step=tf.train.get_or_create_global_step(
                     graph=self.model.graph))
-            eprint("finish and save {} epoch".format(et))
+            self.info("finish and save {} epoch".format(et))
             if not data_in_queue:
                 break
         return
@@ -451,15 +451,15 @@ class StudentLearner(Logging):
 
         wait_times = 10
         while wait_times > 0 and self.queue.empty():
-            eprint("waiting data ... (retry times: {})".format(wait_times))
+            self.info("waiting data ... (retry times: {})".format(wait_times))
             time.sleep(10)
             wait_times -= 1
 
         if self.queue.empty():
-            eprint("No data received. exit")
+            self.warning("No data received. exit")
             return np.nan, 0
 
-        eprint("start test")
+        self.info("start test")
         total_test = 0
         total_acc = []
         while True:
@@ -469,7 +469,7 @@ class StudentLearner(Logging):
                 total_test += len(data)
                 total_acc.append(acc)
             except Exception as e:
-                eprint("no more data: {}".format(e))
+                self.info("no more data: {}".format(e))
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 traceback.print_exception(
                     exc_type, exc_value, exc_traceback, limit=None,
@@ -497,7 +497,7 @@ class DRRNLearner(StudentLearner):
                 self.model.action_idx_: np.arange(len(expected_qs)),
                 self.model.expected_q_: expected_qs,
                 self.model.b_weight_: [1.]})
-        eprint("\nloss: {}".format(loss))
+        self.debug("\nloss: {}".format(loss))
         self.sw.add_summary(summaries, train_step)
 
     def _test_impl(self, data: Tuple) -> float:
@@ -538,7 +538,7 @@ class GenLearner(StudentLearner):
                 self.model.action_len_: action_len,
                 self.model.b_weight_: b_weight})
         self.sw.add_summary(summaries, train_step)
-        eprint("\nloss: {}".format(loss))
+        self.debug("\nloss: {}".format(loss))
 
     def _test_impl(self, data: Tuple) -> float:
         raise NotImplementedError()
@@ -833,7 +833,7 @@ class NLUClassificationLearner(NLULearner):
                 self.model.swag_labels_: swag_labels
                 })
         self.sw.add_summary(summaries, train_step)
-        eprint("\nloss: {}".format(loss))
+        self.debug("\nloss: {}".format(loss))
 
     def _test_impl(self, data: Tuple) -> float:
         raise NotImplementedError()
