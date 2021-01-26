@@ -92,10 +92,13 @@ def main(model_dir_to, model_dir_from):
     for step in steps:
         save_to = "{}/merged_last_weights/after-epoch-{}".format(
             model_dir_to, step)
-        merge_ckpt(
-            ckpt1=step2ckpt[step], ckpt2=best_ckpt2,
-            fn_hparams1=fn_hparams1, fn_hparams2=fn_hparams2,
-            save_to=save_to)
+        try:
+            merge_ckpt(
+                ckpt1=step2ckpt[step], ckpt2=best_ckpt2,
+                fn_hparams1=fn_hparams1, fn_hparams2=fn_hparams2,
+                save_to=save_to)
+        except Exception as e:
+            eprint("error for step {}:\n{}".format(step, e))
 
 
 if __name__ == "__main__":
