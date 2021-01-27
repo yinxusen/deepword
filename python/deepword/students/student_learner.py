@@ -320,6 +320,10 @@ class StudentLearner(Logging):
                         traceback.print_tb(e.__traceback__)
                         raise RuntimeError()
                     i += 1
+            # only load data once if not training
+            if not training:
+                break
+        return
 
     def _prepare_data(
             self,
@@ -462,12 +466,18 @@ class StudentLearner(Logging):
         self.info("start test")
         total_test = 0
         total_acc = []
+        i = 0
         while True:
             try:
-                data = self.queue.get(timeout=1000)
+                data = self.queue.get(timeout=10)
                 acc = self._test_impl(data)
+                if i % 100 == 0:
+                    self.debug(
+                        "progress: {}, current acc: {}, process {} data".format(
+                            i, acc, len(data)))
                 total_test += len(data)
                 total_acc.append(acc)
+                i += 1
             except Exception as e:
                 self.info("no more data: {}".format(e))
                 exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -475,7 +485,10 @@ class StudentLearner(Logging):
                     exc_type, exc_value, exc_traceback, limit=None,
                     file=sys.stdout)
                 break
-        return float(np.mean(total_acc)), total_test
+        acc = float(np.mean(total_acc))
+        self.info("step: {}, acc: {}, total: {}".format(
+            self.train_steps, acc, total_test))
+        return acc, total_test
 
 
 class DRRNLearner(StudentLearner):

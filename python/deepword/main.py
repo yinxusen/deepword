@@ -397,7 +397,7 @@ def process_eval_student(args):
     steps, step2ckpt = list_checkpoints(args.model_dir)
     eprint("evaluate {} checkpoints".format(len(steps)))
 
-    for step in step2ckpt:
+    for step in steps:
         tester = learner_clazz(
             hp, args.model_dir, train_data_dir=None,
             eval_data_path=args.data_path)
