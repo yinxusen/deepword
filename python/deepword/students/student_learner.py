@@ -436,7 +436,7 @@ class StudentLearner(Logging):
         t.start()
         return sess, model, saver, train_steps, queue
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         """
         Test the model one time given data.
 
@@ -473,9 +473,9 @@ class StudentLearner(Logging):
                 acc = self._test_impl(data)
                 if i % 100 == 0:
                     self.debug(
-                        "progress: {}, current acc: {}, process {} data".format(
-                            i, acc, len(data)))
-                total_test += len(data)
+                        "progress: {}, current acc: {}, data: {}".format(
+                            i, np.mean(acc), len(acc)))
+                total_test += len(acc)
                 total_acc.append(acc)
                 i += 1
             except Exception as e:
@@ -513,7 +513,7 @@ class DRRNLearner(StudentLearner):
         self.debug("\nloss: {}".format(loss))
         self.sw.add_summary(summaries, train_step)
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         raise NotImplementedError()
 
     def _prepare_data(self, b_memory, tjs, action_collector):
@@ -553,7 +553,7 @@ class GenLearner(StudentLearner):
         self.sw.add_summary(summaries, train_step)
         self.debug("\nloss: {}".format(loss))
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         raise NotImplementedError()
 
     def _prepare_data(self, b_memory, tjs, action_collector):
@@ -582,7 +582,7 @@ class GenLearner(StudentLearner):
 
 
 class GenMixActionsLearner(GenLearner):
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         raise NotImplementedError()
 
     def _prepare_data(self, b_memory, tjs, action_collector):
@@ -662,7 +662,7 @@ class GenConcatActionsLearner(GenLearner):
         token_weight = np.repeat(action_weight, repeats=action_len + 1)[:-1]
         return concat_action, token_weight
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         raise NotImplementedError()
 
     def _prepare_data_v2(self, b_memory, tjs, action_collector):
@@ -773,7 +773,7 @@ class NLULearner(StudentLearner):
                 })
         self.sw.add_summary(summaries, train_step)
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
         q_actions = self.sess.run(
             [self.model.q_actions],
@@ -782,7 +782,7 @@ class NLULearner(StudentLearner):
                 self.model.src_len_: inp_len,
                 self.model.seg_tj_action_: seg_tj_action
             })
-        return float(np.mean(np.abs(q_actions - selected_qs)))
+        return np.abs(q_actions - selected_qs)
 
     def _prepare_data(self, b_memory, tjs, action_collector):
         n_classes = 4
@@ -848,5 +848,5 @@ class NLUClassificationLearner(NLULearner):
         self.sw.add_summary(summaries, train_step)
         self.debug("\nloss: {}".format(loss))
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         raise NotImplementedError()

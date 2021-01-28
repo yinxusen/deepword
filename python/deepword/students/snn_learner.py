@@ -35,7 +35,7 @@ class SNNLearner(StudentLearner):
         super(SNNLearner, self).__init__(
             hp, model_dir, train_data_dir, eval_data_path)
 
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         """
         Dummy method, won't be used.
         """

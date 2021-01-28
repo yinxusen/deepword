@@ -93,7 +93,7 @@ def get_bert_input(
 
 
 class SwagLearner(NLUClassificationLearner):
-    def _test_impl(self, data: Tuple) -> float:
+    def _test_impl(self, data: Tuple) -> np.ndarray:
         """
         Dummy method, won't be used.
         """
