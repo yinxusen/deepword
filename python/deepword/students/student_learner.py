@@ -305,7 +305,10 @@ class StudentLearner(Logging):
                     combined_data_path, key=lambda k: random.random()):
                 memory, tjs, action_collector, _ = self._load_snapshot(
                     mp, tp, ap, hsp)
-                random.shuffle(memory)
+                if training:
+                    random.shuffle(memory)
+                else:
+                    memory = memory[:5000]
                 i = 0
                 while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
                     ss = i * self.hp.batch_size
