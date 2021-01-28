@@ -779,7 +779,7 @@ class NLULearner(StudentLearner):
     def _test_impl(self, data: Tuple) -> np.ndarray:
         inp, seg_tj_action, inp_len, selected_qs, swag_labels = data
         q_actions = self.sess.run(
-            [self.model.q_actions],
+            self.model.q_actions,
             feed_dict={
                 self.model.src_: inp,
                 self.model.src_len_: inp_len,
