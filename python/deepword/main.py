@@ -122,6 +122,8 @@ def get_parser() -> ArgumentParser:
     student_eval_parser.add_argument('--n-gpus', type=int, default=1)
     student_eval_parser.add_argument(
         '--debug', action='store_true', default=False)
+    student_eval_parser.add_argument('--ckpt-range-min', type=int)
+    student_eval_parser.add_argument('--ckpt-range-max', type=int)
 
     snn_gen_parser = subparsers.add_parser('gen-snn')
     snn_gen_parser.add_argument('--data-path', type=str, required=True)
@@ -394,7 +396,9 @@ def process_eval_student(args):
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
-    steps, step2ckpt = list_checkpoints(args.model_dir)
+    steps, step2ckpt = list_checkpoints(
+        args.model_dir,
+        range_min=args.ckpt_range_min, range_max=args.ckpt_range_max)
     eprint("evaluate {} checkpoints".format(len(steps)))
 
     for step in steps:

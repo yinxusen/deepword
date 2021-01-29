@@ -449,22 +449,17 @@ class FullDirEvalPlayer(Logging):
     def start(
             cls, hp, model_dir, game_files, n_gpus, debug,
             range_min=None, range_max=None):
-        steps, step2ckpt = list_checkpoints(model_dir)
-        if range_max is None:
-            range_max = steps[-1]
-        if range_min is None:
-            range_min = steps[0]
-        steps = [step for step in steps if range_min <= step <= range_max]
-        eprint("valid evaluation steps: {}".format(
-            ",".join([str(step) for step in steps])))
-
+        steps, step2ckpt = list_checkpoints(
+            model_dir, range_min=range_min, range_max=range_max)
         player = MultiGPUsEvalPlayer(
             hp, model_dir, game_files, n_gpus, load_best=False)
         for step in steps[::-1]:  # eval reversely
             player.evaluate(restore_from=step2ckpt[step], debug=debug)
 
 
-def list_checkpoints(model_dir: str) -> Tuple[List[int], Dict[int, str]]:
+def list_checkpoints(
+        model_dir: str, range_min: int = None, range_max: int = None
+) -> Tuple[List[int], Dict[int, str]]:
     """
     list all checkpoints under `model_dir`/last_weights
     all checkpoints should have the same pattern "after-epoch-[step]".
@@ -480,4 +475,9 @@ def list_checkpoints(model_dir: str) -> Tuple[List[int], Dict[int, str]]:
         return [], {}
     step2ckpt = dict(map(lambda fn: (int(fn.split("-")[-1]), fn), files))
     steps = sorted(list(step2ckpt.keys()))
+    if range_max is None:
+        range_max = steps[-1]
+    if range_min is None:
+        range_min = steps[0]
+    steps = [step for step in steps if range_min <= step <= range_max]
     return steps, step2ckpt
