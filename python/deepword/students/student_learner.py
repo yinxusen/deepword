@@ -6,7 +6,7 @@ import traceback
 from os import path
 from queue import Queue
 from threading import Thread
-from typing import Tuple, List, Union, Any, Optional, Dict
+from typing import Tuple, List, Union, Any, Optional, Dict, Generator
 
 import numpy as np
 import tensorflow as tf
@@ -16,7 +16,7 @@ from tensorflow.contrib.training import HParams
 from tensorflow.summary import FileWriter
 from tensorflow.train import Saver
 from termcolor import colored
-from tqdm import trange
+from tqdm import trange, tqdm
 
 from deepword.action import ActionCollector
 from deepword.agents.utils import ActionMaster
@@ -431,12 +431,6 @@ class StudentLearner(Logging):
         sess, model, saver, train_steps = self._prepare_model(
             device_placement, training=False, restore_from=restore_from)
         queue = Queue()
-        t = Thread(
-            target=self._add_batch,
-            args=(self._get_combined_data_path(self.eval_data_path),
-                  queue, False, False))
-        t.setDaemon(True)
-        t.start()
         return sess, model, saver, train_steps, queue
 
     def preprocess_input(self, data_dir):
@@ -459,6 +453,8 @@ class StudentLearner(Logging):
 
             i = 0
             while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
+                if i % 100 == 0:
+                    self.info("process batch - {}".format(i))
                 ss = i * self.hp.batch_size
                 ee = min((i + 1) * self.hp.batch_size, len(memory))
                 batch_memory = memory[ss:ee]
@@ -470,6 +466,24 @@ class StudentLearner(Logging):
             np.savez(
                 "{}/student-data-{}.npz".format(self.model_dir, tag),
                 data=queue)
+
+    def data_loader(
+            self, data_path: str, batch_size: int, training: bool
+    ) -> Generator[Tuple, None, None]:
+        data_tags = sorted(get_path_tags(data_path, prefix="student-data"))
+        self.info("load snn tags: {}".format(data_tags))
+        while True:
+            for tag in tqdm(sorted(data_tags, key=lambda k: random.random())):
+                self.info("load data from {}".format(tag))
+                data = np.load(
+                    path.join(data_path, "student-data-{}.npz".format(tag)))
+                data = data["data"]
+                for x in data:
+                    yield x
+            # only load data one time for evaluation
+            if not training:
+                self.info("snn data loader finished")
+                break
 
     def _test_impl(self, data: Tuple) -> np.ndarray:
         """
@@ -488,38 +502,24 @@ class StudentLearner(Logging):
             (self.sess, self.model, self.saver, self.train_steps,
              self.queue) = self._prepare_test(device_placement, restore_from)
 
-        wait_times = 10
-        while wait_times > 0 and self.queue.empty():
-            self.info("waiting data ... (retry times: {})".format(wait_times))
-            time.sleep(10)
-            wait_times -= 1
-
-        if self.queue.empty():
-            self.warning("No data received. exit")
-            return np.nan, 0
+        data_loader = self.data_loader(
+            data_path=self.eval_data_path, batch_size=self.hp.batch_size,
+            training=False)
 
         self.info("start test")
         total_test = 0
         total_acc = []
         i = 0
-        while True:
-            try:
-                data = self.queue.get(timeout=10)
-                acc = self._test_impl(data)
-                if i % 100 == 0:
-                    self.debug(
-                        "progress: {}, current acc: {}, data: {}".format(
-                            i, np.mean(acc), len(acc)))
-                total_test += len(acc)
-                total_acc.append(acc)
-                i += 1
-            except Exception as e:
-                self.info("no more data: {}".format(e))
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                traceback.print_exception(
-                    exc_type, exc_value, exc_traceback, limit=None,
-                    file=sys.stdout)
-                break
+        for data in data_loader:
+            acc = self._test_impl(data)
+            if i % 100 == 0:
+                self.debug(
+                    "progress: {}, current acc: {}, data: {}".format(
+                        i, np.mean(acc), len(acc)))
+            total_test += len(acc)
+            total_acc.append(acc)
+            i += 1
+
         acc = float(np.mean(total_acc))
         self.info("step: {}, acc: {}, total: {}".format(
             self.train_steps, acc, total_test))
