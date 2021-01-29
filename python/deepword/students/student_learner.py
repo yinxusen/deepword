@@ -439,6 +439,38 @@ class StudentLearner(Logging):
         t.start()
         return sess, model, saver, train_steps, queue
 
+    def preprocess_input(self, data_dir):
+        valid_tags = self._get_compatible_snapshot_tag(data_dir)
+        queue = []
+
+        for tag in valid_tags:
+            tp = path.join(
+                data_dir, "{}-{}.npz".format(self.tjs_prefix, tag))
+            hsp = path.join(
+                data_dir, "{}-{}.npz".format(self.hs2tj_prefix, tag))
+            ap = path.join(
+                data_dir,
+                "{}-{}.npz".format(self.action_prefix, tag))
+            mp = path.join(
+                data_dir, "{}-{}.npz".format(self.memo_prefix, tag))
+
+            memory, tjs, action_collector, hash_states2tjs = \
+                self._load_snapshot(mp, tp, ap, hsp)
+
+            i = 0
+            while i < int(math.ceil(len(memory) * 1. / self.hp.batch_size)):
+                ss = i * self.hp.batch_size
+                ee = min((i + 1) * self.hp.batch_size, len(memory))
+                batch_memory = memory[ss:ee]
+                queue.append(self._prepare_data(
+                    batch_memory, tjs, action_collector),
+                )
+                i += 1
+
+            np.savez(
+                "{}/student-data-{}.npz".format(self.model_dir, tag),
+                data=queue)
+
     def _test_impl(self, data: Tuple) -> np.ndarray:
         """
         Test the model one time given data.

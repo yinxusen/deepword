@@ -377,7 +377,6 @@ def process_snn_input(args):
     if os.path.isfile(fn_hparams):
         eprint(colored(warning_hparams_exist, "red", attrs=["bold"]))
     hp = process_hp(args)
-    assert hp.learner_clazz == "SNNLearner"
     setup_train_log(args.model_dir)
     learner_clazz = learner_name2clazz(hp.learner_clazz)
     learner = learner_clazz(hp, args.model_dir)
