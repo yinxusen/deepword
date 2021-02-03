@@ -44,16 +44,23 @@ if [[ -f $HOME/local/etc/init_tensorflow.sh ]]; then
 fi
 
 
+if [ "$#" -ne 3 ]; then
+    echo "Illegal number of parameters"
+    exit
+fi
+
+
 MODELHOME=$1
 GAMEPATH=$2
+FGAMES=$3
 
 
 pushd "$PDIR"
 ./sbin/run.sh python/deepword/main.py \
-    --agent-clazz "CompetitionAgent" \
-    --policy-to-action "LinUCB" \
     --model-dir "$MODELHOME" \
-    eval-dqn \
-    --game-path "$GAMEPATH" \
-    --load-best
+    "gen-data" \
+    --game-path "$GAMEPATH" --f-games "$FGAMES" \
+    --load-best \
+    --epoch-size 50000 \
+    --epoch-limit 1
 popd

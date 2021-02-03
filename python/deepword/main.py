@@ -70,6 +70,8 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument("--policy-eps", type=float)
     parser.add_argument("--bert-language-layer", type=int)
     parser.add_argument("--bert-freeze-layers", type=str)
+    parser.add_argument(
+        "--action-padding-in-tj", action="store_true", default=None)
     return parser
 
 
@@ -137,6 +139,11 @@ def get_parser() -> ArgumentParser:
     gen_data_parser.add_argument('--restore-from', type=str)
     gen_data_parser.add_argument('--epoch-size', type=int)
     gen_data_parser.add_argument('--epoch-limit', type=int, default=5)
+    gen_data_parser.add_argument(
+        '--load-dev-data', action='store_true', default=False)
+    gen_data_parser.add_argument(
+        '--load-train-data', action='store_true', default=False)
+    gen_data_parser.add_argument('--max-randomness', type=float, default=0.5)
     return parser
 
 
@@ -451,11 +458,22 @@ def process_gen_data(args):
 
     hp = process_hp(args)
     setup_eval_log(log_filename="/tmp/eval-logging.txt")
-    train_games, dev_games = load_and_split(args.game_path, args.f_games)
-    game_files = train_games
+
+    if args.load_dev_data and not args.load_train_data:
+        eprint(colored("load dev data", "blue", "on_red", attrs=["bold"]))
+        _, game_files = load_and_split(args.game_path, args.f_games)
+    elif args.load_train_data and not args.load_dev_data:
+        eprint(colored("load train data", "blue", "on_red", attrs=["bold"]))
+        game_files, _ = load_and_split(args.game_path, args.f_games)
+    else:  # if load_dev and load_train are both True or both False
+        eprint(colored(
+            "load all test data", "yellow", "on_red", attrs=["bold"]))
+        game_files = load_game_files(args.game_path, args.f_games)
+
     eprint("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
-    eprint("games for eval: \n{}".format("\n".join(sorted(game_names))))
+    eprint("games for data generation: \n{}".format(
+        "\n".join(sorted(game_names))))
 
     # make sure epoch_size equals to replay_mem
     # if set, always use epoch_size;
@@ -472,6 +490,8 @@ def process_gen_data(args):
     # need to compute policy at every step
     hp.set_hparam("always_compute_policy", True)
     hp.set_hparam("max_snapshot_to_keep", args.epoch_limit)
+    assert hp.agent_clazz == "TeacherAgent" or \
+           hp.agent_clazz == "DSQNZorkAgent", "Not supported agent class"
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, args.model_dir)
@@ -479,7 +499,7 @@ def process_gen_data(args):
 
     agent_collect_data(
         agent, game_files, hp.game_episode_terminal_t,
-        args.epoch_size, args.epoch_limit)
+        args.epoch_size, args.epoch_limit, args.max_randomness)
 
 
 def main(args):

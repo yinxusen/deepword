@@ -249,7 +249,9 @@ class SNNLearner(StudentLearner):
 
         batch_src, batch_src_len, batch_mask = batch_dqn_input(
             trajectories, self.tokenizer, self.hp.num_tokens,
-            self.hp.padding_val_id, with_action_padding=False)
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
 
         # action_ids, master_ids = zip(*[
         #     self._snn_tj_transformation(tj) for tj in trajectories])

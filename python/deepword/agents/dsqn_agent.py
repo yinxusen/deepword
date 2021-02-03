@@ -1,11 +1,12 @@
 from multiprocessing.pool import ThreadPool
 from os import remove
-from typing import Dict, Tuple, List, Any
+from typing import Dict, Tuple, List, Any, Optional
 
 import numpy as np
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
+from deepword.agents.utils import ActionDesc
 from deepword.agents.utils import Memolet
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import get_snn_keys
@@ -198,3 +199,20 @@ class DSQNZorkAgent(DSQNAgent, ZorkAgent):
     # TODO: Multi-inheritance is dangerous.
     #     Make sure there are no overlapped method overriding for both parents.
     pass
+
+
+class TeacherAgent(DSQNCompetitionAgent):
+    """
+    TeacherAgent is for generating training data for student models.
+    TeacherAgent is a DSQNAgent so that it can collect hs2tj data.
+    TeacherAgent also uses filtered action sets as the CompetitionAgent, because
+    other actions are meaningless to cooking agents.
+    TeacherAgent won't use rule_based_policy and  random_walk_for_collecting_fp
+    since it assign Q-values to almost random actions.
+    """
+    def _rule_based_policy(self, actions, instant_reward):
+        return None
+
+    def _random_walk_for_collecting_fp(
+            self, actions: List[str]) -> Optional[ActionDesc]:
+        return None

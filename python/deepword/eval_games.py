@@ -114,14 +114,17 @@ def eval_agent(
 
 
 def agent_collect_data(
-        agent, game_files, max_episode_steps, epoch_size, epoch_limit):
+        agent, game_files, max_episode_steps, epoch_size, epoch_limit,
+        max_randomness):
     requested_infos = agent.select_additional_infos()
     env_id = textworld.gym.register_games(
         game_files, requested_infos, batch_size=1,
         max_episode_steps=max_episode_steps,
         name="eval")
     game_env = gym.make(env_id)
-    agent.eps = random.random()
+    # randomness won't exceed 0.5 for now
+    # larger randomness would cause too many useless trajectories
+    agent.eps = random.random() * min(max_randomness, 1)
     eprint("new randomness: {}".format(agent.eps))
 
     obs, infos = game_env.reset()
@@ -137,7 +140,7 @@ def agent_collect_data(
                 obs, infos = game_env.reset()
                 scores = [0] * len(obs)
                 dones = [False] * len(obs)
-                agent.eps = random.random()
+                agent.eps = random.random() * min(max_randomness, 1)
                 eprint("new randomness: {}".format(agent.eps))
         agent.save_snapshot()
         eprint("save snapshot epoch: {}".format(epoch_t))

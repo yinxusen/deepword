@@ -105,6 +105,7 @@ default_config = {
         game_episode_terminal_t=100,
         vocab_size=0,
         n_tokens_per_action=10,
+        action_padding_in_tj=False,
         n_actions=256,  # only works for DQN models
         hidden_state_size=32,
         sos=None,

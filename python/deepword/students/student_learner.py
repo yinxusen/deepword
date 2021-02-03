@@ -560,7 +560,11 @@ class DRRNLearner(StudentLearner):
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, _ = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+            states, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action
+        )
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         action_matrix = (
@@ -599,7 +603,10 @@ class GenLearner(StudentLearner):
         expected_qs = np.asarray(flatten([list(m.q_actions) for m in b_memory]))
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+            states, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
         action_len = (
             [action_collector.get_action_len(gid) for gid in game_id])
         action_matrix = (
@@ -656,7 +663,10 @@ class GenMixActionsLearner(GenLearner):
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+            states, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
         p_states = np.repeat(p_states, n_classes, axis=0)
         p_len = np.repeat(p_len, n_classes, axis=0)
         master_mask = np.repeat(master_mask, n_classes, axis=0)
@@ -709,7 +719,10 @@ class GenConcatActionsLearner(GenLearner):
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+            states, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
 
         actions = [
             " ; ".join(sorted(list(
@@ -740,7 +753,10 @@ class GenConcatActionsLearner(GenLearner):
 
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, master_mask = batch_dqn_input(
-            states, self.tokenizer, self.hp.num_tokens, self.hp.padding_val_id)
+            states, self.tokenizer, self.hp.num_tokens,
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
 
         batch_concat_action_in = []
         batch_concat_action_out = []
@@ -845,7 +861,9 @@ class NLULearner(StudentLearner):
         states = tjs.fetch_batch_pre_states(trajectory_id, state_id)
         p_states, p_len, _ = batch_dqn_input(
             states, self.tokenizer, max_allowed_trajectory_size,
-            self.hp.padding_val_id)
+            self.hp.padding_val_id,
+            with_action_padding=self.hp.action_padding_in_tj,
+            max_action_size=self.hp.n_tokens_per_action)
         batch_size = len(p_states)
 
         action_len = action_len[batch_q_idx].reshape((batch_size, n_classes))
