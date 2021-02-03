@@ -512,8 +512,12 @@ class StudentLearner(Logging):
         self.info("start test")
         total_test = 0
         total_acc = []
+        # TODO: control the evaluation size, current we use 625 batches
+        # TODO: with 8 trajectories (32 samples) per batch
         i = 0
         for data in data_loader:
+            if i >= 625:
+                break
             acc = self._test_impl(data)
             if i % 100 == 0:
                 self.debug(
