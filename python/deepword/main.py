@@ -386,7 +386,7 @@ def process_snn_input(args):
     hp = process_hp(args)
     setup_train_log(args.model_dir)
     learner_clazz = learner_name2clazz(hp.learner_clazz)
-    learner = learner_clazz(hp, args.model_dir)
+    learner = learner_clazz(hp, args.model_dir, args.data_path)
     learner.preprocess_input(data_dir=args.data_path)
 
 
@@ -407,7 +407,7 @@ def process_eval_student(args):
         range_min=args.ckpt_range_min, range_max=args.ckpt_range_max)
     eprint("evaluate {} checkpoints".format(len(steps)))
 
-    for step in steps:
+    for step in steps[::-1]:
         tester = learner_clazz(
             hp, args.model_dir, train_data_dir=None,
             eval_data_path=args.data_path)

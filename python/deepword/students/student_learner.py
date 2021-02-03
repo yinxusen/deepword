@@ -433,6 +433,7 @@ class StudentLearner(Logging):
         queue = Queue()
         return sess, model, saver, train_steps, queue
 
+    # TODO: fix the OOM problem
     def preprocess_input(self, data_dir):
         valid_tags = self._get_compatible_snapshot_tag(data_dir)
         queue = []
@@ -467,6 +468,7 @@ class StudentLearner(Logging):
                 "{}/student-data-{}.npz".format(self.model_dir, tag),
                 data=queue)
 
+    # TODO: data loader to use batch size
     def data_loader(
             self, data_path: str, batch_size: int, training: bool
     ) -> Generator[Tuple, None, None]:
@@ -476,7 +478,8 @@ class StudentLearner(Logging):
             for tag in tqdm(sorted(data_tags, key=lambda k: random.random())):
                 self.info("load data from {}".format(tag))
                 data = np.load(
-                    path.join(data_path, "student-data-{}.npz".format(tag)))
+                    path.join(data_path, "student-data-{}.npz".format(tag)),
+                    allow_pickle=True)
                 data = data["data"]
                 for x in data:
                     yield x
