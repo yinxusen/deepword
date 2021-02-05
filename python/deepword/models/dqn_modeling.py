@@ -146,7 +146,7 @@ class CnnDQN(BaseDQN):
         inner_states = dqn.encoder_cnn(
             self.inputs["src"], self.src_embeddings, self.pos_embeddings,
             self.filter_sizes, self.num_filters, self.hp.embedding_size,
-            self.is_infer)
+            self.is_infer, num_channels=1)
         q_actions = tf.layers.dense(
             inner_states, units=self.hp.n_actions, use_bias=True)
         return q_actions

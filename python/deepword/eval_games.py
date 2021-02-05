@@ -147,6 +147,60 @@ def agent_collect_data(
     game_env.close()
 
 
+def agent_collect_data_v2(
+        agent, game_files, max_episode_steps, epoch_size, epoch_limit,
+        max_randomness):
+    requested_infos = agent.select_additional_infos()
+    env_id = textworld.gym.register_games(
+        game_files, requested_infos, batch_size=1,
+        max_episode_steps=max_episode_steps * 3,
+        name="eval")
+    game_env = gym.make(env_id)
+    # randomness won't exceed 0.5 for now
+    # larger randomness would cause too many useless trajectories
+    agent.eps = random.random() * min(max_randomness, 1)
+    eprint("new randomness: {}".format(agent.eps))
+
+    obs, infos = game_env.reset()
+    scores = [0] * len(obs)
+    dones = [False] * len(obs)
+    steps = [0] * len(obs)
+    # TODO: be cautious about the local variable problem
+    look_res = [""] * len(obs)
+    inventory_res = [""] * len(obs)
+
+    for epoch_t in range(epoch_limit):
+        for _ in range(epoch_size):
+            if not all(dones):
+                # TODO: get fake description from an extra look per step
+                look_res, _, _, _ = game_env.step(["look"])
+                infos['description'] = look_res
+                inventory_res, _, _, _ = game_env.step(["inventory"])
+                infos['inventory'] = inventory_res
+                # Increase step counts.
+                steps = ([step + int(not done)
+                          for step, done in zip(steps, dones)])
+                commands = agent.act(obs, scores, dones, infos)
+                obs, scores, dones, infos = game_env.step(commands)
+            else:
+                # Let the agent knows the game is done.
+                # last state obs + inv copy previous state
+                # TODO: this is OK for now,
+                # TODO: since we don't use last states for SNN
+                infos['description'] = look_res
+                infos['inventory'] = inventory_res
+                agent.act(obs, scores, dones, infos)
+
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                agent.eps = random.random() * min(max_randomness, 1)
+                eprint("new randomness: {}".format(agent.eps))
+        agent.save_snapshot()
+        eprint("save snapshot epoch: {}".format(epoch_t))
+    game_env.close()
+
+
 def agg_eval_results(
         eval_results: Dict[str, List[EvalResult]],
         max_steps_per_episode: int = 100

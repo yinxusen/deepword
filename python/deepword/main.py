@@ -16,7 +16,7 @@ from tqdm import trange
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
-    FullDirEvalPlayer, agent_collect_data
+    FullDirEvalPlayer, agent_collect_data, agent_collect_data_v2
 from deepword.eval_games import list_checkpoints
 from deepword.hparams import load_hparams, conventions
 from deepword.utils import agent_name2clazz, learner_name2clazz
@@ -497,9 +497,14 @@ def process_gen_data(args):
     agent = agent_clazz(hp, args.model_dir)
     agent.eval(load_best=args.load_best)
 
-    agent_collect_data(
-        agent, game_files, hp.game_episode_terminal_t,
-        args.epoch_size, args.epoch_limit, args.max_randomness)
+    if hp.agent_clazz == "DSQNZorkAgent":
+        agent_collect_data_v2(
+            agent, game_files, hp.game_episode_terminal_t,
+            args.epoch_size, args.epoch_limit, args.max_randomness)
+    else:
+        agent_collect_data(
+            agent, game_files, hp.game_episode_terminal_t,
+            args.epoch_size, args.epoch_limit, args.max_randomness)
 
 
 def main(args):

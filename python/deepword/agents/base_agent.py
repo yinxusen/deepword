@@ -758,12 +758,13 @@ class BaseAgent(Logging):
             self.tokenizer.tokenize(master))
         if self._last_action is not None:
             if self.hp.action_padding_in_tj:
-                action_tokens = self._last_action.token_idx
+                action_tokens = list(self._last_action.token_idx)
             else:  # trim action ids to its actual length
-                action_tokens = self._last_action.token_idx[
-                    self._last_action.action_len]
+                action_tokens = list(
+                    self._last_action.token_idx[:self._last_action.action_len])
         else:
             action_tokens = []
+
         self.tjs.append(ActionMaster(
             action_ids=action_tokens,
             master_ids=master_tokens,
