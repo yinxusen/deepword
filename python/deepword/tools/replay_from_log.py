@@ -12,13 +12,18 @@ from deepword.utils import eprint
 
 
 class ReplayAgent(CollectorAgent):
-    def __init__(self, fn_game, fn_log):
-        self.eval_results = self.extract_eval_results(fn_log)
-        # eprint(self.eval_results[0].keys())
+    def __init__(self, fn_game, fn_expert_guides):
+        self.guides = self.read_expert_guides(fn_expert_guides)
         self.in_game_t = 0
         self.episode_has_started = False
         self.fn_game = fn_game
         self.curr_episode = 0
+
+    @classmethod
+    def read_expert_guides(cls, fn_expert_guides):
+        with open(fn_expert_guides, "r") as f:
+            lines = [x.strip() for x in f.readlines()]
+        return lines
 
     @classmethod
     def extract_eval_results(cls, fn_log):
@@ -84,15 +89,13 @@ class ReplayAgent(CollectorAgent):
         # eprint("\t"+"\n\t".join(infos[INFO_KEY.actions][0]))
         eprint()
 
-        action = (
-            self.eval_results[0][self.fn_game][self.curr_episode % 2][-1]
-            [self.in_game_t])
+        action = self.guides[self.in_game_t]
         eprint(colored("> " + action, "red"))
         self.in_game_t += 1
         return action
 
 
-def play(game_file, log_file, nb_episodes=2, max_steps=100):
+def play(game_file, log_file, nb_episodes=1, max_steps=600):
     agent = ReplayAgent(os.path.basename(game_file), log_file)
     run_games(agent, [game_file], nb_episodes, max_steps)
 
