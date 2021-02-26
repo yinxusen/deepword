@@ -99,6 +99,7 @@ class OneStepCollector(CollectorAgent):
     def __init__(self):
         self.templates = set()
         self.ingredients = set()
+        self.objectives = []
         self.total_score = 0
         self.all_max_scores = []
 
@@ -108,6 +109,7 @@ class OneStepCollector(CollectorAgent):
             admissible_commands=True,
             command_templates=True,
             max_score=True,
+            objective=True,
             extras=["recipe"])
         return request_infos
 
@@ -118,6 +120,7 @@ class OneStepCollector(CollectorAgent):
         self.templates.update(infos[INFO_KEY.templates][0])
         self.total_score += infos[INFO_KEY.max_score][0]
         self.all_max_scores.append(infos[INFO_KEY.max_score][0])
+        self.objectives.append(infos[INFO_KEY.objective][0])
         # self.ingredients.update(
         #     CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
         action = random.choice(infos[INFO_KEY.actions][0])
@@ -175,6 +178,7 @@ class Main(object):
         print("total scores: ", agent.total_score)
         print("mean score: {}, std: {}".format(
             np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
+        print("objectives:\n{}".format("\n".join(agent.objectives)))
 
 
 if __name__ == '__main__':

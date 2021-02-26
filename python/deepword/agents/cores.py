@@ -307,7 +307,8 @@ class TFCore(BaseCore, ABC):
             src_len: length of the src
         """
 
-        tj = flatten([x.ids for x in trajectory])
+        tj = flatten(
+            [x.ids for x in trajectory] + [trajectory[-1].objective_ids])
         tj = tj if len(tj) <= self.hp.num_tokens else tj[-self.hp.num_tokens:]
         return tj, len(tj)
 
@@ -429,7 +430,8 @@ class NLUCore(TFCore):
             src_len: length of the src
         """
 
-        tj = flatten([x.ids for x in trajectory])
+        tj = flatten(
+            [x.ids for x in trajectory] + [trajectory[-1].objective_ids])
         max_bert_tj_len = self.hp.num_tokens - 3 - self.hp.n_tokens_per_action
         if len(tj) > max_bert_tj_len:
             tj = tj[-max_bert_tj_len:]

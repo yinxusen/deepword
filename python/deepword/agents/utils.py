@@ -41,12 +41,20 @@ class Memolet(namedtuple(
 
 class ActionMaster(object):
     def __init__(
-            self, action_ids: List[int], master_ids: List[int],
-            action: str, master: str):
+            self,
+            action_ids: List[int],
+            master_ids: List[int],
+            objective_ids: List[int],
+            action: str,
+            master: str):
         self._ids = action_ids + master_ids
+        self._objective_ids = objective_ids
         self._lens = [len(action_ids), len(master_ids)]
         self._action = action
         self._master = master
+
+    def __repr__(self):
+        return "{} --- {}".format(self._action, self._master)
 
     @property
     def ids(self):
@@ -59,6 +67,10 @@ class ActionMaster(object):
     @property
     def master_ids(self):
         return self._ids[self._lens[0]:]
+
+    @property
+    def objective_ids(self):
+        return self._objective_ids
 
     @property
     def action(self):
@@ -137,7 +149,7 @@ ACT_TYPE = ActType(
 class EnvInfosKey(namedtuple(
     "KeyInfo",
     ("recipe", "desc", "inventory", "max_score", "won", "lost",
-     "actions", "templates", "verbs", "entities"))):
+     "actions", "templates", "verbs", "entities", "objective", "walkthrough"))):
     pass
 
 
@@ -151,7 +163,9 @@ INFO_KEY = EnvInfosKey(
     actions="admissible_commands",
     templates="command_templates",
     verbs="verbs",
-    entities="entities")
+    entities="entities",
+    objective="objective",
+    walkthrough="extra.walkthrough")
 
 
 class ScheduledEPS(Logging):

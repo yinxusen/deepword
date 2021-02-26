@@ -94,6 +94,8 @@ class BaseAgent(Logging):
         self._stale_tags: Optional[List[int]] = None
         self._positive_scores = 0
         self._negative_scores = 0
+        self._objective = ""
+        self._objective_ids = []
 
     @classmethod
     def _clip_reward(cls, reward: float) -> float:
@@ -128,7 +130,8 @@ class BaseAgent(Logging):
             max_score=True,
             won=True,
             lost=True,
-            admissible_commands=True)
+            admissible_commands=True,
+            objective=True)
 
     def _get_admissible_actions(
             self, infos: Dict[str, List[Any]]) -> List[str]:
@@ -353,6 +356,9 @@ class BaseAgent(Logging):
         self._cnt_action = dict()
         self._positive_scores = 0
         self._negative_scores = 0
+        self._objective = infos[INFO_KEY.objective][0]
+        self._objective_ids = self.tokenizer.convert_tokens_to_ids(
+            self.tokenizer.tokenize(self._objective))
 
     def _end_episode(
             self, obs: List[str], scores: List[int],
@@ -383,6 +389,8 @@ class BaseAgent(Logging):
         self._cumulative_penalty = 0
         self._prev_last_action = None
         self._prev_master = None
+        self._objective = ""
+        self._objective_ids = []
 
     def _delete_stale_context_objs(self) -> None:
         valid_tags = self._get_compatible_snapshot_tag()
@@ -768,6 +776,7 @@ class BaseAgent(Logging):
         self.tjs.append(ActionMaster(
             action_ids=action_tokens,
             master_ids=master_tokens,
+            objective_ids=self._objective_ids,
             action=self._last_action.action if self._last_action else "",
             master=master))
 

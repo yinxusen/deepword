@@ -17,7 +17,60 @@ class HumanAgent(CollectorAgent):
         request_infos.max_score = True
         request_infos.won = True
         request_infos.lost = True
-        request_infos.extras = ["recipe"]
+        request_infos.extras = ["recipe", "walkthrough"]
+        request_infos.admissible_commands = True
+        request_infos.objective = True
+        return request_infos
+
+    def pre_run(self):
+        pass
+
+    def post_run(self):
+        pass
+
+    def act(self, obs, scores, dones, infos):
+        actions = infos[INFO_KEY.actions][0]
+        print(infos["extra.walkthrough"])
+        print(infos["objective"])
+        print("----------------------")
+        print(obs[0])
+        state_text = (
+            infos[INFO_KEY.desc][0] + "\n" + infos[INFO_KEY.inventory][0])
+        print("--------------state text--------------")
+        print(state_text)
+        print("----------------------")
+        print("\n".join(actions))
+        print("\n")
+        print("----------------------")
+        print(infos.keys())
+        print("----------------------")
+        print("won: {}".format(infos[INFO_KEY.won][0]))
+        print("lost: {}".format(infos[INFO_KEY.lost][0]))
+        print("----------------------")
+        print(infos[INFO_KEY.verbs][0])
+        print("----------------------")
+        print(infos[INFO_KEY.templates][0])
+        print("----------------------")
+        print(infos[INFO_KEY.entities][0])
+        print("----------------------")
+        print(infos[INFO_KEY.recipe])
+        action = input("> ")
+        return action
+
+
+class WalkthroughAgent(CollectorAgent):
+    @classmethod
+    def request_infos(cls):
+        request_infos = EnvInfos()
+        request_infos.description = True
+        request_infos.inventory = True
+        request_infos.entities = True
+        request_infos.verbs = True
+        request_infos.command_templates = True
+        request_infos.max_score = True
+        request_infos.won = True
+        request_infos.lost = True
+        request_infos.extras = ["recipe", "walkthrough"]
         request_infos.admissible_commands = True
         return request_infos
 
@@ -29,6 +82,7 @@ class HumanAgent(CollectorAgent):
 
     def act(self, obs, scores, dones, infos):
         actions = infos[INFO_KEY.actions][0]
+        print(infos["extra.walkthrough"])
         print("----------------------")
         print(obs[0])
         state_text = (
