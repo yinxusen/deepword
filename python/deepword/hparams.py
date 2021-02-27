@@ -135,7 +135,8 @@ default_config = {
         policy_to_action="LinUCB",
         policy_sampling_temp=1.,
         policy_eps=0.,
-        action_file=None),
+        action_file=None,
+        append_objective_to_tj=False),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",

@@ -356,9 +356,13 @@ class BaseAgent(Logging):
         self._cnt_action = dict()
         self._positive_scores = 0
         self._negative_scores = 0
-        self._objective = infos[INFO_KEY.objective][0]
-        self._objective_ids = self.tokenizer.convert_tokens_to_ids(
-            self.tokenizer.tokenize(self._objective))
+        if self.hp.append_objective_to_tj:
+            self._objective = infos[INFO_KEY.objective][0]
+            self._objective_ids = self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.tokenize(self._objective))
+        else:  # make sure no objective available
+            self._objective = ""
+            self._objective_ids = []
 
     def _end_episode(
             self, obs: List[str], scores: List[int],
