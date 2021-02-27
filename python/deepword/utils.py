@@ -316,7 +316,7 @@ def setup_train_log(model_dir: str):
         local_log_filename=path.join(model_dir, 'game_script.log'))
 
 
-def setup_eval_log(log_filename: str):
+def setup_eval_log(log_filename: Optional[str]):
     """
     Setup log for evaluation
 

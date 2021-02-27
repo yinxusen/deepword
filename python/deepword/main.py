@@ -20,7 +20,7 @@ from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
 from deepword.eval_games import list_checkpoints
 from deepword.hparams import load_hparams, conventions
 from deepword.utils import agent_name2clazz, learner_name2clazz
-from deepword.utils import load_and_split, load_game_files
+from deepword.utils import load_game_files
 from deepword.utils import setup_train_log, setup_eval_log, eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
@@ -106,10 +106,6 @@ def get_parser() -> ArgumentParser:
     eval_parser.add_argument('--debug', action='store_true', default=False)
     eval_parser.add_argument('--load-best', action='store_true', default=False)
     eval_parser.add_argument('--restore-from', type=str)
-    eval_parser.add_argument(
-        '--load-dev-data', action='store_true', default=False)
-    eval_parser.add_argument(
-        '--load-train-data', action='store_true', default=False)
     eval_parser.add_argument('--ckpt-range-min', type=int)
     eval_parser.add_argument('--ckpt-range-max', type=int)
 
@@ -139,10 +135,6 @@ def get_parser() -> ArgumentParser:
     gen_data_parser.add_argument('--restore-from', type=str)
     gen_data_parser.add_argument('--epoch-size', type=int)
     gen_data_parser.add_argument('--epoch-limit', type=int, default=5)
-    gen_data_parser.add_argument(
-        '--load-dev-data', action='store_true', default=False)
-    gen_data_parser.add_argument(
-        '--load-train-data', action='store_true', default=False)
     gen_data_parser.add_argument('--max-randomness', type=float, default=0.5)
     return parser
 
@@ -264,7 +256,7 @@ def train(
     """
 
     logger = logging.getLogger('train')
-    train_games, _ = load_and_split(game_dir, f_games)
+    train_games = load_game_files(game_dir, f_games)
     logger.info("load {} game files".format(len(train_games)))
     # nb epochs could only be an estimation since steps per episode is unknown
     nb_epochs = (hp.annealing_eps_t // len(train_games) // 10) + 1
@@ -401,7 +393,7 @@ def process_eval_student(args):
            hp.learner_clazz == "NLULearner"
     learner_clazz = learner_name2clazz(hp.learner_clazz)
 
-    setup_eval_log(log_filename="/tmp/eval-logging.txt")
+    setup_eval_log(log_filename=None)
     steps, step2ckpt = list_checkpoints(
         args.model_dir,
         range_min=args.ckpt_range_min, range_max=args.ckpt_range_max)
@@ -421,17 +413,10 @@ def process_eval_dqn(args):
     """
 
     hp = process_hp(args)
-    setup_eval_log(log_filename="/tmp/eval-logging.txt")
-    if args.load_dev_data and not args.load_train_data:
-        eprint(colored("load dev data", "blue", "on_red", attrs=["bold"]))
-        _, eval_games = load_and_split(args.game_path, args.f_games)
-    elif args.load_train_data and not args.load_dev_data:
-        eprint(colored("load train data", "blue", "on_red", attrs=["bold"]))
-        eval_games, _ = load_and_split(args.game_path, args.f_games)
-    else:  # if load_dev and load_train are both True or both False
-        eprint(colored(
-            "load all test data", "yellow", "on_red", attrs=["bold"]))
-        eval_games = load_game_files(args.game_path, args.f_games)
+    setup_eval_log(log_filename=None)
+    logger = logging.getLogger('eval-dqn')
+    eval_games = load_game_files(args.game_path, args.f_games)
+    logger.info("load {} game files".format(len(eval_games)))
 
     if args.eval_mode == "eval":
         eval_player = MultiGPUsEvalPlayer(
@@ -457,18 +442,9 @@ def process_gen_data(args):
     """
 
     hp = process_hp(args)
-    setup_eval_log(log_filename="/tmp/eval-logging.txt")
+    setup_eval_log(log_filename=None)
 
-    if args.load_dev_data and not args.load_train_data:
-        eprint(colored("load dev data", "blue", "on_red", attrs=["bold"]))
-        _, game_files = load_and_split(args.game_path, args.f_games)
-    elif args.load_train_data and not args.load_dev_data:
-        eprint(colored("load train data", "blue", "on_red", attrs=["bold"]))
-        game_files, _ = load_and_split(args.game_path, args.f_games)
-    else:  # if load_dev and load_train are both True or both False
-        eprint(colored(
-            "load all test data", "yellow", "on_red", attrs=["bold"]))
-        game_files = load_game_files(args.game_path, args.f_games)
+    game_files = load_game_files(args.game_path, args.f_games)
 
     eprint("load {} game files".format(len(game_files)))
     game_names = [os.path.basename(fn) for fn in game_files]
