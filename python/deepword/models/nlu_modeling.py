@@ -88,6 +88,7 @@ class BertNLU(BaseDQN):
 
     def get_train_op(self, q_actions):
         losses = tf.squared_difference(self.inputs["expected_q"], q_actions)
+        abs_loss = tf.abs(self.inputs["expected_q"] - q_actions)
         loss = tf.reduce_mean(losses)
 
         var_q_encoder = tf.trainable_variables(scope="q-encoder")
@@ -104,7 +105,7 @@ class BertNLU(BaseDQN):
             loss, global_step=self.global_step,
             var_list=trainable_vars)
 
-        return loss, train_op
+        return loss, train_op, abs_loss
 
     @classmethod
     def get_train_student_model(cls, hp, device_placement):
@@ -181,7 +182,7 @@ def create_train_bert_nlu_model(model_creator, hp, device_placement):
             model = model_creator(hp)
             inputs = model.inputs
             q_actions = model.get_q_actions()
-            loss, train_op = model.get_train_op(q_actions)
+            loss, train_op, abs_loss = model.get_train_op(q_actions)
             classification_loss, classification_train_op = \
                 model.get_classification_train_op(q_actions)
             loss_summary = tf.summary.scalar("loss", loss)
@@ -206,7 +207,7 @@ def create_train_bert_nlu_model(model_creator, hp, device_placement):
         classification_train_summary_op=classification_train_summary_op,
         expected_q_=inputs["expected_q"],
         action_idx_=inputs["action_idx"],
-        abs_loss=None,
+        abs_loss=abs_loss,
         seg_tj_action_=inputs["seg_tj_action"],
         h_state=None,
         b_weight_=None)
