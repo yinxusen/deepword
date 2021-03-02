@@ -421,6 +421,36 @@ def bert_nlu_input(
     return inp.astype(np.int32), seg_tj_action, inp_size
 
 
+def batch_bert_nlu_input(
+        action_matrices: List[np.ndarray],
+        action_lens: List[np.ndarray],
+        action_masks: List[np.ndarray],
+        trajectories: List[List[int]],
+        trajectories_lens: List[int],
+        sep_val_id: int,
+        cls_val_id: int,
+        num_tokens: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[int], List[Dict[int, int]]]:
+
+    mats, lens, actions_repeats, id_real2mask = zip(*[
+        drrn_action_input(mat, l, mask) for mat, l, mask
+        in zip(action_matrices, action_lens, action_masks)])
+
+    # transform trajectories and actions into BERT inputs
+    processed_input = [
+        bert_nlu_input(
+            am, al, tj, tj_len,
+            sep_val_id, cls_val_id, num_tokens)
+        for am, al, tj, tj_len
+        in zip(mats, lens, trajectories, trajectories_lens)]
+
+    inp = np.concatenate([a[0] for a in processed_input], axis=0)
+    seg_tj_action = np.concatenate([a[1] for a in processed_input], axis=0)
+    inp_len = np.concatenate([a[2] for a in processed_input], axis=0)
+
+    return inp, seg_tj_action, inp_len, actions_repeats, id_real2mask
+
+
 def get_best_1d_q(q_actions: np.ndarray) -> Tuple[int, float]:
     """
     Find the best Q-value given a 1D Q-vector

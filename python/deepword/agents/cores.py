@@ -16,6 +16,7 @@ from termcolor import colored
 
 from deepword.agents.utils import ActionMaster, ObsInventory
 from deepword.agents.utils import GenSummary
+from deepword.agents.utils import batch_bert_nlu_input
 from deepword.agents.utils import batch_drrn_action_input
 from deepword.agents.utils import bert_nlu_input
 from deepword.agents.utils import get_action_idx_pair
@@ -437,6 +438,61 @@ class NLUCore(TFCore):
             tj = tj[-max_bert_tj_len:]
         return tj, len(tj)
 
+    def _compute_expected_q(
+            self,
+            action_mask: List[np.ndarray],
+            trajectories: List[List[ActionMaster]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float]) -> np.ndarray:
+
+        # get post trajectories
+        post_src, post_src_len = self.batch_trajectory2input(trajectories)
+        inp, seg_tj_action, inp_len, actions_repeats, _ = batch_bert_nlu_input(
+            action_matrix, action_len, action_mask,
+            post_src, post_src_len,
+            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+
+        # compute target Q values and DQN Q values
+        n_actions = inp.shape[0]
+        self.debug("number of actions: {}".format(n_actions))
+        allowed_batch_size = 32
+        n_batches = int(math.ceil(n_actions * 1. / allowed_batch_size))
+        self.debug("compute q-values through {} batches".format(n_batches))
+
+        target_model, target_sess = self._get_target_model()
+        target_q_actions = []
+        dqn_q_actions = []
+        for i in range(n_batches):
+            ss = i * allowed_batch_size
+            ee = min((i + 1) * allowed_batch_size, n_actions)
+            target_qs = target_sess.run(
+                target_model.q_actions, feed_dict={
+                   target_model.src_: inp[ss: ee],
+                   target_model.seg_tj_action_: seg_tj_action[ss: ee],
+                   target_model.src_len_: inp_len[ss: ee]
+                })
+            target_q_actions.append(target_qs)
+            dqn_qs = self.sess.run(
+                self.model.q_actions, feed_dict={
+                    self.model.src_: inp[ss: ee],
+                    self.model.seg_tj_action_: seg_tj_action[ss: ee],
+                    self.model.src_len_: inp_len[ss: ee],
+                })
+            dqn_q_actions.append(dqn_qs)
+
+        post_qs_target = np.concatenate(target_q_actions, axis=-1)
+        post_qs_dqn = np.concatenate(dqn_q_actions, axis=-1)
+
+        # compute target values for MSE loss
+        best_actions_idx = get_best_batch_ids(post_qs_dqn, actions_repeats)
+        best_qs = post_qs_target[best_actions_idx]
+        expected_q = (
+                np.asarray(rewards) +
+                np.asarray(dones) * self.hp.gamma * best_qs)
+        return expected_q
+
     def train_one_batch(
             self,
             pre_trajectories: List[List[ActionMaster]],
@@ -453,7 +509,53 @@ class NLUCore(TFCore):
             b_weight: np.ndarray,
             step: int,
             others: Any) -> np.ndarray:
-        raise NotImplementedError("NLUCore doesn't support for training")
+        t1 = ctime()
+        expected_q = self._compute_expected_q(
+            post_action_mask, post_trajectories, action_matrix, action_len,
+            dones, rewards)
+        t1_end = ctime()
+
+        t2 = ctime()
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        t2_end = ctime()
+
+        t3 = ctime()
+        # only choose and concatenate actions appearing in action_idx
+        pre_action_idx_mask = [np.asarray([x]) for x in action_idx]
+        inp, seg_tj_action, inp_len, _, _ = batch_bert_nlu_input(
+            action_matrix, action_len, pre_action_idx_mask,
+            pre_src, pre_src_len,
+            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+        t3_end = ctime()
+
+        t4 = ctime()
+        _, summaries = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op],
+            feed_dict={
+
+            })
+
+        _, summaries, loss_eval, abs_loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss,
+             self.model.abs_loss],
+            feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_len,
+                self.model.seg_tj_action_: seg_tj_action,
+                self.model.expected_q_: expected_q
+            })
+        t4_end = ctime()
+
+        self.info(report_status([
+            ("t1", t1_end - t1),
+            ("t2", t2_end - t2),
+            ("t3", t3_end - t3),
+            ("t4", t4_end - t4)
+        ]))
+
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
+        return abs_loss
 
     def policy(
             self,
