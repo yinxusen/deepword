@@ -529,12 +529,6 @@ class NLUCore(TFCore):
         t3_end = ctime()
 
         t4 = ctime()
-        _, summaries = self.sess.run(
-            [self.model.train_op, self.model.train_summary_op],
-            feed_dict={
-
-            })
-
         _, summaries, loss_eval, abs_loss = self.sess.run(
             [self.model.train_op, self.model.train_summary_op, self.model.loss,
              self.model.abs_loss],
