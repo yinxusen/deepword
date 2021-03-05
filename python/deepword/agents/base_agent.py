@@ -385,7 +385,7 @@ class BaseAgent(Logging):
             self._objective_ids = []
 
         if self.hp.walkthrough_guided_exploration:
-            self._walkthrough = infos[INFO_KEY.walkthrough]
+            self._walkthrough = infos[INFO_KEY.walkthrough][0]
             self._continue_walkthrough = True
 
     def _end_episode(
