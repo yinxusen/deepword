@@ -97,6 +97,7 @@ class BaseAgent(Logging):
         self._objective = ""
         self._objective_ids = []
         self._walkthrough = []
+        self._continue_walkthrough = False
 
     @classmethod
     def _clip_reward(cls, reward: float) -> float:
@@ -118,6 +119,21 @@ class BaseAgent(Logging):
         else:
             room_name = None
         return room_name
+
+    @classmethod
+    def _walkthrough_prob_per_step(
+            cls, n_steps: int, prob_complete_play: float) -> float:
+        """
+        compute probability of using walkthrough per step
+
+        Args:
+            n_steps: number steps of walkthrough
+            prob_complete_play: the probability of completing walkthrough
+
+        Returns: probability of using walkthrough per step
+        """
+        assert n_steps > 0, "walkthrough steps should larger than 0"
+        return np.exp((1 / n_steps) * np.log(prob_complete_play))
 
     @classmethod
     def select_additional_infos(cls) -> EnvInfos:
@@ -369,6 +385,7 @@ class BaseAgent(Logging):
 
         if self.hp.walkthrough_guided_exploration:
             self._walkthrough = infos[INFO_KEY.walkthrough]
+            self._continue_walkthrough = True
 
     def _end_episode(
             self, obs: List[str], scores: List[int],
@@ -402,6 +419,7 @@ class BaseAgent(Logging):
         self._objective = ""
         self._objective_ids = []
         self._walkthrough = []
+        self._continue_walkthrough = False
 
     def _delete_stale_context_objs(self) -> None:
         valid_tags = self._get_compatible_snapshot_tag()
@@ -536,9 +554,19 @@ class BaseAgent(Logging):
 
     def _walkthrough_policy(self, actions: List[str]) -> Optional[ActionDesc]:
         if (not self.is_training
+                or not self._continue_walkthrough
                 or not self.hp.walkthrough_guided_exploration
+                or len(self._walkthrough) == 0
                 or not self.in_game_t < len(self._walkthrough)):
             return None
+
+        # allow 1 complete walkthrough per 100 episodes
+        if random.random() > self._walkthrough_prob_per_step(
+                n_steps=len(self._walkthrough), prob_complete_play=0.01):
+            self._continue_walkthrough = False
+            self.info(
+                "disallow walkthrough after {}/{} steps".format(
+                    self.in_game_t, len(self._walkthrough)))
 
         gold_action = self._walkthrough[self.in_game_t]
         gold_action = self._go_with_floor_plan([gold_action])[0]
