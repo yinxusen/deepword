@@ -148,7 +148,8 @@ class BaseAgent(Logging):
             won=True,
             lost=True,
             admissible_commands=True,
-            objective=True)
+            objective=True,
+            extras=["walkthrough"])
 
     def _get_admissible_actions(
             self, infos: Dict[str, List[Any]]) -> List[str]:
