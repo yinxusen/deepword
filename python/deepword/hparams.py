@@ -136,7 +136,8 @@ default_config = {
         policy_sampling_temp=1.,
         policy_eps=0.,
         action_file=None,
-        append_objective_to_tj=False),
+        append_objective_to_tj=False,
+        walkthrough_guided_exploration=False),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
@@ -400,7 +401,8 @@ def load_hparams(
         "max_snapshot_to_keep", "start_t_ignore_model_t", "annealing_eps_t",
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
         "agent_clazz", "policy_to_action", "policy_sampling_temp",
-        "action_file", "policy_eps", "observation_t"
+        "action_file", "policy_eps", "observation_t", "append_objective_to_tj",
+        "walkthrough_guided_exploration"
     ]
 
     if fn_pre_config:

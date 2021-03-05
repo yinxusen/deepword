@@ -132,7 +132,7 @@ ACT = CommonActs(
 class ActType(namedtuple(
     "ActType",
     ("rnd", "rule", "rnd_walk", "policy_drrn", "policy_gen",
-     "jitter", "policy_tbl"))):
+     "jitter", "policy_tbl", "walkthrough"))):
     pass
 
 
@@ -143,7 +143,8 @@ ACT_TYPE = ActType(
     policy_drrn="drrn_action",
     policy_gen="gen_action",
     jitter="jitter_action",
-    policy_tbl="tabular_action")
+    policy_tbl="tabular_action",
+    walkthrough="walkthrough_action")
 
 
 class EnvInfosKey(namedtuple(

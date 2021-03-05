@@ -72,6 +72,11 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument("--bert-freeze-layers", type=str)
     parser.add_argument(
         "--action-padding-in-tj", action="store_true", default=None)
+    parser.add_argument(
+        "--append-objective-to-tj", action="store_true", default=None)
+    parser.add_argument(
+        "--walkthrough-guided-exploration", action="store_true",
+        default=None, help="only effective during training")
     return parser
 
 

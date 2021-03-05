@@ -96,6 +96,7 @@ class BaseAgent(Logging):
         self._negative_scores = 0
         self._objective = ""
         self._objective_ids = []
+        self._walkthrough = []
 
     @classmethod
     def _clip_reward(cls, reward: float) -> float:
@@ -144,6 +145,8 @@ class BaseAgent(Logging):
         admissible_actions = list(set(sys_actions) | {ACT.inventory, ACT.look})
         return admissible_actions
 
+    # TODO: it's possible for different games to have the same game ID
+    # TODO: change it to a better method, maybe read game name from infos
     @classmethod
     def _compute_game_id(cls, infos: Dict[str, List[Any]]) -> str:
         assert INFO_KEY.desc in infos, "request description is required"
@@ -364,6 +367,9 @@ class BaseAgent(Logging):
             self._objective = ""
             self._objective_ids = []
 
+        if self.hp.walkthrough_guided_exploration:
+            self._walkthrough = infos[INFO_KEY.walkthrough]
+
     def _end_episode(
             self, obs: List[str], scores: List[int],
             infos: Dict[str, List[Any]]) -> None:
@@ -395,6 +401,7 @@ class BaseAgent(Logging):
         self._prev_master = None
         self._objective = ""
         self._objective_ids = []
+        self._walkthrough = []
 
     def _delete_stale_context_objs(self) -> None:
         valid_tags = self._get_compatible_snapshot_tag()
@@ -527,39 +534,63 @@ class BaseAgent(Logging):
     ) -> Optional[ActionDesc]:
         return None
 
+    def _walkthrough_policy(self, actions: List[str]) -> Optional[ActionDesc]:
+        if (not self.is_training
+                or not self.hp.walkthrough_guided_exploration
+                or not self.in_game_t < len(self._walkthrough)):
+            return None
+
+        gold_action = self._walkthrough[self.in_game_t]
+        gold_action = self._go_with_floor_plan([gold_action])[0]
+        assert gold_action in actions, "gold action is not in available actions"
+        gold_action_idx = self.actor.action2idx.get(gold_action)
+        action_desc = ActionDesc(
+            action_type=ACT_TYPE.walkthrough,
+            action_idx=gold_action_idx,
+            action_len=self.actor.action_len[gold_action_idx],
+            token_idx=self.actor.action_matrix[gold_action_idx],
+            action=gold_action,
+            q_actions=None)
+        return action_desc
+
     def _choose_action(
             self,
             actions: List[str],
             action_mask: np.ndarray,
             instant_reward: float) -> ActionDesc:
-        # when q_actions is required to get, this should be True
-        if self.hp.always_compute_policy:
-            policy_action_desc = self._get_policy_action(action_mask)
-        else:
-            policy_action_desc = None
 
-        action_desc = self._rule_based_policy(actions, instant_reward)
+        """
+        Choose action, w.r.t.
+         1) walkthrough guided action (training only)
+         2) rule-based policy
+         3) random walk floor map collection
+         4) eps-greedy
+
+        Args:
+            actions: effective actions
+            action_mask: mask ids of the effective actions
+            instant_reward: the latest instant reward
+
+        Returns:
+            Action description
+        """
+
+        action_desc = self._walkthrough_policy(actions)
         if not action_desc:
-            action_desc = self._random_walk_for_collecting_fp(actions)
+            action_desc = self._rule_based_policy(actions, instant_reward)
             if not action_desc:
-                if random.random() < self.eps:
-                    action_desc = self._get_a_random_action(action_mask)
-                else:
-                    if policy_action_desc:
-                        action_desc = policy_action_desc
-                    else:
-                        action_desc = self._get_policy_action(action_mask)
+                action_desc = self._random_walk_for_collecting_fp(actions)
+                if not action_desc:
+                    action_desc = (
+                        self._get_a_random_action(action_mask)
+                        if random.random() < self.eps else
+                        self._get_policy_action(action_mask))
 
-        final_action_desc = ActionDesc(
-            action_type=action_desc.action_type,
-            action_idx=action_desc.action_idx,
-            action_len=action_desc.action_len,
-            token_idx=action_desc.token_idx,
-            action=action_desc.action,
-            q_actions=(
-                policy_action_desc.q_actions
-                if self.hp.always_compute_policy else action_desc.q_actions))
-        return final_action_desc
+        if self.hp.always_compute_policy and action_desc.q_actions is None:
+            action_desc.q_actions = (
+                self._get_policy_action(action_mask).q_actions)
+
+        return action_desc
 
     def _get_raw_instant_reward(self, score: float) -> float:
         """raw instant reward between two consecutive scores"""
@@ -725,7 +756,7 @@ class BaseAgent(Logging):
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
 
         if self._last_action:
-            self.debug(report_status([
+            status = report_status([
                 ("t", self.total_t),
                 ("in_game_t", self.in_game_t),
                 ("action", colored(
@@ -739,9 +770,13 @@ class BaseAgent(Logging):
                 ("reward", colored(
                     "{:.2f}".format(instant_reward),
                     "green" if instant_reward > 0 else "red")),
-                ("is_terminal", dones[0])]))
+                ("is_terminal", dones[0])])
+            if instant_reward > 0 or dones[0]:
+                self.info(status)
+            else:
+                self.debug(status)
         else:
-            self.debug(report_status([
+            self.info(report_status([
                 ("master", colored(
                     master.replace("\n", " "), "cyan", attrs=["underline"])),
                 ("max_score", infos[INFO_KEY.max_score][0])
