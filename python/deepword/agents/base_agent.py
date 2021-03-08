@@ -107,7 +107,7 @@ class BaseAgent(Logging):
     @classmethod
     def load_objectives(cls, fn_objectives):
         with open(fn_objectives, "r") as f:
-            objectives = [x.strip().split() for x in f.readlines()]
+            objectives = [x.strip().split("\t") for x in f.readlines()]
             objectives = dict([(x[0], (x[1], x[2])) for x in objectives])
         return objectives
 
@@ -583,7 +583,8 @@ class BaseAgent(Logging):
 
         # allow 1 complete walkthrough per 100 episodes
         if random.random() > self._walkthrough_prob_per_step(
-                n_steps=len(self._walkthrough), prob_complete_play=0.01):
+                n_steps=len(self._walkthrough),
+                prob_complete_play=self.hp.prob_complete_play):
             self._continue_walkthrough = False
             self.info(
                 "disallow walkthrough after {}/{} steps".format(

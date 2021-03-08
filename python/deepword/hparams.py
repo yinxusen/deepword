@@ -140,7 +140,8 @@ default_config = {
         policy_eps=0.,
         action_file=None,
         append_objective_to_tj=False,
-        walkthrough_guided_exploration=False),
+        walkthrough_guided_exploration=False,
+        prob_complete_play=0.01),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
