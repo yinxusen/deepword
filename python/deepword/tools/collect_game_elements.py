@@ -3,15 +3,15 @@ import re
 
 import fire
 import gym
+import numpy as np
 import textworld.gym
 from textworld import EnvInfos
 from tqdm import tqdm
-import numpy as np
 
-from deepword.agents.competition_agent import CompetitionAgent
+from deepword.agents.base_agent import BaseAgent
+from deepword.agents.utils import INFO_KEY
 from deepword.floor_plan import FloorPlanCollector
 from deepword.utils import load_game_files
-from deepword.agents.utils import INFO_KEY
 
 
 def contain_words(sentence, words):
@@ -102,25 +102,33 @@ class OneStepCollector(CollectorAgent):
         self.objectives = []
         self.total_score = 0
         self.all_max_scores = []
+        self.game_id = []
+        self.walkthrough = []
 
     @classmethod
     def request_infos(cls):
         request_infos = EnvInfos(
+            description=True,
+            inventory=True,
             admissible_commands=True,
             command_templates=True,
             max_score=True,
             objective=True,
-            extras=["recipe"])
+            extras=["recipe", "walkthrough"])
         return request_infos
 
     def pre_run(self):
         pass
 
     def act(self, obs, scores, dones, infos):
+        if all(dones):
+            return None
+        self.game_id.append(BaseAgent._compute_game_id(infos))
         self.templates.update(infos[INFO_KEY.templates][0])
         self.total_score += infos[INFO_KEY.max_score][0]
         self.all_max_scores.append(infos[INFO_KEY.max_score][0])
         self.objectives.append(infos[INFO_KEY.objective][0])
+        self.walkthrough.append(infos[INFO_KEY.walkthrough][0])
         # self.ingredients.update(
         #     CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
         action = random.choice(infos[INFO_KEY.actions][0])
@@ -172,13 +180,18 @@ class Main(object):
     def collect_others(cls, game_dir, f_games=None, nb_episodes=1):
         agent = OneStepCollector()
         game_files = load_game_files(game_dir, f_games)
+        print(game_files)
         run_games(agent, game_files, nb_episodes, max_steps=1)
         print("ingredients:\n", agent.ingredients)
         print("templates:\n", agent.templates)
         print("total scores: ", agent.total_score)
         print("mean score: {}, std: {}".format(
             np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
-        print("objectives:\n{}".format("\n".join(agent.objectives)))
+        for gid, obj, walks in zip(
+                agent.game_id, agent.objectives, agent.walkthrough):
+            print("{}\t{}".format(gid, obj))
+            print(walks)
+            print()
 
 
 if __name__ == '__main__':

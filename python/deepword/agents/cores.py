@@ -540,7 +540,7 @@ class NLUCore(TFCore):
             })
         t4_end = ctime()
 
-        self.info(report_status([
+        self.debug(report_status([
             ("t1", t1_end - t1),
             ("t2", t2_end - t2),
             ("t3", t3_end - t3),
@@ -681,7 +681,7 @@ class DQNCore(TFCore):
                 self.model.action_idx_: action_idx,
                 self.model.expected_q_: expected_q})
 
-        self.info('loss: {}'.format(loss_eval))
+        self.debug('loss: {}'.format(loss_eval))
         self.train_summary_writer.add_summary(
             summaries, step - self.hp.observation_t)
         return abs_loss
@@ -944,7 +944,7 @@ class DRRNCore(TFCore):
                 self.model.actions_repeats_: actions_repeats})
         t4_end = ctime()
 
-        self.info(report_status([
+        self.debug(report_status([
             ("t1", t1_end - t1),
             ("t2", t2_end - t2),
             ("t3", t3_end - t3),
@@ -1112,7 +1112,7 @@ class DSQNCore(DRRNCore):
                 self.model.snn_src2_len_: src2_len,
                 self.model.labels_: labels})
         t4_end = ctime()
-        self.info(report_status([
+        self.debug(report_status([
             ("t0", t0_end - t0),
             ("t1", t1_end - t1),
             ("t2", t2_end - t2),

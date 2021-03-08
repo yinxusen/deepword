@@ -16,7 +16,7 @@ from deepword.agents.utils import ACT, ObsInventory, INFO_KEY, \
 from deepword.agents.utils import categorical_without_replacement, \
     get_best_1d_q, remove_zork_version_info, get_path_tags, get_hash_state
 from deepword.floor_plan import FloorPlanCollector
-from deepword.hparams import save_hparams, output_hparams
+from deepword.hparams import save_hparams, output_hparams, conventions
 from deepword.tokenizers import init_tokens, Tokenizer
 from deepword.trajectory import Trajectory
 from deepword.tree_memory import TreeMemory
@@ -98,6 +98,18 @@ class BaseAgent(Logging):
         self._objective_ids = []
         self._walkthrough = []
         self._continue_walkthrough = False
+        if self.hp.append_objective_to_tj:
+            self._loaded_objectives = self.load_objectives(
+                conventions.objective_file)
+        else:
+            self._loaded_objectives = dict()
+
+    @classmethod
+    def load_objectives(cls, fn_objectives):
+        with open(fn_objectives, "r") as f:
+            objectives = [x.strip().split() for x in f.readlines()]
+            objectives = dict([(x[0], (x[1], x[2])) for x in objectives])
+        return objectives
 
     @classmethod
     def _clip_reward(cls, reward: float) -> float:
@@ -377,7 +389,15 @@ class BaseAgent(Logging):
         self._positive_scores = 0
         self._negative_scores = 0
         if self.hp.append_objective_to_tj:
-            self._objective = infos[INFO_KEY.objective][0]
+            objective = infos[INFO_KEY.objective][0]
+            if (self.game_id in self._loaded_objectives
+                    and self._loaded_objectives[self.game_id][0] == objective):
+                self._objective = self._loaded_objectives[self.game_id][1]
+                self.info(
+                    "substitute objective from ({}) to ({})".format(
+                        objective, self._objective))
+            else:
+                self._objective = objective
             self._objective_ids = self.tokenizer.convert_tokens_to_ids(
                 self.tokenizer.tokenize(self._objective))
         else:  # make sure no objective available
