@@ -141,7 +141,7 @@ default_config = {
         action_file=None,
         append_objective_to_tj=False,
         walkthrough_guided_exploration=False,
-        prob_complete_play=0.01),
+        prob_complete_walkthrough=0.01),
     "LstmDQN": HParams(
         agent_clazz='BaseAgent',
         core_clazz="DQNCore",
@@ -406,7 +406,7 @@ def load_hparams(
         "collect_floor_plan", "init_eps", "final_eps", "save_gap_t",
         "agent_clazz", "policy_to_action", "policy_sampling_temp",
         "action_file", "policy_eps", "observation_t", "append_objective_to_tj",
-        "walkthrough_guided_exploration"
+        "walkthrough_guided_exploration", "prob_complete_walkthrough"
     ]
 
     if fn_pre_config:

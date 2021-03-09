@@ -5,7 +5,6 @@ from os import remove
 from typing import List, Dict, Tuple, Optional, Any
 
 import numpy as np
-from scipy.stats import entropy
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 from textworld import EnvInfos
@@ -134,18 +133,18 @@ class BaseAgent(Logging):
 
     @classmethod
     def _walkthrough_prob_per_step(
-            cls, n_steps: int, prob_complete_play: float) -> float:
+            cls, n_steps: int, prob_complete_walkthrough: float) -> float:
         """
         compute probability of using walkthrough per step
 
         Args:
             n_steps: number steps of walkthrough
-            prob_complete_play: the probability of completing walkthrough
+            prob_complete_walkthrough: the probability of completing walkthrough
 
         Returns: probability of using walkthrough per step
         """
         assert n_steps > 0, "walkthrough steps should larger than 0"
-        return np.exp((1 / n_steps) * np.log(prob_complete_play))
+        return np.exp((1 / n_steps) * np.log(prob_complete_walkthrough))
 
     @classmethod
     def select_additional_infos(cls) -> EnvInfos:
@@ -539,10 +538,13 @@ class BaseAgent(Logging):
             trajectory, state,
             self.actor.action_matrix, self.actor.action_len, action_mask)
 
-        self.debug("q_actions: {}".format(list(q_actions)))
-        self.debug("exp of q_actions: {}".format(list(np.exp(q_actions))))
-        self.debug("ent: {:.5f}".format(
-            entropy(pk=np.exp(q_actions), qk=np.ones_like(q_actions))))
+        actions_with_q_values = list(reversed(sorted(zip(
+            [self.actor.actions[mid] for mid in action_mask],
+            list(q_actions)), key=lambda x: x[1])))
+        self.debug("q_actions: {}".format(actions_with_q_values))
+        # self.debug("exp of q_actions: {}".format(list(np.exp(q_actions))))
+        # self.debug("ent: {:.5f}".format(
+        #     entropy(pk=np.exp(q_actions), qk=np.ones_like(q_actions))))
 
         if self.hp.policy_to_action.lower() == "Sampling".lower():
             masked_action_idx = categorical_without_replacement(
@@ -584,7 +586,7 @@ class BaseAgent(Logging):
         # allow 1 complete walkthrough per 100 episodes
         if random.random() > self._walkthrough_prob_per_step(
                 n_steps=len(self._walkthrough),
-                prob_complete_play=self.hp.prob_complete_play):
+                prob_complete_walkthrough=self.hp.prob_complete_walkthrough):
             self._continue_walkthrough = False
             self.info(
                 "disallow walkthrough after {}/{} steps".format(
@@ -637,8 +639,13 @@ class BaseAgent(Logging):
                         self._get_policy_action(action_mask))
 
         if self.hp.always_compute_policy and action_desc.q_actions is None:
-            action_desc.q_actions = (
-                self._get_policy_action(action_mask).q_actions)
+            action_desc = ActionDesc(
+                action_type=action_desc.action_type,
+                action_idx=action_desc.action_idx,
+                token_idx=action_desc.token_idx,
+                action_len=action_desc.action_len,
+                action=action_desc.action,
+                q_actions=self._get_policy_action(action_mask).q_actions)
 
         return action_desc
 
