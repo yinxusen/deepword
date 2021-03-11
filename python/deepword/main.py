@@ -40,7 +40,7 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument('--init-eps', type=float)
     parser.add_argument('--final-eps', type=float)
     parser.add_argument('--annealing-eps-t', type=int)
-    parser.add_argument('--gamma', type=int)
+    parser.add_argument('--gamma', type=float)
     parser.add_argument('--eval-episode', type=int)
     parser.add_argument('--batch-size', type=int)
     parser.add_argument('--learning-rate', type=float)

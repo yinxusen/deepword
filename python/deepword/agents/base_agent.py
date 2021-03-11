@@ -585,7 +585,7 @@ class BaseAgent(Logging):
 
         # allow 1 complete walkthrough per 100 episodes
         if random.random() > self._walkthrough_prob_per_step(
-                n_steps=len(self._walkthrough),
+                n_steps=self.in_game_t + 1,
                 prob_complete_walkthrough=self.hp.prob_complete_walkthrough):
             self._continue_walkthrough = False
             self.info(
