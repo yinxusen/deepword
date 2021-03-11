@@ -576,13 +576,6 @@ class BaseAgent(Logging):
         return None
 
     def _walkthrough_policy(self, actions: List[str]) -> Optional[ActionDesc]:
-        if (not self.is_training
-                or not self._continue_walkthrough
-                or not self.hp.walkthrough_guided_exploration
-                or len(self._walkthrough) == 0
-                or not self.in_game_t < len(self._walkthrough)):
-            return None
-
         # allow 1 complete walkthrough per 100 episodes
         if random.random() > self._walkthrough_prob_per_step(
                 n_steps=self.in_game_t + 1,
@@ -591,6 +584,13 @@ class BaseAgent(Logging):
             self.info(
                 "disallow walkthrough after {}/{} steps".format(
                     self.in_game_t, len(self._walkthrough)))
+
+        if (not self.is_training
+                or not self._continue_walkthrough
+                or not self.hp.walkthrough_guided_exploration
+                or len(self._walkthrough) == 0
+                or not self.in_game_t < len(self._walkthrough)):
+            return None
 
         gold_action = self._walkthrough[self.in_game_t]
         gold_action = self._go_with_floor_plan([gold_action])[0]
