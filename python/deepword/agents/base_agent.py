@@ -162,8 +162,9 @@ class BaseAgent(Logging):
             objective=True,
             extras=["walkthrough"])
 
+    @classmethod
     def _get_admissible_actions(
-            self, infos: Dict[str, List[Any]]) -> List[str]:
+            cls, infos: Dict[str, List[Any]]) -> List[str]:
         """
         We add inventory and look, in case that the game doesn't provide these
         two key actions.
