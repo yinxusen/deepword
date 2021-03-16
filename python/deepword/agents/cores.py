@@ -361,8 +361,8 @@ class TFCore(BaseCore, ABC):
             self.sess, self.model, self.saver, restore_from, load_best)
 
         if self.is_training:
-            if self.loaded_ckpt_step > 0:
-                self.create_or_reload_target_model(restore_from)
+            # Double DQN must be initialized from the beginning of training
+            self.create_or_reload_target_model(restore_from)
             train_summary_dir = path.join(
                 self.model_dir, "summaries", "train")
             self.train_summary_writer = tf.summary.FileWriter(
