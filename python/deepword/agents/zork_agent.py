@@ -1,5 +1,6 @@
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.utils import *
+from deepword.hparams import conventions
 from deepword.utils import load_actions
 
 
@@ -26,3 +27,17 @@ class ZorkAgent(BaseAgent):
         """
         admissible_actions = self.loaded_actions
         return admissible_actions
+
+    @classmethod
+    def read_expert_guides(cls, fn_expert_guides):
+        with open(fn_expert_guides, "r") as f:
+            lines = [x.strip() for x in f.readlines()]
+        return lines
+
+    def _start_episode_impl(self, obs, infos):
+        super(ZorkAgent, self)._start_episode_impl(obs, infos)
+        # load Zork walkthrough
+        if self.hp.walkthrough_guided_exploration:
+            self._walkthrough = self.read_expert_guides(
+                conventions.zork1_walkthrough)
+            self._continue_walkthrough = True

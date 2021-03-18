@@ -17,6 +17,7 @@ project_path = path.join(dir_path, "../..")
 class Conventions(namedtuple(
     "Conventions", (
         "objective_file",
+        "zork1_walkthrough",
         "logo_file",
         "bert_ckpt_dir",
         "bert_vocab_file",
@@ -49,6 +50,8 @@ class Conventions(namedtuple(
 conventions = Conventions(
     objective_file=path.join(
         project_path, "resources/miscellany/th-games-objectives.txt"),
+    zork1_walkthrough=path.join(
+        project_path, "resources/miscellany/zork1-walkthrough"),
     logo_file=path.join(project_path, "resources/logo.txt"),
     bert_ckpt_dir=path.join(
         home_dir, "local/opt/bert-models/bert-model"),
