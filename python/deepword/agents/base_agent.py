@@ -881,12 +881,14 @@ class BaseAgent(Logging):
             action=self._last_action.action if self._last_action else "",
             master=master))
 
+        obs = infos[INFO_KEY.desc][0] if infos[INFO_KEY.desc][0] else ""
+        inv = (infos[INFO_KEY.inventory][0]
+               if infos[INFO_KEY.inventory][0] else "")
         state = ObsInventory(
-            obs=infos[INFO_KEY.desc][0],
-            inventory=infos[INFO_KEY.inventory][0],
+            obs=obs,
+            inventory=inv,
             sid=self.tjs.get_last_sid(),
-            hs=get_hash_state(
-                infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0]))
+            hs=get_hash_state(obs, inv))
         self.stc.append(state)
 
         admissible_actions = self._get_admissible_actions(infos)
