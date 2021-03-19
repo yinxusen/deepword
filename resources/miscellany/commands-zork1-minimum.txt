@@ -1,0 +1,130 @@
+go east
+go south
+go north
+go down
+go west
+go up
+go southwest
+go northeast
+turn on lamp
+kill troll with sword
+go southeast
+enter house
+turn off lamp
+inventory
+wait
+take torch
+take shovel
+take garlic
+open trap door
+kill thief with knife
+go northwest
+dig sand
+take trident
+take skull
+take screwdriver
+take pump
+take lamp
+take knife
+take diamond
+take coffin
+take coal
+take chalice
+take candles
+take bauble
+put torch in basket
+open lid
+drop torch
+drop knife
+climb tree
+wind up canary
+wave sceptre
+unlock grate
+turn switch with screwdriver
+turn bolt with wrench
+tie rope to railing
+take wrench
+take trunk
+take sword
+take sceptre
+take scarab
+take rope
+take painting
+take matches
+take key
+take jade
+take gold
+take emerald
+take egg
+take coins
+take canary from egg
+take buoy
+take bracelet
+take book
+take bell
+take bar
+take all
+rub mirror
+ring bell
+read leaflet
+read book
+raise basket
+put trident in case
+put skull in case
+put screwdriver in basket
+put sceptre in case
+put scarab in case
+put painting inside case
+put jewels in case
+put jade in case
+put gold in case
+put emerald in case
+put egg in case
+put diamond in case
+put diamond in basket
+put coins in case
+put coffin in case
+put coal in machine
+put coal in basket
+put chalice in case
+put canary in case
+put bracelet in case
+put bauble in case
+put bar in case
+push yellow button
+pray
+open window
+open mailbox
+open grate
+open coffin
+open case
+open buoy
+open bag
+move rug
+lower basket
+look in basket
+light match
+light candles with match
+leave boat
+launch
+inflate plastic with pump
+go up chimney
+go inside boat
+give egg to thief
+echo
+drop wrench
+drop sword
+drop stiletto
+drop shovel
+drop screwdriver
+drop pump
+drop leaflet
+drop garlic
+drop coffin
+drop buoy
+drop book
+drop all
+cross rainbow
+close lid
+climb down
+ulysses

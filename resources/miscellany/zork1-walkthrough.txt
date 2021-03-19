@@ -238,8 +238,7 @@ take shovel
 drop buoy
 take shovel
 go northeast
-dig
-sand
+dig sand
 dig sand
 dig sand
 dig sand
@@ -289,7 +288,7 @@ go southwest
 go east
 go south
 go southeast
-Ulysses
+ulysses
 give egg to thief
 go down
 go east
@@ -348,4 +347,3 @@ go west
 go south
 go up
 put bar in case
-score
