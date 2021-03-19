@@ -51,7 +51,7 @@ conventions = Conventions(
     objective_file=path.join(
         project_path, "resources/miscellany/th-games-objectives.txt"),
     zork1_walkthrough=path.join(
-        project_path, "resources/miscellany/zork1-walkthrough"),
+        project_path, "resources/miscellany/zork1-walkthrough.txt"),
     logo_file=path.join(project_path, "resources/logo.txt"),
     bert_ckpt_dir=path.join(
         home_dir, "local/opt/bert-models/bert-model"),
