@@ -78,7 +78,7 @@ def hp_parser() -> ArgumentParser:
         "--walkthrough-guided-exploration", action="store_true",
         default=None, help="only effective during training")
     parser.add_argument(
-        "--prob-complete-walkthrough", type=float, default=0.01,
+        "--prob-complete-walkthrough", type=float, default=None,
         help="the probability of using all steps in walkthrough at training")
     return parser
 
