@@ -881,9 +881,16 @@ class BaseAgent(Logging):
             action=self._last_action.action if self._last_action else "",
             master=master))
 
-        obs = infos[INFO_KEY.desc][0] if infos[INFO_KEY.desc][0] else ""
-        inv = (infos[INFO_KEY.inventory][0]
-               if infos[INFO_KEY.inventory][0] else "")
+        obs = infos[INFO_KEY.desc][0]
+        inv = infos[INFO_KEY.inventory][0]
+        if not isinstance(obs, str):
+            self.warning(
+                "detect non-str obs: {}, using empty string".format(obs))
+            obs = ""
+        if not isinstance(inv, str):
+            self.warning(
+                "detect non-str inventory: {}, use empty string".format(inv))
+            inv = ""
         state = ObsInventory(
             obs=obs,
             inventory=inv,
