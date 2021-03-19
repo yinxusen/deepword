@@ -883,13 +883,11 @@ class BaseAgent(Logging):
 
         obs = infos[INFO_KEY.desc][0]
         inv = infos[INFO_KEY.inventory][0]
+        # TODO: need to inform user if obs and inv are empty
+        # TODO: otherwise, the DSQN-related experiments are wrong
         if not isinstance(obs, str):
-            self.warning(
-                "detect non-str obs: {}, using empty string".format(obs))
             obs = ""
         if not isinstance(inv, str):
-            self.warning(
-                "detect non-str inventory: {}, use empty string".format(inv))
             inv = ""
         state = ObsInventory(
             obs=obs,
