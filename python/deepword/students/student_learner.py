@@ -33,6 +33,7 @@ from deepword.students.utils import batch_dqn_input, align_batch_str
 from deepword.tokenizers import init_tokens
 from deepword.trajectory import Trajectory
 from deepword.utils import flatten, softmax
+from deepword.utils import load_uniq_lines
 from deepword.utils import model_name2clazz, bytes2idx
 
 
@@ -74,6 +75,13 @@ class StudentLearner(Logging):
         self.sw = None
         self.train_steps = None
         self.queue = None
+
+        # filter allowed gids from memory during training
+        # if allowed_gids is empty, use all memory
+        self.allowed_gids = set()
+        fn_allowed_gids = path.join(self.model_dir, "allowed_gids.txt")
+        if path.isfile(fn_allowed_gids):
+            self.allowed_gids = set(load_uniq_lines(fn_allowed_gids))
 
     def _get_compatible_snapshot_tag(self, data_dir: str) -> List[int]:
         action_tags = get_path_tags(data_dir, self.action_prefix)
@@ -162,7 +170,7 @@ class StudentLearner(Logging):
             res_tj.append(
                 ActionMaster(
                     action=tj[i * 2], master=tj[i * 2 + 1],
-                    action_ids=[], master_ids=[]))
+                    action_ids=[], master_ids=[], objective_ids=[]))
             i += 1
 
         return res_tj
@@ -214,7 +222,7 @@ class StudentLearner(Logging):
     def _load_snapshot(
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector,
+    ) -> Tuple[List[Memolet], Trajectory[ActionMaster], ActionCollector,
                Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         if isinstance(memory[0], DRRNMemoTeacher):
@@ -232,7 +240,7 @@ class StudentLearner(Logging):
     def _load_snapshot_v1(
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector,
+    ) -> Tuple[List[Memolet], Trajectory[ActionMaster], ActionCollector,
                Dict[str, Dict[int, List[int]]]]:
         """load snapshot for old data"""
         old_memory = np.load(memo_path, allow_pickle=True)["data"]
@@ -260,7 +268,7 @@ class StudentLearner(Logging):
     def _load_snapshot_v2(
             self, memo_path: str, tjs_path: str, action_path: str,
             hs2tj_path: str
-    ) -> Tuple[List[Tuple], Trajectory[ActionMaster], ActionCollector,
+    ) -> Tuple[List[Memolet], Trajectory[ActionMaster], ActionCollector,
                Dict[str, Dict[int, List[int]]]]:
         memory = np.load(memo_path, allow_pickle=True)["data"]
         memory = list(filter(lambda x: isinstance(x, Memolet), memory))
@@ -306,7 +314,15 @@ class StudentLearner(Logging):
                 memory, tjs, action_collector, _ = self._load_snapshot(
                     mp, tp, ap, hsp)
                 if training:
-                    random.shuffle(memory)
+                    if not self.allowed_gids:
+                        random.shuffle(memory)
+                    else:
+                        self.info(
+                            "before gid filtering: {}".format(len(memory)))
+                        memory = [
+                            x for x in memory if x.gid in self.allowed_gids]
+                        self.info("after gid filtering: {}".format(len(memory)))
+                        random.shuffle(memory)
                 else:
                     memory = memory[:5000]
                 i = 0
