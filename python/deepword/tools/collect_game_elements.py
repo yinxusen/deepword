@@ -1,3 +1,4 @@
+import os
 import random
 import re
 
@@ -187,11 +188,13 @@ class Main(object):
         print("total scores: ", agent.total_score)
         print("mean score: {}, std: {}".format(
             np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
-        for gid, obj, walks in zip(
-                agent.game_id, agent.objectives, agent.walkthrough):
-            print("{}\t{}".format(gid, obj))
-            print(walks)
-            print()
+        # for gid, obj, walks in zip(
+        #         agent.game_id, agent.objectives, agent.walkthrough):
+        #     print("{}\t{}".format(gid, obj))
+        #     print(walks)
+        #     print()
+        for fn_game, gid in zip(game_files, agent.game_id):
+            print("{}\t{}".format(os.path.basename(fn_game), gid))
 
 
 if __name__ == '__main__':

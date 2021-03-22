@@ -78,10 +78,13 @@ class StudentLearner(Logging):
 
         # filter allowed gids from memory during training
         # if allowed_gids is empty, use all memory
+        # allowed_gids.txt:
+        # game name [TAB] game ID
         self.allowed_gids = set()
         fn_allowed_gids = path.join(self.model_dir, "allowed_gids.txt")
         if path.isfile(fn_allowed_gids):
-            self.allowed_gids = set(load_uniq_lines(fn_allowed_gids))
+            self.allowed_gids = set(
+                [x.split("\t")[1] for x in load_uniq_lines(fn_allowed_gids)])
 
     def _get_compatible_snapshot_tag(self, data_dir: str) -> List[int]:
         action_tags = get_path_tags(data_dir, self.action_prefix)
