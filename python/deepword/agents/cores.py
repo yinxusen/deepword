@@ -224,12 +224,8 @@ class TFCore(BaseCore, ABC):
 
     def _get_target_model(self) -> Tuple[Any, Session]:
         if self.target_model is None:
-            target_model = self.model
-            target_sess = self.sess
-        else:
-            target_model = self.target_model
-            target_sess = self.target_sess
-        return target_model, target_sess
+            self.create_or_reload_target_model()
+        return self.target_model, self.target_sess
 
     def _create_model_instance(self, device):
         model_creator = model_name2clazz(self.hp.model_creator)
