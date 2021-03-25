@@ -26,7 +26,7 @@ class CnnDSQN(BaseDQN):
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
             "src_seg": tf.placeholder(tf.int32, [None, None]),
-            "src_len": tf.placeholder(tf.float32, [None]),
+            "src_len": tf.placeholder(tf.int32, [None]),
             "action_idx": tf.placeholder(tf.int32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
@@ -35,9 +35,9 @@ class CnnDSQN(BaseDQN):
             "actions_repeats": tf.placeholder(tf.int32, [None]),
             "actions_len": tf.placeholder(tf.float32, [None]),
             "snn_src": tf.placeholder(tf.int32, [None, None]),
-            "snn_src_len": tf.placeholder(tf.float32, [None]),
+            "snn_src_len": tf.placeholder(tf.int32, [None]),
             "snn_src2": tf.placeholder(tf.int32, [None, None]),
-            "snn_src2_len": tf.placeholder(tf.float32, [None]),
+            "snn_src2_len": tf.placeholder(tf.int32, [None]),
             "labels": tf.placeholder(tf.float32, [None])
         }
 
@@ -49,7 +49,7 @@ class CnnDSQN(BaseDQN):
             kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     def get_q_actions(self):
-        h_state = self.get_h_state(self.inputs["src"])
+        h_state = self.get_h_state(self.inputs["src"], self.inputs["src_len"])
         new_h = self.wt(h_state)
         new_h_var = self.wt_var(h_state)
         h_state_expanded = tf.repeat(
@@ -67,18 +67,20 @@ class CnnDSQN(BaseDQN):
             tf.multiply(h_state_expanded, h_actions), axis=-1)
         return q_actions, new_h
 
-    def get_h_state(self, src):
+    def get_h_state(self, src, src_len):
         with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
             h_state = dqn.encoder_cnn(
-                src,
+                src, src_len,
                 self.src_embeddings, self.pos_embeddings,
                 self.filter_sizes, self.num_filters, self.hp.embedding_size,
                 self.is_infer)
         return h_state
 
     def is_semantic_same(self):
-        h_state = self.get_h_state(self.inputs["snn_src"])
-        h_state2 = self.get_h_state(self.inputs["snn_src2"])
+        h_state = self.get_h_state(
+            self.inputs["snn_src"], self.inputs["snn_src_len"])
+        h_state2 = self.get_h_state(
+            self.inputs["snn_src2"], self.inputs["snn_src2_len"])
         new_h_var = self.wt_var(h_state)
         new_h_var2 = self.wt_var(h_state2)
         diff_two_states = tf.abs(new_h_var - new_h_var2)
@@ -328,7 +330,7 @@ class TransformerDSQN(CnnDSQN):
             num_layers=1, d_model=self.d_model, num_heads=8, dff=256,
             input_vocab_size=self.hp.vocab_size)
 
-    def get_h_state(self, src):
+    def get_h_state(self, src, src_len):
         with tf.variable_scope("drrn-encoder", reuse=tf.AUTO_REUSE):
             padding_mask = txf.create_padding_mask(src)
             inner_state = self.attn_encoder(

@@ -29,7 +29,7 @@ class BaseDQN(Logging):
         self.optimizer = tf.train.AdamOptimizer(self.hp.learning_rate)
         self.inputs = {
             "src": tf.placeholder(tf.int32, [None, None]),
-            "src_len": tf.placeholder(tf.float32, [None]),
+            "src_len": tf.placeholder(tf.int32, [None]),
             "action_idx": tf.placeholder(tf.int32, [None]),
             "expected_q": tf.placeholder(tf.float32, [None]),
             "b_weight": tf.placeholder(tf.float32, [None])
@@ -144,7 +144,8 @@ class CnnDQN(BaseDQN):
 
     def get_q_actions(self):
         inner_states = dqn.encoder_cnn(
-            self.inputs["src"], self.src_embeddings, self.pos_embeddings,
+            self.inputs["src"], self.inputs["src_len"],
+            self.src_embeddings, self.pos_embeddings,
             self.filter_sizes, self.num_filters, self.hp.embedding_size,
             self.is_infer, num_channels=1)
         q_actions = tf.layers.dense(

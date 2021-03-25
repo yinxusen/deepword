@@ -95,8 +95,41 @@ def encoder_cnn_base(
     return inner_state
 
 
+def reverse_pos_embedding(src_len, pos_embeddings):
+    """
+    Lookup for reversed position embedding for CNN encoder.
+    E.g., given src_len = [2, 3, 7, 1], the function select position embeddings
+    according to the following indexes:
+
+    [[1, 0, 0, 0, 0, 0, 0],
+     [2, 1, 0, 0, 0, 0, 0],
+     [6, 5, 4, 3, 2, 1, 0],
+     [0, 0, 0, 0, 0, 0, 0]]
+
+    And finally, those position embeddings that exceed src_len will be masked
+    out as zeros.
+
+    Args:
+        src_len: (tf.int32, [batch_size])
+        pos_embeddings: (tf.float32, [maximum_length, embedding_size])
+
+    Returns:
+        selected position embedding for src_len
+    """
+    batch_size = tf.shape(src_len)[0]
+    pos_idx = (src_len[:, tf.newaxis] - 1 -
+               tf.reshape(
+                   tf.tile(tf.range(tf.reduce_max(src_len)), [batch_size]),
+                   (batch_size, -1))
+               )
+    pos_idx *= tf.sequence_mask(src_len, dtype=tf.int32)
+    pos_emb = tf.nn.embedding_lookup(pos_embeddings, pos_idx)
+    pos_emb *= tf.sequence_mask(src_len, dtype=tf.float32)[:, :, tf.newaxis]
+    return pos_emb
+
+
 def encoder_cnn(
-        src, src_embeddings, pos_embeddings, filter_sizes, num_filters,
+        src, src_len, src_embeddings, pos_embeddings, filter_sizes, num_filters,
         embedding_size, is_infer=False, num_channels=2, activation="tanh"):
     """
     encode state with CNN, refer to
@@ -104,6 +137,7 @@ def encoder_cnn(
 
     Args:
         src: placeholder, (tf.int32, [batch_size, seq_len])
+        src_len: placeholder, (tf.int32, [batch_size])
         src_embeddings: (tf.float32, [vocab_size, embedding_size])
         pos_embeddings: (tf.float32, [max_position_size, embedding_size])
         filter_sizes: list of ints, e.g. [3, 4, 5]
@@ -118,7 +152,8 @@ def encoder_cnn(
     """
     with tf.variable_scope("cnn_encoder"):
         src_emb = tf.nn.embedding_lookup(src_embeddings, src)
-        pos_emb = tf.slice(pos_embeddings, [0, 0], [tf.shape(src_emb)[1], -1])
+        src_emb *= tf.sequence_mask(src_len, dtype=tf.float32)[:, :, tf.newaxis]
+        pos_emb = reverse_pos_embedding(src_len, pos_embeddings)
         src_pos_emb = src_emb + pos_emb
         if num_channels == 1:
             in_tn = tf.expand_dims(src_pos_emb, axis=-1)  # channel dimension
