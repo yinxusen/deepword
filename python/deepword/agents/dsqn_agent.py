@@ -1,13 +1,14 @@
 from multiprocessing.pool import ThreadPool
 from os import remove
-from typing import Dict, Tuple, List, Any, Optional
+from typing import Dict, Tuple, List, Any
 
 import numpy as np
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.competition_agent import CompetitionAgent
-from deepword.agents.utils import ActionDesc
+from deepword.agents.utils import ActionMaster, INFO_KEY, ObsInventory, ACT_TYPE
 from deepword.agents.utils import Memolet
+from deepword.agents.utils import get_hash_state
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import get_snn_keys
 from deepword.agents.zork_agent import ZorkAgent
@@ -207,12 +208,81 @@ class TeacherAgent(DSQNCompetitionAgent):
     TeacherAgent is a DSQNAgent so that it can collect hs2tj data.
     TeacherAgent also uses filtered action sets as the CompetitionAgent, because
     other actions are meaningless to cooking agents.
-    TeacherAgent won't use rule_based_policy and  random_walk_for_collecting_fp
-    since it assign Q-values to almost random actions.
+    Different with normal Agent, the teacher agent only store random action
+    and policy action into its memory.
     """
-    def _rule_based_policy(self, actions, instant_reward):
-        return None
 
-    def _random_walk_for_collecting_fp(
-            self, actions: List[str]) -> Optional[ActionDesc]:
-        return None
+    def _collect_new_sample(
+            self, master: str, instant_reward: float, dones: List[bool],
+            infos: Dict[str, List[Any]]) -> Tuple[
+            List[str], np.ndarray, np.ndarray, float]:
+        """
+        This function is copied from the BaseAgent.
+        The only change is to only record random-walk actions and policy-drrn
+        actions into memory.
+        """
+
+        master_tokens = self.tokenizer.convert_tokens_to_ids(
+            self.tokenizer.tokenize(master))
+        if self._last_action is not None:
+            if self.hp.action_padding_in_tj:
+                action_tokens = list(self._last_action.token_idx)
+            else:  # trim action ids to its actual length
+                action_tokens = list(
+                    self._last_action.token_idx[:self._last_action.action_len])
+        else:
+            action_tokens = []
+
+        self.tjs.append(ActionMaster(
+            action_ids=action_tokens,
+            master_ids=master_tokens,
+            objective_ids=self._objective_ids,
+            action=self._last_action.action if self._last_action else "",
+            master=master))
+
+        obs = infos[INFO_KEY.desc][0]
+        inv = infos[INFO_KEY.inventory][0]
+        # TODO: need to inform user if obs and inv are empty
+        # TODO: otherwise, the DSQN-related experiments are wrong
+        if not isinstance(obs, str):
+            obs = ""
+        if not isinstance(inv, str):
+            inv = ""
+        state = ObsInventory(
+            obs=obs,
+            inventory=inv,
+            sid=self.tjs.get_last_sid(),
+            hs=get_hash_state(obs, inv))
+        self.stc.append(state)
+
+        admissible_actions = self._get_admissible_actions(infos)
+        sys_action_mask = self.actor.extend(admissible_actions)
+        effective_actions = self._prepare_actions(admissible_actions)
+        action_mask = self.actor.extend(effective_actions)
+
+        # TODO: a better architecture to avoid copy the whole function?
+        if (self.tjs.get_last_sid() > 0
+                and self._last_action.action_type
+                in {ACT_TYPE.policy_drrn, ACT_TYPE.rnd}):
+            memo_let = Memolet(
+                tid=self.tjs.get_current_tid(),
+                sid=self.tjs.get_last_sid(),
+                gid=self.game_id,
+                aid=self._last_action.action_idx,
+                token_id=self._last_action.token_idx,
+                a_len=self._last_action.action_len,
+                a_type=self._last_action.action_type,
+                reward=instant_reward,
+                is_terminal=dones[0],
+                action_mask=self._last_action_mask,
+                sys_action_mask=self._last_sys_action_mask,
+                next_action_mask=action_mask,
+                next_sys_action_mask=sys_action_mask,
+                q_actions=self._last_action.q_actions
+            )
+            original_data = self.memo.append(memo_let)
+            if isinstance(original_data, Memolet):
+                if original_data.is_terminal:
+                    self._stale_tids.append(original_data.tid)
+
+        return effective_actions, action_mask, sys_action_mask, instant_reward

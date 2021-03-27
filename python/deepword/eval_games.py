@@ -115,16 +115,15 @@ def eval_agent(
 
 def agent_collect_data(
         agent, game_files, max_episode_steps, epoch_size, epoch_limit,
-        max_randomness):
+        max_randomness=0.5):
     requested_infos = agent.select_additional_infos()
     env_id = textworld.gym.register_games(
         game_files, requested_infos, batch_size=1,
         max_episode_steps=max_episode_steps,
         name="eval")
     game_env = gym.make(env_id)
-    # randomness won't exceed 0.5 for now
-    # larger randomness would cause too many useless trajectories
-    agent.eps = random.random() * min(max_randomness, 1)
+    # use fix randomness value, default 0.5
+    agent.eps = max_randomness
     eprint("new randomness: {}".format(agent.eps))
 
     obs, infos = game_env.reset()
@@ -149,16 +148,15 @@ def agent_collect_data(
 
 def agent_collect_data_v2(
         agent, game_files, max_episode_steps, epoch_size, epoch_limit,
-        max_randomness):
+        max_randomness=0.5):
     requested_infos = agent.select_additional_infos()
     env_id = textworld.gym.register_games(
         game_files, requested_infos, batch_size=1,
         max_episode_steps=max_episode_steps * 3,
         name="eval")
     game_env = gym.make(env_id)
-    # randomness won't exceed 0.5 for now
-    # larger randomness would cause too many useless trajectories
-    agent.eps = random.random() * min(max_randomness, 1)
+    # use fix randomness value, default 0.5
+    agent.eps = max_randomness
     eprint("new randomness: {}".format(agent.eps))
 
     obs, infos = game_env.reset()
