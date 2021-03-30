@@ -475,7 +475,8 @@ def process_gen_data(args):
     hp.set_hparam("always_compute_policy", True)
     hp.set_hparam("max_snapshot_to_keep", args.epoch_limit)
     assert hp.agent_clazz == "TeacherAgent" or \
-           hp.agent_clazz == "DSQNZorkAgent", "Not supported agent class"
+           hp.agent_clazz == "DSQNZorkAgent" or \
+           hp.agent_clazz == "BaseAgent", "Not supported agent class"
 
     agent_clazz = agent_name2clazz(hp.agent_clazz)
     agent = agent_clazz(hp, args.model_dir)
