@@ -152,8 +152,7 @@ def encoder_cnn(
     """
     with tf.variable_scope("cnn_encoder"):
         src_emb = tf.nn.embedding_lookup(src_embeddings, src)
-        src_emb *= tf.sequence_mask(src_len, dtype=tf.float32)[:, :, tf.newaxis]
-        pos_emb = reverse_pos_embedding(src_len, pos_embeddings)
+        pos_emb = tf.slice(pos_embeddings, [0, 0], [tf.shape(src_emb)[1], -1])
         src_pos_emb = src_emb + pos_emb
         if num_channels == 1:
             in_tn = tf.expand_dims(src_pos_emb, axis=-1)  # channel dimension
