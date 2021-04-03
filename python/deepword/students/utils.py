@@ -118,9 +118,6 @@ def tj2ids(
         master_mask += [1] * len(master_ids)
     # TODO: objective_ids cannot be ignored by the hp parameter.
     # TODO: though it can be disabled by empty objective_ids
-    print("ids", ids)
     ids += trajectory[-1].objective_ids
     master_mask += [1] * len(trajectory[-1].objective_ids)
-
-    print("after objective ids", ids)
     return ids, master_mask
