@@ -3,8 +3,12 @@ Copied from https://www.tensorflow.org/beta/tutorials/text/transformer
 decode function added by Xusen Yin
 """
 
+import copy
+
+import bert.modeling as b_model
 import tensorflow as tf
 
+from deepword.hparams import conventions
 from deepword.models.utils import positional_encoding
 
 
@@ -868,34 +872,305 @@ def sequential_decoding(
 class Transformer(tf.keras.Model):
     def __init__(
             self, num_layers, d_model, num_heads, dff, input_vocab_size,
-            target_vocab_size, dropout_rate=0.1, with_pointer=True):
+            target_vocab_size, dropout_rate=0.1, with_pointer=True,
+            copy_mask=None):
         super(Transformer, self).__init__()
         self.encoder = Encoder(
             num_layers, d_model, num_heads, dff, input_vocab_size, dropout_rate)
         self.decoder = Decoder(
             num_layers, d_model, num_heads, dff, target_vocab_size,
             dropout_rate, with_pointer)
+        self.copy_mask = copy_mask
 
-    def call(self, inp, tar, training, copy_mask=None):
+    def call(self, inp, tar, training):
         enc_padding_mask = create_padding_mask(inp)
         dec_padding_mask = enc_padding_mask
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(inp, training, enc_padding_mask, x_seg=None)
         look_ahead_mask = create_decode_masks(tar)
         final_output, p_gen, gen_logits, copy_logits = self.decoder(
-            tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask,
-            copy_mask)
+            tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask)
         return final_output, p_gen, gen_logits, copy_logits
 
     def decode(
             self, enc_x, training, max_tar_len, sos_id, eos_id, padding_id,
-            use_greedy=True, beam_size=1, temperature=1., copy_mask=None):
+            use_greedy=True, beam_size=1, temperature=1.):
         # ======= encoding input sentences =======
         enc_padding_mask = create_padding_mask(enc_x)
         # (batch_size, inp_seq_len, d_model)
         enc_output = self.encoder(enc_x, training, enc_padding_mask, x_seg=None)
         # ======= end of encoding ======
         return sequential_decoding(
-            self.decoder, copy_mask, enc_x, enc_output, training,
+            self.decoder, self.copy_mask, enc_x, enc_output, training,
+            max_tar_len, sos_id, eos_id, padding_id,
+            use_greedy, beam_size, temperature)
+
+
+class BertDecoderModel(object):
+    def __init__(self,
+                 config,
+                 is_training,
+                 input_ids,
+                 input_mask,
+                 token_type_ids=None,
+                 use_one_hot_embeddings=False,
+                 scope=None):
+        """
+        BertDecoderModel, the only difference with BertModel is the decoder
+        masking.
+
+        We also remove the pooler, since we don't need that in decoding
+
+        With the mask, we turn Bert into left-to-right training style
+         for decoding
+
+        input_mask: a 3D decoding mask
+        """
+        config = copy.deepcopy(config)
+        if not is_training:
+            config.hidden_dropout_prob = 0.0
+            config.attention_probs_dropout_prob = 0.0
+
+        input_shape = b_model.get_shape_list(input_ids, expected_rank=2)
+        batch_size = input_shape[0]
+        seq_length = input_shape[1]
+
+        if token_type_ids is None:
+            token_type_ids = tf.zeros(
+                shape=[batch_size, seq_length], dtype=tf.int32)
+
+        with tf.variable_scope(scope, default_name="bert"):
+            with tf.variable_scope("embeddings"):
+                # Perform embedding lookup on the word ids.
+                (self.embedding_output, self.embedding_table
+                 ) = b_model.embedding_lookup(
+                    input_ids=input_ids,
+                    vocab_size=config.vocab_size,
+                    embedding_size=config.hidden_size,
+                    initializer_range=config.initializer_range,
+                    word_embedding_name="word_embeddings",
+                    use_one_hot_embeddings=use_one_hot_embeddings)
+
+                self.embedding_output = b_model.embedding_postprocessor(
+                    input_tensor=self.embedding_output,
+                    use_token_type=True,
+                    token_type_ids=token_type_ids,
+                    token_type_vocab_size=config.type_vocab_size,
+                    token_type_embedding_name="token_type_embeddings",
+                    use_position_embeddings=True,
+                    position_embedding_name="position_embeddings",
+                    initializer_range=config.initializer_range,
+                    max_position_embeddings=config.max_position_embeddings,
+                    dropout_prob=config.hidden_dropout_prob)
+
+            with tf.variable_scope("encoder"):
+                self.all_encoder_layers = b_model.transformer_model(
+                    input_tensor=self.embedding_output,
+                    attention_mask=input_mask,
+                    hidden_size=config.hidden_size,
+                    num_hidden_layers=config.num_hidden_layers,
+                    num_attention_heads=config.num_attention_heads,
+                    intermediate_size=config.intermediate_size,
+                    intermediate_act_fn=b_model.get_activation(
+                        config.hidden_act),
+                    hidden_dropout_prob=config.hidden_dropout_prob,
+                    attention_probs_dropout_prob=(
+                        config.attention_probs_dropout_prob),
+                    initializer_range=config.initializer_range,
+                    do_return_all_layers=True)
+
+            self.sequence_output = self.all_encoder_layers[-1]
+
+    def get_sequence_output(self):
+        return self.sequence_output
+
+    def get_all_encoder_layers(self):
+        return self.all_encoder_layers
+
+    def get_embedding_output(self):
+        return self.embedding_output
+
+    def get_embedding_table(self):
+        return self.embedding_table
+
+
+class BertDecoder(tf.keras.layers.Layer):
+    def __init__(
+            self, num_layers, d_model, num_heads, dff, tgt_vocab_size,
+            dropout_rate=0.1, with_pointer=False):
+        super(BertDecoder, self).__init__()
+
+        self.d_model = d_model
+        self.num_layers = num_layers
+        self.tgt_vocab_size = tgt_vocab_size
+        self.with_pointer = with_pointer
+
+        self.dec_layers = [
+            DecoderLayer(d_model, num_heads, dff, dropout_rate)
+            for _ in range(num_layers)]
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.logit_gen_layer = tf.keras.layers.Dense(units=1, use_bias=True)
+        self.final_layer = tf.keras.layers.Dense(
+            units=tgt_vocab_size, use_bias=True)
+
+        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(
+            self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(
+            self.bert_init_ckpt_dir)
+        self.bert_config = b_model.BertConfig.from_json_file(
+            self.bert_config_file)
+
+    def call(
+            self, x, enc_x, enc_output, training,
+            look_ahead_mask, padding_mask, copy_mask=None):
+        """
+        decode with pointer
+        :param x: decoder input
+        :param enc_x: encoder input
+        :param enc_output: encoder encoded result
+        :param training:
+        :param look_ahead_mask:
+        :param padding_mask:
+        :param copy_mask: dense vector size |V| to mark all tokens that
+         skip copying with 1; otherwise, 0.
+        :return:
+        """
+
+        # remove the num_heads dimension
+        bert_x_masks = tf.squeeze(1 - look_ahead_mask, axis=1)
+        with tf.variable_scope("bert-decoder", reuse=tf.AUTO_REUSE):
+            bert_model = BertDecoderModel(
+                config=self.bert_config, is_training=training,
+                input_ids=x, input_mask=bert_x_masks)
+        x = bert_model.get_sequence_output()
+
+        # TODO: the initialization is out of here for circumvent while_loop
+        # no bert init here
+
+        seq_len = tf.shape(x)[1]
+        attention_logits = []
+        raw_x = x
+        x = self.dropout(x, training=training)
+
+        for i in range(self.num_layers):
+            x, attn_logits = self.dec_layers[i](
+                x, enc_output, training, look_ahead_mask, padding_mask)
+            attention_logits.append(attn_logits)
+
+        x = self.dropout(x, training=training)
+        gen_logits = self.final_layer(x)
+        gen_logits = gen_logits - tf.reduce_logsumexp(
+            gen_logits, axis=-1, keepdims=True)
+
+        idx_tar_src = get_sparse_idx_for_copy(enc_x, target_seq_len=seq_len)
+        # (batch_size, target_seq_len, src_seq_len)
+        attn_weights = tf.nn.softmax(attention_logits[-1])
+
+        # [batch_size, target_seq_len, tgt_vocab_size]
+        copy_logits = tf.log(tf.map_fn(
+            fn=lambda y: tf.scatter_nd(
+                y[0], y[1], [seq_len, self.tgt_vocab_size]),
+            elems=(idx_tar_src, attn_weights), dtype=tf.float32) + 1e-10)
+        if copy_mask is not None:
+            copy_logits += (copy_mask * -1e9)[None, None, :]
+        copy_logits = copy_logits - tf.reduce_logsumexp(
+            copy_logits, axis=-1, keepdims=True)
+
+        # the combined features is different with LSTM-PGN
+        # LSTM-PGN uses three features, decoder input, decoder state, and
+        # context vectors. but for transformer, the decoder state and context
+        # vectors are highly correlated, so we use one of them.
+        combined_features = tf.concat([x, raw_x], axis=-1)
+        combined_features = self.dropout(combined_features, training=training)
+        # (batch_size, dec_t, 1)
+        logit_gen = self.logit_gen_layer(combined_features)
+        # normalized logit of gen
+        n_logit_gen = -tf.reduce_logsumexp(
+            tf.concat([tf.zeros_like(logit_gen), -logit_gen], axis=-1),
+            axis=-1, keepdims=True)
+        n_logit_copy = -logit_gen + n_logit_gen
+
+        if self.with_pointer:
+            total_logits = tf.reduce_logsumexp(
+                tf.stack(
+                    [n_logit_gen + gen_logits, n_logit_copy + copy_logits],
+                    axis=-1),
+                axis=-1)
+        else:
+            total_logits = gen_logits
+
+        return total_logits, tf.exp(n_logit_gen), gen_logits, copy_logits
+
+
+class BertTransformer(tf.keras.Model):
+    def __init__(
+            self, num_layers, d_model, num_heads, dff,
+            target_vocab_size, dropout_rate=0.1, with_pointer=True,
+            copy_mask=None):
+        super(BertTransformer, self).__init__()
+        # self.decoder = Decoder(
+        #     num_layers, d_model, num_heads, dff, target_vocab_size,
+        #     dropout_rate, with_pointer)
+        self.decoder = BertDecoder(
+             num_layers, d_model, num_heads, dff, target_vocab_size,
+             dropout_rate, with_pointer)
+        self.bert_init_ckpt_dir = conventions.bert_ckpt_dir
+        self.bert_config_file = "{}/bert_config.json".format(
+            self.bert_init_ckpt_dir)
+        self.bert_ckpt_file = "{}/bert_model.ckpt".format(
+            self.bert_init_ckpt_dir)
+        self.dropout = tf.keras.layers.Dropout(rate=0.4)
+        self.bert_config = b_model.BertConfig.from_json_file(
+            self.bert_config_file)
+        self.copy_mask = copy_mask
+
+    def call(self, inp, inp_len, inp_type_ids, tar, training):
+        enc_padding_mask = create_padding_mask(inp)
+        dec_padding_mask = enc_padding_mask
+
+        # bert inp mask is just the reverse of enc padding mask.
+        bert_inp_masks = tf.sequence_mask(inp_len, dtype=tf.int32)
+
+        with tf.variable_scope("bert-encoder", reuse=tf.AUTO_REUSE):
+            bert_model = b_model.BertModel(
+                config=self.bert_config, is_training=training,
+                input_ids=inp, input_mask=bert_inp_masks,
+                token_type_ids=inp_type_ids)
+        enc_output = bert_model.get_sequence_output()
+
+        look_ahead_mask = create_decode_masks(tar)
+        final_output, p_gen, gen_logits, copy_logits = self.decoder(
+            tar, inp, enc_output, training, look_ahead_mask, dec_padding_mask,
+            self.copy_mask)
+
+        # initialize bert from checkpoint file
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-encoder/bert/"})
+
+        tf.train.init_from_checkpoint(
+            self.bert_ckpt_file,
+            assignment_map={"bert/": "bert-decoder/bert/"})
+
+        return final_output, p_gen, gen_logits, copy_logits
+
+    def decode(
+            self, enc_x, enc_x_len, enc_x_type_ids,
+            training, max_tar_len, sos_id, eos_id, padding_id,
+            use_greedy=True, beam_size=1, temperature=1.):
+        # ======= encoding input sentences =======
+        # bert inp mask is just the reverse of enc padding mask.
+        bert_inp_masks = tf.sequence_mask(enc_x_len, dtype=tf.int32)
+
+        with tf.variable_scope("bert-encoder", reuse=tf.AUTO_REUSE):
+            bert_model = b_model.BertModel(
+                config=self.bert_config, is_training=training,
+                input_ids=enc_x, input_mask=bert_inp_masks,
+                token_type_ids=enc_x_type_ids)
+        enc_output = bert_model.get_sequence_output()
+        # ======= end of encoding ======
+        return sequential_decoding(
+            self.decoder, self.copy_mask, enc_x, enc_output, training,
             max_tar_len, sos_id, eos_id, padding_id,
             use_greedy, beam_size, temperature)
