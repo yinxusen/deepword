@@ -324,7 +324,9 @@ class PseudoSeq2SeqDRRN(CnnDRRN):
     def get_q_actions(self):
         src = self.inputs["src"]
         src_len = self.inputs["src_len"]
-        src_masks = tf.sequence_mask(src_len, dtype=tf.int32)
+        max_len = tf.reduce_max([tf.reduce_max(src_len), tf.shape(src)[1]])
+        src_masks = tf.sequence_mask(
+            src_len, maxlen=max_len, dtype=tf.int32)
         bert_config = b_model.BertConfig.from_json_file(self.bert_config_file)
 
         with tf.variable_scope("tj-bert-encoder"):
