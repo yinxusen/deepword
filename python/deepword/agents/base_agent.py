@@ -15,7 +15,8 @@ from deepword.agents.utils import ACT, ObsInventory, INFO_KEY, \
 from deepword.agents.utils import categorical_without_replacement, \
     get_best_1d_q, remove_zork_version_info, get_path_tags, get_hash_state
 from deepword.floor_plan import FloorPlanCollector
-from deepword.hparams import save_hparams, output_hparams, conventions
+from deepword.hparams import save_hparams, output_hparams, conventions, \
+    load_hparams
 from deepword.tokenizers import init_tokens, Tokenizer
 from deepword.trajectory import Trajectory
 from deepword.tree_memory import TreeMemory
@@ -58,6 +59,11 @@ class BaseAgent(Logging):
 
         core_class = core_name2clazz(self.hp.core_clazz)
         self.core = core_class(self.hp, self.model_dir)
+        # need to load hparams and model from NLUCore model
+        model_dir2 = ""
+        hp2 = load_hparams(
+            fn_model_config=path.join(model_dir2, "hparams.json"))
+        self.prior_core = core_name2clazz("NLUCore")(hp2, model_dir2)
 
         self.tjs: Optional[Trajectory[ActionMaster]] = None
         self.memo: Optional[TreeMemory] = None
@@ -336,6 +342,7 @@ class BaseAgent(Logging):
         self.core.init(
             is_training=self.is_training, load_best=load_best,
             restore_from=restore_from)
+        self.prior_core.init(is_training=False, load_best=False)
 
         if self.is_training:
             # save hparams if training
@@ -538,6 +545,10 @@ class BaseAgent(Logging):
         q_actions = self.core.policy(
             trajectory, state,
             self.actor.action_matrix, self.actor.action_len, action_mask)
+        q_prior = self.prior_core.policy(
+            trajectory, state,
+            self.actor.action_matrix, self.actor.action_len, action_mask)
+        q_actions += q_prior
 
         actions_with_q_values = list(reversed(sorted(zip(
             [self.actor.actions[mid] for mid in action_mask],
@@ -780,7 +791,7 @@ class BaseAgent(Logging):
         action_matrix = (
             [self.actor.get_action_matrix(gid) for gid in game_id])
 
-        b_weight = self.core.train_one_batch(
+        b_weight = self.core.train_one_batch2(
             pre_trajectories=pre_trajectories,
             post_trajectories=post_trajectories,
             pre_states=pre_states,

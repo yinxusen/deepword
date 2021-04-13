@@ -547,6 +547,31 @@ class NLUCore(TFCore):
             summaries, step - self.hp.observation_t)
         return abs_loss
 
+    def batch_qs_with_actions(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            action_idx: List[int],
+            ) -> np.ndarray:
+
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        # only choose and concatenate actions appearing in action_idx
+        pre_action_idx_mask = [np.asarray([x]) for x in action_idx]
+        inp, seg_tj_action, inp_len, _, _ = batch_bert_nlu_input(
+            action_matrix, action_len, pre_action_idx_mask,
+            pre_src, pre_src_len,
+            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+
+        q_actions = self.sess.run(
+            self.model.q_actions,
+            feed_dict={
+                self.model.src_: inp,
+                self.model.src_len_: inp_len,
+                self.model.seg_tj_action_: seg_tj_action
+            })
+        return q_actions
+
     def policy(
             self,
             trajectory: List[ActionMaster],
@@ -911,6 +936,124 @@ class DRRNCore(TFCore):
         expected_q = self._compute_expected_q(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards)
+        t1_end = ctime()
+
+        t2 = ctime()
+        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
+        t2_end = ctime()
+
+        t3 = ctime()
+        (actions, actions_lens, actions_repeats, id_real2mask
+         ) = batch_drrn_action_input(
+            action_matrix, action_len, pre_action_mask)
+        action_batch_ids = id_real2batch(
+            action_idx, id_real2mask, actions_repeats)
+        t3_end = ctime()
+
+        t4 = ctime()
+        _, summaries, loss_eval, abs_loss = self.sess.run(
+            [self.model.train_op, self.model.train_summary_op, self.model.loss,
+             self.model.abs_loss],
+            feed_dict={
+                self.model.src_: pre_src,
+                self.model.src_len_: pre_src_len,
+                self.model.b_weight_: b_weight,
+                self.model.action_idx_: action_batch_ids,
+                self.model.expected_q_: expected_q,
+                self.model.actions_: actions,
+                self.model.actions_len_: actions_lens,
+                self.model.actions_repeats_: actions_repeats})
+        t4_end = ctime()
+
+        self.debug(report_status([
+            ("t1", t1_end - t1),
+            ("t2", t2_end - t2),
+            ("t3", t3_end - t3),
+            ("t4", t4_end - t4)
+        ]))
+
+        self.train_summary_writer.add_summary(
+            summaries, step - self.hp.observation_t)
+        return abs_loss
+
+    def _compute_expected_q2(
+            self,
+            action_mask: List[np.ndarray],
+            trajectories: List[List[ActionMaster]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            prior_core: BaseCore) -> np.ndarray:
+
+        post_src, post_src_len = self.batch_trajectory2input(trajectories)
+        actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
+            action_matrix, action_len, action_mask)
+
+        target_model, target_sess = self._get_target_model()
+        post_qs_target = target_sess.run(
+            target_model.q_actions,
+            feed_dict={
+                target_model.src_: post_src,
+                target_model.src_len_: post_src_len,
+                target_model.actions_: actions,
+                target_model.actions_len_: actions_lens,
+                target_model.actions_repeats_: actions_repeats})
+
+        post_qs_dqn = self.sess.run(
+            self.model.q_actions,
+            feed_dict={
+                self.model.src_: post_src,
+                self.model.src_len_: post_src_len,
+                self.model.actions_: actions,
+                self.model.actions_len_: actions_lens,
+                self.model.actions_repeats_: actions_repeats})
+
+        post_qs_prior = np.concatenate([
+            prior_core.policy(
+                trajectory=tj,
+                state=None,
+                action_matrix=am,
+                action_len=al,
+                action_mask=mask)
+            for tj, am, al, mask in zip(
+                trajectories, action_matrix, action_len, action_mask)],
+            axis=-1)
+
+        post_qs_dqn += post_qs_prior
+        post_qs_target += post_qs_prior
+
+        best_actions_idx = get_best_batch_ids(post_qs_dqn, actions_repeats)
+        best_qs = post_qs_target[best_actions_idx]
+        expected_q = (
+                np.asarray(rewards) +
+                np.asarray([not x for x in dones]) * self.hp.gamma * best_qs)
+        return expected_q
+
+    def train_one_batch2(
+            self,
+            pre_trajectories: List[List[ActionMaster]],
+            post_trajectories: List[List[ActionMaster]],
+            pre_states: Optional[List[ObsInventory]],
+            post_states: Optional[List[ObsInventory]],
+            action_matrix: List[np.ndarray],
+            action_len: List[np.ndarray],
+            pre_action_mask: List[np.ndarray],
+            post_action_mask: List[np.ndarray],
+            dones: List[bool],
+            rewards: List[float],
+            action_idx: List[int],
+            b_weight: np.ndarray,
+            step: int,
+            others: Any,
+            prior_core: NLUCore) -> np.ndarray:
+        t1 = ctime()
+        expected_q = self._compute_expected_q2(
+            post_action_mask, post_trajectories, action_matrix, action_len,
+            dones, rewards, prior_core)
+        pre_qs_prior = prior_core.batch_qs_with_actions(
+            pre_trajectories, action_matrix, action_len, action_idx)
+        expected_q -= pre_qs_prior
         t1_end = ctime()
 
         t2 = ctime()
