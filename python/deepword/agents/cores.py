@@ -4,6 +4,7 @@ from copy import deepcopy
 from os import path
 from typing import Dict
 from typing import Optional, List, Any, Tuple
+from collections import namedtuple
 
 import numpy as np
 import tensorflow as tf
@@ -158,6 +159,108 @@ class BaseCore(Logging, ABC):
             restore_from: the path to restore weights
         """
         raise NotImplementedError()
+
+
+class TrieNode(object):
+    def __init__(self):
+        self.complete: bool = False
+        self.next: Dict[int, TrieNode] = dict()
+        self.val: float = 0
+
+
+class TrieNodeObj(namedtuple("TrieNodeObj", ("complete", "next", "val"))):
+    pass
+
+
+class TrieTree(object):
+    def __init__(self):
+        self.root: TrieNode = TrieNode()
+
+    def find(self, inp: List[int]) -> Optional[float]:
+        root = self.root
+        for idx in inp:
+            if idx in root.next:
+                root = root.next[idx]
+            else:
+                return None
+        if root.complete:
+            return root.val
+        return None
+
+    def append(self, inp: List[int], val: float) -> None:
+        root = self.root
+        for idx in inp:
+            if idx not in root.next:
+                root.next[idx] = TrieNode()
+            root = root.next[idx]
+        root.complete = True
+        root.val = val
+
+
+class TrieTreeCodec(object):
+    @classmethod
+    def serialize(cls, node: TrieNode):
+        objs = []
+
+        def _ser(root: TrieNode):
+            root_obj = TrieNodeObj(
+                complete=root.complete,
+                val=root.val,
+                next=sorted(list(root.next.keys())))
+            objs.append(root_obj)
+            for child in root_obj.next:
+                _ser(root.next[child])
+        _ser(node)
+        return objs
+
+    @classmethod
+    def deserialize(cls, objs):
+        pointer = [0]
+
+        def _des() -> TrieNode:
+            cp = pointer[0]
+            root = TrieNode()
+            root.complete = objs[cp].complete
+            root.val = objs[cp].val
+            pointer[0] += 1
+            for child in objs[cp].next:
+                root.next[child] = _des()
+            return root
+
+        node = _des()
+        return node
+
+
+class BertNLUCache(TrieTree):
+    def batch_find(self, inp: np.ndarray) -> Tuple[List[int], np.ndarray]:
+        """
+        find a batch of input from cache
+
+        Returns:
+            1. indexes of inputs that are not in the cache
+            2. all results.
+        """
+        idx = []
+        res = []
+        for i, x in enumerate(inp):
+            y = self.find(x)
+            if y is None:
+                idx.append(i)
+                y = 0
+            res.append(y)
+        return idx, np.asarray(res)
+
+    def batch_append(self, inp: np.ndarry, vals: List[float]):
+        for x, y in zip(list(inp), vals):
+            self.append(x, y)
+
+    def save(self, fname):
+        nodes = TrieTreeCodec.serialize(self.root)
+        np.savez(fname, nodes=nodes)
+
+    def load(self, fname):
+        nodes = np.load(fname, allow_pickle=True)["nodes"]
+        self.root = TrieTreeCodec.deserialize(list(nodes))
 
 
 class TFCore(BaseCore, ABC):
@@ -410,6 +513,7 @@ class NLUCore(TFCore):
         super(NLUCore, self).__init__(hp, model_dir)
         self.model: Optional[NLUModel] = None
         self.target_model: Optional[NLUModel] = None
+        self.cache: BertNLUCache = BertNLUCache()
 
     def trajectory2input(
             self, trajectory: List[ActionMaster]) -> Tuple[List[int], int]:
@@ -563,6 +667,11 @@ class NLUCore(TFCore):
             pre_src, pre_src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
+        unknown_ids, cached_q_actions = self.cache.batch_find(inp)
+        inp = inp[unknown_ids]
+        seg_tj_action = seg_tj_action[unknown_ids]
+        inp_len = inp_len[unknown_ids]
+
         q_actions = self.sess.run(
             self.model.q_actions,
             feed_dict={
@@ -570,7 +679,10 @@ class NLUCore(TFCore):
                 self.model.src_len_: inp_len,
                 self.model.seg_tj_action_: seg_tj_action
             })
-        return q_actions
+
+        cached_q_actions[unknown_ids] = q_actions
+        self.cache.batch_append(inp, list(q_actions))
+        return cached_q_actions
 
     def policy(
             self,
@@ -585,6 +697,12 @@ class NLUCore(TFCore):
         inp, seg_tj_action, inp_size = bert_nlu_input(
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+
+        unknown_ids, cached_q_actions = self.cache.batch_find(inp)
+        inp = inp[unknown_ids]
+        seg_tj_action = seg_tj_action[unknown_ids]
+        inp_size = inp_size[unknown_ids]
+
         n_actions = inp.shape[0]
         self.debug("number of actions: {}".format(n_actions))
         # TODO: better allowed batch
@@ -603,7 +721,10 @@ class NLUCore(TFCore):
             total_q_actions.append(q_actions_t)
 
         q_actions = np.concatenate(total_q_actions, axis=-1)
-        return q_actions
+        cached_q_actions[unknown_ids] = q_actions
+        self.cache.batch_append(inp, list(q_actions))
+
+        return cached_q_actions
 
 
 class DQNCore(TFCore):
