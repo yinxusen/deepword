@@ -246,11 +246,11 @@ class BertNLUCache(TrieTree):
             y = self.find(x)
             if y is None:
                 idx.append(i)
-                y = 0
+                y = 0.0
             res.append(y)
         return idx, np.asarray(res)
 
-    def batch_append(self, inp: np.ndarry, vals: List[float]):
+    def batch_append(self, inp: np.ndarray, vals: List[float]):
         for x, y in zip(list(inp), vals):
             self.append(x, y)
 
@@ -668,6 +668,11 @@ class NLUCore(TFCore):
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
         unknown_ids, cached_q_actions = self.cache.batch_find(inp)
+        self.info("unknown_ids: {}, ratio: {}".format(
+            len(unknown_ids), (len(unknown_ids) / len(inp)) if inp else 0))
+        if len(unknown_ids) == 0:
+            return cached_q_actions
+
         inp = inp[unknown_ids]
         seg_tj_action = seg_tj_action[unknown_ids]
         inp_len = inp_len[unknown_ids]
@@ -699,6 +704,11 @@ class NLUCore(TFCore):
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
         unknown_ids, cached_q_actions = self.cache.batch_find(inp)
+        self.info("unknown_ids: {}, ratio: {}".format(
+            len(unknown_ids), (len(unknown_ids) / len(inp)) if inp else 0))
+        if len(unknown_ids) == 0:
+            return cached_q_actions
+
         inp = inp[unknown_ids]
         seg_tj_action = seg_tj_action[unknown_ids]
         inp_size = inp_size[unknown_ids]
