@@ -669,7 +669,8 @@ class NLUCore(TFCore):
 
         unknown_ids, cached_q_actions = self.cache.batch_find(inp)
         self.info("unknown_ids: {}, ratio: {}".format(
-            len(unknown_ids), (len(unknown_ids) / len(inp)) if inp else 0))
+            len(unknown_ids),
+            (len(unknown_ids) / len(inp)) if len(inp) != 0 else 0))
         if len(unknown_ids) == 0:
             return cached_q_actions
 
@@ -705,7 +706,8 @@ class NLUCore(TFCore):
 
         unknown_ids, cached_q_actions = self.cache.batch_find(inp)
         self.info("unknown_ids: {}, ratio: {}".format(
-            len(unknown_ids), (len(unknown_ids) / len(inp)) if inp else 0))
+            len(unknown_ids),
+            (len(unknown_ids) / len(inp)) if len(inp) != 0 else 0))
         if len(unknown_ids) == 0:
             return cached_q_actions
 
