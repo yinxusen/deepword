@@ -448,8 +448,7 @@ class BaseAgent(Logging):
         self._objective_ids = []
         self._walkthrough = []
         self._continue_walkthrough = False
-        self.prior_core.cache.save(
-            path.join(self.model_dir, "bert-nlu-cache.npz"))
+        self.info("total cached: {}".format(self.prior_core.cache.total_cached))
 
     def _delete_stale_context_objs(self) -> None:
         valid_tags = self._get_compatible_snapshot_tag()
@@ -814,6 +813,9 @@ class BaseAgent(Logging):
 
         if self._is_time_to_save():
             self.save_snapshot()
+            self.prior_core.cache.save(
+                self._get_context_obj_path_w_tag(
+                    "bert-nlu-cache", self.total_t))
             self.core.save_model()
             self.core.create_or_reload_target_model()
 

@@ -1,10 +1,10 @@
 import math
 from abc import ABC
+from collections import namedtuple
 from copy import deepcopy
 from os import path
 from typing import Dict
 from typing import Optional, List, Any, Tuple
-from collections import namedtuple
 
 import numpy as np
 import tensorflow as tf
@@ -232,9 +232,16 @@ class TrieTreeCodec(object):
 
 
 class BertNLUCache(TrieTree):
-    def batch_find(self, inp: np.ndarray) -> Tuple[List[int], np.ndarray]:
+    def __init__(self):
+        super(BertNLUCache, self).__init__()
+        self.total_cached = 0
+
+    def batch_find(
+            self, inp: np.ndarray, inp_len: np.ndarray
+    ) -> Tuple[List[int], np.ndarray]:
         """
         find a batch of input from cache
+        padding ids will be trimmed according to input length
 
         Returns:
             1. indexes of inputs that are not in the cache
@@ -243,16 +250,23 @@ class BertNLUCache(TrieTree):
         idx = []
         res = []
         for i, x in enumerate(inp):
-            y = self.find(x)
+            y = self.find(x[:inp_len[i]])
             if y is None:
                 idx.append(i)
                 y = 0.0
             res.append(y)
         return idx, np.asarray(res)
 
-    def batch_append(self, inp: np.ndarray, vals: List[float]):
-        for x, y in zip(list(inp), vals):
-            self.append(x, y)
+    def batch_append(
+            self, inp: np.ndarray, inp_len: np.ndarray, vals: List[float]
+    ) -> None:
+        """
+        insert a batch of input with their values
+        padding ids will be trimmed according to input length
+        """
+        for x, l, y in zip(list(inp), list(inp_len), vals):
+            self.append(x[:l], y)
+        self.total_cached += len(inp)
 
     def save(self, fname):
         nodes = TrieTreeCodec.serialize(self.root)
@@ -667,10 +681,7 @@ class NLUCore(TFCore):
             pre_src, pre_src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
-        unknown_ids, cached_q_actions = self.cache.batch_find(inp)
-        self.info("unknown_ids: {}, ratio: {}".format(
-            len(unknown_ids),
-            (len(unknown_ids) / len(inp)) if len(inp) != 0 else 0))
+        unknown_ids, cached_q_actions = self.cache.batch_find(inp, inp_len)
         if len(unknown_ids) == 0:
             return cached_q_actions
 
@@ -687,7 +698,7 @@ class NLUCore(TFCore):
             })
 
         cached_q_actions[unknown_ids] = q_actions
-        self.cache.batch_append(inp, list(q_actions))
+        self.cache.batch_append(inp, inp_len, list(q_actions))
         return cached_q_actions
 
     def policy(
@@ -704,10 +715,7 @@ class NLUCore(TFCore):
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
-        unknown_ids, cached_q_actions = self.cache.batch_find(inp)
-        self.info("unknown_ids: {}, ratio: {}".format(
-            len(unknown_ids),
-            (len(unknown_ids) / len(inp)) if len(inp) != 0 else 0))
+        unknown_ids, cached_q_actions = self.cache.batch_find(inp, inp_size)
         if len(unknown_ids) == 0:
             return cached_q_actions
 
@@ -734,7 +742,7 @@ class NLUCore(TFCore):
 
         q_actions = np.concatenate(total_q_actions, axis=-1)
         cached_q_actions[unknown_ids] = q_actions
-        self.cache.batch_append(inp, list(q_actions))
+        self.cache.batch_append(inp, inp_size, list(q_actions))
 
         return cached_q_actions
 
