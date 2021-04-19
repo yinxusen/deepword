@@ -179,12 +179,11 @@ class BertNLUCache(object):
         self.q_vals[htj] = (q_val, h_action)
 
     def save(self, fname):
-        np.savez(fname, tjs=self.q_vals.keys(), q_vals=self.q_vals.values())
+        np.savez(fname, q_vals=list(self.q_vals.items()))
 
     def load(self, fname):
         data = np.load(fname, allow_pickle=True)
-        self.q_vals = dict(
-            zip(list(data["tjs"]), list(data["q_vals"])))
+        self.q_vals = dict(data["q_vals"])
 
 
 class TFCore(BaseCore, ABC):
