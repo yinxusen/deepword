@@ -1,6 +1,5 @@
 import math
 from abc import ABC
-from collections import namedtuple
 from copy import deepcopy
 from os import path
 from typing import Dict
@@ -25,7 +24,6 @@ from deepword.agents.utils import get_best_1d_q
 from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import id_real2batch
-from deepword.utils import get_hash
 from deepword.log import Logging
 from deepword.models.dqn_modeling import DQNModel
 from deepword.models.models import DRRNModel
@@ -167,15 +165,18 @@ class BertNLUCache(object):
         self.total_cached = 0
         self.q_vals = dict()
 
-    def find(self, tj: List[int]):
+    def find(self, tj: List[int], action_mask: List[int]):
         htj = get_hash(" ".join([str(x) for x in tj]))
+        h_action = get_hash(" ".join(str(x) for x in sorted(action_mask)))
         if htj in self.q_vals:
-            return self.q_vals[htj]
+            if self.q_vals[htj][1] == h_action:
+                return self.q_vals[htj][0]
         return None
 
-    def append(self, tj: List[int], q_val: np.ndarray):
+    def append(self, tj: List[int], action_mask: List[int], q_val: np.ndarray):
         htj = get_hash(" ".join([str(x) for x in tj]))
-        self.q_vals[htj] = q_val
+        h_action = get_hash(" ".join(str(x) for x in sorted(action_mask)))
+        self.q_vals[htj] = (q_val, h_action)
 
     def save(self, fname):
         np.savez(fname, tjs=self.q_vals.keys(), q_vals=self.q_vals.values())
@@ -582,7 +583,7 @@ class NLUCore(TFCore):
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
         src, src_len = self.trajectory2input(trajectory)
-        cached_q_vec = self.cache.find(src)
+        cached_q_vec = self.cache.find(src, list(action_mask))
         if cached_q_vec is not None and len(cached_q_vec) == len(action_mask):
             self.info("cached q vector found: {}".format(len(cached_q_vec)))
             return cached_q_vec
@@ -613,7 +614,7 @@ class NLUCore(TFCore):
 
         q_actions = np.concatenate(total_q_actions, axis=-1)
 
-        self.cache.append(src, q_actions)
+        self.cache.append(src, list(action_mask), q_actions)
         return q_actions
 
 
