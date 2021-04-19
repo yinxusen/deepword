@@ -1062,18 +1062,6 @@ class DRRNCore(TFCore):
         expected_q = self._compute_expected_q2(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards, prior_core)
-        pre_qs_prior = np.concatenate([
-            prior_core.policy(
-                trajectory=tj,
-                state=None,
-                action_matrix=am,
-                action_len=al,
-                action_mask=mask)[aid]
-            for tj, am, al, aid, mask in zip(
-                pre_trajectories, action_matrix, action_len, action_idx,
-                pre_action_mask)],
-            axis=-1)
-        expected_q -= pre_qs_prior
         t1_end = ctime()
 
         t2 = ctime()
@@ -1087,6 +1075,19 @@ class DRRNCore(TFCore):
         action_batch_ids = id_real2batch(
             action_idx, id_real2mask, actions_repeats)
         t3_end = ctime()
+
+        pre_qs_prior = np.concatenate([
+            prior_core.policy(
+                trajectory=tj,
+                state=None,
+                action_matrix=am,
+                action_len=al,
+                action_mask=mask)
+            for tj, am, al, aid, mask in zip(
+                pre_trajectories, action_matrix, action_len, action_idx,
+                pre_action_mask)],
+            axis=-1)
+        expected_q -= pre_qs_prior[action_batch_ids]
 
         t4 = ctime()
         _, summaries, loss_eval, abs_loss = self.sess.run(
