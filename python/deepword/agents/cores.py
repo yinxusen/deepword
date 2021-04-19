@@ -25,6 +25,7 @@ from deepword.agents.utils import get_best_1d_q
 from deepword.agents.utils import get_best_batch_ids
 from deepword.agents.utils import get_path_tags
 from deepword.agents.utils import id_real2batch
+from deepword.utils import get_hash
 from deepword.log import Logging
 from deepword.models.dqn_modeling import DQNModel
 from deepword.models.models import DRRNModel
@@ -161,120 +162,28 @@ class BaseCore(Logging, ABC):
         raise NotImplementedError()
 
 
-class TrieNode(object):
+class BertNLUCache(object):
     def __init__(self):
-        self.complete: bool = False
-        self.next: Dict[int, TrieNode] = dict()
-        self.val: float = 0
+        self.total_cached = 0
+        self.q_vals = dict()
 
-
-class TrieNodeObj(namedtuple("TrieNodeObj", ("complete", "next", "val"))):
-    pass
-
-
-class TrieTree(object):
-    def __init__(self):
-        self.root: TrieNode = TrieNode()
-
-    def find(self, inp: List[int]) -> Optional[float]:
-        root = self.root
-        for idx in inp:
-            if idx in root.next:
-                root = root.next[idx]
-            else:
-                return None
-        if root.complete:
-            return root.val
+    def find(self, tj: List[int]):
+        htj = get_hash(" ".join([str(x) for x in tj]))
+        if htj in self.q_vals:
+            return self.q_vals[htj]
         return None
 
-    def append(self, inp: List[int], val: float) -> None:
-        root = self.root
-        for idx in inp:
-            if idx not in root.next:
-                root.next[idx] = TrieNode()
-            root = root.next[idx]
-        root.complete = True
-        root.val = val
-
-
-class TrieTreeCodec(object):
-    @classmethod
-    def serialize(cls, node: TrieNode):
-        objs = []
-
-        def _ser(root: TrieNode):
-            root_obj = TrieNodeObj(
-                complete=root.complete,
-                val=root.val,
-                next=sorted(list(root.next.keys())))
-            objs.append(root_obj)
-            for child in root_obj.next:
-                _ser(root.next[child])
-        _ser(node)
-        return objs
-
-    @classmethod
-    def deserialize(cls, objs):
-        pointer = [0]
-
-        def _des() -> TrieNode:
-            cp = pointer[0]
-            root = TrieNode()
-            root.complete = objs[cp].complete
-            root.val = objs[cp].val
-            pointer[0] += 1
-            for child in objs[cp].next:
-                root.next[child] = _des()
-            return root
-
-        node = _des()
-        return node
-
-
-class BertNLUCache(TrieTree):
-    def __init__(self):
-        super(BertNLUCache, self).__init__()
-        self.total_cached = 0
-
-    def batch_find(
-            self, inp: np.ndarray, inp_len: np.ndarray
-    ) -> Tuple[List[int], np.ndarray]:
-        """
-        find a batch of input from cache
-        padding ids will be trimmed according to input length
-
-        Returns:
-            1. indexes of inputs that are not in the cache
-            2. all results.
-        """
-        idx = []
-        res = []
-        for i, x in enumerate(inp):
-            y = self.find(x[:inp_len[i]])
-            if y is None:
-                idx.append(i)
-                y = 0.0
-            res.append(y)
-        return idx, np.asarray(res)
-
-    def batch_append(
-            self, inp: np.ndarray, inp_len: np.ndarray, vals: List[float]
-    ) -> None:
-        """
-        insert a batch of input with their values
-        padding ids will be trimmed according to input length
-        """
-        for x, l, y in zip(list(inp), list(inp_len), vals):
-            self.append(x[:l], y)
-        self.total_cached += len(inp)
+    def append(self, tj: List[int], q_val: np.ndarray):
+        htj = get_hash(" ".join([str(x) for x in tj]))
+        self.q_vals[htj] = q_val
 
     def save(self, fname):
-        nodes = TrieTreeCodec.serialize(self.root)
-        np.savez(fname, nodes=nodes)
+        np.savez(fname, tjs=self.q_vals.keys(), q_vals=self.q_vals.values())
 
     def load(self, fname):
-        nodes = np.load(fname, allow_pickle=True)["nodes"]
-        self.root = TrieTreeCodec.deserialize(list(nodes))
+        data = np.load(fname, allow_pickle=True)
+        self.q_vals = dict(
+            zip(list(data["tjs"]), list(data["q_vals"])))
 
 
 class TFCore(BaseCore, ABC):
@@ -665,42 +574,6 @@ class NLUCore(TFCore):
             summaries, step - self.hp.observation_t)
         return abs_loss
 
-    def batch_qs_with_actions(
-            self,
-            pre_trajectories: List[List[ActionMaster]],
-            action_matrix: List[np.ndarray],
-            action_len: List[np.ndarray],
-            action_idx: List[int],
-            ) -> np.ndarray:
-
-        pre_src, pre_src_len = self.batch_trajectory2input(pre_trajectories)
-        # only choose and concatenate actions appearing in action_idx
-        pre_action_idx_mask = [np.asarray([x]) for x in action_idx]
-        inp, seg_tj_action, inp_len, _, _ = batch_bert_nlu_input(
-            action_matrix, action_len, pre_action_idx_mask,
-            pre_src, pre_src_len,
-            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
-
-        unknown_ids, cached_q_actions = self.cache.batch_find(inp, inp_len)
-        if len(unknown_ids) == 0:
-            return cached_q_actions
-
-        inp = inp[unknown_ids]
-        seg_tj_action = seg_tj_action[unknown_ids]
-        inp_len = inp_len[unknown_ids]
-
-        q_actions = self.sess.run(
-            self.model.q_actions,
-            feed_dict={
-                self.model.src_: inp,
-                self.model.src_len_: inp_len,
-                self.model.seg_tj_action_: seg_tj_action
-            })
-
-        cached_q_actions[unknown_ids] = q_actions
-        self.cache.batch_append(inp, inp_len, list(q_actions))
-        return cached_q_actions
-
     def policy(
             self,
             trajectory: List[ActionMaster],
@@ -708,20 +581,18 @@ class NLUCore(TFCore):
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
+        src, src_len = self.trajectory2input(trajectory)
+        cached_q_vec = self.cache.find(src)
+        if cached_q_vec is not None and len(cached_q_vec) == len(action_mask):
+            self.info("cached q vector found: {}".format(len(cached_q_vec)))
+            return cached_q_vec
+
+        self.info("compute q vector: {}".format(len(action_mask)))
         action_matrix = action_matrix[action_mask, :]
         action_len = action_len[action_mask]
-        src, src_len = self.trajectory2input(trajectory)
         inp, seg_tj_action, inp_size = bert_nlu_input(
             action_matrix, action_len, src, src_len,
             self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
-
-        unknown_ids, cached_q_actions = self.cache.batch_find(inp, inp_size)
-        if len(unknown_ids) == 0:
-            return cached_q_actions
-
-        inp = inp[unknown_ids]
-        seg_tj_action = seg_tj_action[unknown_ids]
-        inp_size = inp_size[unknown_ids]
 
         n_actions = inp.shape[0]
         self.debug("number of actions: {}".format(n_actions))
@@ -741,10 +612,9 @@ class NLUCore(TFCore):
             total_q_actions.append(q_actions_t)
 
         q_actions = np.concatenate(total_q_actions, axis=-1)
-        cached_q_actions[unknown_ids] = q_actions
-        self.cache.batch_append(inp, inp_size, list(q_actions))
 
-        return cached_q_actions
+        self.cache.append(src, q_actions)
+        return q_actions
 
 
 class DQNCore(TFCore):
@@ -1192,8 +1062,17 @@ class DRRNCore(TFCore):
         expected_q = self._compute_expected_q2(
             post_action_mask, post_trajectories, action_matrix, action_len,
             dones, rewards, prior_core)
-        pre_qs_prior = prior_core.batch_qs_with_actions(
-            pre_trajectories, action_matrix, action_len, action_idx)
+        pre_qs_prior = np.concatenate([
+            prior_core.policy(
+                trajectory=tj,
+                state=None,
+                action_matrix=am,
+                action_len=al,
+                action_mask=mask)[aid]
+            for tj, am, al, aid, mask in zip(
+                pre_trajectories, action_matrix, action_len, action_idx,
+                pre_action_mask)],
+            axis=-1)
         expected_q -= pre_qs_prior
         t1_end = ctime()
 
