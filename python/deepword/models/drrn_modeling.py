@@ -351,7 +351,7 @@ class PseudoSeq2SeqDRRN(CnnDRRN):
                 self.inputs["src"], self.inputs["actions_repeats"], axis=0)
             enc_output = h_state_expanded
             dec_padding_mask = txf.create_padding_mask(inp)
-            look_ahead_mask = txf.create_decode_masks(tgt_in)
+            look_ahead_mask = txf.create_pseudo_decode_masks(tgt_in)
             final_output, p_gen, _, _ = self.bert_decoder(
                 tgt_in, inp, enc_output, not self.is_infer, look_ahead_mask,
                 dec_padding_mask, copy_mask=None)

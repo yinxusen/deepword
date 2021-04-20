@@ -99,6 +99,17 @@ def create_decode_masks(tar):
     return combined_mask
 
 
+def create_pseudo_decode_masks(tar):
+    """
+    Create pseudo masking for decoding
+
+    With this mask, we treat the decoder as a normal encoder, so this is not
+    suitable for actual generation.
+    """
+    dec_target_padding_mask = create_padding_mask(tar)
+    return dec_target_padding_mask
+
+
 def scaled_dot_product_attention(q, k, v, mask):
     """
     Calculate the attention weights.
