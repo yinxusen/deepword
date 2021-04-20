@@ -90,6 +90,9 @@ class ActionCollector(Logging):
 
         Args:
             actions: a list of actions for current episode of game-playing.
+
+        Returns:
+            sorted mask ids
         """
         mask_idx = []
         for a in actions:
@@ -101,7 +104,7 @@ class ActionCollector(Logging):
                 self._actions.append(a)
                 self._curr_aid += 1
             mask_idx.append(self._action2idx[a])
-        return np.asarray(mask_idx)
+        return np.asarray(sorted(mask_idx))
 
     def get_action_matrix(self, gid: Optional[str] = None) -> np.ndarray:
         """
