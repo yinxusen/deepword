@@ -325,13 +325,13 @@ class BaseAgent(Logging):
         # always loading actions to avoid different action index for DQN
         self.actor = self._init_actions(
             self.hp, self.tokenizer, action_path,
-            with_loading=self.is_training)
+            with_loading=True)
         self.tjs = self._init_trajectory(
             self.hp, tjs_path, with_loading=self.is_training)
         self.memo = self._init_memo(
             self.hp, memo_path, with_loading=self.is_training)
         self.floor_plan = self._init_floor_plan(
-            fp_path, with_loading=self.is_training)
+            fp_path, with_loading=True)
         # load stc
         self.stc = self._init_state_text(stc_path, with_loading=True)
 
@@ -343,6 +343,10 @@ class BaseAgent(Logging):
             is_training=self.is_training, load_best=load_best,
             restore_from=restore_from)
         self.prior_core.init(is_training=False, load_best=False)
+        self.prior_core.cache.load(
+            self._get_context_obj_path(prefix="bert-nlu-cache"))
+        self.info("load bert nlu cache: {}".format(
+            len(self.prior_core.cache.q_vals)))
 
         if self.is_training:
             # save hparams if training
