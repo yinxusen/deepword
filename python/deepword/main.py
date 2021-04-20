@@ -80,6 +80,8 @@ def hp_parser() -> ArgumentParser:
     parser.add_argument(
         "--prob-complete-walkthrough", type=float, default=None,
         help="the probability of using all steps in walkthrough at training")
+    parser.add_argument(
+        "--num-tokens", type=int, help="maximum length for trajectory as input")
     return parser
 
 
