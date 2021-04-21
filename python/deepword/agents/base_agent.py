@@ -343,8 +343,11 @@ class BaseAgent(Logging):
             is_training=self.is_training, load_best=load_best,
             restore_from=restore_from)
         self.prior_core.init(is_training=False, load_best=False)
-        self.prior_core.cache.load(
-            self._get_context_obj_path(prefix="bert-nlu-cache"))
+        try:
+            self.prior_core.cache.load(
+                self._get_context_obj_path(prefix="bert-nlu-cache"))
+        except IOError as e:
+            self.info("load bert nlu cache error: \n{}".format(e))
         self.info("load bert nlu cache: {}".format(
             len(self.prior_core.cache.q_vals)))
 
