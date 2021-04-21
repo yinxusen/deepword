@@ -200,7 +200,7 @@ class BertNLUCache(object):
                 to_compute.append(i)
                 q_vals.append(0.)
             else:
-                q_vals.append(self.q_vals[htj])
+                q_vals.append(self.q_vals[htj][ha])
 
         return np.asarray(q_vals), to_compute
 
