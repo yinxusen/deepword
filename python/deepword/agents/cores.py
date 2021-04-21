@@ -164,26 +164,81 @@ class BertNLUCache(object):
     def __init__(self):
         self.total_cached = 0
         self.q_vals = dict()
+        self.action2idx = dict()
+        self.c_idx = 0
 
-    def find(self, tj: List[int], action_mask: List[int]):
-        htj = get_hash(" ".join([str(x) for x in tj]))
-        h_action = get_hash(" ".join(str(x) for x in sorted(action_mask)))
-        if htj in self.q_vals:
-            if self.q_vals[htj][1] == h_action:
-                return self.q_vals[htj][0]
-        return None
+    def find(
+            self,
+            tj: List[int],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            action_mask: np.ndarray
+    ) -> Tuple[np.ndarray, List[int]]:
+        """
+        Find Q values of a trajectory and all its admissible actions labeled by
+        action_mask.
 
-    def append(self, tj: List[int], action_mask: List[int], q_val: np.ndarray):
+        Returns:
+            Q vector, list of indices of actions to compute
+        """
         htj = get_hash(" ".join([str(x) for x in tj]))
-        h_action = get_hash(" ".join(str(x) for x in sorted(action_mask)))
-        self.q_vals[htj] = (q_val, h_action)
+        if htj not in self.q_vals:
+            return np.asarray([0.] * len(action_mask)), list(range(action_mask))
+
+        q_vals = []
+        to_compute = []
+        for i, aid in enumerate(action_mask):
+            token_idx = action_matrix[aid][:action_len[aid]]
+            token_str = " ".join([str(x) for x in token_idx])
+            if token_str not in self.action2idx:
+                self.action2idx[token_str] = self.c_idx
+                self.c_idx += 1
+            ha = self.action2idx[token_str]
+            if ha not in self.q_vals[htj]:
+                to_compute.append(i)
+                q_vals.append(0.)
+            else:
+                q_vals.append(self.q_vals[htj])
+
+        return np.asarray(q_vals), to_compute
+
+    def append(
+            self,
+            tj: List[int],
+            action_matrix: np.ndarray,
+            action_len: np.ndarray,
+            action_mask: np.ndarray,
+            q_vals: np.ndarray) -> None:
+        """
+        Append Q values of actions that associate with a trajectory
+        """
+        htj = get_hash(" ".join([str(x) for x in tj]))
+        if htj not in self.q_vals:
+            self.q_vals[htj] = dict()
+        for i, aid in enumerate(action_mask):
+            token_idx = action_matrix[aid][:action_len[aid]]
+            token_str = " ".join([str(x) for x in token_idx])
+            if token_str not in self.action2idx:
+                self.action2idx[token_str] = self.c_idx
+                self.c_idx += 1
+            ha = self.action2idx[token_str]
+            self.q_vals[htj][ha] = q_vals[i]
 
     def save(self, fname):
-        np.savez(fname, q_vals=list(self.q_vals.items()))
+        np.savez(
+            fname,
+            q_vals=list(self.q_vals.items()),
+            action2idx=list(self.action2idx.items()),
+            c_idx=[self.c_idx]
+        )
 
     def load(self, fname):
+        if self.c_idx != 0:
+            raise RuntimeError("only new Bert-NLU cache is allowed to load")
         data = np.load(fname, allow_pickle=True)
         self.q_vals = dict(data["q_vals"])
+        self.action2idx = dict(data["action2idx"])
+        self.c_idx = int(data["c_idx"][0])
 
 
 class TFCore(BaseCore, ABC):
@@ -581,23 +636,36 @@ class NLUCore(TFCore):
             action_matrix: np.ndarray,
             action_len: np.ndarray,
             action_mask: np.ndarray) -> np.ndarray:
-        src, src_len = self.trajectory2input(trajectory)
-        cached_q_vec = self.cache.find(src, list(action_mask))
-        if cached_q_vec is not None and len(cached_q_vec) == len(action_mask):
-            self.info("cached q vector found: {}".format(len(cached_q_vec)))
-            return cached_q_vec
+        return self.batch_policy(
+            [trajectory], [action_matrix], [action_len], [action_mask])
+        # src, src_len = self.trajectory2input(trajectory)
+        # cached_q_vec, to_compute = self.cache.find(
+        #     src, action_matrix, action_len, action_mask)
+        # self.info("Bert-NLU to compute: {}/{}".format(
+        #     len(to_compute), len(action_mask)))
+        # if len(to_compute) == 0:
+        #     return cached_q_vec
 
-        self.info("compute q vector: {}".format(len(action_mask)))
-        action_matrix = action_matrix[action_mask, :]
-        action_len = action_len[action_mask]
-        inp, seg_tj_action, inp_size = bert_nlu_input(
-            action_matrix, action_len, src, src_len,
-            self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+        # action_mask = action_mask[to_compute]
+        # action_matrix = action_matrix[action_mask, :]
+        # action_len = action_len[action_mask]
+        # inp, seg_tj_action, inp_size = bert_nlu_input(
+        #     action_matrix, action_len, src, src_len,
+        #     self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
 
+        # q_actions = self.batch_agnostic_bert_nlu(
+        #     inp, seg_tj_action, inp_size, allowed_batch_size=32)
+
+        # self.cache.append(
+        #     src, action_matrix, action_len, action_mask, q_actions)
+        # cached_q_vec[to_compute] = q_actions
+
+        # return cached_q_vec
+
+    def batch_agnostic_bert_nlu(
+            self, inp, seg_tj_action, inp_size, allowed_batch_size=32):
         n_actions = inp.shape[0]
         self.debug("number of actions: {}".format(n_actions))
-        # TODO: better allowed batch
-        allowed_batch_size = 32
         n_batches = int(math.ceil(n_actions * 1. / allowed_batch_size))
         self.debug("compute q-values through {} batches".format(n_batches))
         total_q_actions = []
@@ -610,11 +678,72 @@ class NLUCore(TFCore):
                 self.model.src_len_: inp_size[ss: ee],
             })
             total_q_actions.append(q_actions_t)
-
         q_actions = np.concatenate(total_q_actions, axis=-1)
-
-        self.cache.append(src, list(action_mask), q_actions)
         return q_actions
+
+    def batch_policy(
+            self,
+            trajectories: List[List[ActionMaster]],
+            action_matrices: List[np.ndarray],
+            action_lens: List[np.ndarray],
+            action_masks: List[np.ndarray]) -> np.ndarray:
+
+        batch_cached_q_vec = []
+        batch_src = []
+        batch_inp = []
+        batch_seg_tj_action = []
+        batch_inp_size = []
+        batch_to_compute = []
+        batch_to_compute_raw = []
+        batch_id_acc = 0
+        for trajectory, action_matrix, action_len, action_mask in zip(
+                trajectories, action_matrices, action_lens, action_masks):
+            src, src_len = self.trajectory2input(trajectory)
+            cached_q_vec, to_compute = self.cache.find(
+                src, action_matrix, action_len, action_mask)
+            batch_cached_q_vec.append(cached_q_vec)
+            action_mask = action_mask[to_compute]
+            action_matrix = action_matrix[action_mask, :]
+            action_len = action_len[action_mask]
+            inp, seg_tj_action, inp_size = bert_nlu_input(
+                action_matrix, action_len, src, src_len,
+                self.hp.sep_val_id, self.hp.cls_val_id, self.hp.num_tokens)
+            batch_src.append(src)
+            batch_inp.append(inp)
+            batch_seg_tj_action.append(seg_tj_action)
+            batch_inp_size.append(inp_size)
+            batch_to_compute_raw.append(to_compute)
+            batch_to_compute.append(np.asarray(to_compute) + batch_id_acc)
+            batch_id_acc += len(action_mask)
+
+        concat_cached_q_vec = np.concatenate(batch_cached_q_vec, axis=0)
+        concat_to_compute = np.concatenate(batch_to_compute, axis=0)
+        concat_inp = np.concatenate(batch_inp, axis=0)
+        concat_seg_tj_action = np.concatenate(batch_seg_tj_action, axis=0)
+        concat_inp_size = np.concatenate(batch_inp_size, axis=0)
+
+        if len(concat_to_compute) == 0:
+            return concat_cached_q_vec
+
+        self.info("Bert-NLU to compute: {}/{}".format(
+            len(concat_to_compute), len(concat_cached_q_vec)))
+
+        batch_q_actions = self.batch_agnostic_bert_nlu(
+            concat_inp, concat_seg_tj_action, concat_inp_size,
+            allowed_batch_size=32)
+
+        concat_cached_q_vec[concat_to_compute] = batch_q_actions
+
+        batch_id_acc = 0
+        for src, action_matrix, action_len, to_compute in zip(
+                batch_src, action_matrices, action_lens,
+                batch_to_compute_raw):
+            self.cache.append(
+                src, action_matrix, action_len, np.asarray(to_compute),
+                batch_q_actions[batch_id_acc: batch_id_acc + len(to_compute)])
+            batch_id_acc += len(to_compute)
+
+        return concat_cached_q_vec
 
 
 class DQNCore(TFCore):
@@ -995,7 +1124,7 @@ class DRRNCore(TFCore):
             action_len: List[np.ndarray],
             dones: List[bool],
             rewards: List[float],
-            prior_core: BaseCore) -> np.ndarray:
+            prior_core: NLUCore) -> np.ndarray:
 
         post_src, post_src_len = self.batch_trajectory2input(trajectories)
         actions, actions_lens, actions_repeats, _ = batch_drrn_action_input(
@@ -1020,16 +1149,8 @@ class DRRNCore(TFCore):
                 self.model.actions_len_: actions_lens,
                 self.model.actions_repeats_: actions_repeats})
 
-        post_qs_prior = np.concatenate([
-            prior_core.policy(
-                trajectory=tj,
-                state=None,
-                action_matrix=am,
-                action_len=al,
-                action_mask=mask)
-            for tj, am, al, mask in zip(
-                trajectories, action_matrix, action_len, action_mask)],
-            axis=-1)
+        post_qs_prior = prior_core.batch_policy(
+            trajectories, action_matrix, action_len, action_mask)
 
         post_qs_dqn += post_qs_prior
         post_qs_target += post_qs_prior
@@ -1076,17 +1197,8 @@ class DRRNCore(TFCore):
             action_idx, id_real2mask, actions_repeats)
         t3_end = ctime()
 
-        pre_qs_prior = np.concatenate([
-            prior_core.policy(
-                trajectory=tj,
-                state=None,
-                action_matrix=am,
-                action_len=al,
-                action_mask=mask)
-            for tj, am, al, aid, mask in zip(
-                pre_trajectories, action_matrix, action_len, action_idx,
-                pre_action_mask)],
-            axis=-1)
+        pre_qs_prior = prior_core.batch_policy(
+            pre_trajectories, action_matrix, action_len, pre_action_mask)
         expected_q -= pre_qs_prior[action_batch_ids]
 
         t4 = ctime()
