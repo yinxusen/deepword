@@ -715,7 +715,8 @@ class NLUCore(TFCore):
             batch_seg_tj_action.append(seg_tj_action)
             batch_inp_size.append(inp_size)
             batch_to_compute_raw.append(to_compute)
-            batch_to_compute.append(np.asarray(to_compute) + batch_id_acc)
+            batch_to_compute.append(
+                np.asarray(to_compute, dtype=np.int) + batch_id_acc)
             batch_id_acc += len(action_mask)
 
         concat_cached_q_vec = np.concatenate(batch_cached_q_vec, axis=0)
