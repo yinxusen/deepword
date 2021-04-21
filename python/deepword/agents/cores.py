@@ -183,7 +183,9 @@ class BertNLUCache(object):
         """
         htj = get_hash(" ".join([str(x) for x in tj]))
         if htj not in self.q_vals:
-            return np.asarray([0.] * len(action_mask)), list(range(action_mask))
+            return (
+                np.asarray([0.] * len(action_mask)),
+                list(range(len(action_mask))))
 
         q_vals = []
         to_compute = []
@@ -735,11 +737,11 @@ class NLUCore(TFCore):
         concat_cached_q_vec[concat_to_compute] = batch_q_actions
 
         batch_id_acc = 0
-        for src, action_matrix, action_len, to_compute in zip(
-                batch_src, action_matrices, action_lens,
+        for src, action_matrix, action_len, action_mask, to_compute in zip(
+                batch_src, action_matrices, action_lens, action_masks,
                 batch_to_compute_raw):
             self.cache.append(
-                src, action_matrix, action_len, np.asarray(to_compute),
+                src, action_matrix, action_len, action_mask[to_compute],
                 batch_q_actions[batch_id_acc: batch_id_acc + len(to_compute)])
             batch_id_acc += len(to_compute)
 
