@@ -230,7 +230,7 @@ class BertNLUCache(object):
         np.savez(
             fname,
             q_vals=list(self.q_vals.items()),
-            action2idx=list(self.action2idx.items()),
+            action2idx=[self.action2idx],
             c_idx=[self.c_idx]
         )
 
@@ -239,7 +239,7 @@ class BertNLUCache(object):
             raise RuntimeError("only new Bert-NLU cache is allowed to load")
         data = np.load(fname, allow_pickle=True)
         self.q_vals = dict(data["q_vals"])
-        self.action2idx = dict(data["action2idx"])
+        self.action2idx = data["action2idx"][0]
         self.c_idx = int(data["c_idx"][0])
 
 
