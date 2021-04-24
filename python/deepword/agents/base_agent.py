@@ -176,7 +176,8 @@ class BaseAgent(Logging):
         two key actions.
         """
         # system provided admissible actions
-        sys_actions = [a.lower() for a in infos[INFO_KEY.actions][0]]
+        # TODO: don't lower-case actions here, some actions are case-sensitive
+        sys_actions = infos[INFO_KEY.actions][0]
         admissible_actions = list(set(sys_actions) | {ACT.inventory, ACT.look})
         return admissible_actions
 
