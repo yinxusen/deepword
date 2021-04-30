@@ -13,6 +13,7 @@ from gym.core import Env
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 from tqdm import trange
+from alfworld.agents.utils.misc import Demangler
 
 from deepword.agents.base_agent import BaseAgent
 from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
@@ -173,14 +174,22 @@ def run_agent(
             scores = [0] * len(obs)
             dones = [False] * len(obs)
             steps = [0] * len(obs)
-            while not all(dones):
-                # Increase step counts.
-                steps = ([step + int(not done)
-                          for step, done in zip(steps, dones)])
-                commands = agent.act(obs, scores, dones, infos)
-                obs, scores, dones, infos = game_env.step(commands)
-            # Let the agent knows the game is done.
-            agent.act(obs, scores, dones, infos)
+            try:
+                while not all(dones):
+                    # Increase step counts.
+                    steps = ([step + int(not done)
+                              for step, done in zip(steps, dones)])
+                    commands = agent.act(obs, scores, dones, infos)
+                    obs, scores, dones, infos = game_env.step(commands)
+                # Let the agent knows the game is done.
+                agent.act(obs, scores, dones, infos)
+            except Exception as e:
+                eprint("training game {} error: {}".format(game_no, e))
+                eprint("inform agent to finish current episode...")
+                if not all(dones):
+                    dones = [True]
+                    infos["won"] = False
+                    agent.act(obs, scores, dones, infos)
         if agent.total_t >= agent.hp.observation_t + agent.hp.annealing_eps_t:
             logger.info("training steps exceed MAX, stop training ...")
             logger.info("total training steps: {}".format(
@@ -248,6 +257,16 @@ def run_agent_v2(
             return
 
 
+class AlfredDemangler(textworld.core.Wrapper):
+
+    def load(self, *args, **kwargs):
+        super().load(*args, **kwargs)
+
+        demangler = Demangler(game_infos=self._game.infos)
+        for info in self._game.infos.values():
+            info.name = demangler.demangle_alfred_name(info.id)
+
+
 def train(
         hp: HParams, model_dir: str,
         game_dir: str, f_games: Optional[str] = None,
@@ -279,7 +298,8 @@ def train(
 
     env_id = textworld.gym.register_games(
         train_games, requested_infos, batch_size=1,
-        max_episode_steps=hp.game_episode_terminal_t, name="training")
+        max_episode_steps=hp.game_episode_terminal_t, name="training",
+        wrappers=[AlfredDemangler])
     env = gym.make(env_id)
     try:
         func_run_agent(agent, env, len(train_games), nb_epochs)
