@@ -365,8 +365,6 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
-        obs[0] = obs[0].replace(
-            "-= Welcome to TextWorld, ALFRED! =-", "").strip()
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         self.game_id = self._compute_game_id(obs[0])
@@ -392,6 +390,7 @@ class BaseAgent(Logging):
                 self._objective = contents[1].strip()
                 self._objective_ids = self.tokenizer.convert_tokens_to_ids(
                     self.tokenizer.tokenize(self._objective))
+                self.info("objective: {}".format(self._objective))
         else:  # make sure no objective available
             self._objective = ""
             self._objective_ids = []
@@ -967,6 +966,10 @@ class BaseAgent(Logging):
             The states for finished games are simply copy over until all
             games are done.
         """
+        obs = list(obs)
+        obs[0] = obs[0].replace(
+            "-= Welcome to TextWorld, ALFRED! =-", "").strip()
+
         if not self._episode_has_started:
             self._start_episode(obs, infos)
 
