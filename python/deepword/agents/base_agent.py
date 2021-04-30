@@ -365,6 +365,8 @@ class BaseAgent(Logging):
 
     def _start_episode_impl(
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
+        obs[0] = obs[0].replace(
+            "-= Welcome to TextWorld, ALFRED! =-", "").strip()
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
         self.game_id = self._compute_game_id(obs[0])
@@ -380,17 +382,16 @@ class BaseAgent(Logging):
         self._positive_scores = 0
         self._negative_scores = 0
         if self.hp.append_objective_to_tj:
-            objective = infos[INFO_KEY.objective][0]
-            if (self.game_id in self._loaded_objectives
-                    and self._loaded_objectives[self.game_id][0] == objective):
-                self._objective = self._loaded_objectives[self.game_id][1]
-                self.info(
-                    "substitute objective from ({}) to ({})".format(
-                        objective, self._objective))
+            contents = obs[0].split("Your task is to:")
+            if len(contents) != 2:
+                self.warning("wrong objective extraction: {}".format(obs[0]))
+                self._objective = ""
+                self._objective_ids = []
             else:
-                self._objective = objective
-            self._objective_ids = self.tokenizer.convert_tokens_to_ids(
-                self.tokenizer.tokenize(self._objective))
+                obs[0] = contents[0].strip()
+                self._objective = contents[1].strip()
+                self._objective_ids = self.tokenizer.convert_tokens_to_ids(
+                    self.tokenizer.tokenize(self._objective))
         else:  # make sure no objective available
             self._objective = ""
             self._objective_ids = []
