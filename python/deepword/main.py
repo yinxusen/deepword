@@ -266,7 +266,7 @@ def train(
     """
 
     logger = logging.getLogger('train')
-    train_games = load_game_files(game_dir, f_games)
+    train_games = load_alfworld_games(game_dir)
     logger.info("load {} game files".format(len(train_games)))
     # nb epochs could only be an estimation since steps per episode is unknown
     nb_epochs = (hp.annealing_eps_t // len(train_games) // 10) + 1
