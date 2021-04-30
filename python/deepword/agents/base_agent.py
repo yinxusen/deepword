@@ -153,14 +153,9 @@ class BaseAgent(Logging):
         requested infos here are required to run the Agent
         """
         return EnvInfos(
-            description=True,
-            inventory=True,
-            max_score=True,
             won=True,
             lost=True,
-            admissible_commands=True,
-            objective=True,
-            extras=["walkthrough"])
+            admissible_commands=True)
 
     @classmethod
     def _get_admissible_actions(
@@ -170,19 +165,15 @@ class BaseAgent(Logging):
         two key actions.
         """
         # system provided admissible actions
-        sys_actions = [a.lower() for a in infos[INFO_KEY.actions][0]]
+        sys_actions = infos[INFO_KEY.actions][0]
         admissible_actions = list(set(sys_actions) | {ACT.inventory, ACT.look})
         return admissible_actions
 
     # TODO: it's possible for different games to have the same game ID
     # TODO: change it to a better method, maybe read game name from infos
     @classmethod
-    def _compute_game_id(cls, infos: Dict[str, List[Any]]) -> str:
-        assert INFO_KEY.desc in infos, "request description is required"
-        assert INFO_KEY.inventory in infos, "request inventory is required"
-        starter = "{}\n{}".format(
-            infos[INFO_KEY.desc][0], infos[INFO_KEY.inventory][0])
-        return get_hash(starter)
+    def _compute_game_id(cls, obs: str) -> str:
+        return get_hash(obs.strip())
 
     def _init_actions(
             self, hp: HParams, tokenizer: Tokenizer, action_path: str,
@@ -376,7 +367,7 @@ class BaseAgent(Logging):
             self, obs: List[str], infos: Dict[str, List[Any]]) -> None:
         self.tjs.add_new_tj()
         self.stc.add_new_tj(tid=self.tjs.get_current_tid())
-        self.game_id = self._compute_game_id(infos)
+        self.game_id = self._compute_game_id(obs[0])
         self.info("game id: {}".format(self.game_id))
         self.actor.add_new_episode(gid=self.game_id)
         self.floor_plan.add_new_episode(eid=self.game_id)
@@ -810,9 +801,8 @@ class BaseAgent(Logging):
     def _update_status(
             self, obs: List[str], scores: List[float], dones: List[bool],
             infos: Dict[str, List[Any]]) -> Tuple[str, float]:
-        desc = infos[INFO_KEY.desc][0]
-        master = (remove_zork_version_info(desc)
-                  if self.in_game_t == 0 and desc else obs[0])
+        master = obs[0]
+        self.info("master: {}".format(master))
         instant_reward = self._get_instant_reward(
             scores[0], obs[0], dones[0],
             infos[INFO_KEY.won][0], infos[INFO_KEY.lost][0])
@@ -840,8 +830,7 @@ class BaseAgent(Logging):
         else:
             self.info(report_status([
                 ("master", colored(
-                    master.replace("\n", " "), "cyan", attrs=["underline"])),
-                ("max_score", infos[INFO_KEY.max_score][0])
+                    master.replace("\n", " "), "cyan", attrs=["underline"]))
             ]))
 
         if self.hp.collect_floor_plan:
@@ -881,8 +870,8 @@ class BaseAgent(Logging):
             action=self._last_action.action if self._last_action else "",
             master=master))
 
-        obs = infos[INFO_KEY.desc][0]
-        inv = infos[INFO_KEY.inventory][0]
+        obs = ""
+        inv = ""
         # TODO: need to inform user if obs and inv are empty
         # TODO: otherwise, the DSQN-related experiments are wrong
         if not isinstance(obs, str):
@@ -951,9 +940,10 @@ class BaseAgent(Logging):
         # revert back go actions for the game playing
         # TODO: better collecting floor plan schedule?
         # TODO: better condition for reverting go-actions?
-        if (self.hp.collect_floor_plan and action.startswith("go")
-                and "to" in action):
-            action = " ".join(action.split()[:2])
+        # if (self.hp.collect_floor_plan and action.startswith("go")
+        #         and "to" in action):
+        #     action = " ".join(action.split()[:2])
+        self.info("action: {}".format(action))
         return action
 
     def act(self, obs: List[str], scores: List[int], dones: List[bool],

@@ -15,6 +15,7 @@ from typing import List, Dict, Optional, Tuple
 import gym
 import numpy as np
 import textworld.gym
+from alfworld.agents.utils.misc import Demangler
 from tensorflow.contrib.training import HParams
 from termcolor import colored
 
@@ -71,46 +72,59 @@ def eval_agent(
     requested_infos = agent.select_additional_infos()
     for game_no in range(len(game_files)):
         game_file = game_files[game_no]
-        game_name = path.basename(game_file)
+        game_name = game_file
         env_id = textworld.gym.register_games(
             [game_file], requested_infos, batch_size=1,
             max_episode_steps=hp.game_episode_terminal_t,
-            name="eval")
+            name="eval", wrappers=[AlfredDemangler])
         game_env = gym.make(env_id)
         eprint("eval game: {}".format(game_name))
         assert hp.eval_episode > 0, "no enough episode to eval"
-        for episode_no in range(hp.eval_episode):
-            action_list = []
-            obs, infos = game_env.reset()
-            scores = [0] * len(obs)
-            dones = [False] * len(obs)
-            steps = [0] * len(obs)
-            # TODO: make sure verbose won't affect games other than Zork
-            # tmp_obs, _, _, _ = game_env.step(["verbose"] * len(obs))
-            # eprint("use verbose: {}".format(tmp_obs[0]))
-            while not all(dones):
-                # Increase step counts.
-                steps = ([step + int(not done)
-                          for step, done in zip(steps, dones)])
-                commands = agent.act(obs, scores, dones, infos)
-                action_list.append(commands[0])
-                obs, scores, dones, infos = game_env.step(commands)
+        try:
+            for episode_no in range(hp.eval_episode):
+                action_list = []
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                steps = [0] * len(obs)
+                # TODO: make sure verbose won't affect games other than Zork
+                # tmp_obs, _, _, _ = game_env.step(["verbose"] * len(obs))
+                # eprint("use verbose: {}".format(tmp_obs[0]))
+                while not all(dones):
+                    # Increase step counts.
+                    steps = ([step + int(not done)
+                              for step, done in zip(steps, dones)])
+                    commands = agent.act(obs, scores, dones, infos)
+                    action_list.append(commands[0])
+                    obs, scores, dones, infos = game_env.step(commands)
 
-            # Let the agent knows the game is done.
-            agent.act(obs, scores, dones, infos)
+                # Let the agent knows the game is done.
+                agent.act(obs, scores, dones, infos)
 
-            if game_name not in eval_results:
-                eval_results[game_name] = []
-            eval_results[game_name].append(EvalResult(
-                score=scores[0],
-                positive_score=agent.positive_scores,
-                negative_score=agent.negative_scores,
-                max_score=infos[INFO_KEY.max_score][0],
-                steps=steps[0],
-                won=infos[INFO_KEY.won][0],
-                action_list=action_list))
-        game_env.close()
+                if game_name not in eval_results:
+                    eval_results[game_name] = []
+                eval_results[game_name].append(EvalResult(
+                    score=scores[0],
+                    positive_score=agent.positive_scores,
+                    negative_score=agent.negative_scores,
+                    max_score=1,
+                    steps=steps[0],
+                    won=infos[INFO_KEY.won][0],
+                    action_list=action_list))
+            game_env.close()
+        except Exception as e:
+            print("encounter wrong game:\n{}".format(e))
     return eval_results, agent.core.loaded_ckpt_step
+
+
+class AlfredDemangler(textworld.core.Wrapper):
+
+    def load(self, *args, **kwargs):
+        super().load(*args, **kwargs)
+
+        demangler = Demangler(game_infos=self._game.infos)
+        for info in self._game.infos.values():
+            info.name = demangler.demangle_alfred_name(info.id)
 
 
 def agent_collect_data(

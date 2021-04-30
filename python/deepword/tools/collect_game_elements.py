@@ -12,7 +12,18 @@ from tqdm import tqdm
 from deepword.agents.base_agent import BaseAgent
 from deepword.agents.utils import INFO_KEY
 from deepword.floor_plan import FloorPlanCollector
-from deepword.utils import load_game_files
+from deepword.utils import load_game_files, load_alfworld_games
+from alfworld.agents.utils.misc import Demangler, get_templated_task_desc, clean_alfred_facts, add_task_to_grammar
+
+
+class AlfredDemangler(textworld.core.Wrapper):
+
+    def load(self, *args, **kwargs):
+        super().load(*args, **kwargs)
+
+        demangler = Demangler(game_infos=self._game.infos)
+        for info in self._game.infos.values():
+            info.name = demangler.demangle_alfred_name(info.id)
 
 
 def contain_words(sentence, words):
@@ -109,13 +120,8 @@ class OneStepCollector(CollectorAgent):
     @classmethod
     def request_infos(cls):
         request_infos = EnvInfos(
-            description=True,
-            inventory=True,
             admissible_commands=True,
-            command_templates=True,
-            max_score=True,
-            objective=True,
-            extras=["recipe", "walkthrough"])
+            max_score=True)
         return request_infos
 
     def pre_run(self):
@@ -124,15 +130,16 @@ class OneStepCollector(CollectorAgent):
     def act(self, obs, scores, dones, infos):
         if all(dones):
             return None
-        self.game_id.append(BaseAgent._compute_game_id(infos))
-        self.templates.update(infos[INFO_KEY.templates][0])
-        self.total_score += infos[INFO_KEY.max_score][0]
-        self.all_max_scores.append(infos[INFO_KEY.max_score][0])
-        self.objectives.append(infos[INFO_KEY.objective][0])
-        self.walkthrough.append(infos[INFO_KEY.walkthrough][0])
+        # self.game_id.append(BaseAgent._compute_game_id(infos))
+        # self.templates.update(infos[INFO_KEY.templates][0])
+        # self.total_score += infos[INFO_KEY.max_score][0]
+        # self.all_max_scores.append(infos[INFO_KEY.max_score][0])
+        # self.objectives.append(infos[INFO_KEY.objective][0])
+        # self.walkthrough.append(infos[INFO_KEY.walkthrough][0])
         # self.ingredients.update(
         #     CompetitionAgent.get_theme_words(infos[INFO_KEY.recipe][0]))
         action = random.choice(infos[INFO_KEY.actions][0])
+        self.game_id.append(obs[0])
         return action
 
     def post_run(self):
@@ -140,23 +147,29 @@ class OneStepCollector(CollectorAgent):
 
 
 def run_games(agent, game_files, nb_episodes, max_steps):
-    for i in tqdm(range(len(game_files))):
-        fg = game_files[i]
-        env_id = textworld.gym.register_games(
-            [fg], agent.request_infos(),
-            batch_size=1,
-            max_episode_steps=max_steps,
-            name="floor-plan-collector")
-        env = gym.make(env_id)
-        for j in tqdm(range(nb_episodes)):
-            obs, infos = env.reset()
-            dones = [False] * len(obs)
-            scores = [0] * len(obs)
-            while not all(dones):
-                action = agent.act(obs, scores, dones, infos)
-                obs, scores, dones, infos = env.step([action])
-            agent.act(obs, scores, dones, infos)
-        env.close()
+    for i in range(len(game_files)):
+        try:
+            fg = game_files[i]
+            env_id = textworld.gym.register_games(
+                [fg], agent.request_infos(),
+                batch_size=1,
+                max_episode_steps=max_steps,
+                name="floor-plan-collector",
+                wrappers=[AlfredDemangler])
+            env = gym.make(env_id)
+            for j in tqdm(range(nb_episodes)):
+                obs, infos = env.reset()
+                dones = [False] * len(obs)
+                scores = [0] * len(obs)
+                while not all(dones):
+                    action = agent.act(obs, scores, dones, infos)
+                    obs, scores, dones, infos = env.step([action])
+                agent.act(obs, scores, dones, infos)
+            env.close()
+        except Exception as e:
+            print("bad game: {}".format(game_files[i]))
+            print("reason: {}".format(e))
+            agent.game_id.append("wrong game")
 
 
 class Main(object):
@@ -180,21 +193,22 @@ class Main(object):
     @classmethod
     def collect_others(cls, game_dir, f_games=None, nb_episodes=1):
         agent = OneStepCollector()
-        game_files = load_game_files(game_dir, f_games)
+        # game_files = load_game_files(game_dir, f_games)
+        game_files = load_alfworld_games(game_dir)
         print(game_files)
         run_games(agent, game_files, nb_episodes, max_steps=1)
-        print("ingredients:\n", agent.ingredients)
-        print("templates:\n", agent.templates)
-        print("total scores: ", agent.total_score)
-        print("mean score: {}, std: {}".format(
-            np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
+        # print("ingredients:\n", agent.ingredients)
+        # print("templates:\n", agent.templates)
+        # print("total scores: ", agent.total_score)
+        # print("mean score: {}, std: {}".format(
+        #     np.mean(agent.all_max_scores), np.std(agent.all_max_scores)))
         # for gid, obj, walks in zip(
         #         agent.game_id, agent.objectives, agent.walkthrough):
         #     print("{}\t{}".format(gid, obj))
         #     print(walks)
         #     print()
         for fn_game, gid in zip(game_files, agent.game_id):
-            print("{}\t{}".format(os.path.basename(fn_game), gid))
+            print("{}\t{}".format(fn_game, gid))
 
 
 if __name__ == '__main__':

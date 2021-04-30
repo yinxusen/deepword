@@ -20,7 +20,7 @@ from deepword.eval_games import MultiGPUsEvalPlayer, LoopDogEvalPlayer, \
 from deepword.eval_games import list_checkpoints
 from deepword.hparams import load_hparams, conventions
 from deepword.utils import agent_name2clazz, learner_name2clazz
-from deepword.utils import load_game_files
+from deepword.utils import load_game_files, load_alfworld_games
 from deepword.utils import setup_train_log, setup_eval_log, eprint
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.FATAL)
@@ -425,7 +425,8 @@ def process_eval_dqn(args):
     hp = process_hp(args)
     setup_eval_log(log_filename=None)
     logger = logging.getLogger('eval-dqn')
-    eval_games = load_game_files(args.game_path, args.f_games)
+    # eval_games = load_game_files(args.game_path, args.f_games)
+    eval_games = load_alfworld_games(args.game_path)
     logger.info("load {} game files".format(len(eval_games)))
 
     if args.eval_mode == "eval":

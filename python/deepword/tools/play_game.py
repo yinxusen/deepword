@@ -9,17 +9,9 @@ class HumanAgent(CollectorAgent):
     @classmethod
     def request_infos(cls):
         request_infos = EnvInfos()
-        request_infos.description = True
-        request_infos.inventory = True
-        request_infos.entities = True
-        request_infos.verbs = True
-        request_infos.command_templates = True
-        request_infos.max_score = True
         request_infos.won = True
         request_infos.lost = True
-        request_infos.extras = ["recipe", "walkthrough"]
         request_infos.admissible_commands = True
-        request_infos.objective = True
         return request_infos
 
     def pre_run(self):
@@ -30,14 +22,8 @@ class HumanAgent(CollectorAgent):
 
     def act(self, obs, scores, dones, infos):
         actions = infos[INFO_KEY.actions][0]
-        print(infos["extra.walkthrough"])
-        print(infos["objective"])
         print("----------------------")
         print(obs[0])
-        state_text = (
-            infos[INFO_KEY.desc][0] + "\n" + infos[INFO_KEY.inventory][0])
-        # print("--------------state text--------------")
-        # print(state_text)
         print("----------------------")
         print("\n".join(actions))
         print("\n")

@@ -282,6 +282,12 @@ def load_game_files(game_path: str, f_games: Optional[str] = None) -> List[str]:
     return game_files
 
 
+def load_alfworld_games(game_dir: str) -> List[str]:
+    games = glob.glob(path.join(
+        game_dir, "**", "game.tw-pddl"), recursive=True)
+    return games
+
+
 def load_and_split(game_path: str, f_games: str) -> Tuple[List[str], List[str]]:
     """
     Load games and split train dev set
