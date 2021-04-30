@@ -169,12 +169,11 @@ def run_agent(
         for game_no in trange(nb_games):
             logger.info("playing game epoch_no/game_no: {}/{}".format(
                 epoch_no, game_no))
-
-            obs, infos = game_env.reset()
-            scores = [0] * len(obs)
-            dones = [False] * len(obs)
-            steps = [0] * len(obs)
             try:
+                obs, infos = game_env.reset()
+                scores = [0] * len(obs)
+                dones = [False] * len(obs)
+                steps = [0] * len(obs)
                 while not all(dones):
                     # Increase step counts.
                     steps = ([step + int(not done)
@@ -186,10 +185,8 @@ def run_agent(
             except Exception as e:
                 eprint("training game {} error: {}".format(game_no, e))
                 eprint("inform agent to finish current episode...")
-                if not all(dones):
-                    dones = [True]
-                    infos["won"] = False
-                    agent.act(obs, scores, dones, infos)
+                if agent._episode_has_started:
+                    agent._episode_has_started = False
         if agent.total_t >= agent.hp.observation_t + agent.hp.annealing_eps_t:
             logger.info("training steps exceed MAX, stop training ...")
             logger.info("total training steps: {}".format(
