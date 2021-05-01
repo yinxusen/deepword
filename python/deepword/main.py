@@ -5,6 +5,7 @@ import time
 import traceback
 from argparse import ArgumentParser
 from typing import Optional, Callable
+import random
 
 import gym
 import tensorflow as tf
@@ -151,7 +152,7 @@ def get_parser() -> ArgumentParser:
 
 
 def run_agent(
-        agent: BaseAgent, game_env: Env, nb_games: int, nb_epochs: int
+        agent: BaseAgent, game_files, nb_epochs: int
 ) -> None:
     """
     Run a train agent on given games.
@@ -166,11 +167,17 @@ def run_agent(
 
     logger = logging.getLogger("train")
     for epoch_no in trange(nb_epochs):
-        for game_no in trange(nb_games):
+        for game in sorted(game_files, key=lambda _: random.random()):
+            requested_infos = agent.select_additional_infos()
             logger.info("playing game epoch_no/game_no: {}/{}".format(
-                epoch_no, game_no))
+                epoch_no, game))
             try:
-                obs, infos = game_env.reset()
+                env_id = textworld.gym.register_games(
+                    [game], requested_infos, batch_size=1,
+                    max_episode_steps=100, name="training",
+                    wrappers=[AlfredDemangler])
+                env = gym.make(env_id)
+                obs, infos = env.reset()
                 scores = [0] * len(obs)
                 dones = [False] * len(obs)
                 steps = [0] * len(obs)
@@ -179,14 +186,16 @@ def run_agent(
                     steps = ([step + int(not done)
                               for step, done in zip(steps, dones)])
                     commands = agent.act(obs, scores, dones, infos)
-                    obs, scores, dones, infos = game_env.step(commands)
+                    obs, scores, dones, infos = env.step(commands)
                 # Let the agent knows the game is done.
                 agent.act(obs, scores, dones, infos)
+                env.close()
             except Exception as e:
-                eprint("training game {} error: {}".format(game_no, e))
+                eprint("training game {} error: {}".format(game, e))
                 eprint("inform agent to finish current episode...")
                 if agent._episode_has_started:
                     agent._episode_has_started = False
+
         if agent.total_t >= agent.hp.observation_t + agent.hp.annealing_eps_t:
             logger.info("training steps exceed MAX, stop training ...")
             logger.info("total training steps: {}".format(
@@ -267,7 +276,7 @@ class AlfredDemangler(textworld.core.Wrapper):
 def train(
         hp: HParams, model_dir: str,
         game_dir: str, f_games: Optional[str] = None,
-        func_run_agent: Callable[[BaseAgent, Env, int, int], None] = run_agent
+        func_run_agent=run_agent
 ) -> None:
     """
     train an agent
@@ -291,21 +300,13 @@ def train(
     agent = agent_clazz(hp, model_dir)
     agent.train()
 
-    requested_infos = agent.select_additional_infos()
-
-    env_id = textworld.gym.register_games(
-        train_games, requested_infos, batch_size=1,
-        max_episode_steps=hp.game_episode_terminal_t, name="training",
-        wrappers=[AlfredDemangler])
-    env = gym.make(env_id)
     try:
-        func_run_agent(agent, env, len(train_games), nb_epochs)
+        run_agent(agent, train_games, nb_epochs)
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         logger.error("error: {}".format(e))
         traceback.print_exception(
             exc_type, exc_value, exc_traceback, limit=None, file=sys.stdout)
-    env.close()
 
 
 def train_v2(hp, model_dir, game_dir, f_games=None):
