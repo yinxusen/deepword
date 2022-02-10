@@ -16,7 +16,7 @@ TatSu==4.4.0
 textworld==1.2.0
 
 # NN required
-tensorflow==1.15.4
+tensorflow==2.5.3
 bert-tensorflow==1.0.1
 albert-tensorflow==1.1
 sentencepiece==0.1.85
