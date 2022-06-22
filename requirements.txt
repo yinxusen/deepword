@@ -6,7 +6,7 @@ fire==0.2.1
 tqdm==4.43.0
 watchdog==0.10.2
 scipy==1.4.1
-numpy==1.18.1
+numpy==1.22.0
 termcolor==1.1.0
 tabulate==0.8.7
 
